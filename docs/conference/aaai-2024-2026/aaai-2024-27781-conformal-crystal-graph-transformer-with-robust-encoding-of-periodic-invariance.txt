@@ -1,0 +1,646 @@
+Title: Conformal Crystal Graph Transformer with Robust Encoding of Periodic Invariance
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/27781/27598
+
+Number of Pages: 9
+
+Markdown Content:
+# Conformal Crystal Graph Transformer with Robust Encoding of Periodic Invariance 
+
+## Yingheng Wang 1, Shufeng Kong 1,3* , John M. Gregoire 2, Carla P. Gomes 1
+
+> 1
+
+Department of Computer Science, Cornell University, USA 
+
+> 2
+
+Liquid Sunlight Alliance, California Institute of Technology, USA 
+
+> 3
+
+School of Software Engineering, Sun Yat-sen University, China {yw2349, sk2299}@cornell.edu, gregoire@caltech.edu, gomes@cs.cornell.edu 
+
+Abstract 
+
+Machine learning techniques, especially in the realm of materi-als design, hold immense promise in predicting the properties of crystal materials and aiding in the discovery of novel crys-tals with desirable traits. However, crystals possess unique ge-ometric constraints—namely, E(3) invariance for primitive cell and periodic invariance—which need to be accurately reflected in crystal representations. Though past research has explored various construction techniques to preserve periodic invari-ance in crystal representations, their robustness remains inade-quate. Furthermore, effectively capturing angular information within 3D crystal structures continues to pose a significant challenge for graph-based approaches. This study introduces novel solutions to these challenges. We first present a graph construction method that robustly encodes periodic invariance and a strategy to capture angular information in neural net-works without compromising efficiency. We further introduce CrystalFormer, a pioneering graph transformer architecture that emphasizes angle preservation and enhances long-range information. Through comprehensive evaluation, we verify our model’s superior performance in 5 crystal prediction tasks, reaffirming the efficiency of our proposed methods. 
+
+## Introduction 
+
+Machine learning (ML) techniques offer the capacity to model intricate physical and chemical interactions, present-ing a significant opportunity to expedite materials design vi-tal for sustainable agriculture, low-carbon energy, and more. One notable application of ML in this domain is predicting properties of crystal materials, aiding in the discovery of new crystals with desired attributes. Unique to crystals are geomet-ric priors that encompass two distinct physical constraints and symmetries: E(3) invariance within the primitive cell, and periodic invariance. These inherent constraints should be reflected in crystal representations like periodic graphs, often used as input for graph neural networks (GNNs) (Xie and Grossman 2018; Louis et al. 2020; Brody, Alon, and Yahav 2021; Schütt et al. 2017; Chen et al. 2019; Choudhary and DeCost 2021; Yan et al. 2022; Lin et al. 2023). While previous studies (Xie and Grossman 2018; Ying et al. 2021; Yan et al. 2022) have investigated construction techniques 
+
+> *
+
+Contact author Copyright © 2024, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+such as multi-edge and k-connected graph methodologies to establish periodic invariance in crystal structures, these methods often lack robustness when applied to a diverse range of crystal structures, leading to incomplete representa-tions under perturbations. More recent research (Widdowson and Kurlin 2022; Widdowson et al. 2022) has introduced matrix-form crystal representations as a means to encode this completeness. However, these too are potentially susceptible to breaking the completeness in practical applications. Another significant challenge for GNNs in processing 3D crystal structure is the difficulty of efficiently incorporating angular information. Choudhary and DeCost (2021) suggests an approach using a distinct line graph type for angular infor-mation. Despite its notable performance enhancements, this method is hampered by the considerable computational over-head associated with constructing the line graph. On the other hand, Yan et al. (2022) employs radial basis functions (RBF) and combines spherical Bessel functions (SBF) with spheri-cal harmonics to manage angles. Nonetheless, this approach does not yield the anticipated performance boost. This study addresses two key challenges: robustly encod-ing periodic invariance and effectively managing angular information. Our contributions include (1) introducing a graph construction method that preserves periodic invariance and completeness across diverse settings by effectively re-ducing stochasticity via physical properties; (2) developing a method to approximate conformal mapping in neural net-works using harmonic mapping with minimized Dirichlet energy, preserving inherent angular information in crystal graphs; (3) unveiling CrystalFormer, a novel E(3)-invariant graph transformer architecture with a unique angular atten-tion mechanism that enhances our angle preservation ap-proach and fortifies long-range information; (4) conducting comprehensive experiments over 5 tasks on the Jarvis materi-als benchmark (Choudhary et al. 2020), highlighting the sig-nificant of our components and showing our model’s superior performance, and subsequently verifying the effectiveness of our proposed construction and learning methods. 
+
+## Preliminaries 
+
+Crystal Structures 
+
+A crystal structure can be represented as an infinite periodic arrangement of atoms in 3D space. Mathematically, this can The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+283 be captured using the lattice points defined by translation vectors and the basis (the set of atoms within the primitive cell). A lattice L is an infinite set of points in space that can be generated by translating a point using discrete combinations of three non-coplanar vectors, l1, l2, and l3. This set can be written as: 
+
+L = {T|T = n1l1 +n2l2 +n3l3, ∀(n1, n 2, n 3) ∈ Z3}. (1) For a crystal structure, the basis B is a set of atoms associ-ated with every lattice point. Each atom in the basis can be represented as: 
+
+B = {(α, riα)|α ∈ A , riα ∈ R3}, (2) where α represents the type of atom (e.g., Carbon, Oxygen, etc.), A is the set of all atom types in the basis, and riα
+
+represents the position of the ith atom of type α within the primitive cell. Given the lattice and the basis, the crystal structure C is the set of all atoms in the 3D space, defined as: 
+
+C = {(α, piα(T)) |T ∈ L , (α, riα) ∈ B} , (3) where piα(T) = riα + T. This indicates that for every lattice point T and every atom in the basis B, there exists an atom in the crystal structure at position piα(T).A primitive cell is the smallest volume element of a crystal that, when translated through all the vectors of the Bravais lattice, can fill up the whole space without gaps or overlaps. Mathematically, a primitive cell P in terms of the basis is 
+
+P = {(α, riα)|(α, riα) ∈ B} , (4) In essence, the lattice represents the periodicity of the crystal, while the basis represents the arrangement of atoms within a single primitive cell. The combination of the lattice and the basis gives the complete infinite arrangement of atoms in the crystal structure. Moreover, we define xiα ∈ Rh as the feature vector of the ith atom of type α in a primitive cell and naturally xiα(T) for this atom and its periodic repeats. 
+
+Crystal Graph Construction 
+
+Given a crystal graph, G(V, E), where V is the set of vertices representing atoms, and E is the set of edges representing spatial connections between atoms. V can be defined as 
+
+V = {viα(T)|(α, piα(T)) ∈ C} , (5) where viα(T) is the vertex corresponding to the ith atom of type α at position piα(T).
+
+Multi-edge Graph In a multi-edge graph, an edge (or mul-tiple edges) exists between two vertices if their spatial dis-tance falls within a specified radius R:
+
+E = {(viα(T), v jβ (T′)) |dist (piα(T), pjβ (T′)) ≤ R)} (6) where dist (·) is the Euclidean distance function || · || 2, and 
+
+T and T′ are translation vectors corresponding to the posi-tions of two atoms. Using this graph construction, the spatial relationships between atoms in a crystal structure within a specified radius can be captured. The multi-edge nature al-lows for more complex and nuanced relationships between atoms, capturing different types of interactions. 
+
+k-connected Graph k-connected graph shares the same concept with fully-connected graph presented in Ying et al. (2021) and Yan et al. (2022), in which each atom is connected to its k nearest neighbors. Since the term "fully-connected graph" has a different definition in traditional graph the-ory, here we switch to k-connected graph for clarity. In a 
+
+k-connected graph, and the set of edges is determined by 
+
+E = {(viα(T), v jβ (T′)) |vjβ (T′) ∈ N k(viα(T)) } (7) where N k(viα(T)) represents the set of k closest neighbors of the atom located at piα(T).
+
+Physical Constraints of Crystals 
+
+There are two essential properties of crystals in 3D space, i.e., E(3) invariance with respect to the primitive cell, and periodic invariance. The former refers to the invariance of the structure of a primitive cell under the 3D Euclidean transformations. Formally, it can be defined as follows: 
+
+Definition 1 (E(3) Invariance for Primitive Cell) . Let f : C → X denote a function and E(3) be the Euclidean group. The function f is E(3) invariant with respect to the primitive cell ⇐⇒ ∀A ∈ E(3) , ∀t ∈ R3, f (C′) = f (C), where 
+
+C′ = {(α, Ap iα(T) + t)|T ∈ L , (α, riα) ∈ B} . A refers to a rotation or reflection transformation. 
+
+The latter indicates the invariance of the crystal represen-tation when the periodic boundaries of a primitive cell are shifted or scaled up. This can be formally defined as well. 
+
+Definition 2 (Periodic Invariance) . Let f : C → X de-note a function that is E(3) invariant with respect to the primitive cell and Λ ∈ R3×3 be a primitive-cell trans-formation (e.g., rotations, shearing, etc.). The function f
+
+is periodically invariant ⇐⇒ f (P) = f (P′) where 
+
+P′ = {(α, Λr iα + o)|(α, riα) ∈ B , o ∈ R3} where o de-notes the translation of the reshaped primitive cell. 
+
+The primitive-cell transformation, represented by Λ, em-bodies a change of basis in the lattice. While the transformed primitive cell still reflects the periodic nature of the original crystal, it represents a different periodic unit by redefining the primitive vectors of the cell. 
+
+## Robust Encoding for Periodic Invariance 
+
+Previously discussed graph construction methods (Xie and Grossman 2018; Ying et al. 2021; Yan et al. 2022), effec-tively encode periodic invariance in standard settings. How-ever, they falter in specific scenarios where their methods fail to achieve this invariance. More recent works (Widdow-son et al. 2022; Widdowson and Kurlin 2022) dedicate to solve incompleteness problem by introducing matrix-form crystal representations, which are still likely to break the completeness in practice. In this section, we first examine the limitations of two dominant graph construction models—for multi-edge and 
+
+k-connected graphs—and provides solutions to these chal-lenges. Then we discuss how the matrix-form crystal repre-sentations potentially fail to preserve completeness practi-cally. Lastly, we introduce a new graph construction method that ensures efficient and robust encoding of periodic invari-ance and completeness. The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+> 284
+
+Limitations of Existing Graph Constructions 
+
+Two primary crystal graph construction methods are preva-lent: the radius-based graph construction (Xie and Grossman 2018; Louis et al. 2020; Choudhary and DeCost 2021) and the 
+
+k-connected graph construction (Ying et al. 2021; Rampášek et al. 2022; Lin et al. 2023). While both have been tailored to ensure periodic invariance under general conditions (Yan et al. 2022), they exhibit significant drawbacks in preserv-ing this invariance in practical scenarios. These limitations include (1) the random selection of multiple neighbors based on the kth smallest pairwise distance in k-connected graph construction; (2) the inability of the k-connected graph to leverage information beyond Euclidean distance, such as an-gular data; and (3) challenges posed by experimental crystal structures with minor atomic position deviations. We delve into these issues in the subsequent sections. In k-connected graph construction, as illustrated in Equa-tion (7), neighbors are selected based on the k nearest neigh-bors criterion. However, when several neighboring atoms of varying atomic types share the kth smallest pairwise distance, the selection of a particular atom can be arbitrary, leading to inconsistencies across iterations. This introduces stochastic-ity, jeopardizing periodic invariance as the resulting graphs might differ each time. On the other hand, when neighboring atoms of the same atomic type share the kth smallest distance, periodic invariance is typically preserved in standard scenar-ios where basic vertex and edge attributes, such as atomic em-bedding and interatomic distance, are considered—making these atoms indiscernible. Nonetheless, this periodic invari-ance is compromised when incorporating higher-order infor-mation, like unique atomic angles. A straightforward solution would be to incorporate all atoms at the kth smallest pairwise distance into the neighbor set, rather than solely including the exact k closest ones: 
+
+E = ( viα(T), v jβ (T′)) |dist (piα(T), pjβ (T′)) ≤ dk(piα(T)) 
+
+(8) where dk(piα(T)) is the distance to the kth nearest neighbor of the atom at piα(T). This method guarantees deterministic neighbor selection in every situation. However, empirical evidence suggests that its performance is suboptimal. Another challenge lies within the robustness of periodic invariance in crystal structure determination. In materials science, crystal structures are predominantly determined through experimental methods like X-ray crystallography (Ackland and Jones 2006). Consequently, the derived crys-tal structure may exhibit minor, random perturbations. Such discrepancies, although subtle, can cause notable variations in the atomic positions across different measurements of the same crystal. Given that neighboring atoms are identified based on a fixed radius cutoff, these minor changes can sig-nificantly alter the resulting graph’s topological structure. We provide illustrative figures and details in the Appendix. To address this challenge, one could introduce a buffer or a stability margin during the neighbor selection, rather than relying on a strict cutoff. A straightforward method would be to add a tolerance to the cutoff, transforming it into a narrow range. However, setting a precise tolerance value requires a comprehensive understanding of the perturbations and their statistical patterns. This may be impractical given the extensive lab work involved. An alternative approach is the parameter-free Voronoi tes-sellation (Voronoi 1908), which also offers a natural neigh-bor selection strategy. The crystal structure is initially parti-tioned via a Voronoi decomposition of its atomic sites. In this method, each atom’s domain is characterized by a polyhe-dron. Its faces are demarcated by equidistant borders between the atom and its neighboring sites. Atoms sharing a face are considered neighbors, and edges are consequently drawn be-tween them (see the Appendix for illustrative figures and details). Nevertheless, the Voronoi-based method still has drawbacks: (1) the number of edges and their respective pairwise distances can be highly variable and may exhibit significant fluctuations across atoms (Ruff et al. 2023); (2) computational efficiency diminishes noticeably in spaces be-yond 2D (Vassiliades, Chatzilygeroudis, and Mouret 2017). Addressing the challenge of incompleteness in crystal rep-resentation is another crucial issue. Recent advancements (Widdowson et al. 2022; Widdowson and Kurlin 2022), have developed matrix forms that could be complete. However, employing these representations to predict crystal properties while maintaining their completeness poses practical diffi-culties. (1) The proposed matrix-form representations for stable crystal structures neglect atom types, whose complete-ness relies on the premise that no two crystals with identical structures differ solely in atom type, which is only attainable in stable structures. (2) Ensuring completeness requires pre-defining a large number of neighbors that is impractical and costly (Balasingham, Zamaraev, and Kurlin 2022). 
+
+The Proposed Graph Construction Method 
+
+As previously discussed, a robust and complete graph con-struction technique should minimize variability and reduce in-consistency in neighbor selection. To address this, we present a new graph construction method that incorporates a hierar-chical weighting approach. This method assigns normalized weights to represent the preference of each neighboring atom. 
+
+Reciprocal Weight We begin by considering the recip-rocal of interatomic distances, normalized by the distance to the nearest neighbor. To limit the number of neighbors, we restrict our attention to atoms within the kth small-est pairwise distance. For ease of notation, let dij repre-sent dist (piα(T), pjβ (T′)) and dkij be dk(piα(T)) . Here, d0
+
+> ij
+
+stands for the smallest pairwise distance. With this notation in place, the reciprocal weight is formally given by: 
+
+wrij = d0
+
+> ij
+
+dij 
+
+, for dij < (1 + δ)dkij (9) where δ serves as a tolerance parameter 1, enhancing robust-ness against experimental discrepancies. 
+
+Distance-penalizing Weight While the reciprocal weight accounts for penalizing distances from close to distant neigh-bors, it overlooks a crucial factor: the radius riα of the  
+
+> 1δis distinct from the tolerance value discussed earlier. Rather than an absolute distance, it’s a relatively minor parameter, conve-niently set at 0.1 by default for all tasks. The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24)
+> 285
+
+species at piα(T). To integrate this, we introduce a distance-penalizing weight that incorporates atomic radii: 
+
+wdij =
+
+s
+
+cos π(dij − dlc )2( dhc − dlc ) (10) where dlc = riα + rjβ + d0 
+
+> ij
+
+and dhc = riα + rjβ + dkij . Note that the choice of radius type often hinges on the available structural information and is typically ranked by descending preference. We expound upon this in the Appendix. In the realm of materials science, electronegativity plays a pivotal role in determining inter-atomic interactions. Fol-lowing Pan et al. (2021), we represent the difference in elec-tronegativity as: weij = 1 + λ
+
+q
+
+|χiα − χjβ |/3.3 where χiα
+
+denotes the Pauling electronegativity of the atom at piα(T)
+
+and λ is a parameter that adjusts the preference for neigh-boring atoms with pronounced electronegativity differences. The normalization factor is set to 3.3 in the denominator, as it corresponds to the maximal electronegativity difference observed between any two atoms. Through this formulation, atoms exhibiting larger electronegativity disparities with the central atom are assigned greater weights. Lastly, we perform neighbor selection following Pan et al. (2021). We first normalize the weights to the range [0 , 1] us-ing wij = wrij · wdij · weij /max (wij ). For the final neighbor selection, a straightforward approach entails calculating the largest weight gap between two consecutive weights, once they are sorted in descending order. Yet, given the domi-nant interactions in a proximal coordination environment, an alternative strategy might be preferred. Pan et al. (2021) proposes to project the normalized weights onto a quarter-circle placed in the first quadrant. Then, neighbors are chosen based on the highest AUROC observed between successive weights (see the Appendix for details). In this way, we elimi-nate the stochasticity to the maximal extent. In practice, both techniques yield similar performance. Additionally, to en-capsulate periodic patterns, we add self-connected edges for each vertex (Yan et al. 2022). 
+
+## Preserving Implicit Angular Information 
+
+Modeling angular information within GNNs has previously demonstrated notable performance improvements. However, these gains often come at the cost of increased computa-tional demands, largely due to the line graph construction (Choudhary and DeCost 2021). More recent methodologies (Yan et al. 2022) introduce efficient techniques for processing angles in graph transformers, but intriguingly, these meth-ods don’t harness the expected performance gains from the additional information. Here, we demonstrate that any constructed graph intrinsi-cally encapsulates angular information within its topological structure and associated edge attributes. Subsequently, we put forth a novel method designed to implicitly integrate and preserve this angular information throughout the model. 
+
+Implicit Angular Information 
+
+From the outset, the angular information has been incorpo-rated implicitly within the constructed crystal graphs’ edge attributes. Let ⃗e ij denote the edge attribute, signifying the relative position vector between two neighboring atoms. 
+
+Definition 3. An angle , ∠ikj , arises from two adjacent edges: ⃗e ki and ⃗e kj . Here, vkγ (T′′ ) is the mutual neighbor of vertices viα(T) and vjβ (T′).
+
+Given that the edge attributes in ⃗e ki and ⃗e kj denote rela-tive positions, the magnitude of ∠ikj can be quantified by its cosine value: cos ∠ikj =⃗e ki ·⃗e kj /∥⃗e ki ∥ ∥ ⃗e kj ∥. Leveraging the capacity of neural networks as universal approximators (Hornik, Stinchcombe, and White 1989; Scarselli and Tsoi 1998), one can derive a nonlinear mapping from edge at-tributes to the cosine value of angles. This is made feasible through GNNs, in which a multi-layer perceptron is em-ployed to interpret messages from attributes of neighboring vertices and edges. Nevertheless, a persistent challenge lies in ensuring the preservation of the angular information throughout multiple GNN layers. In practical scenarios, not only might the infor-mation not be consistently preserved, but expressive GNN architectures could also inadvertently neglect this angular information amidst a sea of input features. 
+
+The Preservation Approach 
+
+Conformal mapping (Schinzinger and Laura 2012) serves as a potent tool for preserving angular information and has found extensive applications in areas such as image rectifi-cation (Zhang, Li, and Wang 2023) and texture generation (Lévy et al. 2023). However, the rigorous nature of conformal mapping poses challenges for its direct integration into neural networks (Nehari 2012). 
+
+Lemma 1. Let U and V denote real normed spaces. A map 
+
+f : U → V is conformal at a point u0 ∈ U if it is differen-tiable at u0 and its derivative at that point is an isomorphism that preserves angles and orientations between vectors. 
+
+Rather than imposing rigid constraints to achieve confor-mal mapping, which would compromise the differentiability of neural networks, we can consider approximating it concur-rently with the optimization of training objectives. One poten-tial approximation is harmonic mapping, attributed to the har-monicity of conformal mapping, characterized by functions that adhere to the Laplace equation across the domain (Ne-hari 2012). Nonetheless, this unconstrained approximation may introduce inherent distortion, potentially undermining the preservation of angles. 
+
+Definition 4. Let u : Ω → Rn be a differentiable function defined over a domain Ω in Rn. The Dirichlet energy of u is given by Edir (u) = 12
+
+R 
+
+> Ω
+
+∥∇ u∥2 dV , where ∇u represents the gradient of u and dV denotes the area element in Ω.
+
+Proposition 1. Given a domain Ω in Rn, a conformal map-ping f : Ω → Rn can be approximated by a harmonic mapping that minimizes the Dirichlet energy. If the Dirichlet energy has been sufficiently minimized and the mapping is bi-jective, then the mapping is approximately conformal within 
+
+Ω (Wu and Yau 2020). 
+
+Although conformal mapping can be efficiently and accu-rately approximated by harmonic mapping using the mini-mizer of Dirichlet energy, obtaining a closed form for this The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+> 286
+
+Graph Construction: 
+
+𝒞 Preprocessing 𝑑 𝑖𝑗 
+
+𝑟 𝛼 𝑖 Distance-penalizing Weight 
+
+𝜒 𝛼 𝑖 
+
+> Reciprocal Weight
+> Electronegativity Weight
+
+𝑤 𝑖𝑗 
+
+> 𝑑
+
+𝑤 𝑖𝑗 
+
+> 𝑟
+
+𝑤 𝑖𝑗  
+
+> 𝑒
+> Projection AUROC
+> Weight Sorting Neighbor Selection
+
+𝒢(𝒱, 𝓔) 
+
+Embedding Block: 
+
+𝒞 𝑑 𝑖𝑗 
+
+റ𝑒 𝑖𝑗  
+
+> Radial Basis Function Harmonic Map 𝐇 𝜎(𝑊 ·) 𝜎(𝑊 ·)
+> ||
+
+𝐱 𝛼 𝑖 
+
+> Period and group numbers Physical properties
+> ||
+> 𝜎(𝑊 ·) 𝜎(𝑊 ·)
+> One -hot Encoding
+> 𝜎(𝑊 ·)
+
+𝐡 𝑖 (0) 𝐞 𝑖𝑗 
+
+Message Passing: 
+
+𝐡 𝑖 (𝑙) 𝐡 𝑗 (𝑙) 𝐞 𝑖𝑘  
+
+> (𝑙,𝑚)
+
+𝐞 𝑘𝑗     
+
+> (𝑙,𝑛)
+> Query 𝐐 (𝑙)
+> Key 𝐊 (𝑙)
+> Value 𝐕 (𝑙)
+> || || ||
+> ʘ
+
+𝛼 𝑖𝑘  
+
+> (𝑙,𝑚)
+> 𝑑 𝑘 𝜎(𝑊 ·) 𝑓 𝐿𝑁
+> MLP (·) 𝑓 𝐿𝑁
+> MLP (·)
+> 𝛴
+
+𝐦 𝑖𝑘 
+
+> (𝑙)
+
+𝐦 𝑖 (𝑙) 𝑓 𝐿𝑁   
+
+> SiLU(·) 𝑓 𝐵𝑁
+> MLP (·) 𝑓 𝐽𝐾
+
+𝐡 𝑖 (𝑙+1) 
+
+Outpu t Block: 
+
+𝐡 𝑖 (𝐿) 𝜙(·) 
+
+> 𝜎(𝑊 ·)
+> 𝛴
+> ·
+
+𝐦 𝑖 (𝑙) 𝜎(𝑊 ·) 𝜎(𝑊 ·) 
+
+Overall Framework: 
+
+𝒞 Graph Construction Embedding Message Passing Output 
+
+> [···]
+> Atomic Attributes Prediction
+
+Edge -aware  
+
+> Node -aware Message Passing
+
+𝐝 !" 
+
+> Dirichlet energy Minimization
+> Edge -aware Message Passing
+
+Figure 1: Architecture Overview. CrystalFormer accepts an input crystal structure C. It preserves both periodic invariance and E(3) primitive cell invariance in its predictions. This is achieved by successively processing the input through stages: a graph construction step, an embedding block, multiple (node, edge)-aware message-passing layers, and finally, an output block. optimization objective on graph-structured data, especially for multi-edge crystal graphs, remains challenging. Here, we introduce a formulation for the Dirichlet energy on graph data: given a harmonic mapping H ∈ Rd×d′
+
+that is shared across edges, the Dirichlet energy can be written as (we de-note vjα(T), v jβ (T′), v jγ (T′′ ) as vi, v j , v k below for brevity): 
+
+Edir (H) = 12
+
+X 
+
+> (vi,v j)∈U
+
+κij ∥H⃗e ij ∥2
+
+= 12
+
+X 
+
+> (vi,v j)∈U
+
+(cot ∠ikj ) ∥H⃗e ij ∥2
+
+(11) where U = {(vi, v j ) | ∀ vi, v j ∈ V , ∃vk ∈ V , s.t. (vi, v j ) /∈E and (vi, v k), (vj , v k) ∈ E} , κij represents the elastic coef-ficient between the unconnected vertex pair (vi, v j ), and cot 
+
+denotes the cotangent function. In the context of multi-edge crystal graphs, a key issue is the presence of multiple potential relay vertices vk and 
+
+multiple corresponding topological connections ⃗e ik and ⃗e kj ,which will introduce much complexity. For the latter, we consider all existing connections, which ensures that angular information associated with distant atoms can be sufficiently retained, beneficial for encoding long-range interactions and periodicity inherent to crystal structures. For the former, i.e. when selecting relay vertices, it’s essential to follow the un-derlying physical principle: atoms in closer proximity exhibit stronger interactions. Denote the neighborhood of vertices as 
+
+Ni := N (viα(T)) and Nj := N (vjβ (T)) . The selection for 
+
+k can be articulated as: 
+
+k = arg max 
+
+> o∈N i∩N j
+
+⃗ e io ·⃗e jo 
+
+∥⃗e io ∥ ∥ ⃗e jo ∥
+
+
+
+. (12) Above we only consider the situation in which we utilize interatomic distances as edge attributes. For those seeking to initialize atomic positions as vertex attributes, we present a more computationally efficient method to handle matrix operations (with the proof available in the Appendix): 
+
+Edir (H) = 12
+
+X 
+
+> (vi,v j)∈U
+
+κij ∥H⃗p i − H⃗p j ∥2
+
+= tr  FT (D − K)F .
+
+(13) Here, ⃗p i signifies the atomic position. The function tr(·) re-turns the trace of a matrix. Additionally, K is defined as 
+
+(κij )n×n; F can be expressed as (H⃗p 1; H⃗p 2; · · · ; H⃗p n); and 
+
+D is a diagonal matrix denoted as diag (d1, d 2, ..., d N ), where each di is given by nP
+
+> j=1
+
+κij .
+
+## CrystalFormer 
+
+In this section, we unveil our proposed crystal graph trans-former architecture, CrystalFormer, as illustrated in Figure 1. Drawing from the graph construction method and the angle-preserving framework described earlier, CrystalFormer seam-lessly integrates 3D geometric data based on atomic rel-ative positions while preserving periodic invariance. This is achieved without the need to apply restrictive architec-tural constraints. Notably, CrystalFormer inherits the theo-retical guarantees of the preservation approach, ensuring it upholds the intrinsic invariant physical constraints within crystal graphs. The combination of these features provides the architecture with better modeling flexibility. Furthermore, the inclusion of a plug-and-play angle-preserving layer ampli-fies the model’s performance in evaluating crystal properties. 
+
+Embedding Block Expanding on the foundational work of Xie and Grossman (2018), we integrate additional domain-specific knowledge to initialize the vertex attribute of each vertex vi. To this end, we adopt atomic embedding, achieved by concatenating the one-hot encoding of both group and period numbers together with a suite of physical properties. Further details are available in the Appendix. The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+287 In our pursuit to aptly encapsulate the 3D topology inher-ent in atomic systems, we employ a blend of atom relative positions, denoted as ⃗e ij , and the interatomic distances de-noted by dij . Our approach entails the application of har-monic mapping directly on ⃗e ij to obtain eij . Concurrently, we harness a 2-layer MLP on RBF derived from dij to get dij .
+
+eij will be used as the edge embedding for our edge-aware message-passing layer while dij will be the edge embedding for the node-aware message-passing layer (Yan et al. 2022). Note that, in practice, replacing dij with eij achieves better prediction performance. 
+
+Edge-aware Message Passing Within each interaction block, messages are propagated from neighboring vertices 
+
+vj ∈ N i to the center vertice vi via a unique graph trans-former block. To establish an invariant architecture, we im-plement an edge-aware attention mechanism that integrates embeddings from vertices and their adjacent edges (⃗e ik ,⃗ e kj )
+
+in both the query and key. This is followed by an inner prod-uct operation to compute the attention coefficient. For a given vertex embedding h(l) 
+
+> i
+
+and the mth edge em-bedding at the lth layer e(l,m ) 
+
+> ij
+
+, we compute query q(l,m ) 
+
+> ik
+
+, key 
+
+k(l,m ) 
+
+> ik
+
+, and value v(l,m ) 
+
+> ik
+
+in line with Vaswani et al. (2017): 
+
+q(l,m ) 
+
+> ik
+
+=
+
+
+
+Q(l)h(l) 
+
+> i
+
+|| Q(l)h(l) 
+
+> i
+
+|| e(l,m )
+
+> ik
+
+
+
+k(l,m ) 
+
+> ik
+
+=
+
+
+
+K(l)h(l) 
+
+> i
+
+|| K(l)h(l) 
+
+> j
+
+|| e(l,n )
+
+> kj
+
+
+
+v(l,m ) 
+
+> ik
+
+=
+
+
+
+V(l)h(l) 
+
+> i
+
+|| V(l)h(l) 
+
+> j
+
+|| V(l)h(l)
+
+> j
+
+
+
+(14) where Q(l), K(l), and V(l) are linear transformations. This formulation allows us to integrate self-attention for the central vertex, cross-attention between adjacent vertices, and edge-aware attention, all within a single transformer block. Subsequently, the attention coefficients α(l,m ) 
+
+> ik
+
+and mes-sages m(l,m ) 
+
+> ik
+
+are derived as: 
+
+α(l,m ) 
+
+> ik
+
+= q(l,m ) 
+
+> ik
+
+⊙ k(l,m )
+
+> ik
+
+√dk
+
+m(l) 
+
+> ik
+
+=σ
+
+
+
+fLN 
+
+
+
+α(l,m )
+
+> ik
+
+
+
+MLP 
+
+
+
+v(l,m )
+
+> ik
+
+ (15) where fLN denotes layer normalization, while dk represents the embedding dimension of k(l,m ) 
+
+> ik
+
+. Then we impose jump-ing knowledge (Xu et al. 2018) into feature update after aggregating the messages: 
+
+m(l) 
+
+> i
+
+= X
+
+> k∈N i
+
+X
+
+> m
+
+fLN 
+
+
+
+MLP 
+
+
+
+m(l)
+
+> ik
+
+ 
+
+h(l+1)  
+
+> i
+
+= fJK 
+
+
+
+MLP 
+
+
+
+h(l)
+
+> i
+
+
+
+, SiLU 
+
+
+
+fBN 
+
+
+
+m(l)
+
+> i
+
+ 
+
+(16) where fJK and fBN are the jumping knowledge layer and batch normalization. Note that we stack node/edge-aware message passing layer alternately. 
+
+Output Block We derive the final atom predictions ( y) by channeling the obtained atomic representations through two dense layers. This process effectively maps the embeddings to the appropriate dimensionality. Given that the prediction tasks for crystal properties are graph-level, we employ a weighted average strategy for the atomic representations. 
+
+## Experiments 
+
+Experimental setup 
+
+Baselines Baseline methods encompass CGCNN (Xie and Grossman 2018), SchNet (Schütt et al. 2017), MEG-NET (Chen et al. 2019), and others up to PotNet (Lin et al. 2023). For these methods, results are sourced from their re-spective publications or directly from the authors unless noted otherwise. All CrystalFormer models employ the Adam opti-mizer (Kingma and Ba 2015), weight decay (Loshchilov and Hutter 2018), and a one-cycle learning rate scheduler (Smith and Topin 2018). Learning rates and training epochs are mildly adjusted, starting from 0.0005 and 1000 respectively, depending on the task. Specific configurations for each task can be found in the Appendix. 
+
+Datasets We test on five crystal property prediction tasks using the JARVIS (Choudhary et al. 2020) benchmark, specif-ically its DFT-2021.8.18 3D version, which features 55,722 crystals. Our evaluations focus on essential crystal proper-ties, including two types of bandgaps (OPT functional and MBJ potential), total energy, formation energy, and Ehull. We adopt data splits as per (Lin et al. 2023; Yan et al. 2022) to ensure a fair comparison. 
+
+Metrics We evaluate performance and scalability. The pri-mary performance metric is mean absolute error (MAE). Scalability assesses training time per epoch and throughput during inference 2, labeled Train and Infer respectively. 
+
+Model Evaluation 
+
+Experimental Results The results for Jarvis are presented in Table. 1. CrystalFormer surpasses baseline methods in 4 out of 5 tasks: bandgap (OPT), bandgap (MBJ), total en-ergy, and Ehull. Its performance on formation energy is slightly below the state-of-the-art but remains competitive. CrystalFormer’s robust graph construction technique accu-rately encodes unique crystal structures and effectively dif-ferentiates between crystals. Unlike PotNet, which focuses solely on interatomic geometric information, CrystalFormer also retains angular data, leading to an average improvement of 26 .9% across the 5 tasks. In comparison to Matformer, CrystalFormer not only boasts the aforementioned advan-tages but also processes long-range information through 2-hop adjacent edges, akin to PotNet’s approach with com-plete interatomic potentials. This capability significantly ele-vates CrystalFormer and PotNet above Matformer. Contrast-ing ALIGNN, CrystalFormer sidesteps the need for large-scale line graphs, resulting in lower computational costs. Notably, CrystalFormer achieved the best performance for Bandgap(MBJ) in JARVIS with just 14,537 training samples, underscoring its adaptability to varied data scales. In essence, these exceptional results underscore the efficacy of our Mat-former’s periodic pattern encoding in message passing. 
+
+> 2Throughput refers to the model’s average processing speed in samples per second during its forward pass. The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24)
+> 288
+
+Bandgap (OPT) Bandgap (MBJ) Total Energy Formation Energy Ehull Method eV eV eV/atom eV/atom eV CGCNN (2018) 0.20 0.41 0.078 0.063 0.17 SchNet (2017) 0.19 0.43 0.047 0.045 0.14 MEGNET (2019) 0.145 0.34 0.058 0.047 0.084 GATGNN (2020) 0.17 0.51 0.056 0.047 0.12 ALIGNN (2021) 0.142 0.31 0.037 0.033 0.076 Matformer (2022) 0.137 0.30 0.035 0.033 0.064 PotNet (2023) 0.127 0.27 0.032 0.029 0.055 
+
+CrystalFormer 0.101 (-20.5%) 0.13 (-51.9%) 0.017 (-46.9%) 0.033 (+12.1%) 0.040 (-27.3%) 
+
+Table 1: Comparison between CrystalFormer and baselines regarding MAE ( ↓) on JARVIS. The best results are shown in bold and the second best results are shown with underlines. We also provide the performance gain in percentage improvement ( %)between CrystalFormer and the state-of-the-art. All scores have ±0.5% confidence intervals. Time Efficiency ( ↓) Graph Size ( ↑)Methods ms/structure # edges Voronoi 79.24 126.1 
+
+Ours 8.67 207.9 
+
+Table 2: Comparison of the two robust graph construction methods (Voronoi and ours). MAE ( ↓) Train ( ↓) Infer ( ↑)Methods eV s/epoch samples/s ALIGNN 0.31 107 35.7 Matformer (SBF) 0.31 56 55.9 Matformer (RBF) 0.30 53 56.7 
+
+CrystalFormer 0.13 43 69.6 
+
+Table 3: Comparison of CrystalFormer and baselines that use angular information. 
+
+Graph Construction Efficiency We examined the effi-ciency of two graph construction techniques: the Voronoi-based method and our proposal, comparing them in terms of time efficiency and neighbor count, as detailed in Table 2. Our method constructs a crystal structure in approximately 8.67 milliseconds, which is about 8.14 times faster than the Voronoi-based approach that takes 79.24 milliseconds. More-over, our technique extracts an average of 207.9 edges per graph, approximately 0.65 times more than the Voronoi coun-terpart. Previous studies (Xie and Grossman 2018) have il-lustrated that an increased neighbor count can enhance per-formance. Consequently, our method proves superior in both time efficiency and neighbor extraction. 
+
+Model Efficiency We assessed CrystalFormer’s efficiency against other models integrating angular information, us-ing bandgap (MBJ) as the consistent dataset for all models. Results presented in Table 3 show that, CrystalFormer con-siderably surpasses ALIGNN in training speed (43 vs. 107 s/epoch) and inference efficiency. It also marginally exceeds Graph Construction Robustness MAE ( ↓)Multi-edge × 0.28 
+
+k-connected × 0.30 Modified k-connected ✓ 0.29 
+
+Ours ✓ 0.13 
+
+Table 4: Comparison of different graph construction methods. We provide the availability of robustness and model perfor-mance (MAE) on bandgap (MBJ). Matformer, which incorporates preprocessed angular data using SBF with Spherical Harmonics (Gasteiger, Groß, and Günnemann 2020) and RBF. Notably, CrystalFormer avoids the complexities of line graph construction and angular data preprocessing, enhancing its efficiency relatively. 
+
+Ablation Studies We conducted an ablation study to assess the significance of various components in our method. This analysis confirms the importance of both the robust encoding of periodic invariance (Table 4) and our angle-preserving graph transformer block to the model’s performance. No-tably, we contrasted CrystalFormer, built using our graph construction method, with one leveraging previous multi-edge and k-connected graph construction (Yan et al. 2022). We also considered a modified version of the k-connected graph for a thorough assessment. Additionally, we conduct another ablation study by excluding the angular-preserving graph transformer blocks while retaining our graph construc-tion. We found CrystalFormer surpassed its counterpart by approximately 53% (0.13 vs. 0.28 in terms of MAE). 
+
+## Conclusion 
+
+In our study on predicting crystal materials properties, we introduced a graph construction method ensuring robust peri-odic invariance and a technique for preserving angular infor-mation in GNNs. The developed CrystalFormer highlights an innovative angular attention mechanism, reinforcing long-range data. Rigorous testing on the Jarvis materials bench-mark confirmed our method’s superior performance, herald-ing a potential to accelerate materials design. The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+> 289
+
+## Acknowledgements 
+
+This project is partially supported by the Eric and Wendy Schmidt AI in Science Postdoctoral Fellowship, a Schmidt Futures program; the National Science Foundation, the Air Force Office of Scientific Research; the Department of En-ergy (DOE); and the Toyota Research Institute (TRI). 
+
+## References 
+
+Ackland, G.; and Jones, A. 2006. Applications of local crystal structure measures in experiment and simulation. Physical Review B , 73(5): 054104. Balasingham, J.; Zamaraev, V.; and Kurlin, V. 2022. Compact Graph Representation of molecular crystals using Point-wise Distance Distributions. arXiv preprint arXiv:2212.11246 .Brody, S.; Alon, U.; and Yahav, E. 2021. How Attentive are Graph Attention Networks? In International Conference on Learning Representations .Chen, C.; Ye, W.; Zuo, Y.; Zheng, C.; and Ong, S. P. 2019. Graph Networks as a Universal Machine Learning Frame-work for Molecules and Crystals. Chemistry of Materials ,31(9): 3564–3572. Choudhary, K.; and DeCost, B. 2021. Atomistic Line Graph Neural Network for improved materials property predictions. 
+
+npj Computational Materials , 7(1): 1–8. Choudhary, K.; Garrity, K. F.; Reid, A. C.; DeCost, B.; Biac-chi, A. J.; Hight Walker, A. R.; Trautt, Z.; Hattrick-Simpers, J.; Kusne, A. G.; Centrone, A.; et al. 2020. The joint auto-mated repository for various integrated simulations (JARVIS) for data-driven materials design. npj Computational Materi-als , 6(1): 1–13. Gasteiger, J.; Groß, J.; and Günnemann, S. 2020. Direc-tional message passing for molecular graphs. arXiv preprint arXiv:2003.03123 .Hornik, K.; Stinchcombe, M.; and White, H. 1989. Multilayer feedforward networks are universal approximators. Neural networks , 2(5): 359–366. Kingma, D. P.; and Ba, J. 2015. Adam: A Method for Stochas-tic Optimization. In Proceedings of the 3rd International Conference on Learning Representations .Lévy, B.; Petitjean, S.; Ray, N.; and Maillot, J. 2023. Least squares conformal maps for automatic texture atlas genera-tion. In Seminal Graphics Papers: Pushing the Boundaries, Volume 2 , 193–202. Lin, Y.; Yan, K.; Luo, Y.; Liu, Y.; Qian, X.; and Ji, S. 2023. Efficient Approximations of Complete Interatomic Potentials for Crystal Property Prediction. arXiv preprint arXiv:2306.10045 .Loshchilov, I.; and Hutter, F. 2018. Decoupled Weight Decay Regularization. In International Conference on Learning Representations .Louis, S.-Y.; Zhao, Y.; Nasiri, A.; Wang, X.; Song, Y.; Liu, F.; and Hu, J. 2020. Graph convolutional neural networks with global attention for improved materials property prediction. 
+
+Physical Chemistry Chemical Physics , 22(32): 18141–18148. Nehari, Z. 2012. Conformal mapping . Courier Corporation. Pan, H.; Ganose, A. M.; Horton, M.; Aykol, M.; Persson, K. A.; Zimmermann, N. E.; and Jain, A. 2021. Benchmark-ing coordination number prediction algorithms on inorganic crystal structures. Inorganic chemistry , 60(3): 1590–1603. Rampášek, L.; Galkin, M.; Dwivedi, V. P.; Luu, A. T.; Wolf, G.; and Beaini, D. 2022. Recipe for a general, powerful, scalable graph transformer. Advances in Neural Information Processing Systems , 35: 14501–14515. Ruff, R.; Reiser, P.; Stühmer, J.; and Friederich, P. 2023. Connectivity Optimized Nested Graph Networks for Crystal Structures. arXiv preprint arXiv:2302.14102 .Scarselli, F.; and Tsoi, A. C. 1998. Universal approximation using feedforward neural networks: A survey of some exist-ing methods, and some new results. Neural networks , 11(1): 15–37. Schinzinger, R.; and Laura, P. A. 2012. Conformal mapping: methods and applications . Courier Corporation. Schütt, K.; Kindermans, P.-J.; Sauceda Felix, H. E.; Chmiela, S.; Tkatchenko, A.; and Müller, K.-R. 2017. SchNet: A Continuous-filter Convolutional Neural Network for Model-ing Quantum Interactions. Advances in Neural Information Processing Systems , 30. Smith, L. N.; and Topin, N. 2018. Super-convergence: Very fast training of residual networks using large learning rates. Vassiliades, V.; Chatzilygeroudis, K.; and Mouret, J.-B. 2017. Using centroidal voronoi tessellations to scale up the multi-dimensional archive of phenotypic elites algorithm. IEEE Transactions on Evolutionary Computation , 22(4): 623–630. Vaswani, A.; Shazeer, N.; Parmar, N.; Uszkoreit, J.; Jones, L.; Gomez, A. N.; Kaiser, Ł.; and Polosukhin, I. 2017. Attention is all you need. Advances in neural information processing systems , 30. Voronoi, G. 1908. Nouvelles applications des paramètres continus à la théorie des formes quadratiques. Deuxième mé-moire. Recherches sur les parallélloèdres primitifs. Journal für die reine und angewandte Mathematik (Crelles Journal) ,1908(134): 198–287. Widdowson, D.; and Kurlin, V. 2022. Resolving the data am-biguity for periodic crystals. Advances in Neural Information Processing Systems , 35: 24625–24638. Widdowson, D.; Mosca, M. M.; Pulido, A.; Cooper, A. I.; and Kurlin, V. 2022. Average Minimum Distances of periodic point sets-foundational invariants for mapping periodic crys-tals. MATCH-COMMUNICATIONS IN MATHEMATICAL AND IN COMPUTER CHEMISTRY , 87(3): 529–559. Wu, T.; and Yau, S.-T. 2020. Computing harmonic maps and conformal maps on point clouds. arXiv preprint arXiv:2009.09383 .Xie, T.; and Grossman, J. C. 2018. Crystal Graph Convo-lutional Neural Networks for an Accurate and Interpretable Prediction of Material Properties. Physical review letters ,120(14): 145301. Xu, K.; Li, C.; Tian, Y.; Sonobe, T.; Kawarabayashi, K.-i.; and Jegelka, S. 2018. Representation learning on graphs with jumping knowledge networks. In International conference on machine learning , 5453–5462. PMLR. The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+> 290
+
+Yan, K.; Liu, Y.; Lin, Y.; and Ji, S. 2022. Periodic graph trans-formers for crystal material property prediction. Advances in Neural Information Processing Systems , 35: 15066–15080. Ying, C.; Cai, T.; Luo, S.; Zheng, S.; Ke, G.; He, D.; Shen, Y.; and Liu, T.-Y. 2021. Do Transformers Really Perform Badly for Graph Representation? Advances in Neural Information Processing Systems , 34. Zhang, Q.; Li, H.; and Wang, Q. 2023. Wide-Angle Rectifica-tion via Content-Aware Conformal Mapping. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 17357–17365. The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+291

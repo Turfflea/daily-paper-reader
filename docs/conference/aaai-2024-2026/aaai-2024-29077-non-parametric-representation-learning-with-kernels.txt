@@ -1,0 +1,692 @@
+Title: Non-parametric Representation Learning with Kernels
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/29077/30039
+
+Number of Pages: 9
+
+Markdown Content:
+# Non-parametric Representation Learning with Kernels 
+
+# Pascal Esser ∗, Maximilian Fleissner ∗, Debarghya Ghoshdastidar 
+
+Technical University of Munich, Germany esser@cit.tum.de, fleissner@cit.tum.de, ghoshdas@cit.tum.de 
+
+Abstract 
+
+Unsupervised and self-supervised representation learning has become popular in recent years for learning useful fea-tures from unlabelled data. Representation learning has been mostly developed in the neural network literature, and other models for representation learning are surprisingly unex-plored. In this work, we introduce and analyze several kernel-based representation learning approaches: Firstly, we define two kernel Self-Supervised Learning (SSL) models using con-trastive loss functions and secondly, a Kernel Autoencoder (AE) model based on the idea of embedding and reconstruct-ing data. We argue that the classical representer theorems for supervised kernel machines are not always applicable for (self-supervised) representation learning, and present new representer theorems, which show that the representations learned by our kernel models can be expressed in terms of ker-nel matrices. We further derive generalisation error bounds for representation learning with kernel SSL and AE, and em-pirically evaluate the performance of these methods in both small data regimes as well as in comparison with neural net-work based models. 
+
+# Introduction 
+
+Representation learning builds on the idea that for most data, there exists a lower dimensional embedding that still retains most of the information useful for a downstream task (Ben-gio, Courville, and Vincent 2013). While early works relied on pre-defined representations, including image descriptors such as SURF (Bay, Tuytelaars, and Van Gool 2006) or SIFT (Lowe 1999) as well as bag-of-words approaches, over the past decade the focus has moved to representations learned from data itself. Across a wide range of tasks, including im-age classification and natural language processing (Bengio, Courville, and Vincent 2013), this approach has proven to be more powerful than the use of hand-crafted descriptors. In addition, representation learning has gained increasing popularity in recent years as it provides a way of taking ad-vantage of unlabelled data in a partially labelled data setting. Since the early works, methods for representation learning have predominantly relied on neural networks and there has been little focus on other classes of models. This may be 
+
+> ∗
+
+These authors contributed equally. Copyright © 2024, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+part of the reason why it is still mostly driven from an exper-imental perspective. In this work, we focus on the following two learning paradigms that both fall under the umbrella of representation learning: 
+
+Self-Supervised representation learning using con-trastive loss functions has been established in recent years as an important method between supervised and unsuper-vised learning as it does not require explicit labels but re-lies on implicit knowledge of what makes samples seman-tically close to others. Therefore SSL builds on inputs and inter-sample relations (𝑿 , 𝑿 ), where 𝑿 is often constructed through data-augmentations of 𝑿 known to preserve input semantics such as additive noise or horizontal flip for an image (Kanazawa, Jacobs, and Chandraker 2016). While the idea of SSL is not new (Bromley et al. 1993) the main focus has been on deep SSL models, which have been highly suc-cessful in domains such as computer vision (Chen et al. 2020; Jing and Tian 2019) and natural language processing (Misra and Maaten 2020; Devlin et al. 2019). 
+
+Unsupervised representation learning through re-construction relies only on a set of features 𝑿 without having access to the labels. The high level idea is to map the data to a lower dimensional latent space, and then back to the features. The model is optimised by minimising the dif-ference between the input data and the reconstruction. This has been formalized through principal component analysis (PCA) (Pearson 1901) and its nonlinear extension Kernel PCA (Sch ¨olkopf, Smola, and M ¨uller 1998). While few approaches exist in traditional machine learning, the paradigm of repre-sentation through reconstruction has built the foundation of a large number of deep learning methods. Autoencoders (AE) (Kramer 1991) use a neural network for both the embedding into the latent space as well as for the reconstruction. The empirical success of autoencoders has given rise to a large body of work, developed for task specific regularisation (e.g. (Yang et al. 2017)), as well as for a wide range of applications such as image denoising (Buades, Coll, and Morel 2005a), clustering (Yang et al. 2017) or natural language processing (Zhang et al. 2022). However, their theoretical understanding is still limited to analyzing critical points and dynamics in shallow linear networks (Kunin et al. 2019; Pretorius, Kroon, and Kamper 2018; Refinetti and Goldt 2022). 
+
+An extended version including proofs can be found at https://arxiv.org/abs/2309.02028 The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+11910 Kernel representation learning. In spite of the widespread use of deep learning, other models are still ubiq-uitous in data science. For instance, decision tree ensembles are competitive with neural networks in various domains (Shwartz-Ziv and Armon 2022; Roßbach 2018; Gu, Kelly, and Xiu 2020), and are preferred due to interpretability. Another well established approach is kernel methods, which we will focus on in this paper. At an algorithmic level, kernel meth-ods rely on the pairwise similarities between datapoints, denoted by a kernel 𝑘 (𝒙 , 𝒙 ′). When the map 𝑘 is positive definite, 𝑘 (𝒙 , 𝒙 ′) corresponds to the inner product between (potentially infinite-dimensional) nonlinear transformations of the data, and implicitly maps the data to a reproduc-ing kernel Hilbert space (RKHS)  through a feature map 
+
+𝜙 ∶  →  that satisfies 𝑘 (𝒙 , 𝒙 ′) = ⟨𝜙 (𝒙 ), 𝜙 (𝒙 ′)⟩. Thus, any algorithm that relies exclusively on inner products can im-plicitly be run in  by simply evaluating the kernel 𝑘 . Kernel methods are among the most successful models in machine learning, particularly due to their inherently non-linear and non-parametric nature, that nonetheless allows for a sound theoretical analysis. Kernels have been used extensively in regression (Kimeldorf and Wahba 1971; Wahba 1990) and classification (Cortes and Vapnik 1995; Mika et al. 1999). Since representation learning, or finding suitable features, is a key challenge is many scientific fields, we believe there is considerable scope for developing such models in these fields. The goal of this paper is to establish that one can con-struct non-parametric representation learning models, based on data reconstruction and contrastive losses . By reformulat-ing the respective optimisation problems for such models using positive definite kernels (Aronszajn 1950; Sch ¨olkopf and Smola 2002), we implicitly make use of non-linear fea-ture maps 𝜙 (⋅). Moreover, the presented approaches do not reduce to traditional (unsupervised) kernel methods. In the reconstruction based setting we define a Kernel AE and also present kernel-based self-supervised methods by consider-ing two different contrastive loss functions. Thereby, our work takes a significant step towards this development by decoupling the representation learning paradigm from deep learning. To this end, kernel methods are an ideal alternative since (i) kernel methods are suitable for small data problems that are prevalent in many scientific fields (Xu et al. 2023; Todman, Bush, and Hood 2023; Chahal and Toner 2021); (ii) kernels are non-parametric, and yet considered to be quite interpretable (Ponte and Melko 2017; Hainmueller and Hazlett 2014); and (iii) as we show, there is a natural trans-lation from deep SSL to kernel SSL, without compromising performance. 
+
+Contributions. The main contributions of this work is the development and analysis of kernel methods for recon-struction and contrastive SSL models. More specifically: 1. Kernel Contrastive Learning. We present kernel variants of a single hidden layer network that minimises two popular contrastive losses . For a simple contrastive loss (Saunshi et al. 2019), the optimisation is closely related to a kernel eigenvalue problem, while we show that the minimisa-tion of spectral contrastive loss (HaoChen et al. 2021) in the kernel setting can be rephrased as a kernel matrix based optimisation. 2. Kernel Autoencoder. We present a Kernel AE where the encoder learns a low-dimensional representation. We show that a Kernel AE can be learned by solving a kernel matrix based optimisation problem. 3. Theory. We present an extension to the existing represen-ter theorem under orthogonal constraints. Furthermore we derive generalisation error bounds for the proposed kernel models in which show that the prediction of the model improve with increased number of unlabelled data. 4. Experiments. We empirically demonstrate that the three proposed kernel methods perform on par or outperform classification on the original features as well as Kernel PCA and compare them to neural network representation learning models. 
+
+Related Work (Johnson, Hanchi, and Maddison 2022) show that minimising certain contrastive losses can be in-terpreted as learning kernel functions that approximate a fixed positive-pair kernel, and hence, propose an approach of combining deep SSL with Kernel PCA. Closer to our work appears to be (Kiani et al. 2022), where the neural network is replaced by a function learned on the RKHS of a kernel. However, their loss functions are quite different from ours. Moreover, by generalising the representer theorem, we can also enforce orthonormality on the embedding maps from the RKHS itself. (Zhai et al. 2023) studies the role of augmen-tations in SSL through the lense of the RKHS induced by an augmentation. (Shah et al. 2022) present a margin maximi-sation approach for contrastive learning that can be solved using kernel support vector machines. Their approach is close to our simple contrastive loss method (Definition 1), but not the same as we obtain a kernel eigenvalue prob-lem. While (Johnson, Hanchi, and Maddison 2022; Shah et al. 2022) consider specific contrastive losses, we present a wider range of kernel SSL models, including Kernel AE, and pro-vide generalisation error bounds for all proposed models. 
+
+Notation We denote matrices by bold capital letters 𝑨 ,vectors as 𝒂 , and 𝑰 𝑚 for an identity matrix of size 𝑚 ∈ N. For a given kernel 𝑘 ∶ R𝑑 × R𝑑 → R, we denote 𝜙 ∶ R𝑑 → 
+
+for its canonical feature map into the associated RKHS .Given data 𝒙 1, … , 𝒙 𝑛 collected in a matrix 𝑿 ∈ R𝑑 ×𝑛 , we write Φ ∶= ( 𝜙 (𝒙 1), … , 𝜙 (𝒙 𝑛 )) and define 𝑋 as the finite-dimensional subspace spanned by Φ. Recall that  can be decomposed as 𝑋 ⊕ ⟂ 
+
+> 𝑋
+
+. We denote by 𝑲 = Φ 𝑇 Φ ∈ R𝑛 ×𝑛 
+
+the kernel matrix, and define 𝑘 (𝒙 ′, 𝑿 ) = Φ 𝑇 𝜙 (𝒙 ′). Through-out the paper we assume 𝑛 datapoints are used to train the representation learning model, which embeds from R𝑑 into a 
+
+ℎ-dimensional space. On a formal level, the problem could be stated within the generalised framework of matrix-valued kernels 𝐾 ∶ R𝑑 × R𝑑 → Rℎ×ℎ, because the vector-valued RKHS (𝐾 ) associated with a matrix-valued kernel 𝐾 nat-urally contains functions 𝑾 that map from R𝑑 to Rℎ. For the scope of this paper however, it is sufficient to assume 
+
+𝐾 (𝑥, 𝑦 ) = 𝑰 ℎ ⋅ 𝑘 (𝑥, 𝑦 ) for some scalar kernel 𝑘 (𝑥, 𝑦 ) with real-valued RKHS . Then, the norm of any 𝑾 ∈ (𝐾 ) is simply the Hilbert-Schmidt norm that we denote as ‖𝑾 ‖ = ‖𝑾 ‖
+
+(for finite-dimensional matrices, the Frobenius norm), and learning the embedding from R𝑑 to Rℎ reduces to learning 
+
+ℎ individual vectors 𝒘 1, … , 𝒘 ℎ ∈ . In other words, we can The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+> 11911
+
+interpret 𝑾 ∈ (𝐾 ) as a (potentially infinite-dimensional) matrix with columns 𝒘 1, … , 𝒘 ℎ ∈ , sometimes writing 
+
+𝑾 = ( 𝒘 1, … , 𝒘 ℎ) for notational convenience. To underline the similarity with the deep learning framework, we denote 
+
+𝑾 𝑇 𝜙 (𝑥 ) = ( ⟨𝒘 𝑡 , 𝜙 (𝑥 )⟩)ℎ𝑡 =1 = ( 𝒘 1(𝑥 ), … , 𝒘 ℎ(𝑥 )) ∈ Rℎ, where we invoke the reproducing property of the RKHS  in the last step. We denote by 𝑾 ∗ the adjoint operator of 𝑾 (in a finite-dimensional setting, 𝑾 ∗ simply becomes the transpose 
+
+𝑾 𝑇 ). The constraint 𝑾 ∗𝑾 = 𝑰 ℎ enforces orthonormality be-tween all pairs (𝒘 𝑖 , 𝒘 𝑗 )𝑖,𝑗 ≤ℎ.
+
+# Representer Theorems 
+
+In principle, kernel methods minimise a loss functional 
+
+over the entire, possibly infinite-dimensional RKHS. It is the celebrated representer theorem (Kimeldorf and Wahba 1971; Sch ¨olkopf, Herbrich, and Smola 2001) that ensures the practical feasibility of this approach: Under mild conditions on the loss , the optimiser is surely contained within the finite-dimensional subspace 𝑋 . For example, in standard kernel ridge regression, the loss functional  is simply the regularised empirical squared error 
+
+(𝒘 ) = 
+
+> 𝑛
+
+∑
+
+> 𝑖 =1
+
+(𝒘 (𝑥 𝑖 ) − 𝑦 𝑖 )2 + 𝜆 ‖𝒘 ‖
+
+The fact that all minimisers of this problem indeed lie in 
+
+𝑋 can be seen by simply decomposing  = 𝑋 ⊕ ⟂ 
+
+> 𝑋
+
+,observing that 𝒘 (𝑥 𝑖 ) = 0 for all 𝒘 ∈ ⟂ 
+
+> 𝑋
+
+, and concluding that projecting any 𝒘 onto  can only ever decrease the functional . This very argument can be extended to rep-resentation learning, where regularisation is important to avoid mode collapse. We formally state the following result. 
+
+Theorem 1. (Representer Theorem for Representation Learn-ing) Given data 𝒙 1, … , 𝒙 𝑛 , denote by 𝑋 (𝒘 1, … , 𝒘 ℎ) a loss functional on ℎ that does not change whenever 𝒘 1, … , 𝒘 ℎ
+
+are projected onto the finite-dimensional subspace 𝑋 spanned by the data. Then, any minimiser of the regularised loss func-tional 
+
+(𝒘 1, … , 𝒘 ℎ) = 𝑋 (𝒘 1, … , 𝒘 ℎ) + 𝜆 ‖𝑾 ‖
+
+consists of 𝒘 1, … , 𝒘 ℎ ∈ 𝑋 .
+
+This justifies the use of kernel methods when the norm of the embedding map is penalized. However, it does not address loss functionals  that instead impose an orthonor-mality constraint on the embedding 𝑾 . It is natural to ask when a representer theorem exist for these settings as well. Below, we give a necessary and sufficient condition. 
+
+Theorem 2 (Representer theorem under orthonormal-ity constraints ). Given data 𝑿 and an embedding dimension 
+
+ℎ ∈ N, let  ∶ ℎ → R be a loss function that vanishes on 
+
+⟂ 
+
+> 𝑋
+
+. Assume dim( ⟂ 
+
+> 𝑋
+
+) ≥ ℎ. Consider the following constrained minimisation problem over 𝒘 1, … , 𝒘 ℎ ∈ 
+
+minimise (𝒘 1, … , 𝒘 ℎ)
+
+s.t. 𝑾 ∗𝑾 = 𝑰 ℎ
+
+(1) 
+
+Furthermore, consider the inequality-constrained problem over 
+
+𝑋 
+
+minimise (𝒘 1, … , 𝒘 ℎ)
+
+s.t. 𝑾 𝑇 𝑾 ⪯ 𝑰 ℎ and 𝒘 1, … , 𝒘 ℎ ∈ 𝑋 
+
+(2) 
+
+Then, every minimiser of (1) is contained in ℎ𝑋 if and only if every minimiser of (2) satisfies 𝑾 𝑇 𝑾 = 𝑰 ℎ.
+
+In practice, the conditions (2) can often be verified directly by checking the gradient of  on 𝑋 , or under orthonormal-ization (see Appendix). Together with the standard represen-ter theorem, this guarantees that kernel methods can indeed be extended to representation learning — without sacrific-ing the appealing properties that the representer theorem provides us with. 
+
+# Representation Learning with Kernels 
+
+Building on this foundation, we can now formalize the pre-viously discussed representation learning paradigms in the kernel setting — namely SSL using contrastive loss functions, as well as unsupervised learning through reconstruction loss. 
+
+Simple Contrastive Loss 
+
+For convenience, we restrict ourselves to a triplet setting with training samples (𝒙 𝑖 , 𝒙 + 
+
+> 𝑖
+
+, 𝒙 − 
+
+> 𝑖
+
+), 𝑖 = 1 , … , 𝑛 . The idea is to consider an anchor image 𝒙 𝑖 , a positive sample 𝒙 + 
+
+> 𝑖
+
+generated using data augmentation techniques, as well as an indepen-dent negative sample 𝒙 − 
+
+> 𝑖
+
+. The goal is to align the anchor more with the positive sample than with the independent negative sample. In the following, we consider two loss functions that implement this idea. In both cases, we kernelize a single hidden layer, mapping data 𝒙 ∈ R𝑑 to an embedding 𝒛 ∈ Rℎ.
+
+𝒙 ∈ R𝑑 𝜙 (⋅)
+
+−−→ 𝒓 ∈  𝑾 
+
+−−→ 𝒛 ∈ Rℎ. (3) We start with a simple contrastive loss inspired by (Saun-shi et al. 2019), with additional regularisation. Intuitively, this loss directly compares the difference in alignment be-tween the anchor and the positive an the anchor and the negative sample. Formally, we define it as follows. 
+
+Definition 1 (Contrastive Kernel Learning ). We learn a representation of the form 𝑓 𝑾 (𝒙 ) = 𝑾 𝑇 𝜙 (𝒙 ) (see mapping in Eq. 3) by optimising the objective function 
+
+ ∶= 
+
+> 𝑛
+
+∑
+
+> 𝑖 =1
+
+𝑓 𝑾 (𝒙 𝑖 )𝑇 (𝑓 𝑾 (𝒙 − 
+
+> 𝑖
+
+) − 𝑓 𝑾 (𝒙 + 
+
+> 𝑖
+
+))
+
+s.t. 𝑾 ∗𝑾 = 𝑰 ℎ
+
+(4) By verifying the conditions of Theorem 2, we reduce the problem to a finite-dimensional optimisation. Theorem 3 then provides a closed from solution to the optimisation problem in Eq. 4. 
+
+Theorem 3 (Closed Form Solution and Inference at Op-timal parameterization ). Consider the optimisation prob-lem as stated in Definition 1. Let 𝑿 , 𝑿 +, 𝑿 − ∈ R𝑑 ×𝑛 denote the data corresponding to the anchors, positive and negative samples, respectively. Define the kernel matrices 
+
+𝑲 = [𝑘 (𝑥 𝑖 , 𝑥 𝑗 )]𝑖,𝑗 𝑲 − = [𝑘 (𝑥 𝑖 , 𝑥 − 
+
+> 𝑗
+
+)]𝑖,𝑗 
+
+𝑲 + = [𝑘 (𝑥 𝑖 , 𝑥 + 
+
+> 𝑗
+
+)]𝑖,𝑗 𝑲 −− = [𝑘 (𝑥 − 
+
+> 𝑖
+
+, 𝑥 − 
+
+> 𝑗
+
+)]𝑖,𝑗 
+
+𝑲 ++ = [𝑘 (𝑥 + 
+
+> 𝑖
+
+, 𝑥 + 
+
+> 𝑗
+
+)]𝑖,𝑗 𝑲 −+ = [𝑘 (𝑥 − 
+
+> 𝑖
+
+, 𝑥 + 
+
+> 𝑗
+
+)]𝑖,𝑗 The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+> 11912
+
+Furthermore, define the matrices 𝑲 3 = 𝑲 − − 𝑲 + as well as 
+
+𝑲 Δ = 𝑲 −− + 𝑲 ++ − 𝑲 −+ − 𝑲 𝑇  
+
+> −+
+
+𝑲 1 = [
+
+𝑲 𝑲 3
+
+𝑲 3 𝑲 Δ]
+
+𝑩 = [
+
+𝑲 3
+
+𝑲 Δ] ⋅ [𝑲 𝑲 − − 𝑲 +] 𝑲 2 = − 12 (𝑩 + 𝑩 𝑇 ) .
+
+Let 𝑨 2 consist of the top ℎ eigenvectors of the matrix 
+
+𝑲 −1/2 1 𝑲 2𝑲 −1/2 1 , which we assume to have ℎ non-negative eigen-values. Let 𝑨 = 𝑲 −1/2 1 𝑨 2. Then, at optimal parameterization, the embedding of any 𝑥 ∗ ∈ R𝑑 can be written in closed form as 
+
+𝒛 ∗ = 𝑨 𝑇 
+
+[
+
+𝑘 (𝑥 ∗, 𝑿 )
+
+𝑘 (𝑥 ∗, 𝑿 −) − 𝑘 (𝑥 ∗, 𝑿 +)]
+
+Spectral Contrastive Loss 
+
+Let us now consider a kernel contrastive learning based on an alternative, commonly used spectral contrastive loss function (HaoChen et al. 2021). 
+
+Definition 2 (Spectral Kernel Learning ). We learn a rep-resentation of the form 𝑓 𝑾 (𝒙 ) = 𝑾 𝑇 𝜙 (𝒙 ) (see mapping in Eq. 3) by optimising the following objective function, :
+
+ =
+
+> 𝑛
+
+∑
+
+> 𝑖 =1
+
+−2 𝑓 𝑾 (𝒙 𝑖 )𝑇 𝑓 𝑾 (𝒙 + 
+
+> 𝑖
+
+) + (𝑓 𝑾 (𝒙 𝑖 )𝑇 𝑓 𝑾 (𝒙 − 
+
+> 𝑖
+
+))2 + 𝜆 ‖𝑾 ‖2 
+
+> 
+
+.
+
+For universal kernels, we can directly rewrite the loss function using the kernel trick and optimise it using sim-ple gradient descent. This allows us to state the following result, which yields an optimisation directly in terms of the embeddings 𝒛 1, … , 𝒛 𝑛 ∈ Rℎ.
+
+Theorem 4 (Gradients and Inference at Optimal Param-eterization ). Consider the optimisation problem as stated in Definition 2, with 𝑲 denoting the kernel matrix of a universal kernel. Then, we can equivalently minimise the objective w.r.t. the embeddings 𝒁 ∈ Rℎ×3 𝑛 . Denoting by 𝒛 1, … , 𝒛 3𝑛 the columns of 𝒁 , the loss to be minimised becomes 
+
+min 
+
+> 𝒁 ∈Rℎ×3 𝑛
+> 𝑛
+
+∑
+
+> 𝑖 =1
+
+−2 𝒛 𝑇 𝑖 𝒛 𝑖 +𝑛 + (𝒛 𝑇 𝑖 𝒛 𝑖 +2 𝑛 )2 + 𝜆 ⋅ Tr (𝒁𝑲 −1 𝒁 𝑇 )
+
+The gradient of the loss function in terms of 𝒁 is therefore given by 
+
+2𝜆 𝒁𝑲 −1 +
+
+⎧⎪⎪⎪⎨⎪⎪⎪⎩
+
+−2 𝒛 𝑖 +𝑛 + 2( 𝒛 𝑇 𝑖 𝒛 𝑖 +2 𝑛 )𝒛 𝑖 +2 𝑛 , 𝑖 ∈ [ 𝑛 ]−2 𝒛 𝑖 −𝑛 , 𝑖 ∈ [ 𝑛 + 1 , 2𝑛 ]2( 𝒛 𝑇 𝑖 𝒛 𝑖 −2 𝑛 )𝑧 𝑖 −2 𝑛 , 𝑖 ∈ [2 𝑛 + 1 , 3𝑛 ]
+
+For any new point 𝒙 ∗ ∈ R𝑑 , the trained model maps it to 
+
+𝒛 ∗ ∶= 𝒁𝑲 −1 𝑘 (𝑿 , 𝒙 ∗).
+
+Kernel Autoencoders 
+
+In general, AE architectures involve mapping the input to a lower dimensional latent space (encoding), and then back to the reconstruction (decoding). In this work we propose a Kernel AE, where both encoder and decoder correspond to kernel machines, resulting in the mapping 
+
+𝒙 ∈ R𝑑 𝜙 1(⋅)
+
+−−−→ 𝒓 1 ∈ 1 
+
+> 𝑾 1
+
+−−→ 𝒛 ∈ Rℎ 𝜙 2(⋅)
+
+−−−→ 𝒓 2 ∈ 2 
+
+> 𝑾 2
+
+−−→ 𝒙 ∈ R𝑑 
+
+where typically ℎ < 𝑑 . While several materializations of this high-level idea come to mind, we define the Kernel AE as follows. 
+
+Definition 3 (Kernel AE ). Given data 𝑿 ∈ R𝑑 ×𝑛 and a regularisation parameter 𝜆 > 0, define the loss functional 
+
+(𝑾 1, 𝑾 2) ∶= ‖‖‖𝑿 − 𝑾 𝑇  
+
+> 2
+
+𝜙 2 (𝑾 𝑇  
+
+> 1
+
+𝜙 1 (𝑿 ))‖‖‖
+
+> 2
+> 
+
++ 𝜆 (‖ 𝑾 1‖2 
+
+> 
+
++ ‖𝑾 2‖2 
+
+> 
+
+)
+
+The Kernel AE corresponds to the optimisation problem 
+
+min   
+
+> 𝑾 1,𝑾 2
+
+(𝑾 1, 𝑾 2)
+
+s.t. ‖𝑾 𝑇  
+
+> 1
+
+𝜙 (𝒙 𝑖 )‖2 = 1 ∀ 𝑖 ∈ [ 𝑛 ] (5) Let us justify our choice of architecture briefly. Firstly, we include norm regularisations on both the encoder as well as the decoder. This is motivated by the following observation: When the feature map 𝜙 2 maps to the RKHS of a univer-sal kernel, any choice of 𝑛 distinct points 𝒛 1, … , 𝒛 𝑛 in the bottleneck allows for perfect reconstruction. We therefore encourage the Kernel AE to learn smooth maps by penal-izing the norm in the RKHS. In addition, we include the constraint ‖𝑾 𝑇  
+
+> 1
+
+𝜙 (𝒙 𝑖 )‖2 = 1 ∀ 𝑖 ∈ [ 𝑛 ] to prevent the Kernel AE from simply pushing the points 𝒛 1, … , 𝒛 𝑛 to zero. This hap-pens whenever the impact of rescaling 𝒛 𝑖 affects the norm of the encoder 𝑾 1 differently from the decoder 𝑾 2 (as is the case for commonly used kernels such as Gaussian and Laplacian). Nonetheless, we stress that other choices of reg-ularisation are also possible, and we explore some of them in the Appendix. While a closed form solution of Definition 3 is difficult to obtain, we show that for universal kernels, the optimisation can again be rewritten in terms of kernel matrices. 
+
+Theorem 5 (Kernel formulation and inference at opti-mal parameterization ). For any bottleneck 𝒁 ∈ Rℎ×𝑛 , define the reconstruction 
+
+𝑸 (𝒁 ) = 𝑿 (𝑲 𝑍 + 𝜆𝐼 𝑛 )−1 𝑲 𝑍 
+
+For universal kernels, learning the Kernel AE from Definition 3 is then equivalent to minimising the following expression over all possible embeddings 𝒁 ∈ Rℎ×𝑛 :
+
+‖𝑸 (𝑍 ) − 𝑿 ‖2 + 𝜆 Tr (𝒁𝑲 −1  
+
+> 𝑋
+
+𝒁 𝑇 + 𝑸𝑲 −1  
+
+> 𝑍
+
+𝑸 𝑇 )
+
+s.t. ‖𝒛 𝑖 ‖2 = 1 ∀ 𝑖 ∈ [ 𝑛 ]
+
+Given 𝒁 , any new 𝒙 ∗ ∈ R𝑑 is embedded in the bottleneck as 
+
+𝒛 ∗ = 𝒁𝑲 −1  
+
+> 𝑋
+
+𝑘 (𝒙 ∗, 𝑿 )
+
+and reconstructed as ̂
+
+𝒙 ∗ = 𝑿 (𝑲 𝑍 + 𝜆 𝑰 𝑛 )−1 𝑘 (𝒛 ∗, 𝒁 )
+
+Remark 1 (Connection to Kernel PCA ). In light of the known connections between linear autoencoders and stan-dard PCA, it is natural to wonder how above Kernel AE re-lates to Kernel PCA (Sch ¨olkopf, Smola, and M ¨uller 1998). The latter performs PCA in the RKHS , and is hence equivalent The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+11913 to minimising the reconstruction error over all orthogonal basis transformations 𝑾 in (𝑊 ) = 
+
+> 𝑛
+
+∑
+
+> 𝑖 =1
+
+‖‖𝜙 (𝒙 𝑖 ) − 𝑾 𝑇 𝑷 ℎ𝑾 𝜙 (𝒙 𝑖 )‖‖2 (6) where 𝑷 ℎ denotes the projection onto the first ℎ canonical basis vectors, and we assume that the features 𝜙 (𝒙 𝑖 ) are centered. How does the Kernel AE 𝑾 𝑇  
+
+> 2
+
+𝜙 2(𝑾 𝑇  
+
+> 1
+
+𝜙 1(𝒙 )) relate to this if we replace the regularisation terms on 𝑾 1, 𝑾 2 by an orthogonality constraint on both? For simplicity, let us assume ℎ = 1 . The optimisation problem then essentially becomes 
+
+ =
+
+> 𝑛
+
+∑
+
+> 𝑖 =1
+
+‖𝒙 𝑖 − 𝑾 2(𝑾 1(𝒙 𝑖 )) ‖2 (7) where 𝑾 1 ∶ R𝑑 → R is a function from the RKHS over 
+
+R𝑑 (with unit norm), and 𝑾 2 ∶ R → R𝑑 consists of 𝑑 or-thonormal functions from the RKHS over R. Clearly, Eq. 7 evaluates the reconstruction error in the sample space, much in contrast to the loss function in Eq. 6 which computes dis-tances in the RKHS. Additionally, the map 𝑾 𝑇 learned in Eq. 6 from the bottleneck back to  is given by the basis transformation 𝑾 in Kernel PCA, whereas it is fixed as the feature map 𝜙 over Rℎ in the AE setting. Kernel PCA can be viewed as an AE architecture that maps solely within , via 
+
+𝜙 (𝒙 ) → 𝑾 𝜙 (𝒙 ) → 𝑷 ℎ𝑾 𝜙 (𝒙 ) → 𝑾 𝑇 𝑷 ℎ𝑾 𝜙 (𝒙 ).
+
+Notably, the results of Kernel PCA usually do not translate back to the sample space easily. Given a point 𝒙 ∈ R𝑑 , the projection of 𝜙 (𝒙 ) onto the subspace spanned by Kernel PCA is not guaranteed to have a pre-image in R𝑑 , and a direct interpretation of the learned representations can therefore be difficult. In contrast, our method is quite interpretable, as it also provides an explicit formula for the reconstruction ̂ 𝒙 ∗
+
+of unseen data points — not just their projection onto a sub-space in an abstract Hilbert space. In particular, by choosing an appropriate kernel 1 and tuning the regularisation param-eter 𝜆 , a practitioner may directly control the complexity of both decoder as well as the encoder. 
+
+Remark 2 (De-noising Kernel AE ). In this section, we considered the standard setting where the model learns the reconstruction of the input data. A common extension is the de-nosing setting (e.g. (Buades, Coll, and Morel 2005b; Vincent et al. 2010)), which formally moves the model from a reconstruction to a SSL setting, where we replace the input with a noisy version of the data. The goal is now to learn a function that removes the noise and, in the process, learns latent representations. More formally, the mapping becomes 
+
+𝒙 ∈ R𝑑 𝜙 1(⋅)
+
+−−−→ 𝒓 1 ∈ 1 
+
+> 𝑾 1
+
+−−→ 𝒛 ∈ Rℎ 𝜙 2(⋅)
+
+−−−→ 𝒓 2 ∈ 2 
+
+> 𝑾 2
+
+−−→ 𝒙 ∈ R𝑑 .
+
+where 𝒙 is given by 𝒙 ∶= 𝒙 + 𝜀 with 𝜀 being the noise term. A precise formulation is provided in the Appendix. We again note that the simple extension to this setting further distinguishes our approach from Kernel PCA, where such augmentations are not as easily possible. 
+
+> 1The choice of kernel could be influenced by the type of func-tions that are considered interpretable in the domain of application.
+
+# Generalisation Error Bounds 
+
+Kernel methods in the supervised setting are well estab-lished and previous works offer rigorous theoretical anal-ysis (Wahba 1990; Sch ¨olkopf and Smola 2002; Bartlett and Mendelson 2002). In this section, we show that the proposed kernel methods for contrastive SSL as well as for the re-construction setting can be analysed in a similar fashion, and we provide generalisation error bounds for each of the proposed models. 
+
+Error Bound for Representation Learning Setting 
+
+In general we are interested in characterizing (𝑓 ) =
+
+E𝑿 ∼ [𝑙 (𝑓 (𝑿 ))] where 𝑓 (𝑿 ) is the representation function and 𝑙 (⋅) is a loss function, which is either a contrastive loss or based on reconstruction. However, since we do not have access to the distribution of the data , we can only ob-serve the empirical (training) error, ̂ (𝑓 ) = 1 
+
+> 𝑛
+
+∑𝑛 𝑖 =1 𝑙 (𝑓 (𝑿 𝑖 )) ,where 𝑛 is the number of unlabelled datapoints we can char-acterise the generalisation error as 
+
+(𝑓 ) ≤̂ (𝑓 ) + complexity term + slack term The exact form of the complexity and slack term depends on the embeddings and the loss. In the following, we precisely characterise them for all of the proposed models. 
+
+Theorem 6 (Error Bound for Kernel Contrastive Loss ).
+
+Let  ∶= {𝑿 ↦ 𝑾 𝑇 𝜙 (𝑿 ) ∶ ‖𝑾 𝑇 ‖ ≤ 𝜔 } be the class of em-bedding functions we consider in the contrastive setting. Define 
+
+𝛼 ∶= (√ℎ Tr [ 𝑲 𝑿 ] + √ℎ Tr [ 𝑲 𝑿 − ] + √ℎ Tr [ 𝑲 𝑿 + ]) as well as 
+
+𝜅 ∶= max {𝑘 (𝒙 ′ 
+
+> 𝑖
+
+, 𝒙 ′ 
+
+> 𝑖
+
+) ∶ 𝒙 ′ 
+
+> 𝑖
+
+∈ { 𝒙 𝑖 , 𝒙 − 
+
+> 𝑖
+
+, 𝒙 + 
+
+> 𝑖
+
+}𝑛 𝑖 =1 
+
+}. We then obtain the generalisation error for the proposed losses as follows. 1. Simple Contrastive Loss. Let the loss be given by Defini-tion 1. Then, for any 𝛿 > 0, the following statement holds with probability at least 1 − 𝛿 for any 𝑓 ∈  :
+
+(𝑓 ) ≤̂ (𝑓 ) + 𝑂 (
+
+𝜔 2√𝜅𝛼 𝑛 + 𝜔 2𝜅 
+
+√ log 1
+
+> 𝛿
+
+𝑛 )
+
+2. Spectral Contrastive Loss. Let the loss be given by Defi-nition 2. Then, for any 𝛿 > 0, the following statement holds with probability at least 1 − 𝛿 for any 𝑓 ∈  :
+
+(𝑓 ) ≤̂ (𝑓 ) + 𝑂 (𝜆𝜔 2 + 𝜔 3𝜅 32 𝛼 𝑛 + 𝜔 4𝜅 2
+
+√ log 1
+
+> 𝛿
+
+𝑛 )
+
+Similarly to the contrastive setting, we obtain a generali-sation error bound for the Kernel AE as follows. 
+
+Theorem 7 (Error Bound for Kernel AE ). Assume the optimisation be given by Definition 3 and define the class of encoders/decoders as 
+
+ ∶= {𝑿 ↦ 𝑾 𝑇  
+
+> 2
+
+𝜙 2 (𝑾 𝑇  
+
+> 1
+
+𝜙 1 (𝑿 )) ∶
+
+‖𝑾 𝑇  
+
+> 1
+
+𝜙 (𝒙 𝑖 )‖2 = 1 ∀ 𝑖 , ‖𝑾 𝑇  
+
+> 1
+
+‖ ≤ 𝜔 1, ‖𝑾 𝑇  
+
+> 2
+
+‖ ≤ 𝜔 2
+
+}
+
+Let 𝑟 ∶= 𝜆 (𝜔 21 + 𝜔 22) and 𝛾 = max 𝒔 ∈Rℎ
+
+{𝑘 (𝒔 , 𝒔 ) ∶ ‖𝒔 ‖2 = 1 }.Then for any 𝛿 > 0, the following statement holds with proba-bility at least 1 − 𝛿 for any 𝑓 ∈  :
+
+𝐴𝐸 (𝑓 ) ≤̂ 𝐴𝐸 (𝑓 ) + 𝑂 (𝑟 + 𝜔 2
+
+√𝑑𝛾 
+
+√𝑛 +
+
+√ log 1
+
+> 𝛿
+
+𝑛 )The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+> 11914
+
+The above bounds demonstrate that with increasing num-ber of unlabelled datapoints, the complexity term in the generalisation-error bound decreases. Thus, the proposed models follow the general SSL paradigm of increasing the number of unlabelled data to improve the model perfor-mance. 
+
+Error Bound for Supervised Downstream Task 
+
+While the above bounds provide us with insights on the gen-eralisation of the representation learning setting, in most cases we are also interested in the performance on down-stream tasks. Conveniently, we can use the setup presented in (Saunshi et al. 2019) to bound the error of the supervised downstream tasks in terms of the unsupervised loss, provid-ing a bound of the form 
+
+𝑠𝑢𝑝 (𝑓 ) ≤ 𝑐 1̂ 𝑢𝑛 (𝑓 ) + 𝑐 1 ∗ complexity term where 𝑐 1 and 𝑐 2 are data dependent constants. We present the formal version of this statement in the supplementary material for all presented models. This highlights that a better representation (as given by a smaller loss of the unsupervised task) also improves the performance of the supervised downstream task. 
+
+# Experiments 
+
+In this section we illustrate the empirical performance of the kernel-based representation learning models introduced in this paper. As discussed in the introduction, there is a wide range of representation learning models, that are often quite specific to the given task. We mainly consider classification in a setting with only partially labelled data at our disposal, as well as image de-noising using the Kernel AE. We state the main setup and results in the following 2.
+
+Classification on Embedding 
+
+Data. In this section, we consider the following four datasets: 
+
+concentric circles , cubes (Pedregosa et al. 2011), Iris (Fisher 1936) and Ionosphere (Sigillito. et al. 1989). We fix the fol-lowing data split: 𝑢𝑛𝑙𝑎𝑏𝑒𝑙𝑙𝑒𝑑 = 50% , 𝑙𝑎𝑏𝑒𝑙𝑙𝑒𝑑 = 5% and 
+
+𝑡𝑒𝑠𝑡 = 45% , and consider ℎ = 2 as the embedding dimension. 
+
+Classification task using 𝑘 nearest neighbours ( 𝑘 -nn) using embedding as features. We investigate classifica-tion as an example of a supervised downstream task. The setting is the following: We have access to 𝑿 𝑢𝑛𝑙𝑎𝑏. and 𝑿 𝑙𝑎𝑏. 
+
+datapoints, which we use to train the representation learn-ing model without access to labels. Then, as the downstream classification model, we consider a 𝑘 -nn model (with 𝑘 = 3 )learned on the embedding of 𝑿 𝑙𝑎𝑏. , with corresponding labels 
+
+𝒀 𝑙𝑎𝑏. . We test on 𝑿 𝑡𝑒𝑠𝑡 , 𝒀 𝑡𝑒𝑠𝑡 . As a benchmark, we compare to 
+
+𝑘 -nn both on the original features as well as on the embed-dings obtained by standard Kernel PCA. 
+
+Choice of kernel and their parameterization. For the proposed kernel methods as well as for Kernel PCA we consider three standard kernels, Gaussian, Laplacian and     
+
+> 2We provide all further details (as well as experiments on addi-tional datasets) in the arxiv version. We provide a Python implementation on https://github.com/ pascalesser/Representation-Learning-with-Kernels. 01Circles
+> 01Cubes
+> 01Iris
+> Original Kernel PCA SSL simple SSL spectral Kernel AE 01Ionosphere Lin. ReLU Gaus. Lap.
+
+Figure 1: From left to right: we first consider 𝑘 -nn on the original features followed by 𝑘 -nn on embeddings obtained by Kernel PCA, and the proposed methods. 
+
+linear kernels as well as a 1-layer ReLU Kernel (Bietti and Bach 2021). For Gaussian and Laplacian kernel we choose the bandwidth using a grid search over 15 steps spaced logarithmically between 0.01 and 100 . We perform leave-one-out validation on 𝑿 𝑙𝑎𝑏. to pick the bandwidth of the method applied to the test set. The classification experiments on the above listed datasets are present in Figure 1. All results show the mean and standard deviation over five splits of each dataset. It is apparent throughout the experiments that the choice of kernel plays a significant role in the overall performance of the model. This dependency is not surprising, as the performance of a specific kernel directly links to the underlying data-structure, and the choice of kernel is an essential part of the model design. This is in accordance with existing kernel methods — and an important future direction is to analyze what kernel characteristics are beneficial in a representation learning setting. 
+
+Comparison of supervised and representation learn-ing. As stated in the introduction (and supported theoreti-cally in the previous section), the main motivation for repre-sentation learning is to take advantage of unlabelled data by learning embeddings that outperform the original features on downstream tasks. To evaluate this empirically for the kernel representation learning models analyzed in this paper, we compare 𝑘 -nn on the original data to 𝑘 -nn on the em-beddings as shown in Figure 1. We observe that for Circles, Cubes, Iris and Ionosphere there always exists an embedding that outperforms 𝑘 -nn on the original data. 
+
+Comparing different embedding methods. Having observed that learning a representation before classification is beneficial, we now focus on the different embedding ap-proaches. While the performed experiments do not reveal clear trends between different methods, we do note that the proposed methods overall perform on par or outperform Kernel PCA, underlining their relevance for kernel SSL. The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24)    
+
+> 11915 SSL simp. SSL spec. Kernel AE 01Accuracy  MNIST, d=784
+> SSL simp. SSL spec. Kernel AE Cifar, d=3072 NN Linear ReLU Gaus. Lap.
+
+Figure 2: Comparison of kernel methods and neural network models for classification. MNIST CIFAR SVHN 10 7
+
+> MSE NN Linear ReLU Gaus. Lap.
+
+Figure 3: De-noising using NN AE with and Kernel AE. 
+
+Comparison to Neural Networks for Classification and De-noising 
+
+Representation learning has mainly been established in the context of deep neural networks. In this paper, we make a step towards decoupling the representation learn-ing paradigm from the widely used deep learning models. Nonetheless, we can still compare the proposed kernel meth-ods to neural networks. We construct the corresponding NN model by replacing the linear function in the reproducing kernel Hilbert space, 𝑾 ⊤𝜙 (𝒙 ) by an one-hidden layer neural network 𝑾 2𝜎 (𝑾 1𝒙 ), where 𝜎 (⋅) is a non-linear activation function (and we still minimise a similar loss function). 
+
+Classification. We compare the performance of both representation learning approaches in Figure 2 for datasets 
+
+CIFAR-10 (Krizhevsky, Hinton et al. 2009), as well as a subset of the first two classes of MNIST (Deng 2012) (i.e. 𝑛 = 500 ). We observe that the kernel methods perform on par with, or even outperform the neural networks. This indicates that there is not one dominant approach but one has to choose depending on the given task. 
+
+De-Noising. As a second task, we consider de-noising us-ing (Kernel) AE. Data is sampled from the first five classes of 
+
+MNIST , CIFAR-10 and SVHN (Netzer et al. 2011) with 𝑛 = 225 
+
+and the noisy version are generated by 𝒙 ∶= 𝒙 + 𝜀, 𝜀 𝑖 ∼
+
+ (0 , 0.1) . We compare the performance of kernel-based approaches with the neural network reconstructions in Fig-ure 3 by plotting the mean square error on the test set be-tween the AE output and the clean data. Kernel AE out-performs the neural network AE in all considered settings. Moreover, there is little variation among the different ker-nels. This indicates that at least in the presented settings, the proposed kernel methods pose a viable alternative to traditional neural network based representation learning. 
+
+Formal connection between Kernel and neural net-work model. While it is known that regression with infinite-width networks is equivalent to kernel regression with neu-ral tangent kernel (NTK) (Jacot, Gabriel, and Hongler 2018; Arora et al. 2019), similar results are not known for SSL and this brings up the question: Is kernel SSL equivalent to SSL with infinitely-wide neural networks? It is possible to show that single-layer Kernel AE with NTK is the infinite-width limit of over-parameterized AE (Nguyen, Wong, and Hegde 2021; Radhakrishnan, Belkin, and Uhler 2020). We believe that the same equivalence also holds for kernel contrastive learning (Definition 1) with NTK, but leave this as an open problem. We do not know if Definition 3 with NTK is the limit for bottleneck deep learning AE since, as we note ear-lier, there is no unique formulation for Kernel AE. 
+
+# Discussions and Outlook 
+
+In this paper, we show that new variants of representer theorem allows one to rephrase SSL optimisation problems or the learned representations in terms of kernel functions. The resulting kernel SSL models provide natural tools for theoretical analysis. We believe that presented theory and method provide both scope for precise analysis of SSL and can also be extended to other SSL principles, such as other pretext tasks or joint embedding methods (Saunshi et al. 2019; Bardes, Ponce, and LeCun 2022; Grill et al. 2020; Chen and He 2020). We conclude with some additional discussions. 
+
+Computational limitations and small dataset setting. 
+
+Exactly computing kernel matrices is not scalable, however random feature (RF) approximations of kernel methods are well suited for large data (Rahimi and Recht 2007; Carratino, Rudi, and Rosasco 2018). While one may construct scalable kernel representation learning methods using RF, it should be noted that RF models are lazy-trained networks (Ghorbani et al. 2019). So fully-trained deep representation learning models may be more suitable in such scenarios. However representation learning is relevant in all problems with avail-ability of partially labelled data. This does not only apply to the big data regime where deep learning approaches are predominantly used, but also to small data settings where ker-nel methods are traditionally an important tool (Fern ´andez-Delgado et al. 2014). The practical significance of developing kernel approaches is to broaden the scope of the representation learning paradigm beyond the deep learning community. 
+
+Kernel SSL vs. non-parametric data embedding. Sev-eral non-parametric generalisations of PCA, including func-tional PCA, kernel PCA, principle curves etc., have been studied over decades and could be compared to Kernel AEs. However, unlike kernel SSL, embedding methods are typi-cally not inductive. As shown previously, the inductive rep-resentation learning by Kernel AE and contrastive learning make them suitable for downstream supervised tasks. 
+
+Kernel SSL vs. SSL with infinite-width neural net-works. While it is known that regression with infinite-width networks is equivalent to kernel regression with neural tan-gent kernel (NTK) (Jacot, Gabriel, and Hongler 2018), similar results are not known for SSL. We believe that a study of the learning dynamics of neural network based SSL would show their equivalence with our kernel contrastive models with NTK. However, it is unclear to us whether a similar result can exist for kernel AE, as NTK approximations typically do not hold in the presence of bottleneck layers (Liu, Zhu, and Belkin 2020). The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+> 11916
+
+# Acknowledgments 
+
+This work has been supported by the German Research Foundation (Priority Program SPP 2298, project GH 257/2-1, and Research Grant GH 257/4-1) and the DAAD programme Konrad Zuse Schools of Excellence in Artificial Intelligence, sponsored by the Federal Ministry of Education and Re-search. 
+
+# References 
+
+Aronszajn, N. 1950. Theory of reproducing kernels. Trans-actions of the American mathematical society .Arora, S.; Du, S. S.; Hu, W.; Li, Z.; Salakhutdinov, R.; and Wang, R. 2019. On Exact Computation with an Infinitely Wide Neural Net. In Advances in neural information process-ing systems .Bardes, A.; Ponce, J.; and LeCun, Y. 2022. VICReg: Variance-Invariance-Covariance Regularization for Self-Supervised Learning. In International Conference on Learning Represen-tations .Bartlett, P. L.; and Mendelson, S. 2002. Rademacher and Gaussian Complexities: Risk Bounds and Structural Results. 
+
+Journal of Machine Learning Research .Bay, H.; Tuytelaars, T.; and Van Gool, L. 2006. SURF: Speeded Up Robust Features. In Computer Vision – ECCV 2006 .Springer Berlin Heidelberg. Bengio, Y.; Courville, A.; and Vincent, P. 2013. Representa-tion learning: A review and new perspectives. IEEE transac-tions on pattern analysis and machine intelligence .Bietti, A.; and Bach, F. 2021. Deep Equals Shallow for ReLU Networks in Kernel Regimes. In International Conference on Learning Representations .Bromley, J.; Guyon, I.; LeCun, Y.; S ¨ackinger, E.; and Shah, R. 1993. Signature verification using a” siamese” time delay neural network. Advances in neural information processing systems .Buades, A.; Coll, B.; and Morel, J.-M. 2005a. A review of image denoising algorithms, with a new one. Multiscale modeling & simulation .Buades, A.; Coll, B.; and Morel, J.-M. 2005b. A review of image denoising algorithms, with a new one. Multiscale Modeling and Simulation: A SIAM Interdisciplinary Journal .Carratino, L.; Rudi, A.; and Rosasco, L. 2018. Learning with SGD and Random Features. In Advances in Neural Informa-tion Processing Systems 31 .Chahal, H.; and Toner, H. 2021. ‘Small Data’ Are Also Crucial for Machine Learning. Scientific American .Chen, T.; Kornblith, S.; Norouzi, M.; and Hinton, G. 2020. A simple framework for contrastive learning of visual repre-sentations. In International conference on machine learning .Chen, X.; and He, K. 2020. Exploring Simple Siamese Repre-sentation Learning. arXiv preprint arXiv:2011.10566 .Cortes, C.; and Vapnik, V. 1995. Support-vector networks. 
+
+Machine learning .Deng, L. 2012. The mnist database of handwritten digit images for machine learning research. IEEE Signal Processing Magazine .Devlin, J.; Chang, M.; Lee, K.; and Toutanova, K. 2019. BERT: Pre-training of Deep Bidirectional Transformers for Lan-guage Understanding. In Proceedings of the 2019 Conference of the North American Chapter of the Association for Compu-tational Linguistics: Human Language Technologies, .Fern ´andez-Delgado, M.; Cernadas, E.; Barro, S.; and Amorim, D. 2014. Do we need hundreds of classifiers to solve real world classification problems? The journal of machine learn-ing research .Fisher, R. A. 1936. The use of multiple measurements in taxonomic problems. Annals of eugenics .Ghorbani, B.; Mei, S.; Misiakiewicz, T.; and Montanari, A. 2019. Limitations of Lazy Training of Two-layers Neural Net-work. In Advances in Neural Information Processing Systems 32 .Grill, J.-B.; Strub, F.; Altch ´e, F.; Tallec, C.; Richemond, P. H.; Buchatskaya, E.; Doersch, C.; Pires, B. A.; Guo, Z. D.; Azar, M. G.; Piot, B.; Kavukcuoglu, K.; Munos, R.; and Valko, M. 2020. Bootstrap Your Own Latent a New Approach to Self-Supervised Learning. In Advances in neural information processing systems .Gu, S.; Kelly, B.; and Xiu, D. 2020. Empirical asset pricing via machine learning. The Review of Financial Studies .Hainmueller, J.; and Hazlett, C. 2014. Kernel regularized least squares: Reducing misspecification bias with a flexible and interpretable machine learning approach. Political Analysis .HaoChen, J. Z.; Wei, C.; Gaidon, A.; and Ma, T. 2021. Prov-able Guarantees for Self-Supervised Deep Learning with Spectral Contrastive Loss. In Advances in neural information processing systems .Jacot, A.; Gabriel, F.; and Hongler, C. 2018. Neural Tan-gent Kernel: Convergence and Generalization in Neural Net-works. In Advances in neural information processing systems .Jing, L.; and Tian, Y. 2019. Self-Supervised Visual Feature Learning With Deep Neural Networks: A Survey. IEEE Trans-actions on Pattern Analysis and Machine Intelligence .Johnson, D. D.; Hanchi, A. E.; and Maddison, C. J. 2022. Contrastive Learning Can Find An Optimal Basis For Ap-proximately View-Invariant Functions. arXiv preprint arXiv:2210.01883 .Kanazawa, A.; Jacobs, D. W.; and Chandraker, M. 2016. Warp-net: Weakly supervised matching for single-view reconstruc-tion. In IEEE Conference on Computer Vision and Pattern Recognition .Kiani, B. T.; Balestriero, R.; Chen, Y.; Lloyd, S.; and LeCun, Y. 2022. Joint embedding self-supervised learning in the kernel regime. arXiv preprint arXiv:2209.14884 .Kimeldorf, G.; and Wahba, G. 1971. Some results on Tcheby-cheffian spline functions. Journal of Mathematical Analysis and Applications .Kramer, M. A. 1991. Nonlinear principal component analysis using autoassociative neural networks. AIChE journal .Krizhevsky, A.; Hinton, G.; et al. 2009. Learning multiple layers of features from tiny images. The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+> 11917
+
+Kunin, D.; Bloom, J.; Goeva, A.; and Seed, C. 2019. Loss Land-scapes of Regularized Linear Autoencoders. In International Conference on Machine Learning .Liu, C.; Zhu, L.; and Belkin, M. 2020. On the linearity of large non-linear models: when and why the tangent kernel is constant. In Advances in Neural Information Processing Systems 33 .Lowe, D. G. 1999. Object recognition from local scale-invariant features. In Proceedings of the seventh IEEE in-ternational conference on computer vision .Mika, S.; Ratsch, G.; Weston, J.; Scholkopf, B.; and Mullers, K.-R. 1999. Fisher discriminant analysis with kernels. In 
+
+Neural networks for signal processing IX: Proceedings of the 1999 IEEE signal processing society workshop .Misra, I.; and Maaten, L. v. d. 2020. Self-supervised learn-ing of pretext-invariant representations. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition .Netzer, Y.; Wang, T.; Coates, A.; Bissacco, A.; Wu, B.; and Ng, A. Y. 2011. Reading Digits in Natural Images with Unsuper-vised Feature Learning. In NIPS Workshop on Deep Learning and Unsupervised Feature Learning 2011 .Nguyen, T. V.; Wong, R. K. W.; and Hegde, C. 2021. Bene-fits of Jointly Training Autoencoders: An Improved Neural Tangent Kernel Analysis. IEEE Transactions on Information Theory .Pearson, K. 1901. On lines and planes of closest fit to sys-tems of points in space. The London, Edinburgh, and Dublin Philosophical Magazine and Journal of Science .Pedregosa, F.; Varoquaux, G.; Gramfort, A.; Michel, V.; Thirion, B.; Grisel, O.; Blondel, M.; Prettenhofer, P.; Weiss, R.; Dubourg, V.; Vanderplas, J.; Passos, A.; Cournapeau, D.; Brucher, M.; Perrot, M.; and Duchesnay, E. 2011. Scikit-learn: Machine Learning in Python. Journal of Machine Learning Research .Ponte, P.; and Melko, R. G. 2017. Kernel methods for inter-pretable machine learning of order parameters. Physical Review B .Pretorius, A.; Kroon, S.; and Kamper, H. 2018. Learning Dy-namics of Linear Denoising Autoencoders. In International Conference on Machine Learning .Radhakrishnan, A.; Belkin, M.; and Uhler, C. 2020. Overpa-rameterized neural networks implement associative memory. 
+
+Proceedings of the National Academy of Sciences of the United States of America .Rahimi, A.; and Recht, B. 2007. Random Features for Large-Scale Kernel Machines. In Advances in Neural Information Processing Systems 20 .Refinetti, M.; and Goldt, S. 2022. The dynamics of repre-sentation learning in shallow, non-linear autoencoders. In 
+
+International Conference on Machine Learning .Roßbach, P. 2018. Neural networks vs. random forests–does it always have to be deep learning. Saunshi, N.; Plevrakis, O.; Arora, S.; Khodak, M.; and Khan-deparkar, H. 2019. A Theoretical Analysis of Contrastive Unsupervised Representation Learning. In Proceedings of the 36th International Conference on Machine Learning .Sch ¨olkopf, B.; Herbrich, R.; and Smola, A. J. 2001. A Gen-eralized Representer Theorem. In Annual Conference on Computational Learning Theory .Sch ¨olkopf, B.; and Smola, A. J. 2002. Learning with Kernels: support vector machines, regularization, optimization, and beyond . Adaptive computation and machine learning series. MIT Press. Sch ¨olkopf, B.; Smola, A.; and M ¨uller, K.-R. 1998. Nonlinear Component Analysis as a Kernel Eigenvalue Problem. Neural Computation .Shah, A.; Sra, S.; Chellappa, R.; and Cherian, A. 2022. Max-Margin Contrastive Learning. In Proceedings of the AAAI Conference on Artificial Intelligence .Shwartz-Ziv, R.; and Armon, A. 2022. Tabular data: Deep learning is not all you need. Inf. Fusion .Sigillito., V.; S., W.; L., H.; ; and K., B. 1989. Iono-sphere. UCI Machine Learning Repository. DOI: https://doi.org/10.24432/C5W01B. Todman, L. C.; Bush, A.; and Hood, A. S. 2023. ‘Small Data’for big insights in ecology. Trends in Ecology & Evolution .Vincent, P.; Larochelle, H.; Lajoie, I.; Bengio, Y.; Manzagol, P.-A.; and Bottou, L. 2010. Stacked denoising autoencoders: Learning useful representations in a deep network with a local denoising criterion. Journal of machine learning research .Wahba, G. 1990. Spline Models for Observational Data . SIAM. Xu, P.; Ji, X.; Li, M.; and Lu, W. 2023. Small data machine learning in materials science. npj Computational Materials .Yang, B.; Fu, X.; Sidiropoulos, N. D.; and Hong, M. 2017. Towards k-means-friendly spaces: Simultaneous deep learn-ing and clustering. In international conference on machine learning , 3861–3870. PMLR. Zhai, R.; Liu, B.; Risteski, A.; Kolter, Z.; and Ravikumar, P. 2023. Understanding Augmentation-based Self-Supervised Representation Learning via RKHS Approximation. arXiv preprint arXiv:2306.00788 .Zhang, C.; Zhang, C.; Song, J.; Yi, J. S. K.; Zhang, K.; and Kweon, I. S. 2022. A survey on masked autoencoder for self-supervised learning in vision and beyond. arXiv preprint arXiv:2208.00173 .The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24)

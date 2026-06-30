@@ -1,0 +1,529 @@
+Title: Conditional Diffusion Model for Multi-Agent Dynamic Task Decomposition
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/40158/44119
+
+Number of Pages: 10
+
+Markdown Content:
+# Conditional Diffusion Model for Multi-Agent Dynamic Task Decomposition 
+
+## Yanda Zhu 1, Yuanyang Zhu 2†, Daoyi Dong 3, Caihua Chen 1†, Chunlin Chen 4,1  
+
+> 1
+
+School of Management and Engineering, Nanjing University,  
+
+> 2
+
+School of Information Management, Nanjing University  
+
+> 3
+
+Australian Artificial Intelligence Institute, University of Technology Sydney,  
+
+> 4
+
+School of Robotics and Automation, Nanjing University yandazhu@smail.nju.edu.cn, {yuanyangzhu, chchen, clchen }@nju.edu.cn, daoyidong@gmail.com 
+
+Abstract 
+
+> Task decomposition has shown promise in complex coopera-tive multi-agent reinforcement learning (MARL) tasks, which enables efficient hierarchical learning for long-horizon tasks in dynamic and uncertain environments. However, learning dynamic task decomposition from scratch generally requires a large number of training samples, especially exploring the large joint action space under partial observability. In this paper, we present the Conditional Diffusion Model for Dy-namic Task Decomposition (CD³T), a novel two-level hierar-chical MARL framework designed to automatically infer sub-task and coordination patterns. The high-level policy learns subtask representation to generate a subtask selection strat-egy based on subtask effects. To capture the effects of sub-tasks on the environment, CD³T predicts the next observation and reward using a conditional diffusion model. At the low level, agents collaboratively learn and share specialized skills within their assigned subtasks. Moreover, the learned subtask representation is also used as additional semantic information in a multi-head attention mixing network to enhance value decomposition and provide an efficient reasoning bridge be-tween individual and joint value functions. Experimental re-sults on various benchmarks demonstrate that CD³T achieves better performance than existing baselines.
+
+## Introduction 
+
+Cooperative multi-agent reinforcement learning (MARL) has achieved great improvements and holds great promise for real-world challenging problems, such as sensor net-works (Zhang and Lesser 2011), coordination of robot swarms (H¨ uttenrauch, ˇ Soˇ si´ c, and Neumann 2017), and au-tonomous vehicles (Pham et al. 2018). Learning effective control policies under partial observation for coordinating such systems remains challenging. The centralized training with decentralized execution (CTDE) paradigm (Oliehoek, Spaan, and Vlassis 2008; Kraemer and Banerjee 2016; Liu et al. 2025) alleviates partial observability yet struggles with the exponential growth of the joint action-observation space as agent numbers increase, which makes exploration of valu-able states rare and coordination difficult. To deal with uncertainty and adapt to the dynamics of an environment, all agents learn and share a decentralized pol-
+
+> †Corresponding author: Yuanyang Zhu and Caihua Chen. Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved.
+
+icy network under the CTDE framework. Memory-based ar-chitectures, such as recurrent neural networks (RNNs), long short-term memory (LSTM) (Hochreiter and Schmidhuber 1997), and gated recurrent units (GRUs), help agents to cap-ture long-term dependencies in their action-observation his-tory (Sunehag et al. 2018; Rashid et al. 2018; Son et al. 2019). Recent transformer-based methods have shown su-perior performance by modeling both long- and short-term dependencies, offering a powerful solution to partial observ-ability (Parisotto et al. 2020; Yang et al. 2022b; Wen et al. 2022). However, parameter sharing among agents can lead to similar behavior, hindering diversity. The challenge is to balance agent specialization and dynamic sharing to pro-mote cooperation (Christianos et al. 2021). A natural solution to this challenge is decomposing com-plex tasks into subtasks (Butler 2011). This decomposition not only simplifies the task but also allows agents to focus on solving specific subtasks, which can reduce the complexity of the action-observation space and enhance overall learn-ing efficiency. Building on this idea, recent research has ex-plored the integration of roles and skills into MARL. In the learning of roles (Wang et al. 2020a, 2021b; Li et al. 2021), skills (Yang et al. 2022a; Liu et al. 2022), or groups (Zang et al. 2023), existing works generally use a simple network structure to extract action representations for agents and may neglect fully considering the dynamic interactions among agents and the environment. The representational capacity of such a setting poses a bottleneck when trying to learn dis-tinct latent representations for all subtasks. Diffusion Models (Ho, Jain, and Abbeel 2020; Sohl-Dickstein et al. 2015a), a novel class of generative models known for their impressive performance in image generation tasks, offer a promising avenue to address such challenges. These models are well-suited for handling the stochastic-ity inherent in complex environments due to their ability to model stochastic processes through iterative denoising. Fur-thermore, since the spaces of histories and states in MARL are often continuous and high-dimensional, diffusion mod-els are particularly effective because of their robust represen-tational capacity in expansive spaces. These benefits of the diffusion model stimulate our thinking in MARL domains, i.e., can we harness modern generative models, such as dif-fusion models, trained on offline data and capture useful la-tent representation that facilitates online MARL? The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+> 29195
+
+To explore this, we propose the Conditional Diffusion Model for Dynamic Task Decomposition CD 3T. To reflect the potential characters of agents and subtasks, a set of ac-tion representations is used as the input conditioned on ob-servations and actions of agents, while the reward of the en-vironment and the next observations are used as the output. With this representation, we can derive subtasks by cluster-ing and devise a subtask selection mechanism that assigns an agent to a subtask. Due to characters encoded in the sub-task representation, this mechanism could select and share proper skills for agents based on parameter sharing. Bene-fit from the powerful representational capacity of the diffu-sion model, CD 3T not only owns a better ability to model stochastic processes through the iterative denoising induc-tive bias but also learns distinguishable subtasks to explore the environment. Inspired by recent works addressing spu-rious correlations between global states and joint values (Li et al. 2022; Wang et al. 2023; Liu, Zhu, and Chen 2023), we incorporate subtask representations with global state infor-mation to better estimate credit assignment. We evaluate CD 3T across a range of benchmarks, including Level-based Foraging (LBF), StarCraft Multi-Agent Challenge (SMAC) (Samvelyan et al. 2019), and SMACv2 (Ellis et al. 2023). The results show that our CD 3Timproves the performance on SMAC compared to the base-lines, especially on Hard and Super Hard scenarios. Abla-tion studies confirm the efficacy of task decomposition and credit assignment design, and visualizations illustrate mean-ingful dynamic task decompositions and cooperation. 
+
+## Preliminaries 
+
+Our work focuses on a fully cooperative multi-agent task with only partial observation for each agent, which typ-ically is modeled as a decentralized partially observ-able Markov decision process (Dec-POMDP) (Oliehoek and Amato 2016) and described with the tuple M =
+
+⟨I , S, A, P, R, Ω, O, γ ⟩. At each time step, each agent i ∈ I 
+
+receives an observation oi ∈ Ω, drawn from the observation function O(s, i ), where s ∈ S is the global state of the en-vironment, and selects an action ai ∈ A , producing a joint action a = ( a1, . . . , a n). This joint action would lead to the next state s′ according to the state transition function 
+
+P (s′|s), and all agents would receive a shared team reward 
+
+r = R(s, a). We use τ ∈ T ≡ (Ω × A )∗ to denote the joint action-observation history, where τ = ( τ1, . . . , τ n),and τi = ( o1 
+
+> i
+
+, a 1 
+
+> i
+
+, . . . , o t−1 
+
+> i
+
+, a t−1 
+
+> i
+
+, o ti) represents the trajec-tory of agent i. The target is to find the optimal joint pol-icy π(a|τ ) that maximizes the discounted return, defined as Qπ (τ , a) = E [P∞ 
+
+> t=0
+
+γtR(st, at) | s0 = s, a0 = a, π],where γ ∈ [0 , 1) is the discount factor. Unlike recent MARL works (Sunehag et al. 2018; Rashid et al. 2018; Son et al. 2019; Wang et al. 2021a), we propose to decompose a fully cooperative multi-agent task into sub-tasks and present the definition of subtasks in the following. 
+
+Definition 1 (Subtasks) . Given a cooperative task M =
+
+⟨I , S, A, P, R, Ω, O, γ ⟩, we assume there exists a set of g
+
+subtasks, denoted as Φ = {ϕ1, ϕ 2, ..., ϕ g }, where g ∈
+
+N+ is unknown and considered as a tunable hyperparam-eter. Each subtask is expressed as a tuple Mϕj , π ϕj ,where j ∈ { 1, 2, ..., g } is the identity of subtask, Mϕj =
+
+Iϕj , S, Aϕj , P, R, Ωϕj , O, γ and πϕj : T × A ϕj → [0 , 1] .
+
+Iϕj is the set of agents assigned to subtask ϕj and each agent can only select one subtask to solve at each timestep, i.e., Iϕj ⊂ I , ∪ϕj Iϕj = I and Iϕj ∩ I ϕk = ∅ if j̸ = k. Aϕj
+
+is the action space of the subtask, Aϕj ⊂ A , ∪ϕj Aϕj = A,but we allow action spaces of different subtasks to overlap: 
+
+|A ϕj ∩ A ϕk | ≥ 0 if j̸ = k. Each agent i ∈ I ϕj shares the policy parameters of πϕj .
+
+With the set of subtasks Φ defined, each agent iϕj ∈ I ϕj is assigned subtask ϕj through a shared subtask selector. This enables the learning of subtask-specific policies πϕj : τ ×Aϕj for each subtask. Our objective is to learn the optimal set of subtasks Φ∗ that maximizes the expected global return 
+
+QΦ
+
+> tot
+
+(τ , a) = Es1: ∞,a1: ∞ [ ∞P
+
+> t=0
+
+γtrt|s0 = s, a0 = a, Φ] .
+
+## Method 
+
+Our solution for multi-agent dynamic task decomposition is illustrated in Fig. 1 . We begin by describing how to construct action semantic representations that enable the decomposi-tion of multi-agent tasks. Next, we explain how the repre-sentations are leveraged to generate subtasks. Based on the generated subtasks and their corresponding latent represen-tations, we introduce a hierarchical architecture consisting of a subtask selector and a set of subtask policies. Finally, we detail the training objective and inference strategy for both the subtask selector and the subtask policies. 
+
+Action Representation Learning via Diffusion 
+
+The latent action representations are designed to induce di-verse subtasks with distinct responsibilities, capturing char-acteristic agent behaviors for more appropriate subtask se-lection. While this design allows CD 3T to adapt to dynamic environments, it may lead to rapid subtask shifts and insta-bility during learning. Moreover, if the induced subtasks are overly similar, decomposition becomes ineffective. There-fore, two key challenges arise: 1) ensuring temporal stability to maintain adaptability, and 2) enhancing subtask diversity through efficient modeling. To this end, we first construct the action encoder com-ponent to map the one-hot action ai of agent i to the d-dimensional representation zai , which serves as unmodified examples z0. Then the UNet backbone with cross-attention is employed as a flexible feature extractor in the denois-ing network ϵθd (zk, k, o i, a −i) to recover zai from Gassian noise ϵ ∼ N (0 , I ) conditioned on corresponding oi and a−i.Following the simplified objective (Ho, Jain, and Abbeel 2020), we formulate a learning objective for action represen-tations via the conditional diffusion model parameterized by 
+
+θd, which is trained by minimizing the loss function: 
+
+Ld(θd) = Eϵ∼N (0,I)(o,a)∼D 
+
+ ϵ − ϵθd (zk, k, oi, a−i) 2, (1) where D denotes the replay buffer, k is the diffusion iteration uniformly sampled from {1, 2, . . . , K } and zk is the noisy version of z0. Here, oi denotes the observation of agent i,29196 Figure 1: The overall framework of CD 3T. We first derive a latent action representation zai for each agent from its action space, conditioned on its local observation oi and other agents’ one-hot actions a−i, to pretrain a diffusion model. Latent representations are then clustered to define subtask-specific action spaces. The subtask selector and subtask policy share the same architecture with different parameters. At every ∆T steps, the selector assigns a subtask to each agent and estimates the joint Q-value QΦ 
+
+> tot
+
+using the global state st and subtask representation zϕ, while the subtask policy computes Qtot with st and the action representation za.while a−i denotes the joint actions of all other agents. The detailed derivation can be found in Appendix A. Action semantics, where different actions have varying ef-fects on other agents, should influence the environment or their private properties. To further extract the influence of an action through the induced reward and the change in local observations, we leverage the action representations gener-ated by the diffusion model to predict the next observations 
+
+o′ 
+
+> i
+
+and global reward r based on oi and a−i. The prediction objective can be further rewritten as a loss function: 
+
+Lp(θ) = E(o,a,r, o′)∼D 
+
+hX 
+
+> i
+
+ ∥fdo (zai , oi, a−i) − o′
+
+> i
+
+∥22
+
++ λdr 
+
+ fdr (zai , oi, a−i) − r2i
+
+,
+
+(2) where fdo and fdr are predictors of observations and global rewards, respectively, and λdr is a scaling factor. Here, the summation covers all agents, and the whole action represen-tation learning is parameterized by θ. Thus, the objective for action representation learning combines the prediction loss and the diffusion model loss with a scaling factor ηd:
+
+L(θ) = Lp(θ) + ηdLd(θd). (3) The current formulation does not explicitly enforce sub-task specialization, which is essential for ensuring behav-ioral diversity across different subtasks. Prior approaches typically encourage specialization via explicit regularization techniques (Christianos et al. 2021; Wang et al. 2020a). In contrast, we utilize the diffusion model as a flexible fea-ture extractor and enhance its UNet backbone with cross-attention to generate action representations that capture mul-timodal distributions. This property naturally induces sub-task diversity without additional regularization. 
+
+Subtask Dynamic Decomposition 
+
+The action representation plays a critical role in assigning agents to the most suitable subtasks, where agents dealing with the same subtask share their learning of specific abili-ties. Considering that an agent’s subtask history reflects not only its behavioral history but is also task-independent, we perform k-means clustering over these action representa-tions to decompose the task into a finite set of subtasks after sampling and learning for the initial 50 K timesteps of the overall training process. Given the action representations of subtask ϕj , the subtask representation zϕj can be derived as 
+
+zϕj = 1 
+
+> |A j|
+
+P 
+
+> am∈A j
+
+zam , where Aj represents the decom-posed action space of the subtask ϕj and am denotes actions in this restricted space. With a hierarchical network consist-ing of the subtask selector and the subtask policies, subtask representations can be used to assign the most suitable sub-task to an agent over a specific time interval ∆T . Similarly, an MLP layer and a shared GRU layer network are shared by all agents to obtain the historical information of the agent’s local observations and actions, which is parameterized by 
+
+θτϕ and compiles it into a vector h for our subtask selection. When selecting subtasks every ∆T timesteps, the sub-task selector encodes the historical information hτ of each agent into the hidden layer variable zτ ∈ Rd with a ξϕ-parameterized encoder fϕ (:; ξϕ). Then it is used to estimate the expected return of agent i in subtask ϕj with the hidden layer representation of each subtask space Qϕi
+
+ τi, ϕ j  =
+
+zTτi zϕj . The subtask space corresponding to the maximum 29197 Q-value is assigned to each agent. In the next ∆T time step, each agent learns its policy in the restricted subtask space. 
+
+Learning Decomposition with Credit Assignment 
+
+The global state s in multi-agent systems contains rich infor-mation, yet only a subset is relevant to individual decision-making. To extract meaningful abstractions without relying on expert knowledge, we follow (Li et al. 2022; Liu, Zhu, and Chen 2023; Xu et al. 2025) and mitigate spurious cor-relations between s and Qtot by leveraging agents’ local histories τi in partially observable settings. To improve de-composition accuracy and credit assignment, we introduce an intervention-based adjustment function during training, which adheres to the Individual-Global-Maximum (IGM) principle in Appendix B. Specifically, the credit λϕh,i for subtask selector is com-puted with the subtask representation zϕ and the global state 
+
+s through a dot-product attention as 
+
+λϕh,i = exp ((wzϕ zϕ)⊤ ReLU( wss)) 
+
+> PNi=1 exp
+
+((wzϕ zϕ)⊤ ReLU( wss)) , (4) where ws, wzϕ are learnable weight matrices, and ReLU is the element-wise rectified-linear activation. λh,i is positive with softmax operation to ensure monotonicity and h is the number of attention heads. The softmax ensures each λϕh,i is positive and that P 
+
+> i
+
+λϕh,i = 1 . Then the joint action function 
+
+QΦ 
+
+> tot
+
+of the subtask selector can be estimated as 
+
+QΦ 
+
+> tot
+
+= cϕ(s) + HP
+
+> h=1
+
+wϕhNP
+
+> i=1
+
+λϕh,i Qϕj 
+
+> i
+
+(τi, ϕ ji ), (5) where cϕ(s) is learned by a neural network with the global state s as the input. The joint action function QΦ 
+
+> tot
+
+of the subtask selector can be optimized by minimizing TD loss: 
+
+Lss (θτϕ , ξ ϕ) = ED
+
+h ∆T −1X
+
+> ∆t=0
+
+rt+∆ t
+
++ γ max 
+
+> Φ′
+
+¯QΦ
+
+> tot
+
+(st+∆ T , Φ′) − QΦ
+
+> tot
+
+(st, Φt)
+
+2i
+
+, (6) where ξϕ denotes the parameters of the mixing network, 
+
+Φ = ϕ1, ϕ 2, . . . , ϕ N is the joint subtask of all agents, and the expectation is taken over mini-batches sampled uni-formly from the replay buffer D.During the timestep of ∆T , each agent follows the sub-task assigned by the high-level selector. When the agent is assigned to the corresponding subtask, it selects its action in the action space of the subtask. Therefore, each subtask has a corresponding policy πϕj : T × A ϕj → [0 , 1] , which is de-fined in the restricted subtask action space and updates such a policy network. To take full advantage of the action rep-resentation of the corresponding subtask space, we also use the mechanism to compute the joint function Qtot . Here, we use the shared MLP layer and GRU layer parameterized by 
+
+θτ in the same way to compile the local action-observation information history τ into a vector hτ . For each subtask pol-icy, we use a fully connected network fϕ′ (hτ ; ζϕ) parame-terized by ζϕ to represent it. Thus we estimate the individ-ual value of agent i by choosing a primitive action ami as 
+
+Qi (τi, a mi ) = zTτi zami .Similar to the value function factorization of the subtask selector, the action representation za and the global state s
+
+are still fed into the intervention function to estimate credits. Here, the action representations are restricted in the action space of the subtasks assigned to the agent, rather than the subtask representations in the subtask selector, so the credit 
+
+λh,i for the subtask policy is computed as 
+
+λh,i = exp ((wza za)⊤ ReLU( wss))PNi=1 exp(( wza za)⊤ ReLU( wss)) , (7) where ws, wza are the learnable parameters, and ReLU is the activation function. λh,i is positive with softmax opera-tion to ensure monotonicity and h is the number of attention heads. The joint value function of the subtask policy is pre-dicted based on the credits and factorized Q-values 
+
+Qtot = c(s) + HP
+
+> h=1
+
+whNP
+
+> i=1
+
+λh,i Qi(τi, a mi ), (8) where c(s) is learned by a neural network with the global state s as the input. The formulation gives the TD loss for subtask policies: 
+
+Ls(θτ , ξ ) = ED [( r + γ max 
+
+> a′
+
+¯Qtot (s′, a′) − Qtot (s, a)) 2],
+
+(9) where the parameters of the mixing network are denoted by 
+
+ξ and ¯Qtot is a target network. Training samples are drawn uniformly from the same replay buffer D used for the high-level selector. Under the CTDE paradigm, the selector, sub-task policies, and individual utility networks are used jointly at execution time, but only local information is required for each agent to act. Pseudocode for the complete CD 3T algo-rithm is given in Appendix C. 0 0.25 0.50 0.75 1.00 T (mil)     
+
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00 Average Test Return  4-agents & 2-food
+> 00.25 0.50 0.75 1.00 T (mil)
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00 Average Test Return  3-agents & 3-food
+> VDN QMIX QTRAN QPLEX RODE CDS GoMARL ACORM_oc DT2GS CD 3T (Ours)
+
+Figure 2: Performance comparison with baselines on LBF. 
+
+## Experiments 
+
+We evaluate CD 3T on three challenging benchmarks, in-cluding LBF (Christianos, Sch¨ afer, and Albrecht 2020), SMAC (Samvelyan et al. 2019) and SMACv2 (Ellis et al. 2023). The baselines we select are five classic value-decomposition methods (VDN (Sunehag et al. 2018), QMIX (Rashid et al. 2020), QTRAN (Son et al. 2019), QPLEX (Wang et al. 2021a), and CDS (Li et al. 2021)), and four subtask-related methods (RODE (Wang et al. 2021b), 29198 0 0.25 0.50 0.75 1.00 T (mil)                                  
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100 Test Win Rate %  8m
+> 00.50 1.00 1.50 T (mil)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100 Test Win Rate %  2s3z
+> 00.50 1.00 1.50 T (mil)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100 Test Win Rate %  3s5z
+> 00.50 1.00 1.50 T (mil)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100 Test Win Rate %  5m_vs_6m
+> 00.50 1.00 1.50 T (mil)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100 Test Win Rate %  2c_vs_64zg
+> 01.00 2.00 3.00 4.00 T (mil)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100 Test Win Rate %  3s5z_vs_3s6z
+> 01.00 2.00 3.00 4.00 T (mil)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100 Test Win Rate %  6h_vs_8z
+> 01.00 2.00 3.00 4.00 T (mil)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100 Test Win Rate %  corridor
+> VDN QMIX QTRAN QPLEX RODE CDS GoMARL ACORM_oc DT2GS CD 3T (Ours)
+
+Figure 3: Performance comparison with baselines on easy , hard , and super hard scenarios. GoMARL (Zang et al. 2023), ACORM (Hu et al. 2024) and DT2GS (Tian et al. 2023)). ACORM performs k-means clustering at each timestep to obtain commendable results, which undoubtedly imposes a substantial computational bur-den. Therefore, to improve efficiency and maintain consis-tency with our algorithm, we likewise apply clustering for ACORM only once at 50 K timesteps. We use “ACORM oc” to represent ACORM with once clustering in our experi-ments. The implementation details of all experiments are provided in Appendix D. All learning curves report the mean 
+
+± standard deviation over five random seeds. 
+
+Performance on LBF 
+
+We first conduct experiments on two constructed LBF tasks to assess the performance of different algorithms under two distinct settings. Fig. 2 illustrates a comprehensive com-parison of performance against baselines on two specially crafted LBF tasks. Our approach shows competitive perfor-mance across LBF tasks, demonstrating its flexibility and ef-fectiveness on both scenarios. The failure of CDS and RODE could originate from the inability of its heterogeneous agents to effectively explore and develop collaborative strategies. In contrast, VDN, QMIX, and QTRAN require more steps to uncover more refined policies, suggesting that they may struggle with the inherent limitations in solving spurious re-lationships between credit assignments and decomposed Q-values. QPLEX receives a lower return compared to CD 3Tbetween 0.1M and 0.6M timesteps, potentially necessitat-ing additional time for exploration due to its complex value decomposition design. CD 3T achieves slightly higher per-formance than GoMARL and ACORM, which implies that in terms of semantic representation, the action representa-tion may have superiority over both group-based informa-tion and role representation. The marginally inferior perfor-mance of DT2GS compared to CD 3T further substantiates that enhancing the generalization of subtasks inevitably en-tails a trade-off with performance on single tasks. 
+
+Performance on SMAC 
+
+To further evaluate CD 3T, we benchmark it on the more challenging SMAC benchmark, which is a testbed com-monly used for MARL algorithms. We compare CD 3T with other baselines on 8 different scenarios, including easy ,
+
+hard , and super hard scenarios. The experimental results for different scenarios are shown in Fig. 3 . As we can see, CD 3T yields almost the highest win rate on all scenarios, especially on the super hard tasks. QTRAN performs poorly on almost all scenarios due to its soft constraints involving two ℓ2-penalty terms. Although QPLEX behaves well on easy scenarios, resulting in its ten-dency to fall into local optima, its performance decreases on hard scenarios. Both VDN and QMIX can achieve sat-isfactory performance on some easy or hard maps, i.e., 8m ,
+
+2s3z , and 5m vs 6m , but they fail to cope with the tasks well on super hard maps. It should result from the fact that the super-hard task needs more efficient exploration to learn cooperation skills. RODE fails to learn efficient poli-cies for subtasks, which implies that its reliance solely on the simple MLP structure hinders the accurate learning of role semantics. CDS fails to learn efficient policies since it may require more steps to explore, which celebrates diver-sity among agents, especially on the map corridor and 
+
+6h vs 8z . GoMARL attains comparable performance with CD 3T on part of easy and hard maps but underperforms on two super hard maps, possibly owing that the automatic grouping method primarily places excessive emphasis on the relative contribution of each agent to the entire group while ignoring the mutual contributions among agents within the group. ACORM achieves strong early learning, yet once per-step clustering is removed (ACORM-oc), performance col-lapses on nearly all maps, implying that its contrastive role representations rely heavily on continuous reclustering. One 29199 0 0.50 1.00 1.50 T (mil)              
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100 Test Win Rate %
+> 2s3z
+> 00.50 1.00 1.50 2.00 T (mil)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100 Test Win Rate %
+> 5m_vs_6m
+> 01.00 2.00 3.00 4.00 5.00 T (mil)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100 Test Win Rate %
+> 3s5z_vs_3s6z
+> VDN RODE CD 3T w/o Diffusion CD 3T w/o Subtask-based Attention CD 3T (Ours)
+
+(a) Ablation studies regarding each component of CD 3T. 0 0.50 1.00 1.50 T (mil)           
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100 Test Win Rate %
+> 3s5z
+> 00.50 1.00 1.50 T (mil)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100 Test Win Rate %
+> 2c_vs_64zg
+> 01.00 2.00 3.00 4.00 T (mil)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100 Test Win Rate %
+> 6h_vs_8z
+> RODE CD 3T (subtask=3) CD 3T (subtask=4) CD 3T (subtask=5)
+
+(b) The performance of CD 3T with different number of subtask clusters. 
+
+Figure 4: Ablation studies of CD 3T on SMAC benchmark. possible explanation for the consistently suboptimal perfor-mance of DT2GS is its excessive emphasis on generalization across a limited set of tasks. Overall, our approach achieves impressive performance across all scenarios, which validates the advantages of CD 3T with its attentive design. Additional experiments on SMACv2 in the Appendix E further confirm the effectiveness of CD 3T. 
+
+Ablation Studies 
+
+To quantify the contribution of each component, we per-form three ablations and address the following questions: (a) How does the diffusion model enhance subtask representa-tion and improve overall performance? (b) What role does the attention mechanism leveraging subtask representation play in credit assignment? (c) Does the number of subtasks affect the capability of the model? To test components (a), we replace the diffusion model with a vanilla MLP structure and denote it as CD 3T w/o diffusion . For (b), we replace the subtask-based attention mechanism in our mixing network, which is substituted with the QMIX method, and denote it as CD 3T w/o Subtask-based Attention . To test component (c), we test it with the number of subtasks formed during clustering, named CD 3T (subtask=3) . Considering an exces-sive number of subtasks could not affect the performance for the finite action space, we set the number of subtasks to 
+
+3 ≤subtasks ≤ 5.The results on three scenarios with different difficulties are shown in Fig. 4 . CD 3T w/o diffusion attains the low-est win rates on all maps—particularly the hard and super hard ones—highlighting the critical role of diffusion-based subtask representations in high-dimensional state–action spaces. Especially on the hard and super hard maps, it be-comes clear that CD 3T achieves a larger margin than replac-ing the diffusion with a simple MLP. The reason is that asso-ciating subtask policy with its proven powerful representa-tional capacity in such expansive spaces benefits the perfor-mance in complex tasks. CD 3T w/o Subtask-based Attention 
+
+is lower than that of CD 3T, which indicates the importance of subtask representation for estimating credits. As shown in 
+
+Fig. 4(b) , the performance of CD 3T consistently improves as the number of subtasks increases. Generally, moderate order terms (e.g., subtask ≤ 5) are enough for an appropriate trade-off between performance improvement and computa-tion. In summary, the superior performance of CD 3T is con-ditioned on all parts, where it is largely due to the efficient subtask assignment representation. 
+
+Generation of Subtask Representation 
+
+To learn action representations, we collect samples and train the diffusion model for 50 K timesteps, guided by the loss function specified in Eq. (3). In Fig. 5 , we provide an in-depth illustration of how the action representations derived from the diffusion model are strategically harnessed to en-able subtask decomposition. The corridor scenario features homogeneous agents and enemies—specifically, 6 Zealots versus 24 Zer-29200 (a) (b) 2 0 2 4    
+
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> Subtask 1
+> Subtask 2
+> Subtask 3(c)
+
+Figure 5: The process of subtask generation through subtask representations. (a) illustrates that moving northward or eastward has a comparable effect on the environment by directing agents toward the enemies, whereas moving southward or westward moves agents away. (b) depicts the distribution of action representations in a two-dimensional space after PCA projection. (c) visualizes the formation of subtasks derived from action representations following clustering.   
+
+> (a) Timestep = 7 (b) Timestep = 22 (c) Timestep = 149
+
+Figure 6: Visualizations of dynamic subtask selection in one episode on corridor . Blue denotes subtask ϕ1, yellow denotes subtask ϕ2, and red denotes subtask ϕ3. (a), (b), and (c) depict game screenshots at t = 7 , t = 22 , and t = 149 , respectively. glings—where all attack actions produce similar effects due to enemy uniformity. Owing to the scenario’s spatial sym-metry, moving north or east similarly advances agents to-ward the enemies, while moving south or west leads them away. The diffusion model captures these structural regu-larities within the action space, as illustrated in Fig.5(a) . In 
+
+Fig.5(b) , we apply PCA to project the high-dimensional ac-tion representations into a two-dimensional space, revealing clear clusters aligned with the primary action types. These clusters emerge consistently across random seeds, demon-strating that our diffusion model reliably learns subtask rep-resentations that reflect the underlying action effects. 
+
+Visualization of Dynamic Subtask Selections 
+
+To gain deeper insights into the subtask selection behavior of CD 3T, we visualize the agent-wise subtask assignments across a representative episode (Fig.6) and report the corre-sponding selection frequencies over time (Fig.8). Additional examples are included in Appendix G. A key observation is that direct engagement under numer-ical disadvantage is strategically suboptimal. As shown in 
+
+Fig. 6(a) , CD 3T assigns subtask ϕ2 to Agent 1 early in the episode ( t = 7 ), prompting it to move northward and draw nearly half of the enemies away. This diversion enables the remaining five agents to reposition eastward for a more coor-dinated attack. In Fig. 6(b) , Agent 1 switches to subtask ϕ3
+
+to engage the enemies directly until eliminated. Meanwhile, Agents 2 and 3 execute kiting behaviors under ϕ1, while Agents 4–6 focus fire under ϕ3. As the battle progresses, surviving enemies regroup in the bottom-left corner, out of sight of the Zealots. During mid-phase, CD 3T reassigns sub-task ϕ2 to Agent 2 to lure a subset of enemies away from the group and disrupt their formation. Meanwhile, the remain-ing agents continue alternating between evasive movement and focused fire to isolate and eliminate targets. 
+
+Empirical Visualization of Action Space Reduction 
+
+Fig. 7 presents a comparative visualization of the effec-tive action space dimensions under three methods: CD 3T, RODE, and QMIX. CD 3T consistently achieves a more compact action space across diverse scenarios, as reflected in its lower average dimensionality and tighter confidence intervals. This suggests that its fine-grained subtask decom-position enables each sub-policy to operate within a task-relevant, reduced action set. By comparison, QMIX does not incorporate any subtask or role abstraction, and thus always 29201 8m 2s3z 3s5z 5m_vs_6m 6h_vs_8z 3s5z_vs_3s6z      
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> 12
+> 14
+> 16
+> Avg Action Space Size
+> 9.0 8.5 10.0 8.0 7.3 9.5 10.0 8.5 10.0 9.0 10.0 10.5 14.0 11.0 14.0 12.0 14.0 15.0
+> CD 3TRODE QMIX
+
+Figure 7: Average action space sizes of CD 3T, RODE, and QMIX across six SMAC scenarios. Each bar denotes the mean number of available actions per method, while the error bars capture variation across roles or agents, ranging from the minimum to the maximum number of available actions. QMIX takes actions over the full action space without any form of masking, and thus does not produce variation. 0 50 100 150 200 250 300 350 Timestep      
+
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6Frequency Subtask 1Subtask 2Subtask 3
+
+Figure 8: Demonstrates subtask selection frequencies of CD 3T on corridor map in the same episode. The curve represents the number of agents assigned the corresponding subtask at the timestep. utilizes the full action space. Its action dimensionality re-mains fixed across scenarios, which may limit its adaptabil-ity to varying task complexity or coordination requirements. In relatively simple environments such as 8m , 2s3z , and 
+
+3s5z , both CD 3T and RODE exhibit similar action space sizes, indicating that in low-complexity settings, the bene-fits of explicit decomposition may be less pronounced. How-ever, in more challenging scenarios, 5m vs 6m , 6h vs 8z ,and 3s5z vs 3s6z , CD 3T achieves more substantial re-duction. This improvement may be attributed to its explicit subtask masking mechanism, which restricts each role to a compact, specialized action subset. In contrast, RODE’s role abstraction is more implicit and does not enforce strict action sparsity, potentially resulting in less targeted compression. These findings highlight CD 3T’s ability to adaptively re-duce the decision space in accordance with task complexity. By focusing each agent on a smaller, semantically meaning-ful set of actions, CD 3T not only improves computational efficiency but also facilitates more structured and scalable coordination in challenging multi-agent environments. 
+
+## Conclusions 
+
+Task decomposition is a pivotal approach to simplifying complex multi-agent tasks, yet it remains a long-standing and unresolved challenge. To address this, we proposed leveraging latent representations extracted by a diffusion model to decompose tasks into multiple subtasks. This ap-proach captures the relationship between subtasks and envi-ronmental dynamics more accurately. Agents are assigned to corresponding subtasks through subtask selectors, ensuring better compatibility between agents and subtasks. This com-patibility enables agents to learn policies more efficiently in a shared learning framework. Furthermore, by cluster-ing latent representations, similar agents can share experi-ences, accelerating training and enhancing overall perfor-mance. During training, the subtask-based attention mech-anism in the mixing network effectively utilizes global state and semantic inference to guide the mixing of Q-values. Ex-perimental results across three benchmarks demonstrate that our method achieves superior performance in nearly all sce-narios, advancing the state of the art in MARL. 
+
+## Acknowledgements 
+
+This work was supported in part by the National Natural Science Foundation of China (Nos. 72394363, 72394364 & 72394360), National Key Research and Development Program of China (2025YFA101690004), Major Science and Technology Project of Jiangsu Province under Grant BG2024041, and the Fundamental Research Funds for the Central Universities under Grant 011814380048, the China Postdoctoral Science Foundation under Grant Num-ber 2025T180877, the Jiangsu Funding Program for Excel-lent Postdoctoral Talent 2025ZB267. 29202 References 
+
+Al-Emran, M. 2015. Hierarchical reinforcement learning: a survey. International Journal of Computing and Digital Systems , 4(2): 137–143. Butler, E. 2011. The Condensed Wealth of Nations . Adam Smith Institute. Christianos, F.; Papoudakis, G.; Rahman, M. A.; and Al-brecht, S. V. 2021. Scaling multi-agent reinforcement learn-ing with selective parameter sharing. In Proc. Int. Conf. Mach. Learn. , volume 139, 1989–1998. Christianos, F.; Sch¨ afer, L.; and Albrecht, S. 2020. Shared experience actor-critic for multi-agent reinforcement learn-ing. In Proc. Adv. Neural Inf. Process. Syst. , volume 33, 10707–10717. Daniel, C.; Neumann, G.; Kroemer, O.; and Peters, J. 2016. Hierarchical Relative Entropy Policy Search. Journal of Ma-chine Learning Research , 17(93): 1–50. Dayan, P.; and Hinton, G. E. 1992. Feudal Reinforcement Learning. In Proc. Adv. Neural Inf. Process. Syst. , volume 5, 271–278. Dilokthanakul, N.; Kaplanis, C.; Pawlowski, N.; and Shana-han, M. 2019. Feature control as intrinsic motivation for hi-erarchical reinforcement learning. IEEE Trans. Neural Netw. Learn. Syst. , 30(11): 3409–3418. Ellis, B.; Cook, J.; Moalla, S.; Samvelyan, M.; Sun, M.; Ma-hajan, A.; Foerster, J. N.; and Whiteson, S. 2023. SMACv2: An Improved Benchmark for Cooperative Multi-Agent Re-inforcement Learning. In Proc. Adv. Neural Inf. Process. Syst. , volume 36. Gupta, T.; Mahajan, A.; Peng, B.; B¨ ohmer, W.; and White-son, S. 2021. UneVEn: Universal Value Exploration for Multi-Agent Reinforcement Learning. In Proc. Int. Conf. Mach. Learn. , volume 139, 3930–3941. He, H.; Bai, C.; Xu, K.; Yang, Z.; Zhang, W.; Wang, D.; Zhao, B.; and Li, X. 2023. Diffusion Model is an Effec-tive Planner and Data Synthesizer for Multi-Task Reinforce-ment Learning. In Proc. Adv. Neural Inf. Process. Syst. , vol-ume 36, 64896–64917. Hegde, S.; Batra, S.; Zentner, K.; and Sukhatme, G. 2023. Generating behaviorally diverse policies with latent diffu-sion models. In Proc. Adv. Neural Inf. Process. Syst. , vol-ume 36, 7541–7554. Ho, J.; Jain, A.; and Abbeel, P. 2020. Denoising Diffusion Probabilistic Models. In Proc. Adv. Neural Inf. Process. Syst. , volume 33, 6840–6851. Hochreiter, S.; and Schmidhuber, J. 1997. Long short-term memory. Neural Computation , 9(8): 1735–1780. Hu, Z.; Zhang, Z.; Li, H.; Chen, C.; Ding, H.; and Wang, Z. 2024. Attention-Guided Contrastive Role Representations for Multi-Agent Reinforcement Learning. In Proc. Int. Conf. Learn. Represent. 
+
+H¨ uttenrauch, M.; ˇ Soˇ si´ c, A.; and Neumann, G. 2017. Guided deep reinforcement learning for swarm systems. arXiv preprint arXiv:1709.06011 .Jang, E.; Gu, S.; and Poole, B. 2017. Categorical Reparame-terization with Gumbel-Softmax. In Proc. Int. Conf. Learn. Represent. 
+
+Janner, M.; Du, Y.; Tenenbaum, J. B.; and Levine, S. 2022. Planning with Diffusion for Flexible Behavior Synthesis. In 
+
+Proc. Int. Conf. Mach. Learn. , volume 162, 9902–9915. Kingma, D. P.; and Welling, M. 2014. Auto-Encoding Vari-ational Bayes. In Proc. Int. Conf. Learn. Represent. 
+
+Kraemer, L.; and Banerjee, B. 2016. Multi-agent reinforce-ment learning as a rehearsal for decentralized planning. Neu-rocomputing , 190: 82–94. Lee, Y.; Yang, J.; and Lim, J. J. 2020. Learning to Coordi-nate Manipulation Skills via Skill Behavior Diversification. In Proc. Int. Conf. Learn. Represent. 
+
+Li, C.; Wang, T.; Wu, C.; Zhao, Q.; Yang, J.; and Zhang, C. 2021. Celebrating Diversity in Shared Multi-Agent Rein-forcement Learning. In Proc. Adv. Neural Inf. Process. Syst. ,volume 34, 20888–20900. Li, J.; Kuang, K.; Wang, B.; Liu, F.; Chen, L.; Fan, C.; Wu, F.; and Xiao, J. 2022. Deconfounded value decomposition for multi-agent reinforcement learning. In Proc. Int. Conf. Mach. Learn. , volume 162, 12843–12856. Liu, Y.; Li, Y.; Xu, X.; Dou, Y.; and Liu, D. 2022. Hetero-geneous Skill Learning for Multi-agent Tasks. In Proc. Adv. Neural Inf. Process. Syst. , volume 35, 26412–26425. Liu, Z.; Zhu, Y.; and Chen, C. 2023. NA 2Q: Neural At-tention Additive Model for Interpretable Multi-Agent Q-Learning. In Proc. Int. Conf. Mach. Learn. , volume 202, 22539–22558. PMLR. Liu, Z.; Zhu, Y.; Wang, Z.; Gao, Y.; and Chen, C. 2025. MIXRTs: Toward interpretable multi-agent reinforcement learning via mixing recurrent soft decision trees. IEEE Trans. Pattern Anal. Mach. Intell. , 47(5): 4090–4107. Lu, C.; Ball, P.; Teh, Y. W.; and Parker-Holder, J. 2023. Syn-thetic Experience Replay. In Proc. Adv. Neural Inf. Process. Syst. , volume 36. Nair, S.; and Finn, C. 2020. Hierarchical Foresight: Self-Supervised Learning of Long-Horizon Tasks via Visual Sub-goal Generation. In Proc. Int. Conf. Learn. Represent. 
+
+Oliehoek, F. A.; and Amato, C. 2016. A Concise Introduc-tion to Decentralized POMDPs . Springer. Oliehoek, F. A.; Spaan, M. T.; and Vlassis, N. 2008. Op-timal and approximate Q-value functions for decentralized POMDPs. J. Artif. Intell. Res. , 32: 289–353. Parisotto, E.; Song, F.; Rae, J.; Pascanu, R.; Gulcehre, C.; Jayakumar, S.; Jaderberg, M.; Lopez Kaufman, R.; Clark, A.; Noury, S.; Botvinick, M.; Heess, N.; and Hadsell, R. 2020. Stabilizing Transformers for Reinforcement Learning. In Proc. Int. Conf. Mach. Learn. , volume 119, 7487–7498. Pham, H. X.; La, H. M.; Feil-Seifer, D.; and Nefian, A. 2018. Cooperative and distributed reinforcement learning of drones for field coverage. arXiv preprint arXiv:1803.07250 .Rashid, T.; Farquhar, G.; Peng, B.; and Whiteson, S. 2020. Weighted QMIX: Expanding Monotonic Value Function 29203 Factorisation for Deep Multi-Agent Reinforcement Learn-ing. In Proc. Adv. Neural Inf. Process. Syst. , volume 33, 10199–10210. Rashid, T.; Samvelyan, M.; Schroeder, C.; Farquhar, G.; Fo-erster, J.; and Whiteson, S. 2018. QMIX: Monotonic Value Function Factorisation for Deep Multi-Agent Reinforcement Learning. In Proc. Int. Conf. Mach. Learn. , volume 80, 4295–4304. Samvelyan, M.; Rashid, T.; de Witt, C. S.; Farquhar, G.; Nardelli, N.; Rudner, T. G.; Hung, C.-M.; Torr, P. H.; Foer-ster, J.; and Whiteson, S. 2019. The StarCraft Multi-Agent Challenge. In Proc. Int. Conf. Auto. Agents Multiagent Syst. ,2186–2188. Sharma, A.; Gu, S.; Levine, S.; Kumar, V.; and Hausman, K. 2020. Dynamics-Aware Unsupervised Discovery of Skills. In Proc. Int. Conf. Learn. Represent. 
+
+Sohl-Dickstein, J.; Weiss, E.; Maheswaranathan, N.; and Ganguli, S. 2015a. Deep Unsupervised Learning using Nonequilibrium Thermodynamics. In Proc. Int. Conf. Mach. Learn. , volume 37, 2256–2265. Sohl-Dickstein, J.; Weiss, E. A.; Maheswaranathan, N.; and Ganguli, S. 2015b. Deep Unsupervised Learning using Nonequilibrium Thermodynamics. In Proc. Int. Conf. Mach. Learn. , volume 37, 2256–2265. Son, K.; Kim, D.; Kang, W. J.; Hostallero, D.; and Yi, Y. 2019. QTRAN: Learning to Factorize with Transformation for Cooperative Multi-Agent Reinforcement Learning. In 
+
+Proc. Int. Conf. Mach. Learn. , volume 97, 5887–5896. Song, Y.; Sohl-Dickstein, J.; Kingma, D. P.; Kumar, A.; Er-mon, S.; and Poole, B. 2021. Score-Based Generative Mod-eling through Stochastic Differential Equations. In Proc. Int. Conf. Learn. Represent. 
+
+Sunehag, P.; Lever, G.; Gruslys, A.; Czarnecki, W. M.; Zam-baldi, V.; Jaderberg, M.; Lanctot, M.; Sonnerat, N.; Leibo, J. Z.; Tuyls, K.; and Graepel, T. 2018. Value-Decomposition Networks For Cooperative Multi-Agent Learning. In Proc. Int. Conf. Auto. Agents Multiagent Syst. , 2085–2087. Sutton, R. S.; Precup, D.; and Singh, S. 1999. Between MDPs and semi-MDPs: A framework for temporal abstrac-tion in reinforcement learning. Artif. Intell. , 112(1-2): 181– 211. Tian, Z.; Chen, R.; Hu, X.; Li, L.; Zhang, R.; Wu, F.; Peng, S.; Guo, J.; Du, Z.; Guo, Q.; and Chen, Y. 2023. Decom-pose a Task into Generalizable Subtasks in Multi-Agent Re-inforcement Learning. In Proc. Adv. Neural Inf. Process. Syst. , volume 36, 78514–78532. Venkatraman, S.; Khaitan, S.; Akella, R. T.; Dolan, J.; Schneider, J.; and Berseth, G. 2024. Reasoning with La-tent Diffusion in Offline Reinforcement Learning. In Proc. Int. Conf. Learn. Represent. 
+
+Wang, J.; Ren, Z.; Liu, T.; Yu, Y.; and Zhang, C. 2021a. QPLEX: Duplex Dueling Multi-Agent Q-Learning. In Proc. Int. Conf. Learn. Represent. 
+
+Wang, T.; Dong, H.; Lesser, V.; and Zhang, C. 2020a. ROMA: Multi-Agent Reinforcement Learning with Emer-gent Roles. In Proc. Int. Conf. Mach. Learn. , volume 119, 9876–9886. Wang, T.; Gupta, T.; Mahajan, A.; Peng, B.; Whiteson, S.; and Zhang, C. 2021b. RODE: Learning Roles to Decompose Multi-Agent Tasks. In Proc. Int. Conf. Learn. Represent. 
+
+Wang, T.; Wang, J.; Zheng, C.; and Zhang, C. 2020b. Learn-ing Nearly Decomposable Value Functions via Communica-tion Minimization. In Proc. Int. Conf. Learn. Represent. 
+
+Wang, W.; Yang, T.; Liu, Y.; Hao, J.; Hao, X.; Hu, Y.; Chen, Y.; Fan, C.; and Gao, Y. 2023. ASN: Action Semantics Net-work for Multiagent Reinforcement Learning. Autonomous Agents and Multi-Agent Systems , 37(1): 1–28. Wang, Z.; Hunt, J. J.; and Zhou, M. 2023. Diffusion Poli-cies as an Expressive Policy Class for Offline Reinforcement Learning. In Proc. Int. Conf. Learn. Represent. 
+
+Wen, M.; Kuba, J. G.; Lin, R.; Zhang, W.; Wen, Y.; Wang, J.; and Yang, Y. 2022. Multi-Agent Reinforcement Learning is a Sequence Modeling Problem. In Proc. Adv. Neural Inf. Process. Syst. , volume 35, 24602–24616. Xu, Q.; Zhu, Y.; Wu, X.; and Chen, C. 2025. High-order Interactions Modeling for Interpretable Multi-Agent Q-Learning. In Proc. Adv. Neural Inf. Process. Syst. , vol-ume 38. Xu, Z.; Bai, Y.; Zhang, B.; Li, D.; and Fan, G. 2023. HAVEN: Hierarchical Cooperative Multi-Agent Reinforce-ment Learning with Dual Coordination Mechanism. In Proc. AAAI Conf. Artif. Intell. , volume 37, 11735–11743. Yang, J.; Borovikov, I.; and Zha, H. 2020. Hierarchical Co-operative Multi-Agent Reinforcement Learning with Skill Discovery. In Proc. Int. Conf. Auto. Agents Multiagent Syst. ,1566–1574. Yang, M.; Zhao, J.; Hu, X.; Zhou, W.; Zhu, J.; and Li, H. 2022a. LDSA: Learning Dynamic Subtask Assignment in Cooperative Multi-Agent Reinforcement Learning. In Proc. Adv. Neural Inf. Process. Syst. , volume 35, 11735–11743. Yang, Y.; Chen, G.; Wang, W.; Hao, X.; Hao, J.; and Heng, P.-A. 2022b. Transformer-based Working Memory for Mul-tiagent Reinforcement Learning with Action Parsing. In 
+
+Proc. Adv. Neural Inf. Process. Syst. , volume 35, 1–14. Zang, Y.; He, J.; Li, K.; Fu, H.; Fu, Q.; Xing, J.; and Cheng, J. 2023. Automatic Grouping for Efficient Cooperative Multi-Agent Reinforcement Learning. In Proc. Adv. Neu-ral Inf. Process. Syst. , volume 36, 64896–64917. Zhang, C.; and Lesser, V. 2011. Coordinated multi-agent reinforcement learning in networked distributed POMDPs. In Proc. AAAI Conf. Artif. Intell. , volume 25, 764–770. Zhang, C.; Lesser, V. R.; and Abdallah, S. 2010. Self-Organization for Coordinating Decentralized Reinforcement Learning. In Proc. Int. Conf. Auto. Agents Multiagent Syst. ,739–746. Zhang, K.; Sun, T.; Tao, Y.; Genc, S.; Mallya, S.; and Basar, T. 2020. Robust multi-agent reinforcement learning with model uncertainty. In Proc. Adv. Neural Inf. Process. Syst. ,volume 33, 10571–10583. Zhang, M.; Cai, Z.; Pan, L.; Hong, F.; Guo, X.; Yang, L.; and Liu, Z. 2024. Motiondiffuse: Text-driven human motion generation with diffusion model. IEEE Trans. Pattern Anal. Mach. Intell. , 46(6): 4115–4128. 29204

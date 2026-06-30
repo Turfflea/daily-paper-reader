@@ -1,0 +1,290 @@
+Title: Zero-Shot Learning for Materials Science Texts: Leveraging Duck Typing Principles
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/32100/34255
+
+Number of Pages: 9
+
+Markdown Content:
+# Zero-Shot Learning for Materials Science Texts: Leveraging Duck Typing Principles 
+
+# Xin Zhang 1, Peiliang Zhang 1,3 , Jingling Yuan 1,2* , Lin Li 1
+
+> 1
+
+School of Computer Science and Artificial Intelligence, Wuhan University of Technology, China 
+
+> 2
+
+Hubei Key Laboratory of Transportation Internet of Things, Wuhan University of Technology, China 
+
+> 3
+
+Department of Library and Information Science, Yonsei University, Korea 
+
+{xinz, zhangpl109, yjl, cathylilin }@whut.edu.cn 
+
+Abstract 
+
+Materials science text mining (MSTM), involving tasks like property extraction and synthesis action retrieval, is pivotal for advancing research by deriving critical insights from sci-entific literature. Descriptors, serving as essential task la-bels, often vary in meaning depending on researchers’ usage purposes across different mining tasks. (e.g., ‘ Material ’can refer to both synthesis components and participants in fuel cell experiment). This meaning difference makes it diffi-cult for existing methods, fine-tuned to specific task, to han-dle the same descriptors in other tasks. To overcome above limitation, we propose MatDuck, a simple and effective ap-proach for Zero-Shot MSTM by evoking material knowl-edge within Large Language Models (LLMs). Specifically, inspired by the Duck Typing principles in programming lan-guages, we present a ClassDefinition-Style Descriptor gener-ation method that evokes task-specific characteristics to ad-dress usage variation. Subsequently, we introduce code-style in-context learning for zero-shot tasks, reframing them into code to leverage LLMs’ proficiency in code understanding. Extensive experiments on eight benchmark datasets demon-strate that MatDuck, as a plug-and-play approach, signifi-cantly improves the Zero-Shot MSTM performance of LLMs by an average of 11.3% across seven tasks. 
+
+# Introduction 
+
+Material Science Text Mining (MSTM) focuses on extract-ing valuable elements using predefined descriptors from ma-terials science-related texts, which are more challenging than general texts due to their specialized terms, complex structures, and precise information requirements. (Gupta et al. 2022; Song, Miret, and Liu 2023; Song et al. 2023). Key MSTM tasks include named entity recognition, rela-tion extraction, and sentence classification, among others. By applying these, researchers can efficiently organize and interpret vast amounts of material science data, including re-search papers, patents, and experimental reports (Tshitoyan et al. 2019; Suvarna et al. 2023; Sun et al. 2024; Dagdelen et al. 2024). This paradigm facilitates the identification of critical patterns and relationships in material properties, per-formance characteristics, and practical applications, driving faster innovation and deployment of new materials. 
+
+> *
+
+Corresponding author. Copyright © 2025, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+Figure 1: Illustration of meaning differences due to varying usage purposes, and two proposed Duck Typing principles. Descriptors are abstract representations of material prop-erties, structures, or behaviors, enabling data-driven anal-ysis in materials science domain (Isayev et al. 2017; Wyrzykowska et al. 2022; Kabylda et al. 2023). In text min-ing, they often function as task labels. Researchers typi-cally define descriptors based on task objectives, construct datasets, and fine-tune models accordingly. As a result, the meaning of descriptors can vary depending on their specific requirements in different tasks (Song, Miret, and Liu 2023; Gupta et al. 2024). For instance, the descriptor ‘ Material ’in materials science can refer to both the materials used in synthesis of target and those mentioned as participants in fuel cell experiment. As shown in Figure 1 (a), when en-countering new tasks with the same descriptor but differ-ent purposes, variations in usage pose a challenge to the generalizability of specifically trained models. Retraining or fine-tuning often requires high effort and computational cost (Zhao et al. 2024; Xia et al. 2024), making it unafford-able for many material researchers, especially those with no background in natural language processing. Given this challenge, from a broader research perspec-tive, the meaning difference highlights the urgent need for paradigms that reduce fine-tuning on task-specific labeled data. In this context, Zero-Shot MSTM aims to exploit the embedded material knowledge and powerful generalisabil-The Thirty-Ninth AAAI Conference on Artificial Intelligence (AAAI-25) 
+
+1129 ity of LLMs (Brown et al. 2020; Kojima et al. 2022) to pro-vide greater flexibility and applicability across various tasks without fine-tuning on any task data, enabling researchers to focus on scientific exploration rather than model adapta-tions. Indeed, leveraging the material knowledge embedded in rapidly evolving LLMs may be a more practical approach than substantial investments in fine-tuning. To achieve this goal, inspired by the Duck Typing princi-ples in programming languages, which emphasizes focusing on an object’s behavior rather than its explicit type (e.g., if an object ‘looks like a duck, walks like a duck, and quacks like a duck’, then it should be treated as a duck), two principles for MSTM are naturally derived: Principle I : If the type of an object is unknown, it can be identified by its characteristic properties. Principle II : If the meaning of a descriptor is un-clear, it can be inferred from its task-related text, as shown in Figure 1 (b). Based on these, we propose leveraging descrip-tor characteristic properties to enhance the identification of material text objects, and anchoring the meanings of descrip-tors with task-specific texts, thereby fully utilizing existing LLMs to achieve zero-shot. In this study, we propose MatDuck, a simple and effec-tive approach for Zero-Shot MSTM, which leverages Duck Typing principles to evoke the material knowledge within LLMs. Specifically, following Principle I, we begin by set-ting the descriptor as the class name and then use LLMs to generate multiple potential class definitions, fully evok-ing the relevant embedded knowledge. Then, to anchor the most suitable class definitions for the task, we employ the task texts to obtain the fitness degree of each class defi-nition based on Principle II, and retain the top one as the ClassDefinition-Style Descriptor. Finally, we strategically reframe the MSTM tasks into a code format to better lever-age LLMs’ code understanding, particularly their object-oriented class identification capability, enabling zero-shot learning. Overall, compared with existing methods, our ap-proach can be adapted to different tasks without requiring fine-tuning on task-specific data. Our contributions can be summarized as follows: • We propose MatDuck, a user-friendly choice for re-searchers in the materials domain, which avoids the com-plexities of data annotation and model fine-tuning while enabling effective MSTM, even without requiring exter-nal materials knowledge. • We achieve zero-shot learning by leveraging Duck Typing 
+
+principles to evoke embedded material knowledge and code understanding capabilities in LLMs, with adaptabil-ity to diverse LLMs and tasks. • Extensive experiments show that MatDuck boosts LLMs’ zero-shot performance by 11.3% on average across seven MSTM tasks and eight benchmark datasets, outperforming the best commercial LLMs by using LlaMA3-8B as the backbone. 
+
+# Related Work 
+
+Materials Science Text Mining As a widely studied task, traditional MSTM approaches relied on rule-based systems and manual ontologies (Tshitoyan et al. 2019). The rise of machine learning and natural language processing has led to the adoption of supervised learning, using BERT-based models, such as MatBERT (Walker et al. 2021), MatSciB-ERT (Gupta et al. 2022), BatteryBERT (Huang and Cole 2022), and MatSci-NLP (Song, Miret, and Liu 2023), to learn vector representations based on labeled data. Recently, with the outstanding text performance of LLMs, researchers have turned their attention to the materials domain LLMs (Song et al. 2023; Dagdelen et al. 2024). However, these methods heavily depend on task-specific data, resulting in limited generalisability. Meanwhile, the trend towards zero-shot learning has been highlighted as particularly benefi-cial in materials science. To achieve this, LLaMA models were adopted and fine-tuned on the generic material data. (Song et al. 2023). Despite performance gains, this method still heavily depends on extensive fine-tuning, limiting its efficiency compared to the rapid iteration of LLMs. Thus, it is necessary to further explore plug-and-play approaches that do not require fine-tuning but fully utilize the material knowledge embedded within LLMs. 
+
+Zero-Shot with LLMs Zero-shot learning with LLMs has shown promising results, particularly in text-related tasks. In this approach, LLMs are adopted to perform tasks with-out fine-tuning task-specific datasets. Research has shown that LLMs like GPT-3 can execute zero-shot text classi-fication by using natural language prompts. (Brown et al. 2020). Further research emphasizes the critical role of In-Context Learning (ICL), where prompt engineering plays a crucial role in guiding LLMs to effectively utilize their pre-trained knowledge. (Min et al. 2022; Liu et al. 2023; Lin et al. 2023; Wang et al. 2023a). Chain-of-Thought prompt-ing further enhances reasoning by structuring tasks into in-termediate steps (Wei et al. 2022; Kojima et al. 2022; Wang et al. 2023b). These methods significantly boost LLM per-formance in zero-shot scenarios, highlighting the potential of ICL. Meanwhile, there is increasing interest in integrat-ing code style into LLMs applications for text tasks (Li et al. 2024; Sainz et al. 2023; Wang, Li, and Ji 2023), us-ing programming constructs to structure prompts, thereby leveraging the model’s code ability to handle complex tex-tual data. However, fine-tuning is still required. Unlike pre-viously mentioned methods, to the best of our knowledge, we are the first to explore task-agnostic ICL for Zero-Shot MSTM, without requiring any fine-tuning or external mate-rials knowledge. 
+
+# Method 
+
+MatDcuk is designed to achieve Zero-Shot MSTM by en-hancing ICL using Duck Typing principles. As shown in Figure 2, it encompasses three primary parts: Class Defi-nition Generation, ClassDefinition-Style Descriptor Adap-tation, and Code-Style Task Inference. 
+
+## Problem Formulation 
+
+Similar to the works of (Song, Miret, and Liu 2023; Song et al. 2023), we formalize the mining tasks as classification tasks, as materials science places a high emphasis on data ac-curacy, and classification offers greater precision compared 1130 Figure 2: The framework of MatDuck, a task-agnostic ICL approach for Zero-Shot MSTM by leveraging Duck Typing principles (NER task as an example). MatDuck aims to fully leverage the materials knowledge and code capabilities within LLMs. to other generative approaches. In this context, a simpli-fied definition of the tasks, using Named Entity Recogni-tion (NER) as an example, is as follows : Given an entity e
+
+mentioned within a contextual text T and a set of descriptors 
+
+D = {d1, d 2, ..., d m}, the goal is to identify the most appro-priate descriptor from D for the entity e based on the context provided in T. It is worth noting that in some tasks, such as sentence or paragraph classification, the x represents not an entity in the text but the contextual text T itself. 
+
+## Class Definition Generation 
+
+Different usage purposes for the same descriptor lead to vari-ations in its conveyed meaning, making it challenging to ap-ply the descriptor name alone to new tasks. Inspired by the 
+
+Principle I , we consider anchoring descriptor meanings in different tasks in the form of code class definitions. However, current methods for constructing class defini-tions (Li et al. 2024; Sainz et al. 2023) often rely on com-bining templates with structured knowledge from external knowledge bases, which is unsuitable for materials science domain where access to accurate task knowledge is limited. In this paper, we use LLMs to construct class definitions, leveraging their embedded knowledge to overcome above limitation. Specifically, instead of directly generating class defini-tions, we adopt the Chain-of-Thought (Wei et al. 2022) ap-proach to produce more precise definitions. Given a set de-scriptors D, for each d, due to the diversity of descriptors in materials science, [ Step 1 ] we use the descriptor name as a keyword in the prompts, and then [ Step 2 ] generate a diverse set of definitions as class annotations Cd = {cd
+
+> 1
+
+, c d
+
+> 2
+
+, ..., c dh}
+
+based on the multiple meanings of descriptor d :
+
+Cd = Generator(T( d)) (1) where LLMs is selected as the Generator and T( ·) de-notes the instruction template. After that, For each possi-ble meaning of the descriptor, [ Step 3 ] descriptor d and class annotation cdi ∈ Cd are adopted as the foundation for constructing descriptor-specific instruction to generate a set of properties and corresponding annotations (P, Cp)i =
+
+{(p1, c p
+
+> 1
+
+)i, (p2, c p
+
+> 2
+
+)i, ..., (pk, c pk)i} :
+
+(P, Cp)i = Generator(T( d, cdi )) (2) Finally, the generated class annotation (P, Cp)i are used to construct the descriptor class definitions Γd based on pre-designed templates Class( ·) :
+
+γi = Class( d, ci, (P, Cp)i) (3) where γi ∈ Γ, Γ denotes the set of class definitions of d.In this way, for each meaning of the descriptor d, we ob-tain the corresponding class definitions Γ, each with suffi-cient characteristic properties to anchor the exact meaning of the descriptor. 
+
+## ClassDefinition-Style Descriptor Adaptation 
+
+To effectively mitigate the meaning gap between descrip-tors and specific tasks, we further propose a ClassDefinition-Style Descriptor adaptation method, which aims to iden-tify the distribution of class objects within the task texts, thereby determining the most relevant class definitions as the ClassDefinition-Style Descriptors for the tasks. Specifically, for descriptor d, given a generated set of class definitions {γ1, γ 2, ..., γ h} and a set of texts {T1, T2, ..., Tr }1131 Algorithm 1: ClassDefinition-Style Descriptors Generation 
+
+Input : Descriptors of TaskA D = {d1, d 2, . . . , d m}, Texts of TaskA T = {t1, t 2, . . . , t r }
+
+Output : ClassDefinition-Style Descriptors of TaskA Dc 
+
+> 1:
+
+Dc ← {}  
+
+> 2:
+
+for each descriptor d ∈ D do  
+
+> 3:
+
+Generate multiple class annotations Cd 
+
+> 4:
+
+for each class annotation cdi ∈ Cd do  
+
+> 5:
+
+Generate multiple property&annotations (P, C p)i 
+
+> 6:
+
+Define class γi consisting of d, cdi , and (P, C p)i 
+
+> 7:
+
+Initialize object counter Obj [γi] ← 0 
+
+> 8:
+
+Form a set Si = {(d, c di )} ∪ { (P, C p)i} 
+
+> 9:
+
+for each task text t ∈ T do  
+
+> 10:
+
+Count objects of elements in Si within t and up-date Obj [γi] 
+
+> 11:
+
+end for  
+
+> 12:
+
+Obtaining the fitness degree ΦSi ← sum (Obj [γi])  
+
+> 13:
+
+end for  
+
+> 14:
+
+Select the class definition γc ← γi arg max Φ Si 
+
+> 15:
+
+Dc ← Dc ∪ { γc} 
+
+> 16:
+
+end for  
+
+> 17:
+
+return Dc
+
+randomly selected from the texts of current task. We aim to follow Principle II to calculate the distribution of instance relationships between class definitions and potential objects, determining their fitness to specific tasks: 
+
+Si = {(d, cdi )} ∪ { (P, Cp)i} (4) 
+
+ΦSi =
+
+> k
+
+X
+
+> j=1
+
+X
+
+> s∈Si
+
+Count(Instance( s, T j )) (5) where Instance( a, b) denotes the set of instances of class a
+
+that may be present in b, which is achieved using LLMs’ class identification capabilities through prompts. Then, the class definition with the best fitness degree Φ is selected as the ClassDefinition-Style Descriptor γ:
+
+γ = γi∗ where i∗ = arg max  
+
+> i
+
+ΦSi (6) The pseudo-code for complete ClassDefinition-Style De-scriptors generation procedure is presented in Algorithm 1. 
+
+## Code-Style Task Inference 
+
+After obtaining task-specific ClassDefinition-Style Descrip-tors, our goal is to effectively introduce them to enhance ICL for zero-shot learning. To achieve this, we introduce a Code-Style Task Infer-ence method that enhances ICL by leveraging the object-oriented class identification in code understanding capabil-ity of LLMs (Yang et al. 2024). This method integrates task constraints and descriptor class definitions into a code-style format for instance-based judgment. Specifically, the Python programming language is employed to represent the MSTM tasks. We wrap the object to be recognized e, the background text T, and the set of descriptors {γ1, γ 2, ..., γ m} into a code style prompt and output with a class type. 
+
+Figure 3: The Code-Style ICL (NER task as an example). 
+
+Task #Samples #Descriptors Misuse Rate 
+
+NER 112,191 41 0.439 RC 25,674 19 0.316 EAE 6,566 7 -PC 1,500 1 -SAR 5,547 8 -SC 9,466 1 -SF 8,253 18 0.333 Total 169,197 95 0.316 Table 1: The detailed statistics of datasets and the misuse rate of descriptors. As shown in Figure 3, with the NER task as an exam-ple, we define the descriptor as a sub-class of task class, and represent the task constraints through parameters. The input background text is then assigned as a string to the variable ”T ext ” and specified with an annotation. The task goal is de-scribed as instance class type judgment in the form of code annotation. 
+
+## Query Execution Complexity Analysis 
+
+In materials science text mining, large volumes of data (including documents and reports) often need to be pro-cessed. Although some zero-shot methods do not require fine-tuning, they still necessitate numerous LLM queries for a single instance (Zhuang et al. 2024; Chen et al. 2024), which can significantly impact execution time and compu-tational costs. Therefore, we will analyze the complexity of query execution in MatDuck. 1132 Model Named Entity Relation Event Argument Paragraph Synthesis Action Sentence Slot Overall Recognition Extraction Extraction Classification Retrieval Classification Filling All Tasks Fine-tuning Performance                                                                                                                                                                                 
+
+> MatSciBERT 0.707 0.791 0.436 0.719 0.692 0.914 0.436 0.671 (Gupta et al. 2022) 0.470 0.507 0.251 0.623 0.484 0.660 0.194 0.456 MatBERT 0.875 0.804 0.451 0.756 0.717 0.909 0.548 0.722 (Walker et al. 2021) 0.630 0.513 0.288 0.691 0.594 0.614 0.273 0.517
+> Zero-Shot Performance
+> Chat-GPT 0.444 0.572 0.451 0.626 0.672 0.384 0.360 0.501 (OpenAI 2022) 0.309 0.525 0.421 0.626 0.561 0.354 0.274 0.439 LLaMA3-8B 0.405 0.576 0.499 0.692 0.722 0.495 0.409 0.543 (Dubey et al. 2024) 0.306 0.552 0.465 0.691 0.598 0.432 0.310 0.480 GPT-4 0.497 0.549 0.516 0.708 0.745 0.354 0.529 0.557 (OpenAI 2023) 0.404 0.526 0.478 0.706 0.641 0.334 0.398 0.511 Claude3.5 0.556 0.613 0.522 0.624 0.817 0.406 0.551 0.584 (Anthropic 2024) 0.480 0.606 0.487 0.624 0.734 0.370 0.402 0.533 Honybee-7B 0.267 0.245 0.290 0.490 0.688 0.490 0.393 0.409 (Song et al. 2023) 0.190 0.178 0.189 0.343 0.342 0.365 0.289 0.271 Honybee-13B 0.429 0.412 0.481 0.611 0.801 0.589 0.578 0.557 (Song et al. 2023) 0.372 0.346 0.378 0.467 0.429 0.503 0.423 0.417
+> MatDuck 0.470 0.611 0.528 0.748 0.785 0.853 0.411 0.629 (LLaMA3-8B) 0.355 0.520 0.488 0.735 0.762 0.573 0.330 0.538
+> MatDuck 0.564 0.579 0.538 0.768 0.851 0.817 0.516 0.661 (GPT4) 0.472 0.503 0.497 0.755 0.828 0.596 0.401 0.579
+> MatDuck 0.627 0.639 0.544 0.758 0.874 0.885 0.554 0.697 (Claude3.5) 0.512 0.587 0.508 0.757 0.859 0.576 0.437 0.605
+
+Table 2: Zero-shot and fine-tuning evaluation results for MSTM tasks. We present macro-F1 (top) and micro-F1 (bottom) scores, with the best , second-best and third-best zero-shot performing approachs highlighted. 
+
+Preparation Phase : The query number during the defini-tion process of m anchored descriptor classes (as described in the Eqs. 1-6): 
+
+Qpred = m(h(1 + k) + hr (1 + k)) (7) 
+
+Interfence Phases : The query number during the infer-ence process for n samples to be classified. 
+
+Qintf er = n (8) 
+
+Total Count : The total query number for n samples: 
+
+Qtotal = Qpred + Qintf er = n + mh (1 + r)(1 + k) (9) It can be observed that total query number is mainly related to the sample size n. The complexity of the query execution is considered acceptable. 
+
+# Experiments 
+
+In this section, we conduct extensive experiments to address the following questions to evaluate the effectiveness of the proposed MatDuck: RQ1 : How does MatDuck perform on Zero-Shot MSTM? Compared to existing zero-shot meth-ods and fine-tuning methods? RQ2 : How effective is the ClassDefinition-Style Descriptor in capturing task-specific characteristics ( Principle I )? RQ3 : How effective is the task adaptation in selecting ClassDefinition-Style Descriptors for specific tasks ( Principle II )? RQ4 : How effective is code-style ICL compared to natural language for zero-shot perfor-mance improvement? 
+
+## Dataset 
+
+To evaluate the performance of our proposed MatDuck for Zero-Shot MSTM, we conduct experiments on eight public materials science text benchmark datasets (Song, Miret, and Liu 2023), where the texts included are all materials science domain literature. Tasks include Named Entity Recognition (NER), Relation Extraction (RE), Event Attribute Extrac-tion (EAE), Paragraph Classification (PC), Synthesis Action Retrieval (SAR), Sentence Classification SC), and Slot Fill-ing (SF). Further details about the tasks and datasets can be found in the work of (Song, Miret, and Liu 2023). Additionally, we calculated the descriptor misuse rate, de-fined as the proportion of the same descriptors applied across multiple research contexts (tasks or datasets). As shown in Table 3, the overall misuse rate reaches 31.6% and 43.9% 
+
+in the NER task. This misuse rate highlights the necessity of anchoring the meanings of descriptors. 
+
+## Baselines and Evaluation Metrics 
+
+To validate the competitiveness, we compare the proposed MatDuck variants with the following baselines: 
+
+API-accessible LLMs , such as GPT4 (OpenAI 2023), GPT3.5 (OpenAI 2022), and Claude3.5 (Anthropic 2024), represent the state-of-the-art in general-purpose models. Due to the limited availability of open-source options, we conducted our evaluation through API access. 1133 Model Named Entity Relation Event Argument Paragraph Synthesis Action Sentence Slot Overall Recognition Extraction Extraction Classification Retrieval Classification Filling All Tasks MatDuck 0.627 0.639 0.544 0.758 0.874 0.885 0.554 0.697                                                         
+
+> (Claude3.5) 0.512 0.587 0.508 0.757 0.849 0.576 0.437 0.605
+> w/o 0.565 0.622 0.526 0.592 0.804 0.396 0.517 0.575 Property 0.412 0.599 0.481 0.592 0.723 0.365 0.385 0.508 w/o 0.593 0.619 0.502 0.632 0.826 0.591 0.526 0.613 Task-Adapt 0.481 0.565 0.459 0.630 0.729 0.529 0.391 0.541 w/o 0.608 0.583 0.510 0.688 0.848 0.656 0.535 0.633 Code-Style 0.489 0.529 0.477 0.687 0.751 0.539 0.419 0.556
+
+Table 3: Zero-shot evaluation results of MatDuck in ablation experiments. 
+
+Open-source LLMs , such as LLaMA3 (Dubey et al. 2024), represent the competitive open-source LLMs. Con-sidering the performance improvement validation and re-source constraints, we will concentrate on the LLaMA3-8B. 
+
+Material-domain LLMs , including HoneyBee-7B and HoneyBee-13B (Song et al. 2023), are state-of-the-art billion-parameter models in MSTM, achieving zero-shot performance improvements through fine-tuning on materi-als science instruction data. 
+
+Fine-tuned BERTs , such as MatBERT (Walker et al. 2021), MatSciBERT (Gupta et al. 2022), are BERT (Devlin 2018) variants pre-trained on materials science task-specific labeled data, achieving outstanding performance based on the supervised information. 
+
+Evaluation Metrics: We evaluate the performance by us-ing two widely adopted metrics: Micro-F1 and Macro-F1, consistent with existing work (Song, Miret, and Liu 2023; Song et al. 2023). 
+
+## Implementation Details 
+
+As MatDuck is a plug-and-play method, we evaluated its performance using high-performance API-accessible mod-els such as GPT-4 and Claude3.5, as well as open-source models like LLaMA3-8B as backbone models. Specifi-cally, the GPT-4 version used is GPT-4-Turbo, Claude3.5 is Claude3.5 Sonnet, and LLaMA3-8B was evaluated on two NVIDIA RTX- 4090 GPUs. The generators in the Mat-Duck variants are the foundational LLMs on which they are based. In class definition generation and adaptation, we set the number of properties to 5, and in the class definition se-lection, the number of random task texts selected is 10% of the total texts. For some datasets, fewer texts may be needed to select suitable ClassDefinition-Style Descriptors, and ad-justments can be made based on the task dataset’s distri-bution. Our experimental setup and baseline results for the BERT series and Honeybee series methods follow the (Song, Miret, and Liu 2023; Song et al. 2023). The source code is available at https://github.com/xinzcode/MatDuck. 
+
+## Experimental Results 
+
+Comparison with Zero-Shot Baselines (RQ1) As shown in the results in Table 2, existing general-purpose LLMs demonstrate objective performance in Zero-Shot MSTM tasks, which can be attributed to the extensive material do-main text included in their pre-training datasets and their no-table generalization capabilities in text tasks. Among these, Claude3.5 exhibits the best overall performance across mul-tiple tasks. Additionally, although LLaMA3-8B performs slightly lower than Claude3.5 and GPT4, its advantages as an open-source model make this trade-off acceptable. HonnyBee, as the method fine-tuned for materials science based on the original LLaMA-7B, shows limited advan-tages in zero-shot performance compared to the rapidly evolving LLMs. This indicates that leveraging the material knowledge embedded in contemporary LLMs might be a more effective strategy compared to extensive investments in domain-specific fine-tuning. Our proposed approach, uti-lizing Claude3.5, GPT4, and LLaMA3-8B, significantly out-performs both existing general-purpose LLMs and material-domain LLMs in zero-shot performance, achieving im-provements of 8.6%, 10.4% , 11.3% , and 14.0 %, respec-tively. This finding effectively validates the effectiveness of MatDuck, which enhances Zero-Shot MSTM by ap-plying Duck Typing principles to characterize descriptors and improve ICL. Additionally, it is worth noting that the MatDuck-enhanced LLaMA3-8B outperforms the top general-purpose models, GPT-4 and Claude3.5, by 7.2% 
+
+and 4.5% . This makes it a viable option for researchers with open-source or low-cost requirements. 
+
+Comparison with Fine-Tuned Baselines (RQ1) Com-pared to the zero-shot approach, the fine-tuned BERTs achieve considerable performance on certain tasks, with 
+
+0.914 F1-score on the SC task, making BERT-based mod-els a viable choice when task labeled data is available. Fur-thermore, MatDuck demonstrates competitive performance as a zero-shot method compared to these approaches. With Claude3.5 as its backbone, MatDuck achieves 0.697 F1-score, surpassing the fine-tuned method MatSciBERT. This reflects that MatDuck, when combined with general-purpose LLMs, can reach a level comparable to supervised learning and highlights the promising potential of leveraging material knowledge within LLMs for Zero-Shot MSTM. 
+
+Ablation Study To analyze the contributions of differ-ent components within the proposed MatDuck, we con-ducted ablation experiments with the following variants, us-ing Claude3.5 as the backbone: • w/o Properties (RQ2) : It means that descriptor class def-1134 Figure 4: Performance with different number of properties. initions do not incorporate task-specific characteristic in-formation, such as properties and annotations. • w/o Task-Adapt (RQ3) : It means that generating ClassDefinition-Style Descriptor directly for tasks, with-out task adaptation. • w/o Code-Style (RQ4) : It means employing natural lan-guage for tasks rather than converting them into code for-mat within ICL. The results of the ablation experiments are shown in Table 3. Performance drops significantly to 0.575 when task-specific properties and annotations are excluded from descriptor class definitions, falling below the original LLM baseline. This decline likely occurs because, without these charac-teristics, class definitions include only descriptor names and structures, making descriptor-related information less prominent in the context, leading to reduced performance. This highlights the importance of descriptor characteristics in class definitions, consistent with Principle I. Additionally, when task adaptation is not employed, performance also de-clines significantly. This may be attributed to the gap be-tween directly generated descriptor class definitions and the intended task, validating the necessity of Principle II. While using natural language style ICL, the lack of knowledge aggregation from class definitions and the limited use of LLM code understanding capabilities restrict performance improvements, though it still benefits from incorporating task-specific knowledge. 
+
+Performance with Different Number of Properties (RQ2) To further assess the effectiveness of the proposed ClassDefinition-Style Descriptors in MatDuck, we will eval-uate how varying the number of generated class definition properties affects performance. This approach is based on the intuition that more properties enhance the anchoring ef-fect of class definitions on material knowledge, as outlined in Principle I. As shown in Figure 4, we evaluate the perfor-mance of MatDuck with different backbones across vary-ing numbers of properties. The results indicate a positive correlation between the number of properties and perfor-mance across different backbones. Generally, performance improves as the number of properties increases, with the peak observed at 4, 5, and 6 properties. However, as the 
+
+Figure 5: True fitness success rate of sorted class definitions. number of properties continues to rise, the benefits start to diminish. This decline might be due to an overabundance of properties, which can reduce the relative importance of descriptor-specific information and lead to negative effects from overly long contexts. Overall, the impact of property number on performance validates the importance of Princi-ple I for Zero-Shot MSTM, which emphasizes the role of properties in enhancing the identification of descriptors. 
+
+Effectiveness Analysis of Task Adaptation (RQ3) To analyze the proposed task adaptation method, which aims to select the best-fit ClassDefinition-Style Descriptors for spe-cific tasks by leveraging Principle II, we analyzed the fitness success rate for class definitions with different fitness de-grees. This rate represents the probability that a class defini-tion at each position in the ranking results is the true optimal class definition. In this way, the effectiveness of task adap-tation can be validated. The results presented in Figure 5 show that, in most cases, the optimal choices frequently ap-pear in the top two positions of the ranking results based on the task adaptation method. This validates the effectiveness of Principle II in determining descriptor meanings according to the task texts, also highlights the necessity of addressing potential meaning differences of descriptors caused by usage purpose variation. 
+
+# Conclusion 
+
+In this paper, we propose a simple and effective approach, MatDuck, for Zero-Shot MSTM by leveraging Duck Typ-ing principles. MatDuck aims to enhance in-context learn-ing by leveraging material knowledge and code capabilities within LLMs under the guidance of two Duck Typing princi-ples. As a plug-and-play solution, MatDuck can be applied to various rapidly evolving LLMs without adjustments or fine-tuning, making it user-friendly for materials researchers without an NLP background. Extensive experiments across seven datasets and eight datasets validate the Zero-Shot per-formance of MatDuck, showing an average improvement of 11.3% without requiring fine-tuning or external materi-als knowledge bases. In future work, we will further ex-plore material knowledge and capabilities within LLMs to advance the field of materials science. 1135 Acknowledgments 
+
+This work was supported by the National Natural Sci-ence Foundation of China (No.62472332, No.62276196), the “Open Bidding for Selecting the Best Candidates” Project of Wuhan East Lake High-Tech Development Zone (No.2024KJB322), and the Hubei Provincial In-ternational Science and Technology Cooperation Project (No.2024EHA031). 
+
+# References 
+
+Anthropic. 2024. Claude 3.5 Sonnet. https://www.anthropic. com/claude/sonnet. Accessed: 2024-08-15. Brown, T.; Mann, B.; Ryder, N.; Subbiah, M.; Kaplan, J. D.; Dhariwal, P.; Neelakantan, A.; Shyam, P.; Sastry, G.; Askell, A.; et al. 2020. Language models are few-shot learners. Ad-vances in neural information processing systems , 33: 1877– 1901. Chen, X.; Chen, X.; He, B.; Wen, T.; and Sun, L. 2024. An-alyze, generate and refine: Query expansion with LLMs for zero-shot open-domain QA. In Findings of the Association for Computational Linguistics ACL 2024 , 11908–11922. Dagdelen, J.; Dunn, A.; Lee, S.; Walker, N.; Rosen, A. S.; Ceder, G.; Persson, K. A.; and Jain, A. 2024. Structured in-formation extraction from scientific text with large language models. Nature Communications , 15(1): 1418. Devlin, J. 2018. Bert: Pre-training of deep bidirectional transformers for language understanding. arXiv preprint arXiv:1810.04805 .Dubey, A.; Jauhri, A.; Pandey, A.; Kadian, A.; Al-Dahle, A.; Letman, A.; Mathur, A.; Schelten, A.; Yang, A.; Fan, A.; et al. 2024. The llama 3 herd of models. arXiv preprint arXiv:2407.21783v2 .Gupta, A.; Mittal, D.; Goel, O.; and Jha, S. K. 2024. Natu-ral language processing algorithms for domain-specific data extraction in material science: Reseractor. Journal of Mate-rials Science , 1–17. Gupta, T.; Zaki, M.; Krishnan, N. A.; and Mausam. 2022. MatSciBERT: A materials domain language model for text mining and information extraction. npj Computational Ma-terials , 8(1): 102. Huang, S.; and Cole, J. M. 2022. BatteryBERT: A pretrained language model for battery database enhancement. Journal of chemical information and modeling , 62(24): 6365–6377. Isayev, O.; Oses, C.; Toher, C.; Gossett, E.; Curtarolo, S.; and Tropsha, A. 2017. Universal fragment descriptors for predicting properties of inorganic crystals. Nature commu-nications , 8(1): 15679. Kabylda, A.; Vassilev-Galindo, V.; Chmiela, S.; Poltavsky, I.; and Tkatchenko, A. 2023. Efficient interatomic descrip-tors for accurate machine learning force fields of extended molecules. Nature communications , 14(1): 3562. Kojima, T.; Gu, S. S.; Reid, M.; Matsuo, Y.; and Iwasawa, Y. 2022. Large language models are zero-shot reason-ers. Advances in neural information processing systems , 35: 22199–22213. Li, Z.; Zeng, Y.; Zuo, Y.; Ren, W.; Liu, W.; Su, M.; Guo, Y.; Liu, Y.; Li, X.; Hu, Z.; et al. 2024. KnowCoder: Coding Structured Knowledge into LLMs for Universal Information Extraction. arXiv preprint arXiv:2403.07969 .Lin, H.; Yi, P.; Ma, J.; Jiang, H.; Luo, Z.; Shi, S.; and Liu, R. 2023. Zero-shot rumor detection with propagation structure via prompt learning. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 37, 5213–5221. Liu, P.; Yuan, W.; Fu, J.; Jiang, Z.; Hayashi, H.; and Neubig, G. 2023. Pre-train, prompt, and predict: A systematic survey of prompting methods in natural language processing. ACM Computing Surveys , 55(9): 1–35. Min, S.; Lyu, X.; Holtzman, A.; Artetxe, M.; Lewis, M.; Hajishirzi, H.; and Zettlemoyer, L. 2022. Rethinking the Role of Demonstrations: What Makes In-Context Learning Work? In Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing , 11048–11064. OpenAI. 2022. Introducing ChatGPT. https://openai.com/ index/chatgpt. Accessed: 2024-08-15. OpenAI. 2023. GPT-4: Technical report. https://www. openai.com/research/gpt-4. Accessed: 2024-08-15. Sainz, O.; Garc´ ıa-Ferrero, I.; Agerri, R.; de Lacalle, O. L.; Rigau, G.; and Agirre, E. 2023. Gollie: Annotation guidelines improve zero-shot information-extraction. arXiv preprint arXiv:2310.03668 .Song, Y.; Miret, S.; and Liu, B. 2023. MatSci-NLP: Evaluat-ing Scientific Language Models on Materials Science Lan-guage Tasks Using Text-to-Schema Modeling. In Proceed-ings of the 61st Annual Meeting of the Association for Com-putational Linguistics (Volume 1: Long Papers) , 3621–3639. Song, Y.; Miret, S.; Zhang, H.; and Liu, B. 2023. HoneyBee: Progressive Instruction Finetuning of Large Language Mod-els for Materials Science. In Findings of the Association for Computational Linguistics: EMNLP 2023 , 5724–5739. Sun, L.; Han, Y.; Zhao, Z.; Ma, D.; Shen, Z.; Chen, B.; Chen, L.; and Yu, K. 2024. Scieval: A multi-level large language model evaluation benchmark for scientific research. In Pro-ceedings of the AAAI Conference on Artificial Intelligence ,volume 38, 19053–19061. Suvarna, M.; Vaucher, A. C.; Mitchell, S.; Laino, T.; and P´ erez-Ram´ ırez, J. 2023. Language models and protocol standardization guidelines for accelerating synthesis plan-ning in heterogeneous catalysis. Nature Communications ,14(1): 7964. Tshitoyan, V.; Dagdelen, J.; Weston, L.; Dunn, A.; Rong, Z.; Kononova, O.; Persson, K. A.; Ceder, G.; and Jain, A. 2019. Unsupervised word embeddings capture latent knowl-edge from materials science literature. Nature , 571(7763): 95–98. Walker, N.; Trewartha, A.; Huo, H.; Lee, S.; Cruse, K.; Dagdelen, J.; Dunn, A.; Persson, K.; Ceder, G.; and Jain, A. 2021. The impact of domain-specific pre-training on named entity recognition tasks in materials science. Available at SSRN 3950755 .Wang, L.; Li, L.; Dai, D.; Chen, D.; Zhou, H.; Meng, F.; Zhou, J.; and Sun, X. 2023a. Label Words are Anchors: An 1136 Information Flow Perspective for Understanding In-Context Learning. In Proceedings of the 2023 Conference on Empir-ical Methods in Natural Language Processing , 9840–9855. Wang, L.; Xu, W.; Lan, Y.; Hu, Z.; Lan, Y.; Lee, R. K.-W.; and Lim, E.-P. 2023b. Plan-and-Solve Prompting: Improv-ing Zero-Shot Chain-of-Thought Reasoning by Large Lan-guage Models. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 2609–2634. Wang, X.; Li, S.; and Ji, H. 2023. Code4Struct: Code Gen-eration for Few-Shot Event Structure Prediction. In Pro-ceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 3640– 3663. Wei, J.; Wang, X.; Schuurmans, D.; Bosma, M.; Xia, F.; Chi, E.; Le, Q. V.; Zhou, D.; et al. 2022. Chain-of-thought prompting elicits reasoning in large language mod-els. Advances in neural information processing systems , 35: 24824–24837. Wyrzykowska, E.; Mikolajczyk, A.; Lynch, I.; Jeliazkova, N.; Kochev, N.; Sarimveis, H.; Doganis, P.; Karatzas, P.; Afantitis, A.; Melagraki, G.; et al. 2022. Representing and describing nanomaterials in predictive nanoinformatics. Na-ture Nanotechnology , 17(9): 924–932. Xia, Y.; Kim, J.; Chen, Y.; Ye, H.; Kundu, S.; Talati, N.; et al. 2024. Understanding the Performance and Es-timating the Cost of LLM Fine-Tuning. arXiv preprint arXiv:2408.04693 .Yang, K.; Liu, J.; Wu, J.; Yang, C.; Fung, Y. R.; Li, S.; Huang, Z.; Cao, X.; Wang, X.; Wang, Y.; et al. 2024. If llm is the wizard, then code is the wand: A survey on how code empowers large language models to serve as intelligent agents. arXiv preprint arXiv:2401.00812 .Zhao, A.; Huang, D.; Xu, Q.; Lin, M.; Liu, Y.-J.; and Huang, G. 2024. Expel: Llm agents are experiential learners. In Pro-ceedings of the AAAI Conference on Artificial Intelligence ,volume 38, 19632–19642. Zhuang, S.; Zhuang, H.; Koopman, B.; and Zuccon, G. 2024. A setwise approach for effective and highly efficient zero-shot ranking with large language models. In Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval , 38–47. 1137

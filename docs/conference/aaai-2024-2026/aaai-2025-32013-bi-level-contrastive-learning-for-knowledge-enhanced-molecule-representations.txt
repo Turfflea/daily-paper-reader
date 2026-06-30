@@ -1,0 +1,803 @@
+Title: Bi-level Contrastive Learning for Knowledge-Enhanced Molecule Representations
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/32013/34168
+
+Number of Pages: 9
+
+Markdown Content:
+## Bi-level Contrastive Learning for Knowledge-Enhanced Molecule Representations 
+
+Pengcheng Jiang 1, Cao Xiao 2, Tianfan Fu 3, Parminder Bhatia 2, Taha Kass-Hout 2,Jimeng Sun 1, Jiawei Han 1
+
+> 1
+
+University of Illinois Urbana Champaign 
+
+> 2
+
+GE HealthCare 
+
+> 3
+
+Rensselaer Polytechnic Institute 
+
+Abstract 
+
+Molecular representation learning is vital for various down-stream applications, including the analysis and prediction of molecular properties and side effects. While Graph Neural Networks (GNNs) have been a popular framework for mod-eling molecular data, they often struggle to capture the full complexity of molecular representations. In this paper, we in-troduce a novel method called G ODE , which accounts for the dual-level structure inherent in molecules. Molecules possess an intrinsic graph structure and simultaneously function as nodes within a broader molecular knowledge graph. G ODE 
+
+integrates individual molecular graph representations with multi-domain biochemical data from knowledge graphs. By pre-training two GNNs on different graph structures and em-ploying contrastive learning, G ODE effectively fuses molecu-lar structures with their corresponding knowledge graph sub-structures. This fusion yields a more robust and informative representation, enhancing molecular property predictions by leveraging both chemical and biological information. When fine-tuned across 11 chemical property tasks, our model sig-nificantly outperforms existing benchmarks, achieving an av-erage ROC-AUC improvement of 12.7% for classification tasks and an average RMSE/MAE improvement of 34.4% for regression tasks. Notably, G ODE surpasses the current lead-ing model in property prediction, with advancements of 2.2% in classification and 7.2% in regression tasks. 
+
+Introduction 
+
+In recent years, there has been a significant focus on tailoring machine learning models specifically for chemical and bio-logical data (Wang et al. 2021a; Li, Huang, and Zitnik 2022; Somnath, Bunne, and Krause 2021; Wang et al. 2023). A key challenge in this field is developing effective representa-tions of molecular structures, which are critical for achieving accurate predictions in subsequent tasks (Yang et al. 2019; Haghighatlari et al. 2020). To address this challenge, graph neural networks (GNNs) have become a widely adopted tool for facilitating representation learning (Li et al. 2021; Hu et al. 2019). However, the conventional approach of using molecular graphs as input for GNNs may inadvertently con-strain their potential for generating robust and comprehen-sive representations. 
+
+Copyright © 2025, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+Molecular data, including chemical and biological datasets, exhibits a wide range of representational complex-ities (Tong et al. 2017; Argelaguet et al. 2020). On an in-dividual level, molecules can naturally be represented as graphs, with atoms as nodes and bonds as edges. For collec-tions of molecules, their interrelationships can be captured through knowledge graphs (KGs), where each molecule is represented as a unique node. Notable examples of such KGs include UMLS (Bodenreider 2004), PrimeKG (Chan-dak, Huang, and Zitnik 2023a), and PubChemRDF (Fu et al. 2015). Building on this observation, we hypothesize that by integrating the molecular graphs of individual molecules and the broader sub-graphs from KGs centered on these molecules, we can create a more enriched representation that could lead to more accurate and robust predictions. Previous efforts have attempted to unify molecular struc-tures with KGs for property prediction. For example, Ye et al. (2021) combined molecule embeddings with static KG embeddings (Bordes et al. 2013). However, these integra-tions often fall short of capturing the local molecular infor-mation within the KG, leading to only marginal improve-ments in prediction accuracy. In contrast, Fang et al. (2023) demonstrated the advantages of enhancing molecular repre-sentations through contrastive learning, supported by a spe-cialized chemical element KG. This approach has shown more significant performance gains, underscoring the value of integrating KGs with molecular data. Our work seeks to explore novel methods for embedding biochemical knowl-edge graphs into molecular prediction models. In this study, we introduce “ Graph as a N ode ” (G ODE ), a new approach specifically designed to pre-train GNNs for molecule predictions. Our approach incorporates bi-level self-supervised tasks that target both molecular structures and their corresponding sub-graphs within the knowledge graph. By combining this strategy with contrastive learn-ing, G ODE produces more robust embeddings, leading to improved predictions of molecular properties. Our major contributions can be summarized as follows: • A new paradigm for molecule knowledge integration .Our G ODE method introduces a new approach to integrat-ing molecular structures with their corresponding KGs. This method not only produces richer and more accurate molecular representations in our specific application but also has the potential to be extended to other domains. The Thirty-Ninth AAAI Conference on Artificial Intelligence (AAAI-25) 
+
+352 • More robust molecular embeddings . Achieving robust molecular representations is crucial for accurate and con-sistent predictions across diverse datasets. Our approach integrates information from multiple domains for the same molecule, leveraging shared knowledge across modalities to create more comprehensive representations. By utiliz-ing bi-level self-supervised pre-training combined with contrastive learning, we significantly enhance the robust-ness and reliability of the embeddings, resulting in more precise molecular property predictions and a solid founda-tion for various applications. • Introducing a new molecular knowledge graph . We have developed MolKG, a comprehensive knowledge graph specifically tailored to molecular data. MolKG encapsulates extensive molecular information, enabling more advanced and knowledge-driven molecular analyses. To evaluate G ODE ’s performance, we conducted exper-iments across 11 chemical property prediction tasks. We benchmarked G ODE against state-of-the-art methods, in-cluding GROVER (Rong et al. 2020), MolCLR (Wang et al. 2021a), and KANO (Fang et al. 2023). Our results demon-strate that G ODE consistently outperforms these baselines, achieving improvements of 12.7% in classification tasks and 34.4% in regression tasks for molecular property prediction. 
+
+Related Works 
+
+Graph-based Molecular Representation Learning. Over the years, various streams of molecular representation meth-ods have been proposed, including traditional fingerprint-based approaches (Rogers and Hahn 2010), SMILES string methods (Xu et al. 2024), and modern GNN meth-ods (Jin et al. 2017, 2018; Zheng et al. 2019). While Mol2Vec (Jaeger, Fulle, and Turk 2018) adopts a molecule interpretation akin to Word2Vec for sentences (Mikolov et al. 2013), it overlooks substructure roles in chemistry. In contrast, GNN-based techniques can overcome this limita-tion by capturing more insightful details from aggregated sub-graphs. This advantage yields enhanced representations for chemical nodes, bonds, and entire molecules (Rong et al. 2020; Hu et al. 2019; Wang et al. 2021a). Consequently, our study adopts GNN as the foundational framework for repre-senting molecules. 
+
+Biomedical Knowledge Graphs. Various biomedical/bio-chemical KGs were developed to capture interconnections among diverse entities such as genes, proteins, diseases, and drugs (Fu et al. 2015; Bodenreider 2004). Notably, PubChemRDF (Fu et al. 2015) spotlights biochemical do-mains, furnishing machine-readable chemical insights en-compassing structures, properties, activities, and bioassays. Its subdivisions (e.g., Compound , Cooccurrence , Descrip-tor , Pathway ) amass comprehensive chemical information. PrimeKG (Chandak, Huang, and Zitnik 2023b) is another KG that provides a multimodal view of precision medicine. Our study has a complementary focus and constructs a molecule-centric KG from those base KGs for supporting molecule property prediction tasks. 
+
+Molecular Property Predictions. We focus on molecular property prediction, an essential downstream task for chem-ical representation learning frameworks. Three main aspects of the molecular property attract researchers: quantum me-chanics properties (Yang et al. 2019; Liao et al. 2019; Gilmer et al. 2017), physicochemical properties (Shang et al. 2018; Wang et al. 2019; B´ ecigneul et al. 2020), and toxicity (Xu, Pei, and Lai 2017; Yuan and Ji 2020). Most of the recent works on molecular predictions are based on GNN (Du-venaud et al. 2015; Mansimov et al. 2019). However, the methods mentioned only focus on chemical structures and do not consider inter-relations among chemicals and knowl-edge graphs, which could improve property prediction. 
+
+Contrastive Learning in Molecular Representation. The rise of cross-modality contrastive learning (Radford et al. 2021) has increasingly influenced molecular representation approaches. Pioneering studies, such as (St¨ ark et al. 2022), have successfully employed contrastive learning to merge 3D and 2D molecular representations. This technique has been applied across various domains, including chemical re-actions (Lee et al. 2021; Seidl et al. 2022), natural language processing (Su et al. 2022; Seidl et al. 2023), microscopy imaging (Sanchez-Fernandez et al. 2022), and chemical ele-ment knowledge (Fang et al. 2023). Distinctively, our work harnesses contrastive learning to enable knowledge transfer between KGs and molecular structures. 
+
+Fusing Knowledge Graph and Molecules. Previously, Ye et al. (2021) introduced a method that combines static KG embeddings of drugs with their structural representations for downstream tasks. However, this approach overlooks the contextual information surrounding molecular nodes, leading to only modest performance improvements. Alter-natively, Wang et al. (2022) proposed a Graph-of-Graphs technique that enriches molecular graph representations. While this method enhances the graph information, it does not explore pre-training or contrastive learning strategies to align the same entity across different graph modalities. On the other hand, Fang et al. (2023) pioneered a contrastive learning-based approach that augments molecular structures with element-wise knowledge, creating an innovative graph structure that has significantly improved molecular prop-erty predictions. Unlike existing methods, G ODE extracts a molecule’s sub-graph from our molecule-centric KG, offer-ing a novel representation that effectively links molecular data with knowledge graphs. 
+
+Method 
+
+In this section, we present G ODE framework. First, we de-fine a few key concepts below. 
+
+Definition 1 (Molecule Graph) A molecule graph (MG) is a structured representation of a molecule, where atoms (or nodes) are connected by bonds (or edges). An MG Gm can be viewed as a graph structure with a set of nodes Vm rep-resenting atoms and a set of edges Em representing bonds such that Gm = ( Vm, Em).
+
+Definition 2 (Knowledge Graph) A knowledge graph (KG) is a structured representation of knowledge in which entities (or nodes) are connected by relations (or edges). A directed KG can formally be represented as a set of 
+
+n triples: T = {⟨ h, r, t ⟩i}ni where each triple contains 353 i. M olecule -level 
+
+Pretraining 
+
+ii. KG -level Pretraining 
+
+> derived_from
+> structure
+> complexity
+
+212 
+
+> rotatable
+> bonds
+
+3
+
+> modulates
+
+exact mass 
+
+180.04 
+
+prevents 
+
+platelet 
+
+aggregation 
+
+XlogP3 1.2 
+
+molecular 
+
+weight 
+
+138.12 
+
+acne lesions 
+
+reduces 
+
+Central 
+
+molecule 
+
+Interact with 
+
+O O
+
+O
+
+H
+
+O O
+
+O
+
+O
+
+H
+
+(1) Contextual 
+
+Property Prediction 
+
+(2) Motif Prediction 
+
+(1) Edge Prediction 
+
+(3) Motif Prediction 
+
+COOCH3 
+
+-COOH 
+
+O O
+
+O
+
+H
+
+O O
+
+O
+
+O
+
+H
+
+(2) Node Prediction 
+
+COX -1/COX -2 molecule 
+
+others 
+
+value 
+
+drug 
+
+phenotype 
+
+protein 
+
+pathway 
+
+disease 
+
+-Hop Knowledge Graph with a Central Molecule  
+
+> <latexit sha1_base64="B+z8DZ+vtK0ker/mXuFRrBICV1o=">AAAB7XicbVBNSwMxEJ2tX7V+VT16CRbBU9lVUY9FLx4r2A9ol5JNs21sNglJVihL/4MXD4p49f9489+YtnvQ1gcDj/dmmJkXKc6M9f1vr7Cyura+UdwsbW3v7O6V9w+aRqaa0AaRXOp2hA3lTNCGZZbTttIUJxGnrWh0O/VbT1QbJsWDHSsaJnggWMwItk5qdkdYKdwrV/yqPwNaJkFOKpCj3it/dfuSpAkVlnBsTCfwlQ0zrC0jnE5K3dRQhckID2jHUYETasJsdu0EnTilj2KpXQmLZurviQwnxoyTyHUm2A7NojcV//M6qY2vw4wJlVoqyHxRnHJkJZq+jvpMU2L52BFMNHO3IjLEGhPrAiq5EILFl5dJ86waXFbP7y8qtZs8jiIcwTGcQgBXUIM7qEMDCDzCM7zCmye9F+/d+5i3Frx85hD+wPv8AZjIjyc=</latexit>
+
+ i. M olecule -level 
+
+Pretraining 
+
+ii. KG -level Pretraining 
+
+> has_parent
+> has_component
+> structure
+> complexity
+
+345 
+
+> rotatable
+> bonds
+
+4 2
+
+> covalent
+> unit count
+
+exact mass isomeric smiles 
+
+C=C1C(=O)O 
+
+> XlogP3
+
+1.2 
+
+212 
+
+molecular 
+
+weight 
+
+138.12 
+
+2-hydroxybenzoic acid 
+
+IUPAC 
+
+Central 
+
+molecule 
+
+> structure
+> complexity
+> isotopologue  of
+
+oalumanyloxy )alumane 
+
+IUPAC 
+
+synonym 
+
+[11] 
+
+O O
+
+O
+
+H
+
+O O
+
+O
+
+O
+
+H
+
+(1) Contextual 
+
+Property Prediction 
+
+(2) Motif Prediction 
+
+(1) Edge Prediction 
+
+(3) Motif Prediction 
+
+COOCH3 
+
+-COOH 
+
+O O
+
+O
+
+H
+
+O O
+
+O
+
+O
+
+H
+
+(2) Node Prediction 
+
+Aspirin 
+
+iii. Contrastive Learning 
+
+Molecule -level 
+
+Pretraining 
+
+KG -level 
+
+Pretraining 
+
+M-GNN K-GNN 
+
+READOUT 
+
+Contrastive 
+
+Learning Node 
+
+Emb .
+
+Graph 
+
+Emb .
+
+molecule 
+
+others 
+
+value 
+
+1
+
+2
+
+⋮
+
+10 
+
+drug 
+
+phenotype 
+
+protein 
+
+pathway 
+
+disease 
+
+-Hop Knowledge Graph with a Central Molecule 
+
+iv. Fine -tuning 
+
+motif <latexit sha1_base64="EZR09dFW5xHauT0GqOMgD/ZnzNg=">AAAB7XicbVDLSgNBEOyNrxhfUY9eBoPgKeyqqMegF48RzAOSJcxOZpMx81hmZoWw5B+8eFDEq//jzb9xkuxBEwsaiqpuuruihDNjff/bK6ysrq1vFDdLW9s7u3vl/YOmUakmtEEUV7odYUM5k7RhmeW0nWiKRcRpKxrdTv3WE9WGKflgxwkNBR5IFjOCrZOaXZXw1PTKFb/qz4CWSZCTCuSo98pf3b4iqaDSEo6N6QR+YsMMa8sIp5NSNzU0wWSEB7TjqMSCmjCbXTtBJ07po1hpV9Kimfp7IsPCmLGIXKfAdmgWvan4n9dJbXwdZkwmqaWSzBfFKUdWoenrqM80JZaPHcFEM3crIkOsMbEuoJILIVh8eZk0z6rBZfX8/qJSu8njKMIRHMMpBHAFNbiDOjSAwCM8wyu8ecp78d69j3lrwctnDuEPvM8f0pqPTQ==</latexit> 
+
+  <latexit sha1_base64="EZR09dFW5xHauT0GqOMgD/ZnzNg=">AAAB7XicbVDLSgNBEOyNrxhfUY9eBoPgKeyqqMegF48RzAOSJcxOZpMx81hmZoWw5B+8eFDEq//jzb9xkuxBEwsaiqpuuruihDNjff/bK6ysrq1vFDdLW9s7u3vl/YOmUakmtEEUV7odYUM5k7RhmeW0nWiKRcRpKxrdTv3WE9WGKflgxwkNBR5IFjOCrZOaXZXw1PTKFb/qz4CWSZCTCuSo98pf3b4iqaDSEo6N6QR+YsMMa8sIp5NSNzU0wWSEB7TjqMSCmjCbXTtBJ07po1hpV9Kimfp7IsPCmLGIXKfAdmgWvan4n9dJbXwdZkwmqaWSzBfFKUdWoenrqM80JZaPHcFEM3crIkOsMbEuoJILIVh8eZk0z6rBZfX8/qJSu8njKMIRHMMpBHAFNbiDOjSAwCM8wyu8ecp78d69j3lrwctnDuEPvM8f0pqPTQ==</latexit> 
+
+ 
+
+M-GNN 
+
+Emb .
+
+Additional 
+
+Feat .
+
+K-GNN 
+
+Emb .
+
+MLP Molecular 
+
+Property Label 
+
+i. M olecule -level 
+
+Pretraining 
+
+ii. KG -level Pretraining 
+
+> has_parent
+> has_component
+> structure
+> complexity
+
+345 
+
+> rotatable
+> bonds
+
+4 2
+
+> covalent
+> unit count
+
+exact mass 
+
+.04 
+
+isomeric smiles 
+
+C=CC=C1C(=O)O 
+
+> XlogP3
+
+1.2 
+
+212 
+
+molecular 
+
+weight 
+
+138.12 
+
+2-hydroxybenzoic acid 
+
+IUPAC 
+
+Central 
+
+molecule 
+
+> structure
+> complexity
+> isotopologue  of
+
+(oxoalumanyloxy )alumane 
+
+IUPAC 
+
+synonym 
+
+[11] 
+
+O O
+
+O
+
+H
+
+O O
+
+O
+
+O
+
+H
+
+(1) Contextual 
+
+Property Prediction 
+
+(2) Motif Prediction 
+
+(1) Edge Prediction 
+
+(3) Motif Prediction 
+
+COOCH3 
+
+-COOH 
+
+O O
+
+O
+
+H
+
+O O
+
+O
+
+O
+
+H
+
+(2) Node Prediction 
+
+Aspirin 
+
+iii. Contrastive Learning 
+
+Molecule -level 
+
+Pretraining 
+
+KG -level 
+
+Pretraining 
+
+M-GNN K-GNN 
+
+READOUT 
+
+Contrastive 
+
+Learning Node 
+
+Emb .
+
+Graph 
+
+Emb .
+
+molecule 
+
+others 
+
+value 
+
+1
+
+2
+
+⋮
+
+10 
+
+drug 
+
+phenotype 
+
+protein 
+
+pathway 
+
+disease 
+
+-Hop Knowledge Graph with a Central Molecule  
+
+> <latexit sha1_base64="B+z8DZ+vtK0ker/mXuFRrBICV1o=">AAAB7XicbVBNSwMxEJ2tX7V+VT16CRbBU9lVUY9FLx4r2A9ol5JNs21sNglJVihL/4MXD4p49f9489+YtnvQ1gcDj/dmmJkXKc6M9f1vr7Cyura+UdwsbW3v7O6V9w+aRqaa0AaRXOp2hA3lTNCGZZbTttIUJxGnrWh0O/VbT1QbJsWDHSsaJnggWMwItk5qdkdYKdwrV/yqPwNaJkFOKpCj3it/dfuSpAkVlnBsTCfwlQ0zrC0jnE5K3dRQhckID2jHUYETasJsdu0EnTilj2KpXQmLZurviQwnxoyTyHUm2A7NojcV//M6qY2vw4wJlVoqyHxRnHJkJZq+jvpMU2L52BFMNHO3IjLEGhPrAiq5EILFl5dJ86waXFbP7y8qtZs8jiIcwTGcQgBXUIM7qEMDCDzCM7zCmye9F+/d+5i3Frx85hD+wPv8AZjIjyc=</latexit>
+
+
+
+iv. Fine -tuning 
+
+motif <latexit sha1_base64="EZR09dFW5xHauT0GqOMgD/ZnzNg=">AAAB7XicbVDLSgNBEOyNrxhfUY9eBoPgKeyqqMegF48RzAOSJcxOZpMx81hmZoWw5B+8eFDEq//jzb9xkuxBEwsaiqpuuruihDNjff/bK6ysrq1vFDdLW9s7u3vl/YOmUakmtEEUV7odYUM5k7RhmeW0nWiKRcRpKxrdTv3WE9WGKflgxwkNBR5IFjOCrZOaXZXw1PTKFb/qz4CWSZCTCuSo98pf3b4iqaDSEo6N6QR+YsMMa8sIp5NSNzU0wWSEB7TjqMSCmjCbXTtBJ07po1hpV9Kimfp7IsPCmLGIXKfAdmgWvan4n9dJbXwdZkwmqaWSzBfFKUdWoenrqM80JZaPHcFEM3crIkOsMbEuoJILIVh8eZk0z6rBZfX8/qJSu8njKMIRHMMpBHAFNbiDOjSAwCM8wyu8ecp78d69j3lrwctnDuEPvM8f0pqPTQ==</latexit> 
+
+  <latexit sha1_base64="EZR09dFW5xHauT0GqOMgD/ZnzNg=">AAAB7XicbVDLSgNBEOyNrxhfUY9eBoPgKeyqqMegF48RzAOSJcxOZpMx81hmZoWw5B+8eFDEq//jzb9xkuxBEwsaiqpuuruihDNjff/bK6ysrq1vFDdLW9s7u3vl/YOmUakmtEEUV7odYUM5k7RhmeW0nWiKRcRpKxrdTv3WE9WGKflgxwkNBR5IFjOCrZOaXZXw1PTKFb/qz4CWSZCTCuSo98pf3b4iqaDSEo6N6QR+YsMMa8sIp5NSNzU0wWSEB7TjqMSCmjCbXTtBJ07po1hpV9Kimfp7IsPCmLGIXKfAdmgWvan4n9dJbXwdZkwmqaWSzBfFKUdWoenrqM80JZaPHcFEM3crIkOsMbEuoJILIVh8eZk0z6rBZfX8/qJSu8njKMIRHMMpBHAFNbiDOjSAwCM8wyu8ecp78d69j3lrwctnDuEPvM8f0pqPTQ==</latexit> 
+
+ 
+
+M-GNN 
+
+Emb .
+
+Additional 
+
+Feat .
+
+K-GNN 
+
+Emb .
+
+MLP Molecular 
+
+Property Label 
+
+PPAR γ activity 
+
+OH 
+
+O
+
+> by -product
+
+XlogP3 
+
+- 0.2 
+
+deuteroacetic acid same 
+
+connectivity 
+
+COOCH3 
+
+COOH Figure 1: Overview of our framework G ODE . Left : The κ-hop KG sub-graph consisting of molecule-relevant relational knowledge, originating from a central molecule. Right : We conduct ( i) Molecule-level Pre-training on the molecular graphs with contextual property prediction and motif prediction tasks; ( ii ) KG-level Pre-training on the κ-hop KG sub-graphs of a central molecule with the tasks of edge prediction, node prediction, and motif prediction; ( iii ) Contrastive Learning to maximize the agreement between M-GNN and K-GNN, pre-trained by (i) and (ii), respectively; and ( iv ) Fine-tuning of our learned embedding, optionally enriched with extracted molecular-level features, for specific property predictions. 
+
+a head entity ( h) and a tail entity ( t), and a relation ( r)connecting them. A KG Gk can also be viewed as a graph 
+
+Gk = ( Vk, Ek) with a set of nodes Vk and a set of edges Ek.
+
+Definition 3 (M-GNN) M-GNN is a graph encoder f :
+
+M → Rd encoding a MG to a vector hMG .
+
+Definition 4 (K-GNN) K-GNN is a graph encoder g : K → 
+
+Rd encoding the central molecule in a molecule KG sub-graph to a vector hKG .
+
+Our G ODE approach (illustrated in Figure 1) first con-ducts molecule-level pre-training to train an M-GNN and KG-level pre-training to train a K-GNN with a series of self-supervised tasks. Subsequently, we employ contrastive learning to enhance the alignment of molecule representa-tions between the pre-trained M-GNN and K-GNN. Finally, we fine-tune our model for property prediction tasks. 
+
+Molecule-level Pre-training 
+
+Given a molecular graph Gm = ( Vm, Em), we employ the GNN encoder to derive embeddings for atoms and bonds. To pre-train M-GNN, we employ two tasks described below. (1) Node-level Contextual Property Prediction. We ran-domly select a node v ∈ Vm and its corresponding embedding hv . This embedding is then input into an output layer for predicting the contextual property. Contextual property prediction operates as a multi-class classification task. Here, the GNN’s output layer computes the probability distribution for potential contextual property labels linked to node v. These labels originate from the statistical attributes of the sub-graph centered on v (Rong et al. 2020). (2) Graph-level Motif Prediction. The molecule graph em-bedding, represented as hMG , is also input into an out-put layer. This layer predicts the presence or absence of functional group motifs, which is detected by RD-Kit (Landrum et al. 2013). The embedding hMG is de-rived by applying mean pooling to all nodes: hMG =MEAN( hv1 , hv2 , ..., hvk |v1, v 2, ..., v k ∈ V m), where hv1 ,
+
+hv2 , ..., hvk are the learned node embeddings from the M-GNN’s final convolutional layer. This prediction task is a multi-label classification problem, where the GNN output layer predicts a binary label vector, indicating the presence or absence of each functional group motif in Gm.During training, we employ a joint loss function, as shown in Eq. 1, to optimize both the node-level contextual prop-erty prediction and the graph-level motif prediction. This loss function encourages the M-GNN to accurately predict both the contextual properties of nodes and the functional group motifs’ presence or absence in MG. 
+
+LM =
+
+V′
+
+mX
+
+v
+
+log P (pv |hv ) + 
+
+nX
+
+j=1 
+
+yj log P (Mj |hMG )+ (1 − yj ) log(1 − P (Mj |hMG )) , (1) where V′
+
+m is a set of randomly selected nodes; pv is the con-textual property label for the node v; n is the number of all possible motifs; Mj is the presence of j-th motif. After the molecule-level pre-training, M-GNN is able to encode a molecule to a vector hMG through mean pooling. 354 KG-level Pre-training 
+
+Embedding Initialization. Prior to the K-GNN pre-training, we use knowledge graph embedding (KGE) methods (Bor-des et al. 2013; Yang et al. 2014; Sun et al. 2019; Balaˇ zevi´ c, Allen, and Hospedales 2019) to initialize the node and edge embeddings with entity and relation embeddings. KGE methods capture relational knowledge behind the structure and semantics of entities and relationships in the KG. The KGE model is trained on the entire KG ( T ) and learns to represent each entity and relation as continuous vectors in a low-dimensional space. The resulting embedding vectors capture the semantic meanings and relationships between entities and relations. The loss functions of KGE meth-ods depend on the scoring functions they use. For exam-ple, TransE (Bordes et al. 2013) learns embeddings for en-tities and relations in a KG by minimizing the difference between the sum of the head entity embedding ( eh) and the relation embedding ( rr ), and the tail entity embedding ( et): 
+
+s(h, r, t ) = −∥ eh + rr − et∥p, where ∥·∥ p is the Lp norm. After training the KGE model, we obtain the entity embed-dings ev and relation embeddings re for each node v and edge e in the KG, providing a strong starting point. Sub-graph Extraction. for the central molecule is a crucial step in KG-level pre-training. Inspired by the work of G-Meta (Huang and Zitnik 2020), we extract the sub-graph of each molecule to learn transferable knowledge from its surrounding nodes/edges in the biochemical KG. Specifi-cally, for each central molecule, we extract a κ-hop sub-graph from the entire KG to capture its local neighborhood information. Given a molecule mi, we first find its corre-sponding node vi in the KG, Gk = ( Vk, Ek). We then itera-tively extract a neighborhood sub-graph Nk(vi, h ) of depth 
+
+h (1 ≤ h ≤ κ), centered at node vi. The depth parame-ter h determines the number of edge traversals to include in the sub-graph. To avoid over-smoothing, we terminate the expansion of a graph branch upon reaching a non-molecule node. Formally, the sub-graph extraction process is defined as follows. Let Nk(v, 0) be a single node v. For h > 0,
+
+Nk(v, h ) is defined recursively as: 
+
+Nk(v, h ) = {v}∪ [ 
+
+> u∈N k(v,h −1)
+
+{u}∪ [
+
+> u∈M
+
+{w : ( u, w ) ∈ E k},
+
+(2) where u denotes the set of neighboring nodes of v in the sub-graph Nk(v, h − 1) , and w : ( u, w ) ∈ E k represents the set of nodes that share an edge with u ∈ M in the orig-inal KG Gk where M is the set of molecule nodes. We define The κ-hop sub-graph for molecule m is given by 
+
+Gsub (m,κ ) = ( Vsub (m,κ ), Esub (m,κ )) = Nk(c, κ ) where c is the corresponding node of m in Gsub (m,κ ).The following loss function is used to pre-train K-GNN: 
+
+LK =λm
+
+> n
+
+X
+
+> j=1
+
+BCE( yj , P (Mj |hc)) 
+
+| {z }
+
+> motif prediction
+
++λn CE( v′, P (v′|hv )) 
+
+| {z }
+
+> node prediction
+
++ λe CE(( u, v )′, P (( u, v )′|hu ⊕ hv )) 
+
+| {z }
+
+> edge prediction
+
+(3) which includes three tasks shown in Figure 1 (ii): (1) Edge Prediction, a multi-class classification task aiming at correctly predicting the edge type between two nodes: (2) Node Prediction, a multi-class classification task pre-dicting the category of a node in Gsub (m,κ );(3) Node-level Motif Prediction, a multi-label classification task predicting the motif of the central molecule node c
+
+in Gsub (m,κ ). The motif labels are created by RDKit. Here, (u, v )′ is the label of edge between the nodes u and 
+
+v. v′ is the label of node v, ⊕ denotes the embedding con-catenation. yj is binary indicator, P (Mj |hc) is the predicted probability of central molecule c has the j-th functional group motif Mj given its embedding hc. λe, λm, and λn
+
+are balancing hyperparameters. After the KG-level pre-training, K-GNN can encode a molecule to a vector hKG given its surrounding nodes. 
+
+Contrastive Learning 
+
+Inspired by the success of previous works (Radford et al. 2021; Seidl et al. 2023; Sanchez-Fernandez et al. 2022) that apply contrastive learning to transfer knowledge across dif-ferent modalities, we follow their steps using InfoNCE as the loss function to conduct contrastive learning between molecule graph and KG sub-graph. We construct the train-ing set D = D+ ∪ D − = {(mi, s i), y i}N , where D+ =
+
+{(mi, G sub( mi,κ )), y i = 1 }Np is a set of positive samples and D− = {(mi, G sub( mj ,κ ))j̸ =i, y i = 0 }N −Np is a set of negative samples. To make the task more challenging, we further divide D− into D−
+
+> rand
+
+, and D− 
+
+> nbr
+
+, which are (1) ran-domly sampled from all negative molecule-centric KG sub-graphs , and (2) sampled from the sub-graphs of the neighbor molecule nodes connected to the positive molecule node, re-spectively. The loss is defined as: 
+
+LInfoNCE = − 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+
+
+yi log(sim( f (mi), g (si))) +(1 − yi) log(1 − sim( f (mi), g (si))) 
+
+
+
+, (4) where sim( f (mi), g (si))) = exp ( τ −1hTMG( i)hKG( i))exp ( τ −1hTMG( i)hKG( i))+1 , yi is the binary label, mi and si are the paired MG and KG sub-graph in the training data, τ −1 is the inverse temperature. 
+
+Fine-tuning for Downstream Tasks 
+
+Upon completing molecule- and KG-level pre-training com-bined with contrastive learning, we obtain two GNN en-coders, f and g, which respectively encode molecules and KG sub-graphs into vectors. Following previous works (Rong et al. 2020; Fang et al. 2023; Wu et al. 2018; Yang et al. 2019), we employ RDKit to extract additional molecule-level features hf . A joint representation is formed by hjoint = hMG ⊕ hf ⊕ hKG , with ⊕ representing con-catenation. This representation is then utilized to predict the target property y using a multi-layer perception (MLP) with an activation function. For multi-label classification, we use Binary Cross-Entropy (BCE) loss with sigmoid activation, and for regression, we use Mean Squared Error (MSE) loss. 355 # Triples : 2,523,867 # Entities : 184,819 # Relations : 39 # Entity Types : 7 # Molecules : 65,454                                        
+
+> Entity Types
+> molecule, gene/protein, disease, effect/phenotype, drug, pathway, value
+> Relations
+> drug protein, contraindication, indication, off-label use, drug drug, drug effect, defined bond stereo count, tpsa, rotatable bond count, xlogp3-aa, structure complexity, covalent unit count, defined atom stereo count, molecular weight, hydrogen bond donor count, undefined bond stereo count, isotope atom count, exact mass, mono isotopic weight, total formal charge, hydrogen bond acceptor count, non-hydrogen atom count, tautomer count, undefined atom stereo count, xlogp3, cooccurence molecule molecule, cooccurence molecule disease, cooccurence molecule gene/protein, neighbor 2d, neighbor 3d, has same connectivity, has component, has isotopologue, has parent, has stereoisomer, to drug, closematch, type, in pathway
+
+Table 1: Overview of MolKG, a biochemical dataset we construct from PubChemRDF and PrimeKG. 
+
+Experiments 
+
+Experimental Setting 
+
+Data Sources. (1) Molecule-level pre-training data: The pre-training data for our molecule-level M-GNN is de-rived from the same unlabelled dataset of 11 million molecules utilized by GROVER. This dataset encompasses sources such as ZINC15 (Sterling and Irwin 2015) and ChEMBL (Gaulton et al. 2012). We randomly split this dataset into two subsets with a 9:1 ratio for training and validation. (2) Knowledge graph-level pre-training data: For the KG-level pre-training, we retrieve KG triples related to the molecules from PubChemRDF and PrimeKG. These in-clude various subdomains and properties from PubChem-RDF, as well as 3-hop sub-graphs for all 7957 drugs from PrimeKG. We show an overview of the dataset (MolKG) in Table 1. The dataset is divided into training and validation sets with a 9:1 ratio. The construction details of the dataset are placed in Appendix . (3) Contrastive learning data: we set the negative sampling ratio as |D −|/|D +| = 32 and retain a 
+
+1 : 1 ratio for D− 
+
+> rand
+
+: D− 
+
+> nbr
+
+. Training and validation sam-ples are in a 0.95 : 0 .05 ratio. (4) Downstream task datasets: The effectiveness of our model is tested utilizing the com-prehensive MoleculeNet dataset (Wu et al. 2018; Huang et al. 2021) 1, which contains 6 classification and 5 regres-sion datasets for molecular property prediction. We place detailed descriptions of these datasets in the Appendix. To fine-tune the model, we calculate the mean and standard de-viation of the ROC-AUC for classification tasks and RM-SE/MAE for regression tasks. Scaffold splitting with three random seeds was employed with a training/validation/test-ing ratio of 8:1:1 across all datasets, aligning with previous studies (Rong et al. 2020; Fang et al. 2023). 
+
+Baselines. We compare our proposed model with several popular baselines in molecular property prediction tasks, which include GCN (Kipf and Welling 2016), GIN (Xu et al. 2018), SchNet (Sch¨ utt et al. 2017), MPNN (Gilmer et al. 2017), DMPNN (Yang et al. 2019), MGCN (Lu et al. 2019), N-GRAM (Liu, Demirel, and Liang 2019), Hu et al (Hu et al. 2019), GROVER (Rong et al. 2020), MGSSL (Zhang et al. 2021), KGE NFM (Ye et al. 2021) with our MolKG, Mol-CLR (Wang et al. 2021b), and KANO (Fang et al. 2023). 
+
+Implementation. For molecule-level pre-training, we em-ploy GROVER (Rong et al. 2020), and for KG-level pre-
+
+> 1
+
+https://moleculenet.org/datasets-1 
+
+training, we utilize GINE (Hu et al. 2019). TransE initializes the KG embeddings over a span of 10 epochs. Our settings include λe = 1 .5, λm = 1 .8, and λn = 1 .5. Both M-GNN and K-GNN have a hidden size of 1,200. We adopt a tem-perature τ = 1 .0 for contrastive learning. Early stopping is anchored to validation loss. During fine-tuning, embed-dings from K-GNN remain fixed, updating only the param-eters of M-GNN. We use Adam optimizer with the Noam learning rate scheduler (Vaswani et al. 2017). All tests are performed with two AMD EPYC 7513 32-core Processors, 528GB RAM, 8 NVIDIA A6000 GPUs, and CUDA 11.7. 
+
+More implementation details and the hyper-parameter study are placed in Appendix .
+
+Results on Molecule Property Prediction 
+
+Table 2 presents comparative performance metrics for clas-sification and regression tasks, respectively. It is clear from the data that our proposed method, G ODE , consistently out-performs the baseline models in most tasks. Specifically, in classification tasks, G ODE achieves SOTA results across all tasks. Amongst the competitors, KANO stands out, con-sistently showcasing performance close to our method. In-triguingly, KANO, as a knowledge-driven model, augments molecular structures by integrating information about chem-ical elements from its ElementKG. This underlines the sub-stantial advantage of leveraging external knowledge in pre-dicting molecular properties. On the regression front, G ODE 
+
+attains best results in 4 out of 5 tasks. This consistent high performance, irrespective of the nature of the task, un-derscores our model’s adaptability and reliability. Cumula-tively, our approach yields a relative improvement of 23.6% across all tasks (12.7% for classification and 34.4% for regression tasks). When compared with the SOTA model, KANO, G ODE records improvements of 2.2% and 7.2% for classification and regression tasks, respectively. To analyze the effects of G ODE ’s variants, we conduct ab-lation studies in Figure 2, which are discussed as follows. 
+
+Effect of the Integration of MolKG. To assess the im-pact of integrating our molecule-centric KG - MolKG, into molecule property prediction, we compare Case 8 in Fig-ure 2 with our backbone M-GNN model, GROVER. Specifi-cally, Case 8 melds GROVER ( hMG ⊕hf ) with the static KG embedding ( hKGE ), which is trained using the KGE method. Our observations indicate that infusing the KG boosts per-formance across all tasks, resulting in a noteworthy 14.3% overall enhancement. Moreover, when all variants of G ODE 356 Classification (Higher is Better) Regression (Lower is Better) Dataset BBBP SIDER ClinTox BACE Tox21 ToxCast FreeSolv ESOL Lipophilicity QM7 QM8                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+
+> # Molecules 2039 1427 1478 1513 7831 8575 642 1128 4200 6830 21786 # Tasks 127 2112 617 111112 GCN 71 .8±0.953 .6±0.362 .5±2.871 .6±2.070 .9±0.365 .0±6.12.870 ±0.140 1.430 ±0.050 0.712 ±0.049 122 .9±2.20.037 ±0.001
+> GIN 65 .8±4.557 .3±1.658 .0±4.470 .1±5.474 .0±0.866 .7±1.52.765 ±0.180 1.452 ±0.020 0.850 ±0.071 124 .8±0.70.037 ±0.001
+> SchNet 84 .8±2.254 .5±3.871 .7±4.276 .6±1.176 .6±2.567 .9±2.13.215 ±0.755 1.045 ±0.064 0.909 ±0.098 74 .2±6.00.020 ±0.002
+> MPNN 91 .3±4.159 .5±3.087 .9±5.481 .5±4.480 .8±2.469 .1±1.31.621 ±0.952 1.167 ±0.430 0.672 ±0.051 111 .4±0.90.015 ±0.001
+> DMPNN 91 .9±3.063 .2±2.389 .7±4.085 .2±5.382.6 ±2.3 71 .8±1.11.673 ±0.082 1.050 ±0.008 0.683 ±0.016 103 .5±8.60.016 ±0.001
+> MGCN 85 .0±6.455 .2±1.863 .4±4.273 .4±3.070 .7±1.666 .3±0.93.349 ±0.097 1.266 ±0.147 1.113 ±0.041 77 .6±4.70.022 ±0.002
+> N-GRAM 91 .2±1.363 .2±0.585 .5±3.787 .6±3.576 .9±2.7-2.512 ±0.190 1.100 ±0.160 0.876 ±0.033 125 .6±1.50.032 ±0.003
+> HU. et.al 70 .8±1.562 .7±0.872 .6±1.584 .5±0.778 .7±0.465 .7±0.62.764 ±0.002 1.100 ±0.006 0.739 ±0.003 113 .2±0.60.022 ±0.001
+> GROVER Large, GTrans 86 .2±3.957 .6±1.674 .7±4.482 .5±4.476 .9±2.366 .7±2.62.445 ±0.761 1.028 ±0.145 0.890 ±0.050 95 .3±5.60.020 ±0.003
+> MGSSL 70 .5±1.164 .1±0.780 .7±2.179 .7±0.876 .4±0.464 .1±0.7-----MolCLR 73 .3±1.061 .2±3.689 .8±2.782 .8±0.774 .1±5.365 .9±2.12.301 ±0.247 1.113 ±0.023 0.789 ±0.009 90 .0±1.70.019 ±0.013
+> MolCLR GTrans 76 .7±2.263 .3±2.589 .3±3.187 .7±1.880 .2±3.270 .4±2.12.124 ±0.223 0.982 ±0.109 0.767 ±0.064 88 .9±4.80.018 ±0.002
+> KGE NFM w/ MolKG 92 .4±2.465.3 ±1.4 87 .3±2.078 .1±2.179 .8±3.372.6 ±1.8 1.942 ±0.441 1.027 ±0.201 0.877 ±0.071 87 .6±3.20.016 ±0.001
+> KANO CMPNN 92.6 ±1.8 65.5 ±1.6 92.9 ±1.1 90.7 ±3.1 81 .8±1.172.5 ±1.9 1.320 ±0.244 0.902 ±0.104 0.641 ±0.012 66.5 ±3.7 0.013 ±0.001
+> KANO GTrans 93.7 ±2.3 63 .8±1.293.6 ±0.7 90.4 ±1.5 81.2 ±1.8 72.5 ±1.5 1.443 ±0.315 0.914 ±0.092 0.651 ±0.018 63.6 ±4.1 0.013 ±0.002 GODE (ours) 94.8 ±1.9 67.4 ±1.4 94.7 ±2.9 92.0 ±2.2 84.3 ±1.2 73.4 ±0.9 1.048 ±0.314 0.746 ±0.128 0.743 ±0.043 57.2 ±3.0 0.013 ±0.001
+
+Table 2: Performance on six classification benchmarks (ROC-AUC; higher is better) and five regression benchmarks (RMSE for FreeSolv, ESOL, and Lipophilicity; MAE for QM7/QM8; lower is better). We report the mean and standard deviation. The Top-3 results are highlighted in bold. The backbone model is shaded in grey, and models utilizing the backbone are shaded in yellow. The table is divided into three sections: non-KG methods, other KG-based methods, and our method. Case KGE  Pret. Cont. Embedding 0 3 – 7 7 hMG   hKGE                                                                
+
+> 17233hMG  hKG
+> 23237hMG  hKG
+> 33233hMG  hKG
+> 43233hMG
+> 53333hMG  hKG
+> 63333hMG
+> 73233hMG  hf
+> 83–77hMG  hf hKGE
+> 93233hMG  hf hKG
+> 1
+
+Configurations by Cases 
+
+Figure 2: Ablation study configurations and results. (Left) Configurations. “KGE”: KG embedding initialization. “ κ”: κ-hop KG subgraph. “Pret.”: KG-level pre-training. “Cont.”: contrastive learning. “Embedding”: input to MLP for fine-tuning. (Right) Performance comparison across different datasets and configurations. We highlight the best configuration for each dataset in red. The dotted blue lines denote the performance achieved by the backbone model (GROVER). are deployed (as in Case 9), a significant uplift of 23.2% in performance over GROVER is realized. 
+
+Effect of KG-level Pre-training and Contrastive Learn-ing. Through a side-by-side comparison of Cases 0, 2, and 3 in Figure 2, we discern the value of K-GNN pre-training and contrastive learning. Standalone K-GNN pre-training (Case 2) yields a modest boost of 4.5%, with a particularly slight edge in classification tasks at 0.1%. However, when paired with contrastive learning and leveraging both hMG and hKG 
+
+for fine-tuning, as in Case 3, the surge in performance is no-table, reaching an overall enhancement of 13.6% over the baseline Case 0. A testament to the effectiveness of this approach can be seen in the BBBP dataset. The molecule acetylsalicylate, better known as aspirin, posed a prediction challenge to both our M-GNN model and the methods in Cases 0 and 2. Yet, when Case 3 employed relational knowl-edge from its KG sub-graph (e.g., [ acetylsalicylate, indica-tion, neurological conditions ]) alongside contrastive learn-ing, it managed to make accurate predictions. This example underscores the pivotal role of contrastive learning in refin-ing molecular property predictions. 
+
+Efficacy of Knowledge Transfer. The influence of con-trastive learning in transferring domain knowledge from the biochemical KG to the molecular representation hMG is discerned by examining Cases 3, 4, 5, 6, and contrasting GROVER (backbone) with Cases 7 and 9. Notably, while the M-GNN embeddings of G ODE (represented by Cases 4 and 6) do not quite surpass the bi-level concatenated em-beddings (Cases 3 and 5), they come notably close. More compelling is Case 7, which parallels Case 9 and outper-forms GROVER by a striking 21.0% (with 12.0% in classifi-cation and 30.1% in regression). The distinguishing feature of Case 7 that provides an edge over GROVER is its en-riched hMG , an enhancement absent in GROVER. This un-derscores G ODE ’s prowess in biochemical knowledge trans-fer to molecular representations. 
+
+Mutual Benefit of Bi-level Self-supervised Pre-training. 
+
+In addition to the insights provided in Figure 2, we con-357 (a) Effect of Pre-training on M-GNN and K-GNN                                                                                                                                   
+
+> M-GNN Pret. K-GNN Pret. BBBP SIDER ClinTox BACE Tox21 ToxCast FreeSolv ESOL Lipo QM7 QM8
+> 94.8 67.4 94.7 92.0 84.3 73.4 1.048 0.746 0.743 57.2 0.013
+> 92.2 62.6 89.4 89.8 80.6 70.8 1.313 0.834 0.708 64.6 0.016 93.2 66.7 90.7 81.6 83.1 71.9 1.563 0.841 0.876 74.4 0.017 88.9 62.1 88.4 84.1 81.6 69.4 1.944 0.978 0.845 77.9 0.017
+> (b) Effect of Relationship Exclusion from MolKG
+> Knowledge Graph BBBP SIDER ClinTox BACE Tox21 ToxCast FreeSolv ESOL Lipo QM7 QM8 MolKG 94.8 67.4 94.7 92.0 84.3 73.4 1.048 0.746 0.743 57.2 0.013 w/o indication 93.8 65.7 93.4 91.6 84.2 73.0 1.063 0.754 0.751 58.1 0.013 w/o xlogp3 &xlogp3-aa 93.7 66.0 94.2 91.1 83.0 72.8 1.189 0.789 0.782 57.8 0.012
+> w/o tautomer cnt &covalent unit cnt 94.3 66.5 93.1 90.9 83.5 72.5 1.272 0.761 0.759 61.7 0.014 w/o nbr 2d &nbr 3d &has same conn 95.0 67.3 93.6 91.3 84.3 72.7 1.058 0.749 0.748 57.6 0.013
+
+Table 3: Study the effects of (top) bi-level self-supervised pre-training and (below) relationship exclusion from MolKG. ducted an in-depth analysis of the impact of pre-training M-GNN and K-GNN on the performance of G ODE , as detailed in Table 3(a). The findings clearly underscore the mutual benefit of both M-GNN and K-GNN pre-training to the effi-cacy of our framework. Notably, an improved performance on the Lipophilicity dataset was observed when the M-GNN pre-training was omitted, presenting an intriguing aspect for further investigation. 
+
+Impact of Relationship Exclusion. We investigated the im-pact of removing specific relationships from MolKG on both classification and regression datasets (in Table 3(b)). For classification, excluding “tautomer count” and “cova-lent unit count” led to the largest performance drop on ClinTox, while removing structural similarity relationships slightly improved results on BBBP. For regression, remov-ing “xlogp3” and “xlogp3-aa” substantially increased the er-ror on solvation and lipophilicity predictions, aligning with the physical meaning of these features. Removing “tau-tomer count” and “covalent unit count” also notably im-pacted FreeSolv and QM7, suggesting their importance for predicting solvation and quantum properties. This analysis reveals the variable significance of different relationships, with the most consistent impact observed for “xlogp3” and “xlogp3-aa” on solvation and lipophilicity tasks. 
+
+Embedding Visualization. In the t-SNE visualization pre-sented in Figure 3, the GROVER embeddings highlight molecules from varying scaffolds intermingling, signaling a significant avenue for refinement. Particularly in the Tox21 task, these embeddings appear sparse. When enhanced with KANO, there is a noticeable delineation of clusters, reflect-ing the constructive influence of integrating external knowl-edge into molecular representations. Nonetheless, a resid-ual overlap of molecules from different scaffolds still per-sists. Progressing to the G ODE visualization, the clusters ex-hibit further refinement, achieving pronounced distinctive-ness with minimal scaffold overlap, outperforming KANO, and securing the lowest Davies–Bouldin Index (DBI), which signifies the effectiveness of G ODE .
+
+Conclusion 
+
+We introduced G ODE , a framework that enhances molecule representations through bi-level self-supervised pre-training 
+
+Figure 3: t-SNE visualization of molecule embeddings across two tasks. Each color represents a unique scaffold (molecule substructure). We compare the embeddings from GROVER, KANO, and G ODE . The clustering quality is as-sessed using the DB index. and contrastive learning, leveraging biochemical domain knowledge. Our empirical results demonstrate its effective-ness in molecular property prediction tasks. Future work will focus on expanding the coverage of MolKG and identifying crucial knowledge elements for optimizing molecular repre-sentations. This research lays groundwork for advancements in drug discovery applications. 
+
+Acknowledgments 
+
+Research was supported in part by US DARPA INCAS Program No. HR0011-21-C0165 and BRIES Program No. HR0011-24-3-0325, National Science Foundation IIS-19-56151, the Molecule Maker Lab Institute: An AI Research Institutes program supported by NSF under Award No. 2019897, and the Institute for Geospatial Understanding through an Integrative Discovery Environment (I-GUIDE) by NSF under Award No. 2118329. 358 References 
+
+Argelaguet, R.; Arnol, D.; Bredikhin, D.; Deloro, Y.; Velten, B.; Marioni, J. C.; and Stegle, O. 2020. MOFA+: a statisti-cal framework for comprehensive integration of multi-modal single-cell data. Genome biology , 21(1): 1–17. Balaˇ zevi´ c, I.; Allen, C.; and Hospedales, T. M. 2019. Tucker: Tensor factorization for knowledge graph comple-tion. arXiv preprint arXiv:1901.09590 .B´ ecigneul, G.; Ganea, O.-E.; Chen, B.; Barzilay, R.; and Jaakkola, T. S. 2020. Optimal transport graph neural net-works. Bodenreider, O. 2004. The unified medical language system (UMLS): integrating biomedical terminology. Nucleic acids research , 32(suppl 1): D267–D270. Bordes, A.; Usunier, N.; Garcia-Duran, A.; Weston, J.; and Yakhnenko, O. 2013. Translating embeddings for modeling multi-relational data. Advances in neural information pro-cessing systems , 26. Chandak, P.; Huang, K.; and Zitnik, M. 2023a. Building a knowledge graph to enable precision medicine. Nature Scientific Data .Chandak, P.; Huang, K.; and Zitnik, M. 2023b. Building a knowledge graph to enable precision medicine. Scientific Data , 10(1): 67. Duvenaud, D. K.; Maclaurin, D.; Iparraguirre, J.; Bombarell, R.; Hirzel, T.; Aspuru-Guzik, A.; and Adams, R. P. 2015. Convolutional networks on graphs for learning molecular fingerprints. Advances in neural information processing sys-tems , 28. Fang, Y.; Zhang, Q.; Zhang, N.; Chen, Z.; Zhuang, X.; Shao, X.; Fan, X.; and Chen, H. 2023. Knowledge graph-enhanced molecular contrastive learning with functional prompt. Na-ture Machine Intelligence , 1–12. Fu, G.; Batchelor, C.; Dumontier, M.; Hastings, J.; Willigha-gen, E.; and Bolton, E. 2015. PubChemRDF: towards the semantic annotation of PubChem compound and substance databases. Journal of cheminformatics , 7(1): 1–15. Gaulton, A.; Bellis, L. J.; Bento, A. P.; Chambers, J.; Davies, M.; Hersey, A.; Light, Y.; McGlinchey, S.; Michalovich, D.; Al-Lazikani, B.; et al. 2012. ChEMBL: a large-scale bioac-tivity database for drug discovery. Nucleic acids research ,40(D1): D1100–D1107. Gilmer, J.; Schoenholz, S. S.; Riley, P. F.; Vinyals, O.; and Dahl, G. E. 2017. Neural message passing for quantum chemistry. In International conference on machine learn-ing , 1263–1272. PMLR. Haghighatlari, M.; Li, J.; Heidar-Zadeh, F.; Liu, Y.; Guan, X.; and Head-Gordon, T. 2020. Learning to make chemical predictions: the interplay of feature representation, data, and machine learning methods. Chem , 6(7): 1527–1542. Hu, W.; Liu, B.; Gomes, J.; Zitnik, M.; Liang, P.; Pande, V.; and Leskovec, J. 2019. Strategies for pre-training graph neural networks. arXiv preprint arXiv:1905.12265 .Huang, K.; Fu, T.; Gao, W.; Zhao, Y.; Roohani, Y. H.; Leskovec, J.; Coley, C. W.; Xiao, C.; Sun, J.; and Zitnik, M. 2021. Therapeutics Data Commons: Machine Learning Datasets and Tasks for Drug Discovery and Development. In Thirty-fifth Conference on Neural Information Process-ing Systems Datasets and Benchmarks Track (Round 1) .Huang, K.; and Zitnik, M. 2020. Graph meta learning via local subgraphs. Advances in neural information processing systems , 33: 5862–5874. Jaeger, S.; Fulle, S.; and Turk, S. 2018. Mol2vec: unsuper-vised machine learning approach with chemical intuition. 
+
+Journal of chemical information and modeling , 58(1): 27– 35. Jin, W.; Coley, C. W.; Barzilay, R.; and Jaakkola, T. 2017. Predicting organic reaction outcomes with weisfeiler-lehman network. arXiv preprint arXiv:1709.04555 .Jin, W.; Yang, K.; Barzilay, R.; and Jaakkola, T. 2018. Learning multimodal graph-to-graph translation for molec-ular optimization. arXiv preprint arXiv:1812.01070 .Kipf, T. N.; and Welling, M. 2016. Semi-supervised classi-fication with graph convolutional networks. arXiv preprint arXiv:1609.02907 .Landrum, G.; et al. 2013. RDKit: A software suite for chem-informatics, computational chemistry, and predictive model-ing. Greg Landrum , 8. Lee, H.; Ahn, S.; Seo, S.-W.; Song, Y. Y.; Yang, E.; Hwang, S.-J.; and Shin, J. 2021. RetCL: A Selection-based Approach for Retrosynthesis via Contrastive Learn-ing. arXiv:2105.00795. Li, M.; Zhou, J.; Hu, J.; Fan, W.; Zhang, Y.; Gu, Y.; and Karypis, G. 2021. Dgl-lifesci: An open-source toolkit for deep learning on graphs in life science. ACS omega , 6(41): 27233–27238. Li, M. M.; Huang, K.; and Zitnik, M. 2022. Graph repre-sentation learning in biomedicine and healthcare. Nature Biomedical Engineering , 1–17. Liao, R.; Zhao, Z.; Urtasun, R.; and Zemel, R. S. 2019. Lanczosnet: Multi-scale deep graph convolutional networks. 
+
+arXiv preprint arXiv:1901.01484 .Liu, S.; Demirel, M. F.; and Liang, Y. 2019. N-gram graph: Simple unsupervised representation for graphs, with appli-cations to molecules. Advances in neural information pro-cessing systems , 32. Lu, C.; Liu, Q.; Wang, C.; Huang, Z.; Lin, P.; and He, L. 2019. Molecular property prediction: A multilevel quan-tum interactions modeling perspective. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 33, 1052–1060. Mansimov, E.; Mahmood, O.; Kang, S.; and Cho, K. 2019. Molecular geometry prediction using a deep generative graph neural network. Scientific reports , 9(1): 20381. Mikolov, T.; Chen, K.; Corrado, G.; and Dean, J. 2013. Ef-ficient estimation of word representations in vector space. 
+
+arXiv preprint arXiv:1301.3781 .Radford, A.; Kim, J. W.; Hallacy, C.; Ramesh, A.; Goh, G.; Agarwal, S.; Sastry, G.; Askell, A.; Mishkin, P.; Clark, J.; et al. 2021. Learning transferable visual models from nat-ural language supervision. In International conference on machine learning , 8748–8763. PMLR. 359 Rogers, D.; and Hahn, M. 2010. Extended-connectivity fin-gerprints. Journal of chemical information and modeling ,50(5): 742–754. Rong, Y.; Bian, Y.; Xu, T.; Xie, W.; Wei, Y.; Huang, W.; and Huang, J. 2020. Self-Supervised Graph Transformer on Large-Scale Molecular Data. arXiv:2007.02835. Sanchez-Fernandez, A.; Rumetshofer, E.; Hochreiter, S.; and Klambauer, G. 2022. Contrastive learning of image-and structure-based representations in drug discovery. In 
+
+ICLR2022 Machine Learning for Drug Discovery .Sch¨ utt, K.; Kindermans, P.-J.; Sauceda Felix, H. E.; Chmiela, S.; Tkatchenko, A.; and M¨ uller, K.-R. 2017. Schnet: A continuous-filter convolutional neural network for modeling quantum interactions. Advances in neural infor-mation processing systems , 30. Seidl, P.; Renz, P.; Dyubankova, N.; Neves, P.; Verhoeven, J.; Wegner, J. K.; Segler, M.; Hochreiter, S.; and Klambauer, G. 2022. Improving few-and zero-shot reaction template pre-diction using modern hopfield networks. Journal of chemi-cal information and modeling , 62(9): 2111–2120. Seidl, P.; Vall, A.; Hochreiter, S.; and Klambauer, G. 2023. Enhancing activity prediction models in drug discovery with the ability to understand human language. arXiv preprint arXiv:2303.03363 .Shang, C.; Liu, Q.; Chen, K.-S.; Sun, J.; Lu, J.; Yi, J.; and Bi, J. 2018. Edge attention-based multi-relational graph convo-lutional networks. arXiv preprint arXiv: 1802.04944 .Somnath, V. R.; Bunne, C.; and Krause, A. 2021. Multi-scale representation learning on proteins. Advances in Neu-ral Information Processing Systems , 34: 25244–25255. St¨ ark, H.; Beaini, D.; Corso, G.; Tossou, P.; Dallago, C.; G¨ unnemann, S.; and Li´ o, P. 2022. 3D Infomax improves GNNs for Molecular Property Prediction. In Chaudhuri, K.; Jegelka, S.; Song, L.; Szepesvari, C.; Niu, G.; and Sabato, S., eds., Proceedings of the 39th International Conference on Machine Learning , volume 162 of Proceedings of Ma-chine Learning Research , 20479–20502. PMLR. Sterling, T.; and Irwin, J. J. 2015. ZINC 15–ligand discovery for everyone. Journal of chemical information and model-ing , 55(11): 2324–2337. Su, B.; Du, D.; Yang, Z.; Zhou, Y.; Li, J.; Rao, A.; Sun, H.; Lu, Z.; and Wen, J.-R. 2022. A molecular multimodal foun-dation model associating molecule graphs with natural lan-guage. arXiv preprint arXiv:2209.05481 .Sun, Z.; Deng, Z.-H.; Nie, J.-Y.; and Tang, J. 2019. Rotate: Knowledge graph embedding by relational rotation in com-plex space. arXiv preprint arXiv:1902.10197 .Tong, T.; Gray, K.; Gao, Q.; Chen, L.; Rueckert, D.; Initia-tive, A. D. N.; et al. 2017. Multi-modal classification of Alzheimer’s disease using nonlinear graph fusion. Pattern recognition , 63: 171–181. Vaswani, A.; Shazeer, N.; Parmar, N.; Uszkoreit, J.; Jones, L.; Gomez, A. N.; Kaiser, Ł.; and Polosukhin, I. 2017. At-tention is all you need. Advances in neural information pro-cessing systems , 30. Wang, H.; Fu, T.; Du, Y.; Gao, W.; Huang, K.; Liu, Z.; Chan-dak, P.; Liu, S.; Van Katwyk, P.; Deac, A.; et al. 2023. Sci-entific discovery in the age of artificial intelligence. Nature ,620(7972): 47–60. Wang, H.; Li, W.; Jin, X.; Cho, K.; Ji, H.; Han, J.; and Burke, M. D. 2021a. Chemical-reaction-aware molecule represen-tation learning. arXiv preprint arXiv:2109.09888 .Wang, X.; Li, Z.; Jiang, M.; Wang, S.; Zhang, S.; and Wei, Z. 2019. Molecule property prediction based on spatial graph embedding. Journal of chemical information and modeling ,59(9): 3817–3828. Wang, Y.; Wang, J.; Cao, Z.; and Farimani, A. 2021b. MolCLR: Molecular contrastive learning of representations via graph neural networks. arXiv 2021. arXiv preprint arXiv:2102.10056 .Wang, Y.; Zhao, Y.; Shah, N.; and Derr, T. 2022. Imbalanced graph classification via graph-of-graph neural networks. In 
+
+Proceedings of the 31st ACM International Conference on Information & Knowledge Management , 2067–2076. Wu, Z.; Ramsundar, B.; Feinberg, E. N.; Gomes, J.; Ge-niesse, C.; Pappu, A. S.; Leswing, K.; and Pande, V. 2018. MoleculeNet: a benchmark for molecular machine learning. 
+
+Chemical science , 9(2): 513–530. Xu, B.; Lu, Y.; Li, C.; Yue, L.; Wang, X.; Hao, N.; Fu, T.; and Chen, J. 2024. SMILES-Mamba: Chemical Mamba Foun-dation Models for Drug ADMET Prediction. arXiv preprint arXiv:2408.05696 .Xu, K.; Hu, W.; Leskovec, J.; and Jegelka, S. 2018. How Powerful are Graph Neural Networks? In International Con-ference on Learning Representations .Xu, Y.; Pei, J.; and Lai, L. 2017. Deep learning based re-gression and multiclass models for acute oral toxicity pre-diction with automatic chemical feature extraction. Journal of chemical information and modeling , 57(11): 2672–2685. Yang, B.; Yih, W.-t.; He, X.; Gao, J.; and Deng, L. 2014. Embedding entities and relations for learning and inference in knowledge bases. arXiv preprint arXiv:1412.6575 .Yang, K.; Swanson, K.; Jin, W.; Coley, C.; Eiden, P.; Gao, H.; Guzman-Perez, A.; Hopper, T.; Kelley, B.; Mathea, M.; et al. 2019. Analyzing learned molecular representations for property prediction. Journal of chemical information and modeling , 59(8): 3370–3388. Ye, Q.; Hsieh, C.-Y.; Yang, Z.; Kang, Y.; Chen, J.; Cao, D.; He, S.; and Hou, T. 2021. A unified drug–target interaction prediction framework based on knowledge graph and recom-mendation system. Nature communications , 12(1): 6775. Yuan, H.; and Ji, S. 2020. Structpool: Structured graph pool-ing via conditional random fields. In Proceedings of the 8th International Conference on Learning Representations .Zhang, Z.; Liu, Q.; Wang, H.; Lu, C.; and Lee, C.-K. 2021. Motif-based Graph Self-Supervised Learning for Molecular Property Prediction. arXiv:2110.00987. Zheng, S.; Rao, J.; Zhang, Z.; Xu, J.; and Yang, Y. 2019. Pre-dicting retrosynthetic reactions using self-corrected trans-former neural networks. Journal of Chemical Information and Modeling , 60(1): 47–55. 360

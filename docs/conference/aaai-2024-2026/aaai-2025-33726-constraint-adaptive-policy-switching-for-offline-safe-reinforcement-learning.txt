@@ -1,0 +1,356 @@
+Title: Constraint-Adaptive Policy Switching for Offline Safe Reinforcement Learning
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/33726/35881
+
+Number of Pages: 9
+
+Markdown Content:
+# Constraint-Adaptive Policy Switching for Offline Safe Reinforcement Learning 
+
+# Yassine Chemingui 1, Aryan Deshwal 2, Honghao Wei 1, Alan Fern 3, Jana Doppa 1
+
+> 1
+
+Washington State University 
+
+> 2
+
+University of Minnesota 
+
+> 3
+
+Oregon State University 
+
+{yassine.chemingui,honghao.wei,jana.doppa }@wsu.edu, adeshwal@umn.edu, alan.fern@oregonstate.edu 
+
+Abstract   
+
+> Offline safe reinforcement learning (OSRL) involves learning a decision-making policy to maximize rewards from a fixed batch of training data to satisfy pre-defined safety constraints. However, adapting to varying safety constraints during deploy-ment without retraining remains an under-explored challenge. To address this challenge, we introduce constraint-adaptive policy switching (CAPS), a wrapper framework around exist-ing offline RL algorithms. During training, CAPS uses offline data to learn multiple policies with a shared representation that optimize different reward and cost trade-offs. During testing, CAPS switches between those policies by selecting at each state the policy that maximizes future rewards among those that satisfy the current cost constraint. Our experiments on 38 tasks from the DSRL benchmark demonstrate that CAPS con-sistently outperforms existing methods, establishing a strong wrapper-based baseline for OSRL.
+
+# 1 Introduction 
+
+Online reinforcement learning (RL) has shown great suc-cesses in applications where the agent can continuously in-teract with the environment to collect new feedback data to improve its decision-making policy (Mnih et al. 2015; Silver et al. 2018; Li 2017). However, in many real-world domains such as agriculture, smart grid and healthcare, executing ex-ploratory decisions is costly and/or dangerous, but we have access to pre-collected datasets. Offline RL (Levine et al. 2020) is an emerging paradigm to learn decision policies 
+
+solely from such offline datasets, eliminating the need for ad-ditional interaction with the environment. The key challenge in offline RL is addressing the distributional shift between the state-action distribution of the offline dataset and the learned policy, as this shift results in extrapolation error. Existing of-fline RL methods typically employ the principle of pessimism in the face of uncertainty (i.e., some form of penalization to deal with out-of-distribution states/actions) to address this challenge (Levine et al. 2020). In many safety-critical domains (e.g., agriculture and smart grid), the agent behavior needs to also satisfy some cost con-straints in addition to maximizing reward. Most of the prior work on offline RL focuses on the unconstrained setting where the policy is optimized to maximize rewards. There is 
+
+> Copyright © 2025, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved.
+
+relatively less work on offline constrained/safe RL and the majority of these methods assume that the cost constraint is known during the training phase (as elaborated in the related work section). However, in many applications, the cost con-straints can change at deployment depending on the use-case scenario. For example, in agricultural drones, the reward is the area covered during spraying, and the cost is the bat-tery/power consumption. The goal is to maximize efficiency for a given agricultural field by optimizing coverage based on the available battery power. This paper studies the problem of offline safe RL (OSRL) where the safety/cost constraints can vary after deployment. We propose Constraint-Adaptive Policy Switching (CAPS) ,an algorithm that can be wrapped around existing offline RL methods and is easy to implement. CAPS handles the challenge of unknown cost constraint threshold as follows. At training time, we learn multiple policies with a shared representation with the goal of achieving different reward and cost trade-offs: one centered on reward maximization, one on cost minimization, and other policies optimized for varied linear scalarizations of costs and rewards. At testing time, CAPS switches between the decisions from the trained policies at each state, selecting the one that maximizes future rewards from the ones that satisfy the cost constraint. We also theoretically analyze the conditions under which CAPS decision-making process has safety guarantees. We perform experiments on 38 tasks from the DSRL benchmark (Liu et al. 2024) to compare CAPS with state-of-the-art OSRL baselines and our main findings are as follows. First, CAPS wrapped around two qualitatively different of-fline RL algorithms exhibits safe behavior (first-order objec-tive) on a larger fraction of tasks compared to baselines across different cost threshold constraints. Prior methods struggle even with known cost constraints, potentially because of es-timation errors in value functions and/or instability in the Lagrange multiplier. Second, the implicit Q-learning instan-tiation of CAPS demonstrates safe performance in 34/38 tasks (89%) and achieves the highest rewards in 18 of those tasks compared to the baselines.. Third, CAPS using shared representation performs significantly better than CAPS with independently trained policies. Finally, increasing the number of policies improves the overall performance of CAPS, but CAPS with two policies (one for reward maximization and one for cost minimization) is competitive, has the advantage The Thirty-Ninth AAAI Conference on Artificial Intelligence (AAAI-25) 
+
+> 15722
+
+of removing extra hyperparameters, and stands as a strong minimalist approach for effective offline safe RL. 
+
+Contributions. The key contribution is the development and evaluation of CAPS framework for offline safe RL with vary-ing cost constraints. Specific contributions include: • Development of CAPS to handle any test-time cost thresh-old constraint. CAPS can be wrapped around existing offline RL algorithms and easy to implement. • Theoretical analysis to understand the conditions under which CAPS decision policy has safety guarantees. • Experiments and ablations on 38 DSRL tasks, demon-strate the effectiveness of CAPS over prior methods. The code/appendices are available at https://github.com/ yassineCh/CAPS. 
+
+# 2 Problem Setup 
+
+RL problems with safety constraints are naturally formu-lated within the Constrained Markov Decision Process (CMDP) framework. A CMDP is defined by a tuple M =(S, A, P, r, c, μ 0), where S is the state space, A is the ac-tion space, P : S × A × S → [0 , 1] is the state transition probability function, r : S × A → R defines the reward func-tion, and c : S → [0 , C max ] quantifies the costs associated with states, where Cmax is the maximum possible cost, and 
+
+μ0 : S → [0 , 1] is the initial state distribution. For simplicity of notation, we define cost function on states noting that it is easy to define an equivalent CMDP with costs associated with state-action pairs. In offline safe RL problems, we are given a fixed pre-collected dataset D={(s, a, r, c, s ′)i}ni=1 from one or more (unknown) behavior policies, where each training example 
+
+i contains the action a taken at state s, reward received r,cost incurred c, and the next state s′. The goal is to learn a policy π : S → A from the offline dataset D to maximize the expected reward while satisfying a specified cost/safety constraint. This problem is mathematically formulated as: 
+
+max  
+
+> π
+
+Eτ ∼π [R(τ )] subject to Eτ ∼π [C(τ )] ≤ κ, 
+
+Here, κ ∈ [0 , +∞) is the cost threshold for safety con-straint, τ = {s1, a 1, r 1, c 1, . . . , s T , a T , r T , c T } denotes a trajectory sampled by executing the policy π, T is the length of episode, R(τ ) = PTt=1 rt is the total accumulated reward, and C(τ ) = PTt=1 ct is the total incurred cost. The majority of prior work on OSRL assumes that the cost threshold κ for safety constraint is known at the training time and remains same at deployment. However, this assumption is violated in many real-world applications where the safety requirements can change during deployment based on the op-erating conditions or environmental factors. For example, in agricultural crop management, the goal may be to maximize yield under constraints on water and/or nitrogen application depending on time-varying regulations. Additionally, in a decision-support scenario, it can be useful for decision mak-ers to quickly explore the impact of different cost thresholds without requiring retraining. Other application domains where this problem setting arises include healthcare, power systems, and robotics. Con-sequently, OSRL methods that learn a single policy tailored to a specific cost constraint are ill-equipped to handle varying test-time cost constraints. The goal of this paper is to fill this knowledge gap in the current literature by studying a variant of the OSRL problem where the cost constraint κ can vary during deployment. 
+
+# 3 Related Work 
+
+Online Safe RL. RL with safety constraints in the online setting, where the agent can interact with the environment to collect feedback data, is extensively studied (Garcıa and Fern ´andez 2015; Gu et al. 2024). However, most of these methods assume a fixed constraint threshold during both training and deployment. Constraint-conditioned policy op-timization (Yao et al. 2023), addresses this limitation and adapts to changing constraints using two strategies: approxi-mating value functions under unseen constraints and encod-ing arbitrary constraint thresholds during policy optimization. 
+
+Offline RL. The goal in offline RL is to learn effective policies from fixed static datasets without any additional interaction with the environment. Prior work has tackled the key challenge of distribution shift in offline RL (Levine et al. 2020; Figueiredo Prudencio, Maximo, and Colombini 2024). Some representative techniques include incorporating regularization in value function estimation (Fujimoto and Gu 2021; Kostrikov, Nair, and Levine 2022; Kumar et al. 2019; Lyu et al. 2022; Yang et al. 2022), sequential model-ing formulations (Janner, Li, and Levine 2021; Wang et al. 2022), uncertainty-aware methods (An et al. 2021; Bai et al. 2022), divergence based policy constraints (Wu, Tucker, and Nachum 2020; Jaques et al. 2020; Wu et al. 2022), and ex-tensions of model based RL (Kidambi et al. 2020; Yu et al. 2020; Rigter, Lacerda, and Hawes 2022) and imitation learn-ing (Xu et al. 2022). SfBC (Chen et al. 2023) and IDQL (Hansen-Estruch et al. 2023) filter candidate actions using Q-function evaluations and reweight them for selection. In contrast, CAPS avoids reweighting by directly selecting the best safe action using two Q-functions. PEX (Zhang, Xu, and Yu 2023) is a offline-to-online RL approach that adds a new expansion policy to the offline policy, unlike CAPS, which dynamically switches between pre-trained policies for safety. 
+
+Offline Safe RL. Recent work has studied the offline safe RL problem, aiming to learn a safe policy from a given offline dataset (Liu et al. 2024). These methods include finding cost-conservative policies for better actual constraint satisfaction via some form of constrained policy optimization formula-tion (Polosky et al. 2022; Lee et al. 2022), Lagrangian based approaches to handle cost constraints (Xu, Zhan, and Zhu 2022), and the constrained decision transformer (CDT) (Liu et al. 2023), which exploits the advances in sequential mod-eling by learning from a dataset of trajectories. TREBI (Lin et al. 2023) and FISOR (Zheng et al. 2024) leverage diffu-sion models for creating safe policies: TREBI generates safe trajectories, while FISOR uses a diffusion actor to select ac-tions within feasible regions. However, these methods, with 15723 the exception of CDT, rely on fixed cost thresholds during training, limiting their flexibility for deployment scenarios with varying cost threshold constraints. 
+
+# 4 Constraint-Adaptive Policy Switching 
+
+In this section, we first describe the reasoning procedure behind the Constraint-Adaptive Policy Switching (CAPS) ap-proach of handling unknown constraints at testing time. Next, we describe the training process and the design choices that enable effective decision-making in CAPS. 
+
+4.1 Decision-Making in CAPS 
+
+One way to handle dynamically changing cost constraints would be to: 1) train a large set of K policies that span a wide spectrum of cost-reward trade-offs, and 2) at each test-time state, select the best of those policies that satisfies the current cost constraint. While this makes sense in concept, there are at least two key practical issues. First, there is a high computational cost involved in optimizing K policies via safe offline RL. Second, and more importantly, step (2) requires accurately assessing the safety of a given policy and also selecting the best among the safe ones. This requires accurate cost and value functions for each policy, which would need to be estimated using off-policy evaluation (OPE) techniques with the available dataset. Unfortunately, as our experimental results show, current OPE techniques are not reliable enough to ensure test-time safety (Figueiredo Prudencio, Maximo, and Colombini 2024). The key idea of CAPS is to address these two issues by creating a set of K diverse policies at a much smaller computational cost, while avoiding a reliance on OPE to provide test-time safety. CAPS relies on two key components for its decision-making to handle unknown cost constraints. First, a set of 
+
+K ≥ 2 policies P = {πr , π 1, . . . , π K−2, π c} that are trained using the offline dataset D to cover actions with different re-ward and cost trade-offs. At one extreme, πr is trained to maximize reward via standard Offline-RL, while ignoring the cost objective. At the other extreme, πc is trained to minimize cost via standard Offline-RL, while ignoring reward. In this sense, πc is maximally safe, while πr is cost agnostic. The re-maining K − 2 policies are trained with the intent of covering actions that achieve a variety of reward and cost trade-offs, while avoiding the full computational cost of Offline-RL for each one. Second, CAPS retains from Offline-RL the learned Q-functions Qrt and Qct which we assume are non-stationary given the finite time horizon: 
+
+Qrt (s, a ) = E[
+
+> T
+
+X
+
+> t
+
+rt|st = s, a t = a] (1) 
+
+Qct (s, a ) = E[
+
+> T
+
+X
+
+> t
+
+ct|st = s, a t = a], (2) where the expectation is taken over the corresponding policy with respect to randomness from reward/cost functions and state transitions. Intuitively, CAPS will use Qct to help filter out unsafe decisions from the K policies and Qrt is employed to select the best decision from the unfiltered ones. Note that these Q-functions are an artifact of policy optimization, rather than OPE of an arbitrary policy. This is a subtle, but important, aspect of CAPS, since it has been observed that value estimates of arbitrary policies via OPE tends to be less reliable (Figueiredo Prudencio, Maximo, and Colombini 2024). Given K policies P={πr , π 1, . . . , π K−2, π c}, two Q-functions Qr and Qc, cost threshold constraint κ, and ac-cumulated cost c≤t up to current state st, CAPS selects an action as follows: 1. Filter : Identify the subset of feasible actions Ft ⊆{πr (st), π 1(st), . . . , π K−2(st), π c(st)} selected by the 
+
+K policies and are safe in st according to Qc and cost threshold κ:
+
+Ft = {π(st) | Qct (st, π (st)) + c≤t ≤ κ, π ∈ P} (3) 2. Select : Among the feasible actions Ft, pick the one that that maximizes the estimated reward according to Qr :
+
+a∗ 
+
+> t
+
+= arg max 
+
+> a∈F t
+
+Qrt (st, a ) (4) If the filter step results in an empty set of feasible actions 
+
+(Ft = ∅), CAPS selects the action associated with the policy that minimizes the estimated cost: 
+
+a∗ 
+
+> t
+
+= π∗ 
+
+> t
+
+(st), where π∗ 
+
+> t
+
+= arg min  
+
+> π∈P
+
+Qct (st, π (st)) 
+
+Intuitively, the first filtering step keeps any action selected by a policy such that it is safe to take that action and then follow πc thereafter. That is, after the action is taken there is an assurance in expectation that πc is a safe fallback policy. The selection step then heuristically selects the action that looks best from a reward maximization point of view. 
+
+4.2 Training Algorithm for CAPS 
+
+Given an offline dataset D = {(si, a i, r i, c i, s ′
+
+> i
+
+)}ni=1 , the CAPS approach aims to efficiently learn a set of policies 
+
+P={πr , π 1, . . . , π K−2, π c} and the two Q-value functions 
+
+Qr and Qc that yield strong test time performance. A key feature of CAPS is that training is done via a reduction to standard Offline-RL. In particular, CAPS can be combined with any Offline-RL algorithm that produces a Q-function and a mechanism to extract a policy for that Q-function. In what follows, we first describe the high-level training schema and then provide two concrete instantiations that are used in our experiments. Finally, we discuss the network architecture design and shared structure among the K policies. 
+
+Reduction to Offline RL. The training approach for CAPS can be wrapped around existing offline RL algorithms with minimal changes, making it straightforward to implement. The general recipe consists of the following two steps: 1. Train the reward-only value funcion Qr and cost-only value function Qc. For Qc, we train using cost data from the offline dataset by defining the rewards as costs. 15724 2. Extract the reward maximizing policy πr from Qr , the cost minimizing policy πc from Qc, and the other K − 2,
+
+πk, policies with different reward and cost trade-offs from the mixture Q-value function Qr − λkQc following the same policy extraction procedure in the offline RL method, where λk is the scalarization parameter. Thus, the approach requires just two full runs of an Offline RL algorithm and K runs of the much cheaper policy ex-traction step. It is important to note that the Q-functions for costs and rewards are not learned for each πk, which means that the precise cost-reward trade-off of each policy is un-known. Thus, this approach to producing each πk is a fast heuristics for identifying a set of policies that are likely to span a range of cost-reward trade-offs. Another advantage of this reduction approach is that we can leverage better offline RL algorithms to further improve the performance of CAPS and our experiments demonstrate this advantage. While it is possible to apply OPE methods to learn these Q-functions and use them for decision making, our experiments show that while safety is maintained, the rewards are significantly lower compared to our CAPS decision procedure. 
+
+Two CAPS Instantiations. Our two instantiations of CAPS training are based on two state-of-the-art offline RL methods: IQL and SAC+BC. 
+
+IQL Instantiation: We employ the Implicit Q-Learning (IQL) algorithm (Kostrikov, Nair, and Levine 2022) as fol-lows. Given the offline dataset D = {(si, a i, r i, c i, s ′
+
+> i
+
+)}ni=1 ,we additionally train a value function V c and a Q-value func-tion Qc for costs. These functions are trained similarly to the original IQL reward value V r and Q-value Qr functions by minimizing the expectile loss, thereby avoiding explicit value queries for unseen actions. Next, we extract each policy 
+
+π ∈ P by maximizing the following objective. 
+
+Jπk (ϕ) = Es,a ∼D [exp( β(Ar − λkAc)) log πϕ(a|s)] (5) where the advantages are defined as: 
+
+Ar = Qrθ (s, a ) − V rψ (s), Ac = Qcθ (s, a ) − V cψ (s) (9) where θ and ψ correspond to the parameters of the Q-value and value function network representation. Note that for πr
+
+and πc, we only use Ar and −Ac respectively. 
+
+SAC+BC Instantiation: (Fujimoto and Gu 2021)) recently described a general framework for developing offline RL algorithms by combining an off-policy RL with a behavior cloning (BC) regularization term. We follow the same princi-ple but employ soft-actor-critic (SAC) (Haarnoja et al. 2018) algorithm as the off-policy RL component instead of the TD3 algorithm used originally. Following the offline reduction recipe, we update the actor network to incorporate K heads and define an additional Q-value function for costs. We then learn each policy πk by maximizing the following objective: 
+
+Jπk (ϕ) = Es,a ∼D ,˜a∼πϕ(·| s)
+
+h
+
+Qk(s, ˜a) − α log πϕ(˜ a|s)
+
+− (˜ a − a)2i (6) where Qk(s, ˜a) = Qrθr (s, ˜a) − λkQcθc (s, ˜a). For πr and πc,we use Qr and −Qc to update their corresponding heads. 
+
+Improving CAPS via Shared Actor Representation. To enhance knowledge transfer and/or training efficiency, we utilize a shared neural network architecture for the K dif-ferent policies. Instead of training separate networks, we employ a common body with parameters ϕs that learns a unified state representation fϕs (s). This body is paired with distinct output heads (one for each of the K policies), each with its own parameters ϕk, which specialize in pre-dicting the action distributions for their respective policies: 
+
+πk(a|s) = gϕk (fϕs (s)) , ∀k ∈ [K].There are two synergistic benefits of a shared policy rep-resentation. First, this approach captures general features relevant to both reward and cost objectives, leading to knowl-edge transfer across policies. Second, CAPS requires only one round of training to adapt to different cost constraint thresholds. This saves significant training time compared to methods that need re-training for each cost constraint. 
+
+# 5 Safety Guarantee 
+
+This section describes conditions under which the CAPS decision-making process has safety guarantees. For simplic-ity, we consider the case where the optimal-cost Q-function is perfectly estimated, noting that it is straightforward to modify our result to account for bounded estimation error. We focus on the finite-horizon setting with horizon T and let Qct and V ct denote the cost optimal Q and value functions for time step t ∈ { 0, . . . , T } respectively. Here we treat these functions as positive cost accumulation functions that are minimized during optimization. We consider policies of the form πt(s, c <t ) where s is the current state and c<t is the accumulated cost before arriving at time step t. For a given cost safety bound κ, our guarantee applies to any policy that is κ-admissible. 
+
+Assumption 1 A policy π is κ-admissible if for any state 
+
+s, any time step t, and any accumulated cost c<t , we have 
+
+Qct (s, π t(s, c <t )) ≤ max {V ct (s), κ − c<t }.
+
+Note that by assuming a perfect Qc, the switching policy defined for CAPS is κ-admissible since it either picks an action a such that Qct (s, a ) ≤ κ − c<t if possible, or resorts to choosing the least cost action, which has a value of V ct (s)
+
+since Qc and V c are cost optimal. This is true of CAPS for any set of K policies P that contains the cost optimal policy 
+
+πc and any reward value function Qrt .Our safety guarantees are specified in terms of a parameter 
+
+ϵ that characterizes the underlying Markov decision process (MDP). In particular, safety in terms of expected cost is chal-lenging when stochastic state transitions can result in a set of possible next states that have wildly different values of V c.Indeed, counter examples to safety can be constructed that involve transitions with very small probabilities of reaching enormous values of V c while the remaining probability mass results in very small costs. For this purpose, we define the notion of optimal-cost variation .
+
+Assumption 2 Given an MDP M , let N (s, a ) =
+
+{s′ | P (s, a, s ′) > 0} be the set of possible next states after taking action a in state s. M has an optimal-cost varia-tion of ϵ if each state-action-timestep tuple (s, a, t ) satisfies 
+
+max s′∈N (s,a ) V ct (s′) − min s′∈N (s,a ) V ct (s′) ≤ ϵ.15725 Note that any deterministic MDP has ϵ = 0 . Also note that this assumption places no constraints between the optimal costs of states resulting from different (s, a, t ) tuples. We can now state our main result which bounds the total cost of a policy π, denoted V π,c t .
+
+Theorem 1 For any MDP M with optimal-cost variation ϵ
+
+and any κ-admissible policy π, we have that for any state s,time step t, and accumulated cost c<t ,
+
+V π,c t (s) ≤ max {V ct (s), κ − c<t } + ( T − t)ϵ
+
+See the supplementary material for the full proof. This result says that up to a constant factor either the expected total cost of policy π will be bounded by κ over a horizon of T or if that is not possible, it will be bounded by the lowest possible expected cost V ct (s). Based on this result, if one has an estimate of ϵ for the system, an appropriate value of κ can be selected to provide a desired guarantee. The constant factor (T −t)ϵ is simply a constant of ϵ accumulated over the remaining horizon T − t. Note that for time step 0, we get a bound of κ when it is possible to achieve that safety factor. Also, note that in the deterministic case, the bound is tight since ϵ = 0 .
+
+# 6 Experiments and Results 
+
+This section presents experimental evaluation of the CAPS approach and comparison with state-of-the-art methods. 
+
+6.1 Experimental Setup 
+
+Benchmarks. We employ 38 sequential decision-making benchmarks of varying difficulty from Safety-Gymnasium (Ray, Achiam, and Amodei 2019; Ji et al. 2024), Bullet-Safety-Gym (Gronauer 2022), and MetaDrive (Li et al. 2022) within the DSRL framework (Liu et al. 2024). Further details are provided in Appendix C.1. 
+
+Configuration of CAPS. We consider two instantiations of CAPS training with different offline RL methods: 
+
+CAPS(IQL) employs IQL (Kostrikov, Nair, and Levine 2022) and CAPS(SAC+BC) employs soft-actor-critic based off-policy RL combined with a behavior cloning regulariza-tion term (Haarnoja et al. 2018; Fujimoto and Gu 2021) as described in the technical section. We consider CAPS with different number of policies K ∈ { 2, 4, 8} to determine the best configuration in terms of computational cost and quality of decisions. We provide the details of the neural network structure used for value and Q-functions, policy heads, and hyper-parameters in the Appendix C.3. 
+
+Baseline methods. We compare CAPS with several state-of-the-art baseline methods. 1) BC (Behavior Cloning) serves as a straightforward baseline where policies are learned by mimicking the behavior observed in the training data. 2) 
+
+BEAR-Lag integrates BEAR (Wu, Tucker, and Nachum 2020), an offline RL method, with a Lagrangian approach to address safety constraints. 3) Constraints-penalized Q-learning ( CPQ ) treats out-of-distribution actions as unsafe and updates the Q-value function using only safe state-action pairs (Xu, Zhan, and Zhu 2022). 4) COptiDICE builds upon the distribution correction estimation (DICE) method to incorporate cost constraints in offline RL (Lee et al. 2022) . 5) 
+
+CDT employs a decision transformer framework to consider safety constraints for safe decision-making (Liu et al. 2023). This is the only baseline that allows varying cost constraints at test-time. We run each over three seeds. 
+
+Evaluation methodology. We evaluate CAPS and the above-mentioned baseline methods using normalized return and normalized cost, where a normalized cost below 1 indicates that safety constraints are satisfied. In line with the DSRL guidelines, safety is our primary evaluation metric and our goal is to maximize rewards while adhering to cost con-straints. We evaluate each algorithm using three different target cost threshold configurations, three random seeds, and twenty episodes. The configurations are: {10, 20, 40 }, {20, 40, 80 }, where the second cost limit set applies to the more challenging Safety-Gymnasium environments. We compute the average normalized reward and cost to assess the perfor-mance. Note that, for all baseline methods except CDT, a separate agent is trained for each cost threshold. 
+
+6.2 Results and Discussion 
+
+Ablation for number of policies. Tables 3 and 4 in the Ap-pendix B.1 show the results of CAPS-K with K ∈ { 2, 4, 8}
+
+heads/policies. We make the following observations. 1) 
+
+CAPS-4 with four policies achieves better results than CAPS-2 with two policies. CAPS-8 with eight policies despite its potential for increased capacity, does not lead to substantial improvements over CAPS-4. The diminishing returns demon-strate that the incremental benefit of adding more policies is decreasing, with CAPS-4 providing an optimized balance of flexibility and complexity. Eight policies introduce some redundancy and potentially exacerbates stochasticity, rather than providing additional value. 2) CAPS-2 with two poli-cies also demonstrates impressive results and is preferred as our main approach due to its simplicity and computational efficiency. Switching between reward-maximizing and cost-minimizing policies is very effective for managing varying test-time cost constraints. In contrast, CAPS variant with more than two heads involve optimizing additional policies for combined reward and cost objectives with extra scalar-ization hyper-parameters λk. Therefore, we use CAPS with two policies (one for reward maximization and one for cost minimization) for the rest of our experimental analysis. 
+
+Ablation for shared policy representation. We investigate the advantages of using a shared policy representation archi-tecture compared to training separate agents for reward and cost objectives respectively. A shared representation allows different heads/policies to utilize common state features, to potentially improve the overall performance. The intuition behind this idea is that the shared network enables the cost head to achieve higher rewards and the reward head to incur lower costs compared to independently learned policies. For instance, Figure 1 compares the performance of sepa-rate agents and shared agents in the CarGoal1 environment using the two instantiations: SAC+BC (left) and IQL (right). The focus is on understanding how sharing impacts the be-havior of cost agents and reward agents when run uniformly. 15726 Task BC BEAR-Lag CPQ CDT COptiDICE CAPS (SAC+BC) CAPS (IQL) reward ↑ cost ↓ reward ↑ cost ↓ reward ↑ cost ↓ reward ↑ cost ↓ reward ↑ cost ↓ reward ↑ cost ↓ reward ↑ cost ↓
+
+PointButton1 0.11 1.06 0.24 1.95 0.64 3.31 0.53 2.99 0.12 1.43 0.10 1.23 0.03 0.50 
+
+PointButton2 0.25 2.30 0.41 2.63 0.57 4.47 0.45 2.85 0.17 1.93 0.21 1.54 0.14 0.75 
+
+PointCircle1 0.81 4.97 0.69 3.04 0.45 1.14 0.58 0.82 0.85 5.39 0.53 0.36 0.50 0.78 
+
+PointCircle2 0.71 5.49 0.70 4.64 0.09 4.97 0.63 1.33 0.87 8.70 0.61 1.38 0.51 0.80 
+
+PointGoal1 0.56 0.91 0.74 1.20 0.57 0.66 0.71 1.03 0.49 1.54 0.17 0.11 0.47 0.53 
+
+PointGoal2 0.54 2.72 0.70 3.12 0.52 1.86 0.55 1.98 0.41 1.83 0.20 0.55 0.33 0.80 
+
+PointPush1 0.18 0.77 0.21 0.92 0.26 0.75 0.26 0.94 0.13 1.08 0.19 0.38 0.19 0.29 
+
+PointPush2 0.15 1.39 0.17 1.16 0.09 1.57 0.21 1.13 0.04 1.17 0.15 0.70 0.13 0.64 
+
+CarButton1 0.00 1.54 0.22 2.76 0.42 10.20 0.21 2.71 -0.09 1.36 0.01 1.17 -0.01 0.30 
+
+CarButton2 -0.03 1.38 0.00 2.00 0.36 12.65 0.19 3.53 -0.06 1.27 -0.14 1.17 -0.08 0.32 
+
+CarCircle1 0.71 5.67 0.76 5.39 0.09 1.10 0.59 2.90 0.70 5.86 0.64 3.24 0.54 1.51 CarCircle2 0.73 7.60 0.74 6.68 0.47 2.34 0.65 4.22 0.75 8.34 0.66 4.98 0.50 1.55 CarGoal1 0.39 0.42 0.60 1.10 0.80 1.51 0.67 1.18 0.38 0.53 0.28 0.47 0.33 0.38 
+
+CarGoal2 0.23 0.78 0.29 1.27 0.56 3.64 0.48 2.17 0.22 0.82 0.21 0.75 0.16 0.62 
+
+CarPush1 0.19 0.39 0.21 0.45 0.11 1.11 0.31 0.81 0.16 0.46 0.22 0.34 0.20 0.31 
+
+CarPush2 0.13 1.27 0.11 1.06 0.19 4.59 0.19 1.88 0.09 1.48 0.14 0.82 0.07 0.75 
+
+SwimmerVelo 0.51 2.62 0.27 1.83 0.18 2.04 0.63 0.88 0.61 6.31 0.41 0.51 0.43 1.58 HopperVelo 0.54 2.80 0.36 5.47 0.12 1.73 0.71 0.75 0.10 1.45 0.62 0.71 0.41 0.70 
+
+HalfCheetahVelo 0.96 5.26 0.98 6.55 0.34 0.66 0.98 0.16 0.62 0.00 0.95 0.21 0.94 0.77 
+
+Walker2dVelo 0.74 1.85 0.89 4.16 0.03 0.23 0.79 0.10 0.12 0.86 0.80 0.04 0.80 0.62 
+
+AntVelo 0.98 2.58 -1.01 0.00 -1.01 0.00 0.99 0.50 1.00 2.99 0.89 0.67 0.95 0.64 SafetyGym Avg 0.45 2.56 0.39 2.73 0.28 2.88 0.54 1.66 0.37 2.61 0.37 1.02 0.36 0.72 
+
+BallRun 0.67 3.16 0.02 3.11 0.30 2.36 0.38 1.02 0.57 3.38 0.24 0.60 0.19 0.94 
+
+CarRun 0.97 0.11 0.40 7.65 0.93 0.94 0.98 0.63 0.93 0.00 0.97 0.00 0.97 0.25 
+
+DroneRun 0.32 1.44 0.42 3.85 0.36 2.62 0.62 0.74 0.67 4.27 0.54 0.39 0.47 2.19 AntRun 0.72 2.76 0.04 0.08 0.02 0.01 0.72 0.82 0.62 1.00 0.53 0.25 0.61 0.90 
+
+BallCircle 0.76 2.70 0.80 2.22 0.62 0.57 0.78 1.20 0.70 2.63 0.59 0.19 0.69 0.59 
+
+CarCircle 0.62 3.15 0.76 2.78 0.71 0.27 0.75 0.91 0.48 2.93 0.61 0.29 0.69 0.65 
+
+DroneCircle 0.71 2.70 0.80 3.93 -0.23 0.36 0.62 1.02 0.25 1.02 0.42 0.14 0.55 0.67 
+
+AntCircle 0.65 4.67 0.64 5.23 0.00 0.00 0.48 2.34 0.18 4.33 0.47 0.42 0.41 0.15 BulletGym Avg 0.68 2.59 0.49 3.61 0.34 0.89 0.67 1.09 0.55 2.45 0.55 0.29 0.57 0.79 
+
+easysparse 0.18 0.82 0.03 0.71 -0.06 0.08 0.25 0.26 0.92 5.33 0.54 2.14 0.11 0.34 
+
+easymean 0.05 0.18 0.02 0.50 -0.06 0.06 0.49 1.18 0.73 4.35 0.16 0.41 0.01 0.20 
+
+easydense 0.20 0.31 -0.01 0.39 -0.06 0.08 0.41 0.51 0.53 3.02 0.11 0.15 0.10 0.19 
+
+mediumsparse 0.65 1.56 -0.01 0.31 -0.09 0.06 0.55 1.03 0.79 2.65 0.65 0.99 0.60 0.74 
+
+mediummean 0.74 1.55 -0.04 0.10 -0.08 0.07 0.48 1.31 0.78 2.52 0.13 0.23 0.66 0.94 
+
+mediumdense 0.63 1.08 0.08 0.63 -0.07 0.05 0.21 0.29 0.63 2.17 0.69 0.80 0.69 0.56 
+
+hardsparse 0.19 0.54 0.02 0.24 -0.04 0.08 0.26 0.63 0.38 2.31 0.10 0.18 0.45 0.72 
+
+hardmean 0.47 2.32 0.01 0.26 -0.05 0.07 0.19 0.35 0.36 2.37 0.19 0.30 0.28 0.25 
+
+harddense 0.36 1.62 0.07 3.86 -0.04 0.05 0.28 0.69 0.23 1.46 0.22 0.45 0.37 0.67 MetaDrive Avg 0.39 1.11 0.02 0.78 -0.06 0.07 0.35 0.69 0.59 2.91 0.31 0.63 0.36 0.51 
+
+Table 1: Results for normalized rewards and costs. The cost threshold is 1. The ↑ symbol denotes that higher the rewards, the better. The ↓ symbol denotes that the lower the costs (up to threshold 1), the better. Each value is averaged over 3 distinct cost thresholds, 20 evaluation episodes, and 3 random seeds. Bold : Safe agents whose normalized cost ≤ 1. Gray: Unsafe agents. 
+
+Blue : Safe agent with the highest reward. We compare CAPS instantiations with other baselines, not with each other. In the case of separately trained agents, joined by the red line in both plots, the reward agent maximizes rewards with-out much consideration for the cost objective, resulting in high costs for achieving high rewards. For instance, in the SAC+BC algorithm, the reward agent’s point shows a high cost of around 80 and a moderate reward of about 0.1, indi-cating a reckless pursuit of rewards. Similarly, in the IQL al-gorithm, the reward agent incurs a cost of about 25 to achieve a reward of approximately 0.34. Conversely, the cost agent in the separate agents’ scenario aggressively minimizes costs, leading to low rewards as it avoids actions that could increase costs. This conservative behavior is evident the SAC+BC case, where the cost agent achieves low rewards of around -0.1 and costs near 0, and the IQL, where the cost agent’s rewards are around 0.3 with costs around 10. In contrast, the shared agents, joined by the blue lines, ex-hibit a more balanced approach. The shared policy representa-tion helps cost agent become less conservative, encouraging them to seek higher rewards even if it means incurring some costs. For example, in the SAC+BC algorithm, the shared cost agent achieves more rewards of about 0.33 with increased costs of around 20, showing a willingness to balance both objectives. Similarly, in the IQL algorithm, the shared cost agent achieves higher rewards of approximately 0.36 with moderate costs of around 15. A similar balanced approach is also evident for the reward agent under sharing. Tables 6, 7, 8 and 9 in the Appendix B.2 shows the re-sults for shared vs. independent policies ablations on all 38 benchmarks for IQL and SAC+BC. Additionally, the per-formance of CAPS with and without sharing is detailed in Table 5. These results demonstrate the benefits of the shared policy representation. Therefore, we use CAPS with shared 15727 Figure 1: Ablation results for shared architecture vs. inde-pendently trained reward ● and cost ■ optimized policies.                                    
+
+> Cost Limits CAPS(IQL) CAPS(SAC+BC) CDT
+> {5, 10 }18 / 38 15 / 38 11 / 38
+> {10, 20 }28 / 38 24 / 38 16 / 38
+> {15, 30 }31 / 38 29 / 38 19 / 38
+> {20, 40 }33 / 38 32 / 38 20 / 38
+> {30, 60 }33 / 38 34 / 38 22 / 38
+> {40, 80 }33 / 38 35 / 38 25 / 38
+
+Table 2: Performance of CAPS(IQL) and CAPS(SAC+BC) for different cost limit configurations. representation for two policies for baseline comparison. 
+
+Comparison with baselines. Table 1 compares the two CAPS variants, namely, CAPS(IQL) and CAPS(SAC+BC) against all baseline methods. Each method’s performance is displayed across two objectives: reward maximization and cost minimization. The table includes results for various tasks and aggregated performance for the three environment cate-gories (SafetyGym Avg, BulletGym Avg, MetaDrive Avg). We make the following observations. 1) Both CAPS instan-tiations significantly outperform the baselines, meeting cost constraints in 34 out of 38 tasks for CAPS(IQL) and 30 out of 38 tasks for CAPS(SAC+BC). This is remarkable given that safety is the primary metric. In contrast, the second-best method, CDT, only manages to satisfy the constraints in 19 out of 38 tasks. 2) CAPS(IQL) achieves the highest reward in 18 out of 38 tasks, demonstrating superior performance in reward maximization while meeting the safety/cost con-straints. This result shows that CAPS can leverage better offline RL algorithms to further improve the performance in OSRL. 3) Results in Appendix C.2 show that the training time of CAPS with increasing number of heads/policies is significantly lower than CDT. Other baseline methods will be worse as they need to be trained for every cost constraint. 
+
+4) CAPS with two policies is a minimalist approach and a strong wrapper based baseline for OSRL. 
+
+Ablation on cost limits. To evaluate the performance of CAPS under various cost limits, we compare both CAPS variants with CDT. The results in Table 2 demonstrate that CAPS handles different cost constraints better than CDT. For a cost limit configuration of {5, 10 }, where the cost limit is 10 for SafetyGym environments and 5 for the other two categories, CAPS(IQL) maintains safety in 18 out of 38 tasks, while CAPS(SAC+BC) achieves safety in 15 out of 38 tasks (compared to 11 for CDT). Although these num-bers might appear modest, they are reasonable given that the benchmark was designed with higher cost thresholds for evaluation. When the cost limit is increased to {10, 20 }, both CAPS variants show significant improvement: CAPS(IQL) ensures safety in 28 out of 38 tasks, and CAPS(SAC+BC) in 24 out of 38 tasks. With a configuration of {15, 30 },CAPS(IQL) achieves safety in 31 out of 38 tasks, while CAPS(SAC+BC) secures safety in 29 out of 38 tasks. Per-formance peaks at the {20, 40 }, {30, 60 }, and {40, 80 }
+
+configurations. CAPS(IQL) maintains safety in 33 out of 38 tasks at all three configurations, while CAPS(SAC+BC) shows consistent improvement, achieving safety in 32, 34, and 35 out of 38 tasks, respectively. The results demonstrates that both CAPS instantiations can effectively adapt to var-ious cost limits without requiring retraining. In contrast to other methods, which often necessitate specific training for each cost limit, both CAPS variants demonstrate flexibility and robustness, consistently outperforming CDT across all cost limit configurations. Full results comparing CDT and CAPS(IQL) can be found in Appendix B.3. 
+
+Off-policy evaluation. We implemented a variant of CAPS with off-policy evaluation for the two policies/heads configu-ration, comparing this method to our original approach. We trained two Q-functions for each head/policy (i.e., πr and 
+
+πc) using fitted Q-evaluation (FQE) (Le, Voloshin, and Yue 2019): ˆQr for rewards and ˆQc for costs, applying the same logic for policy switching. In Appendix B.4, we present re-sults comparing the original CAPS method to two variants: 1) CAPS with FQE based ˆQr and ˆQc for both πr and πc
+
+(reward-cost FQE), and 2) CAPS with FQE based ˆQr for πr
+
+and πc (reward FQE). The reward-cost FQE method yields overly conservative results with low rewards. The learned ˆQc
+
+corresponding to respective policies πr and πc frequently es-timates that actions exceed the cost limit, defaulting to select-ing the action with the lowest cost Q-value. Our results also show that reward FQE method which use ˆQr functions from FQE and Qc from offline RL method yields better perfor-mance than reward-cost FQE and is comparable to the origi-nal CAPS (uses Qc and Qr from offline RL). We hypothesize that this behavior is due to estimation errors in off-policy evaluation as noted by prior literature (Figueiredo Prudencio, Maximo, and Colombini 2024). The FQE based ˆQr functions effectively differentiate between actions without needing a precise estimation (unlike cost where precision matters to check safety of decisions at a state). These findings support the robust choice of applying Qc in CAPS’s filtering stage. 
+
+# 7 Summary and Future Work 
+
+This paper introduces CAPS, a novel offline safe RL frame-work that dynamically adapts to varying safety constraints by training multiple diverse policies. CAPS switches between actions from policies during deployment, ensuring safety while maximizing rewards. Empirical results show that CAPS outperforms existing methods. Future work could integrate CAPS into online learning for real-time gains. 15728 Acknowledgements 
+
+The authors gratefully acknowledge the in part support by USDA-NIFA funded AgAID Institute award 2021-67021-35344. The views expressed are those of the authors and do not reflect the official policy or position of the USDA-NIFA. 
+
+# References 
+
+An, G.; Moon, S.; Kim, J.-H.; and Song, H. O. 2021. Uncertainty-based offline reinforcement learning with diversi-fied Q-ensemble. Advances in neural information processing systems , 34: 7436–7447. Bai, C.; Wang, L.; Yang, Z.; Deng, Z.-H.; Garg, A.; Liu, P.; and Wang, Z. 2022. Pessimistic Bootstrapping for Uncertainty-Driven Offline Reinforcement Learning. In In-ternational Conference on Learning Representations .Chen, H.; Lu, C.; Ying, C.; Su, H.; and Zhu, J. 2023. Offline Reinforcement Learning via High-Fidelity Generative Behav-ior Modeling. In The Eleventh International Conference on Learning Representations .Figueiredo Prudencio, R.; Maximo, M. R. O. A.; and Colom-bini, E. L. 2024. A Survey on Offline Reinforcement Learn-ing: Taxonomy, Review, and Open Problems. IEEE Trans-actions on Neural Networks and Learning Systems , 35(8): 10237–10257. Fujimoto, S.; and Gu, S. S. 2021. A minimalist approach to offline reinforcement learning. Advances in neural informa-tion processing systems , 34: 20132–20145. Garcıa, J.; and Fern ´andez, F. 2015. A Comprehensive Cur-vey on Safe Reinforcement Learning. Journal of Machine Learning Research , 16(1): 1437–1480. Gronauer, S. 2022. Bullet-Safety-Gym: A Framework for Constrained Reinforcement Learning. Technical report, me-diaTUM. Gu, S.; Yang, L.; Du, Y.; Chen, G.; Walter, F.; Wang, J.; and Knoll, A. 2024. A Review of Safe Reinforcement Learning: Methods, Theories and Applications. IEEE Transactions on Pattern Analysis and Machine Intelligence .Haarnoja, T.; Zhou, A.; Hartikainen, K.; Tucker, G.; Ha, S.; Tan, J.; Kumar, V.; Zhu, H.; Gupta, A.; Abbeel, P.; et al. 2018. Soft actor-critic algorithms and applications. arXiv preprint arXiv:1812.05905 .Hansen-Estruch, P.; Kostrikov, I.; Janner, M.; Kuba, J. G.; and Levine, S. 2023. Idql: Implicit Q-learning as an actor-critic method with diffusion policies. arXiv preprint arXiv:2304.10573 .Janner, M.; Li, Q.; and Levine, S. 2021. Offline reinforcement learning as one big sequence modeling problem. Advances in neural information processing systems , 34: 1273–1286. Jaques, N.; Ghandeharioun, A.; Shen, J. H.; Ferguson, C.; Lapedriza, A.; Jones, N.; Gu, S.; and Picard, R. 2020. Way Off-Policy Batch Deep Reinforcement Learning of Human Preferences in Dialog. Ji, J.; Zhou, J.; Zhang, B.; Dai, J.; Pan, X.; Sun, R.; Huang, W.; Geng, Y.; Liu, M.; and Yang, Y. 2024. OmniSafe: An Infrastructure for Accelerating Safe Reinforcement Learning Research. Journal of Machine Learning Research , 25(285): 1–6. Kidambi, R.; Rajeswaran, A.; Netrapalli, P.; and Joachims, T. 2020. MOReL: Model-Based Offline Reinforcement Learn-ing. In Larochelle, H.; Ranzato, M.; Hadsell, R.; Balcan, M.; and Lin, H., eds., Advances in Neural Information Processing Systems , volume 33, 21810–21823. Curran Associates, Inc. Kostrikov, I.; Nair, A.; and Levine, S. 2022. Offline Reinforce-ment Learning with Implicit Q-Learning. In International Conference on Learning Representations .Kumar, A.; Fu, J.; Soh, M.; Tucker, G.; and Levine, S. 2019. Stabilizing Off-Policy Q-Learning via Bootstrapping Error Reduction. Advances in neural information processing sys-tems , 32. Le, H.; Voloshin, C.; and Yue, Y. 2019. Batch policy learning under constraints. In International Conference on Machine Learning , 3703–3712. PMLR. Lee, J.; Paduraru, C.; Mankowitz, D. J.; Heess, N.; Precup, D.; Kim, K.-E.; and Guez, A. 2022. COptiDICE: Offline Constrained Reinforcement Learning via Stationary Distribu-tion Correction Estimation. In International Conference on Learning Representations .Levine, S.; Kumar, A.; Tucker, G.; and Fu, J. 2020. Offline reinforcement learning: Tutorial, review, and perspectives on open problems. arXiv preprint arXiv:2005.01643 .Li, Q.; Peng, Z.; Feng, L.; Zhang, Q.; Xue, Z.; and Zhou, B. 2022. Metadrive: Composing diverse driving scenarios for generalizable reinforcement learning. IEEE transactions on pattern analysis and machine intelligence , 45(3): 3461–3475. Li, Y. 2017. Deep reinforcement learning: An overview. 
+
+arXiv preprint arXiv:1701.07274 .Lin, Q.; Tang, B.; Wu, Z.; Yu, C.; Mao, S.; Xie, Q.; Wang, X.; and Wang, D. 2023. Safe offline reinforcement learning with real-time budget constraints. In International Conference on Machine Learning , 21127–21152. PMLR. Liu, Z.; Guo, Z.; Lin, H.; Yao, Y.; Zhu, J.; Cen, Z.; Hu, H.; Yu, W.; Zhang, T.; Tan, J.; and Zhao, D. 2024. Datasets and Benchmarks for Offline Safe Reinforcement Learning. 
+
+Journal of Data-centric Machine Learning Research .Liu, Z.; Guo, Z.; Yao, Y.; Cen, Z.; Yu, W.; Zhang, T.; and Zhao, D. 2023. Constrained decision transformer for offline safe reinforcement learning. In International Conference on Machine Learning , 21611–21630. PMLR. Lyu, J.; Ma, X.; Li, X.; and Lu, Z. 2022. Mildly conservative Q-learning for offline reinforcement learning. Advances in Neural Information Processing Systems , 35: 1711–1724. Mnih, V.; Kavukcuoglu, K.; Silver, D.; Rusu, A. A.; Veness, J.; Bellemare, M. G.; Graves, A.; Riedmiller, M.; Fidjeland, A. K.; Ostrovski, G.; et al. 2015. Human-level control through deep reinforcement learning. Nature , 518(7540): 529–533. Polosky, N.; Da Silva, B. C.; Fiterau, M.; and Jagannath, J. 2022. Constrained offline policy optimization. In Inter-national Conference on Machine Learning , 17801–17810. PMLR. 15729 Ray, A.; Achiam, J.; and Amodei, D. 2019. Benchmark-ing safe exploration in deep reinforcement learning. arXiv preprint arXiv:1910.01708 .Rigter, M.; Lacerda, B.; and Hawes, N. 2022. Rambo-rl: Robust adversarial model-based offline reinforcement learn-ing. Advances in neural information processing systems , 35: 16082–16097. Silver, D.; Hubert, T.; Schrittwieser, J.; Antonoglou, I.; Lai, M.; Guez, A.; Lanctot, M.; Sifre, L.; Kumaran, D.; Graepel, T.; et al. 2018. A general reinforcement learning algorithm that masters chess, shogi, and Go through self-play. Science ,362(6419): 1140–1144. Wang, K.; Zhao, H.; Luo, X.; Ren, K.; Zhang, W.; and Li, D. 2022. Bootstrapped transformer for offline reinforcement learning. Advances in Neural Information Processing Sys-tems , 35: 34748–34761. Wu, J.; Wu, H.; Qiu, Z.; Wang, J.; and Long, M. 2022. Sup-ported policy optimization for offline reinforcement learn-ing. Advances in Neural Information Processing Systems , 35: 31278–31291. Wu, Y.; Tucker, G.; and Nachum, O. 2020. Behavior Regu-larized Offline Reinforcement Learning. Xu, H.; Jiang, L.; Jianxiong, L.; and Zhan, X. 2022. A policy-guided imitation approach for offline reinforcement learn-ing. Advances in Neural Information Processing Systems , 35: 4085–4098. Xu, H.; Zhan, X.; and Zhu, X. 2022. Constraints penalized Q-learning for safe offline reinforcement learning. In Pro-ceedings of the AAAI Conference on Artificial Intelligence ,volume 36, 8753–8760. Yang, R.; Bai, C.; Ma, X.; Wang, Z.; Zhang, C.; and Han, L. 2022. RORL: Robust Offline Reinforcement Learning via Conservative Smoothing. In Oh, A. H.; Agarwal, A.; Bel-grave, D.; and Cho, K., eds., Advances in Neural Information Processing Systems .Yao, Y.; Liu, Z.; Cen, Z.; Zhu, J.; Yu, W.; Zhang, T.; and Zhao, D. 2023. Constraint-Conditioned Policy Optimization for Versatile Safe Reinforcement Learning. In Thirty-seventh Conference on Neural Information Processing Systems .Yu, T.; Thomas, G.; Yu, L.; Ermon, S.; Zou, J. Y.; Levine, S.; Finn, C.; and Ma, T. 2020. MOPO: Model-based Offline Policy Optimization. In Larochelle, H.; Ranzato, M.; Had-sell, R.; Balcan, M.; and Lin, H., eds., Advances in Neural Information Processing Systems , volume 33, 14129–14142. Curran Associates, Inc. Zhang, H.; Xu, W.; and Yu, H. 2023. Policy Expansion for Bridging Offline-to-Online Reinforcement Learning. In The Eleventh International Conference on Learning Representa-tions .Zheng, Y.; Li, J.; Yu, D.; Yang, Y.; Li, S. E.; Zhan, X.; and Liu, J. 2024. Safe Offline Reinforcement Learning with Feasibility-Guided Diffusion Model. In The Twelfth Interna-tional Conference on Learning Representations .15730

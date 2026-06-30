@@ -1,0 +1,621 @@
+Title: Scalable Multi-Objective and Meta Reinforcement Learning via Gradient Estimation
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/40092/44053
+
+Number of Pages: 9
+
+Markdown Content:
+# Scalable Multi-Objective and Meta Reinforcement Learning via Gradient Estimation 
+
+# Zhenshuo Zhang, Minxuan Duan, Youran Ye, Hongyang R. Zhang 
+
+Northeastern University, Boston, Massachusetts 
+
+{zhang.zhens, duan.mi, ye.you, ho.zhang }@northeastern.edu 
+
+Abstract 
+
+We study the problem of efficiently estimating policies that simultaneously optimize multiple objectives in reinforcement learning (RL). Given n objectives (or tasks), we seek the op-timal partition of these objectives into k ≪ n groups, where each group comprises related objectives that can be trained together. This problem arises in applications such as robotics, control, and preference optimization in language models, where learning a single policy for all n objectives is sub-optimal as n grows. We introduce a two-stage procedure— meta-training followed by fine-tuning—to address this prob-lem. We first learn a meta-policy for all objectives using mul-titask learning. Then, we adapt the meta-policy to multiple randomly sampled subsets of objectives. The adaptation step leverages a first-order approximation property of well-trained policy networks, which is empirically verified to be accu-rate within a 2% error margin across various RL environ-ments. The resulting algorithm, PolicyGradEx, efficiently es-timates an aggregate task-affinity score matrix given a policy evaluation algorithm. Based on the estimated affinity score matrix, we cluster the n objectives into k groups by maxi-mizing the intra-cluster affinity scores. Experiments on three robotic control and the Meta-World benchmarks demonstrate that our approach outperforms state-of-the-art baselines by 
+
+16% on average, while delivering up to 26 × faster speedup relative to performing full training to obtain the clusters. Ablation studies validate each component of our approach. For instance, compared with random grouping and gradient-similarity-based grouping, our loss-based clustering yields an improvement of 19% . Finally, we analyze the generalization error of policy networks by measuring the Hessian trace of the loss surface, which gives non-vacuous measures relative to the observed generalization errors. 
+
+# Introduction 
+
+Reinforcement learning (RL) is a technique for sequen-tial decision-making in interactive environments, enabling agents to learn from feedback signals. A central challenge in RL is to develop agents that generalize across a wide range of tasks rather than solving a single task in isolation. For instance, a robot needs to master multiple related skills that share an underlying structure (Yu et al. 2020b). Prior work has studied this problem for two closely related set-tings. The first, multitask reinforcement learning, seeks to 
+
+Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+find a single policy that performs well across a given set of objectives (or tasks) (Sodhani, Zhang, and Pineau 2021; Joshi et al. 2025). The second, meta-reinforcement learning, aims to learn a meta-initialization that can rapidly adapt to unseen tasks (Finn, Abbeel, and Levine 2017; Rakelly et al. 2019). In both settings, however, the computational cost of evaluating and adapting a shared policy over many compet-ing objectives grows quickly with n.This paper studies the problem of designing a (scalable) multi-objective optimizer for reinforcement learning, with extensions to policy meta-adaptation. Learning from a di-verse set of tasks has been shown to improve generaliza-tion (Thrun and Pratt 1998; Cobbe et al. 2019; Yin et al. 2020). However, the main difficulty is modeling task rela-tionships and how different tasks transfer information to one another when trained together in a complex network (Wu, Zhang, and R´ e 2020). Existing approaches have considered measuring the similarity between gradient vectors across tasks to quantify task relationships (Yu et al. 2020a). No-tably, this gradient-similarity-based measure corresponds to pairwise task-affinity scores, whereas in practice it is natu-ral to model how multiple policies interact when trained to-gether (Li, Nguyen, and Zhang 2023). Exhaustively search-ing over all subsets of {1, 2, . . . , n } is computationally in-feasible: evaluating each subset typically requires a full training procedure, and the number of subsets grows expo-nentially in n (Caruana 1997). Greedy stepwise selection re-quires evaluation on O(n2) subsets, which is again impracti-cal for large n (Li et al. 2023; Li, Sharma, and Zhang 2024). To overcome these challenges, we introduce a scalable al-gorithm for estimating policy performance on arbitrary task subsets without full training. Our algorithm starts by learn-ing a single meta-policy across all tasks, then uses a first-order surrogate model—derived from a Taylor approxima-tion around the meta-policy to efficiently estimate the out-come of fine-tuning on any subset. This approach is analo-gous to a random ensemble (Zhang et al. 2025), which al-lows us to compute a pairwise task affinity matrix and parti-tion the n objectives into k subgroups using a convex clus-tering procedure. The resulting groups can be trained sepa-rately using any multitask or meta-RL optimizers. This over-all approach is illustrated in Figure 1. We validate our approach through extensive experiments on both Meta-World (Yu et al. 2020b) and robotic control The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+28609 𝑆 1 𝑆 2
+
+𝑆 𝑚 
+
+𝝅 𝜽 ⋆
+
+𝜋 ෡𝜃 (1)
+
+𝜋 ෡𝜃 (2)
+
+𝜋 ෡𝜃 (𝑚 )
+
+> Projected gradients
+
+𝑇 1
+
+𝑇 2
+
+𝑇 3
+
+𝑇 𝑛 
+
+> …
+
+𝑇 1 …
+
+𝑇 1
+
+𝑇 3
+
+𝑇 2
+
+𝑇 𝑛 
+
+𝐺 1
+
+𝐺 𝑘 
+
+> Compute a task affinity
+> score matrix
+> …
+
+Policy gradient estimation Meta -policy training 
+
+𝑇 1
+
+𝑇 2
+
+𝑇 𝑛 …  
+
+> Multitask
+> training
+> for all 𝑛
+> objectives
+> Random
+> projection of
+> gradients at 𝜋 𝜃 ⋆
+> for all tasks
+
+𝝅 𝜽 ⋆
+
+Multi -objective optimization via clustering     
+
+> Cluster the 𝑛 objectives
+> into 𝑘 subgroups
+
+𝑇 2 𝑇 3 𝑇 𝑛 Figure 1: An overview of our approach. Left: Run multitask training on all the tasks, T1, T 2, . . . , T n, and obtain to a meta-initialization policy πθ⋆ . Store the projected gradients of a surrogate loss with meta-policy θ⋆ for every transition from t =1, 2, . . . , N . Middle: Estimate policy adaptation performance on m task subsets using projected gradients as features in logistic regression. Right: Compute an n × n task affinity score matrix based on the estimated loss values. Lastly, run a clustering algorithm to group similar objectives, resulting in k subgroups G1, . . . , G k, each of which share the same policy within group. benchmarks (Towers et al. 2025). We find that the first-order approximation applied to the outputs of a policy net-work yields accurate estimates—typically within 2% error margin—while being up to 26 × faster than full training. Our algorithm consistently outperforms multitask and meta-RL baselines (Yang et al. 2020; Sodhani, Zhang, and Pineau 2021; Sun et al. 2022) by 16% on average, and surpasses baseline grouping strategies (such as random grouping or gradient-similarity based grouping) by 23% and 16% , re-spectively. These results highlight the effectiveness and scal-ability of our task-affinity estimation approach. Lastly, we conduct a theoretical analysis of the generaliza-tion errors of policy networks. The main technical approach is to compute (and measure) the trace of the Hessian of the loss surface (Ju, Li, and Zhang 2022; Ju et al. 2023; Zhang, Li, and Ju 2024). See Theorem 1 for the precise statement. When evaluated on the above RL environments, we find that the Hessian-based generalization bounds match the scale of empirical generalization errors (see Figure 2). In summary, the contributions of this paper are three-fold. (1) We propose a first-order gradient estimation al-gorithm to estimate policy performance on any given task subset efficiently. Based on this gradient estimation, we de-sign a scalable algorithm that computes an n × n task affin-ity score matrix and partitions n objectives into k clus-ters via convex relaxation. (2) We conduct extensive exper-iments to validate the efficiency of our approach for sev-eral multi-objective and meta reinforcement learning bench-marks. The code for reproducing our results can be accessed at: https://github.com/VirtuosoResearch/PolicyGradEx. (3) Finally, we show non-vacuous bounds on the generalization error of the loss surface of policy networks via a PAC-Bayes analysis, and report empirical estimates of the Hessian trace. 
+
+# Problem Setup 
+
+We consider a Markov decision process in which an agent must learn a set of n tasks T = {T1, T 2, . . . , T n}. Each task Ti is modeled as a Markov decision process (MDP) 
+
+Ti = ( S, A, P, P 0, r i, γ ), where all tasks share the same state space S, action space A, transition model P , and initial-state distribution P0, discount factor γ, but differ in their reward functions ri. For a policy πθ with parameters θ,we define its task-specific expected reward as 
+
+Ri(θ) = Eπθ
+
+" ∞X
+
+> t=0
+
+γt ri(st, a t)
+
+#
+
+.
+
+In multi-objective RL, the goal is to learn a single pol-icy that performs well across all tasks. A natural aggregate objective is the average reward 
+
+RT (θ) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+Ri(θ).
+
+More generally, for any subset S ⊆ T , we define 
+
+RS (θ) = 1
+
+|S|
+
+X
+
+> Ti∈S
+
+Ri(θ).
+
+Pairwise task interactions can be characterized through this notion. For example, R{i,j }(θ) captures the joint per-formance on tasks Ti and Tj , providing a meaningful mea-sure of their affinity. A key challenge in multitask learning is negative transfer , where conflicting gradients from two tasks degrade optimization efficiency and final performance (Wu, Zhang, and R´ e 2020). This occurs when 
+
+R{i,j }(θ) < (Ri(θ) + Rj (θ)) /2,
+
+indicating that training the pair together is detrimental com-pared to training each task separately. Our goal is to model the underlying relationship between the n tasks, which can be used to group similar tasks or se-lect a small representative subset for meta-learning. How-ever, searching for the optimal partition requires evaluating 
+
+RS (θ) for multiple subsets S ⊆ T , since the number of pos-sible subsets is 2n. Greedy stepwise selection again requires evaluating O(n2) subsets, where each evaluation typically involves a full RL training or adaptation procedure (Li et al. 2023, 2024). This is again intractable for large n.To address this challenge, we introduce an efficient gradient-estimation algorithm to approximate the loss of any subset trained on a policy network without repeated training . This enables us to scale up multi-objective RL to a large number of objectives n, as we will describe next. 28610 Our Approach 
+
+This section describes our proposed algorithm for multi-objective reinforcement learning. The algorithm consists of two main stages. We first find a meta-policy θ⋆ trained us-ing all tasks. Then, compute a surrogate model to estimate the adapted performance of θ⋆ on a subset of {1, 2, . . . , n }.This surrogate modeling framework enables efficient esti-mation of subset combinations without repeated training. In the second stage, we estimate the fine-tuning performance 
+
+RSi on m randomly chosen subsets S1, S 2, . . . , S m of T ,for every 1 ≤ i ≤ m. For each subset, we solve a weighted logistic regression problem to estimate the adaptation pa-rameters ˆθSi and then estimate an approximate loss. Impor-tantly, we run this second step using precomputed gradients and functional values at θ⋆ from the first stage. The key tech-nique that enables this gradient estimation is a first-order approximation property of the policy reward that we also empirically verify for various RL settings. 
+
+Surrogate Modeling 
+
+Our goal is to estimate the output of a policy update start-ing from the meta-initialization θ⋆. To do so efficiently, we linearize the policy gradient objective around θ⋆ and refor-mulate the one-step update as a weighted logistic regression problem. We begin with the standard policy gradient objective used in algorithms such as Proximal Policy Optimization (PPO) (Schulman et al. 2017): 
+
+J(θ) = Et
+
+h
+
+rt(θ) ˆAt
+
+i
+
+, where rt(θ) = πθ (at|st)
+
+πθ⋆ (at|st)
+
+is the probability ratio and ˆAt is the estimated reward for the state-action pair (st, a t) at time t. We perform a first-order Taylor expansion of the log-probability log πθ (at|st)
+
+around the initial parameters θ⋆. Let ∆θ = θ −θ⋆ and define the gradient feature vector 
+
+gt = ∇ log πθ (at|st) θ=θ⋆ .
+
+The first-order Taylor expansion of the above log-probability-ratio is given by: 
+
+log rt(θ) = log πθ (at|st) − log πθ⋆ (at|st)= g⊤ 
+
+> t
+
+∆θ + ϵ, (1) where ϵ refers to the approximation error of the expansion. Provided that ∆θ is small relative to θ⋆, we have another approximation as (with an error of (1 − rt)2/2)
+
+rt(θ) ≈ 1 + log rt(θ). (2) By applying equations (1) and (2) back to J(θ), we have: 
+
+J(θ) ≈ Et
+
+h ˆAt(1 + g⊤ 
+
+> t
+
+∆θ)
+
+i
+
+.
+
+Since Et[ ˆAt] does not depend on ∆θ, maximizing J(θ) re-duces to maximizing the following which is linear in θ:
+
+Et[ ˆAtg⊤ 
+
+> t
+
+(θ − θ⋆)] .
+
+Surrogate loss. Next, we turn the above reward maximiza-tion on J(θ) into a weighted binary classification problem. For every (st, a t, ˆAt), for any t ∈ { 1, 2, . . . , N }, define: Algorithm 1: Policy gradient estimation (P OLICY GRAD EX)
+
+Input: m random subsets from T , S1, S 2, . . . , S m
+
+Require: Initial meta-policy parameter θ⋆ ∈ Rp; Number of episodes N ; Projection dimension d 
+
+> 1:
+
+πθ⋆ ← Setup the meta-policy for all tasks in T 
+
+> 2:
+
+S1, S 2, . . . , S m ← m random subsets of T with size α 
+
+> 3:
+
+P ← A p by d isotropic Gaussian random projection matrix  
+
+> 4:
+
+for t = 1 , . . . , N do  
+
+> 5:
+
+for Ti ∈ T do  
+
+> 6:
+
+gi,t ← P ⊤∇πθ⋆ (at|st) 
+
+> 7:
+
+wi,t ← | ˆAt| 
+
+> 8:
+
+yi,t ← sign ( ˆAt) 
+
+> 9:
+
+end for  
+
+> 10:
+
+end for  
+
+> 11:
+
+for j = 1 , . . . , m do  
+
+> 12:
+
+∆ˆθd ← arg min ∆θ∈Rd ˆLSj (θ⋆ + P ∆θ) 
+
+> 13:
+
+ˆθ(j) ← θ⋆ + P ∆ˆθd 
+
+> 14:
+
+ˆf (Sj ) ← − ˆLSj (ˆθ(j)) 
+
+> 15:
+
+end for  
+
+> 16:
+
+Return ˆf (S1), . . . , ˆf (Sm)
+
+• Target binary label yt = sign ( ˆAt) ∈ {− 1, +1 }, indicat-ing if the action was better or worse than zero. • Classifier score zt = g⊤ 
+
+> t
+
+∆θ, linear score for the update. • Sample weight wt = | ˆAt|, magnitude of the reward. This yields a per-sample surrogate loss as follows: 
+
+ℓ(gt, y t, w t; ∆ θ) = wt · log(1 + ( −yt(g⊤ 
+
+> t
+
+∆θ))) .
+
+For a given task subset S, let DS denote the set of tra-jectory samples (gi,t , y i,t , w i,t ) from all the tasks Ti ∈ S,across all the samples (with an extra index i). The average loss for the subset S is defined by the average loss over all the samples from all the tasks within the subset S:
+
+ˆLS (θ) = 1
+
+|D S |
+
+X
+
+> (g,y,w )∈D S
+
+ℓ(g, y, w ; θ). (3) Minimizing this loss over ∆θ = θ − θ⋆ yields the estimated adaptation for the subset S from the meta-policy θ⋆.
+
+Random projection. Since the gradient vectors gi,t ∈ Rp
+
+may be high-dimensional (with p in the order of millions), we apply random projections to reduce the dimension down to a few hundred (in practice, d = 400 suffices). This pro-jection provably preserves the pairwise similarity between all pairs of gradient vectors via the Johnson–Lindenstrauss Lemma (Johnson and Lindenstrauss 1984). We sample a random projection matrix P ∈ Rp×d, where d ≪ p and every entry of P is independently drawn from a Gaussian 
+
+N (0 , d −1). We project the high-dimensional gradients to a 
+
+d-dimensional space as 
+
+˜gi,t = P ⊤gi,t .28611 Distance MT10 CartPole Highway Lunarlander             
+
+> 0.1% 0.01 ±0.01 %0.12 ±0.14 %0.02 ±0.02 %0.06 ±0.01 %0.5% 0.43 ±0.73 %0.73 ±0.10 %0.11 ±0.09 %0.03 ±0.02 %1.0% 0.32 ±0.56 %0.98 ±0.65 %2.04 ±0.58 %0.48 ±0.01 %
+
+Table 1: We empirically find that the approximation error of 
+
+ϵ is negligible for several interactive RL environments. We report the mean and standard deviation of the approximation error across 10 random subsets. We defer a detailed descrip-tion of the setup to the experiments section. Then, we solve a logistic regression problem in the d-dimensional space with θd ∈ Rd:
+
+bθd ← arg min 
+
+> θd∈Rd
+
+1
+
+|D Sj |
+
+X
+
+> (g,y,w )∈D Sj
+
+ℓ(˜ g, y, w ; θd), (4) for any j = 1 , 2, . . . , m . Finally, we turn the solution from dimension d back to the original dimension p as 
+
+bθ(j) = θ⋆ + P bθd.
+
+The complete description of this surrogate modeling proce-dure is provided in Algorithm 1. 
+
+Evaluation of First-Order Policy Approximation 
+
+A critical assumption is the accuracy of the approximation in equation (1). Here we observe that the approximation error remains negligible for θ around θ⋆. We evaluate this approx-imation by measuring the relative residual sum of squares (RSS) error across multiple RL environments. Specifically, we compute: 
+
+ log πθ (at|st) − log πθ⋆ (at|st) − g⊤ 
+
+> t
+
+∆θ2
+
+(log πθ (at|st)) 2 ,
+
+where ∆θ = θ − θ⋆ and gt = ∇ log πθ (at|st) θ=θ⋆ .We begin by verifying that adapted policies remain close to the meta-initialization θ⋆. Using ten randomly sampled subsets, we evaluate the relative distance ∥θ−θ⋆∥F 
+
+> ∥θ⋆∥F
+
+, confirm-ing that adaptation stays within a local neighborhood where the approximation is valid. We report the RSS error measured on MT10 from the MetaWorld benchmark, CartPole, LunarLander, and High-way in Table 1. In these environments, the policy, a four-layer MLP, is trained to perform various control tasks by selecting an action based on its output given the states. We sample 2048 steps per task to obtain the gradients. The re-sults are averaged over 10 randomly sampled subsets of size 
+
+5. For a proper initialization θ⋆, the approximation error is less than 2% when the updated policy θ remains close to the initial policy. This verifies that the first-order expansion pro-vides a sufficiently accurate local model for surrogate-based policy estimation. The approximation error increases from less than 2% to up to 10% when the policy’s parameter dis-tance from initialization grows to around 5% , defining the boundaries of our method’s applicability. Algorithm 2: Clustering related objectives into subgroups using the task affinity score matrix 
+
+Input: n tasks T ; number of desired clusters k
+
+Require: Number of subsets m with size α; Regularization parameter λ; Number of episodes N ; Projected dimension d
+
+Output: A disjoint partition of {1, 2, . . . , n } into k groups  
+
+> 1:
+
+θ⋆ ← Train a meta-initialization policy with T 
+
+> 2:
+
+S1, . . . , S m ← Sample m subsets of size α from T 
+
+> 3:
+
+ˆf (S1), ˆf (S2), . . . , ˆf (Sm) ← Apply P OLICY GRAD EX
+
+with (S1, S 2, . . . , S m; θ⋆; N, d ) 
+
+> 4:
+
+U ← An n × n affinity score matrix via equation (5)  
+
+> 5:
+
+X ← Solve convex relaxation program (7) (in the Ap-pendix) with U and regularization parameter λ 
+
+> 6:
+
+G1, G 2, . . . , G k ← Round X into k subgroups 
+
+Task Affinity Grouping 
+
+We next quantify the pairwise relationships between tasks by constructing a task affinity matrix U ∈ Rn×n, where each entry Ui,j captures the collaborative behavior between tasks 
+
+Ti and Tj . Larger values indicate that jointly fine-tuning on the two tasks produces higher surrogate performance. A naive approach is to repeatedly train a model for all the  n
+
+> 2
+
+ subsets, which is impractical. Instead, we sample m
+
+random subsets {S1, . . . , S m} and use the surrogate model to compute their estimated performance ˆf (Si) = − ˆLSi (ˆθi),for all i = 1 , 2, . . . , m based on Algorithm 1. We then com-pute an n × n task affinity score matrix as follows: 
+
+Ui,j = 1
+
+ni,j 
+
+X 
+
+> 1≤l≤m:{Ti,T j}∈ Sl
+
+ˆf (Sl), (5) for all i and j in {1, 2, . . . , n }, where ni,j is the number of sampled subsets containing both Ti and Tj . As a remark, provided that m = O(n2), then ni,j must be nonzero with high probability, for all i and j in {1, 2, . . . , n }.We then cluster tasks by solving a convex optimization problem that maximizes intra-cluster affinity, following a trace-regularized relaxation (Awasthi et al. 2015). This step is very fast since it runs on an n by n matrix with n being at most several hundred, which can typically be solved in just a few seconds. Moreover, this procedure can be repeated with different values of λ to determine the optimal number of clusters k for downstream performance. For brevity, we defer a complete description of the convex relaxation pro-gram to the Appendix. The whole procedure is described in Algorithm 2. 
+
+# Experiments 
+
+We conduct a comprehensive set of experiments to validate POLICY GRAD EX and its application across various multi-objective reinforcement learning benchmarks. Our evalua-tion is designed to answer two key questions: (1) Does our surrogate model accurately and efficiently approximate the outcome of full policy training on various task subsets? (2) Do task groups identified by our algorithm lead to superior performance in downstream multitask and meta-RL evalua-tions compared to state-of-the-art and heuristic baselines? 28612 RL Environment Meta-World CartPole Highway LunarLander Multi-task training (Yu et al. 2020b) 71 .3±1.2% 145 .9±9.0 140 .0±4.6 53 .8±14 .6
+
+Soft modularization (Yang et al. 2020) 82 .0±1.1% 139 .3±9.5 141 .3±3.5 66 .1±13 .0
+
+PaCo (Sun et al. 2022) 73 .1±1.1% 144 .5±5.2 136 .6±6.4 62 .6±11 .4
+
+CARE (Sodhani, Zhang, and Pineau 2021) 84 .0±1.8% / / /Randomly assign each task into k groups 58 .2±6.2% 144 .1±10 .1 143 .4±5.4 73 .1±11 .7
+
+Gradient-similarity-based grouping (Yu et al. 2020a) 69 .6±1.9% 142 .0±8.2 135 .6±7.6 80 .8±6.9
+
+Algorithm 2 (This paper) 94 .0±2.8% 159 .2±3.8 153 .5±7.8 82 .8±6.9
+
+Table 2: Comparison of our approach with several baseline methods. We report the average success rate on the Meta-World benchmark and the rewards (after adaptation) for three robotic control environments. We note that CARE does not apply to the control tasks in the meta-RL setting. We report the mean and standard deviation from five runs. Our finding shows that our surrogate modeling approach achieves high accuracy in estimating multitask RL perfor-mance, with over 0.73 normalized mutual information rel-ative to the ground-truth, while reducing the number of floating-point operations (FLOPs) by up to 26 ×. In down-stream evaluations, P OLICY GRAD EX outperforms existing multitask optimizers by 19% in multitask RL benchmarks and achieves a 13% improvement in the meta-RL setting. Furthermore, we compare our task affinity grouping al-gorithm to random grouping and gradient-similarity based grouping, showing that P OLICY GRAD EX achieves a 19% 
+
+improvement over both. Ablation analysis validates the use of random projections and the choice of k in the algorithm. 
+
+Experimental Setup 
+
+Environments. We evaluate our method on two types of benchmarks. First, we use MT10 from the Meta-World benchmark (Yu et al. 2020b), which consists of 10 diverse robotic manipulation tasks. While these tasks share common state and action spaces, their reward functions and dynamics vary (e.g., a goal position in one task may correspond to an object’s position in another). Second, we use three classic control environments from Gymnasium (Towers et al. 2025) and MO-Gymnasium (Felten et al. 2023): CartPole, High-way, and LunarLander. For each, we generate a distribution of 10 source tasks by altering key physical parameters (e.g., pole length for CartPole, traffic density for Highway, and gravity for LunarLander). 
+
+Baselines. We compare our method against two categories of baselines. (1) Multi-objective RL baselines: These repre-sent standard and state-of-the-art multitask approaches for multitasks training: a single policy trained on all tasks; Soft Modularization (Yang et al. 2020), which employs a routing-based selection mechanism; PaCo (Sun et al. 2022), an en-semble method that composes policies from a shared pa-rameter subspace; and CARE (Sodhani, Zhang, and Pineau 2021), which performs inference using contextual informa-tion to adapt policies. (2) Grouping baselines: These meth-ods use the same number of groups as our approach but em-ploy different heuristic grouping procedures. This allows us to isolate the benefit of our affinity modeling. We include random grouping (where tasks are randomly assigned to k
+
+groups) and gradient-similarity-based grouping (where tasks are clustered based on the cosine similarity of their respec-# MLP layers Meta-World LunarLander Speedup 
+
+2 0.76 0.73 21 ×
+
+4 0.76 0.73 24 ×
+
+8 0.76 0.73 26 ×
+
+Table 3: Normalized Mutual Information (NMI) between es-timated and actual clusters, measured on two environments trained with a multi-layer perceptron (MLP). In the last col-umn, the speedup is measured as the ratio of the FLOP count between full training and P OLICY GRAD EX.tive policy gradients). 
+
+Implementations. For the MT10 benchmark, we group the 
+
+n = 10 tasks into k = 3 subsets and train a separate policy for each subgroup using soft modularization. We measure performance using the average success rate per task. For the control environments, we form the meta-training set by randomly selecting one from each task group provided by P OLICY GRAD EX. We then use MAML (Finn, Abbeel, and Levine 2017) to train a meta-policy on the assigned tasks. The final performance is measured by the average reward after 200 adaptation steps on 50 unseen target tasks. All ex-periments are conducted using PyTorch on an Ubuntu server with an Intel Xeon E5-2623 CPU and an NVIDIA Quadro RTX 6000 GPU. 
+
+Results for Loss Function Estimation 
+
+We first evaluate both the approximation accuracy and com-putational cost of P OLICY GRAD EX. We establish ground-truth subset clusters based on task-affinity scores derived from rewards obtained by training policies on different task subsets. We then use Normalized Mutual Information (NMI) to quantify the accuracy of the subsets estimated by P OLI -
+
+> CY
+
+GRAD EX against this ground truth. As shown in Table 3, on both MetaWorld and LunarLan-der, P OLICY GRAD EX identifies subset clusters that achieve over 0.73 similarity to those obtained from full-policy train-ing, while reducing FLOPs by a factor of 26 ×. By con-trast, the NMI under random clustering is approximately 0.2.Moreover, the relative error between the estimated task affin-ity matrix and the ground-truth matrix is at most 0.2.28613 0 20 40 60 80 100                                               
+
+> Iterations
+> 0
+> 90
+> 180
+> Value
+> Single -task (MetaWorld) 020 40 60 80 100
+> Iterations
+> 0
+> 80
+> 160
+> Value
+> Multi -task (MetaWorld) 020 40 60 80 100
+> Iterations
+> 0
+> 50
+> 100
+> Value
+> Ours (MetaWorld) 020 40 60 80 100
+> Iterations
+> 10 −3
+> 10 −2
+> 10 −1
+> 10 0
+> Value
+> Single -task (Control)
+> Hessian Error 020 40 60 80 100
+> Iterations
+> 10 −3
+> 10 −2
+> 10 −1
+> 10 0
+> Value
+> Multi -task (Control) 020 40 60 80 100
+> Iterations
+> 10 −3
+> 10 −2
+> 10 −1
+> 10 0
+> Value
+> Ours (Control) (a) Illustration of Hessian traces and generalization errors during training 13610
+> α
+> 0
+> 50
+> Errors (MetaWorld) 13610
+> α
+> 1.0
+> 2.0
+> 3.0Errors ×10 −3(Control) 13610
+> α
+> 100
+> 150
+> 200 Traces (MetaWorld) 13610
+> α
+> 0.2
+> 0.3
+> 0.4Traces (Control) (b) Varying subset size αin Algorithm 2
+
+Figure 2: Illustrating the Hessian trace measurements and empirical generalization errors with respect to the policy network. Figure 2a: Showing that the Hessian trace is comparable in scale to the observed generalization errors, tested on Meta-World and a control task. Figure 2b: Showing that in a Meta-World environment, the generalization error reaches the highest when the subset size α = 3 , suggesting negative transfer among a small set of tasks. In the meta-RL control task, the generalization performance monotonically improves with the addition of more tasks in each group. 
+
+Results for Multi-Objective RL 
+
+We report the evaluation results in Table 2. On the Meta-World benchmark, our approach improves the average suc-cess rate by 21% compared to multitask optimizers. It also achieves a 62% improvement over training with random groups and a 35% improvement over training with gradient-similarity-based groups. This observation suggests that ran-dom grouping and gradient similarity-based grouping in Meta-World tasks can result in negative transfer. In contrast, POLICY GRAD EX selects task groups with positive transfer-ability, thereby improving the final success rate. Next, we evaluate the ability of P OLICY GRAD EX to se-lect a representative task subset for meta-learning in the three control RL environments. Using MAML as the meta-learner, our approach improves the final adapted reward by 
+
+7% compared to multitask optimizers. Finally, we compare with two baseline meta-training set-tings: training on all available source tasks and training on randomly grouped tasks. Our approach achieves a 13% im-provement over both baselines and a 9% improvement com-pared to gradient-similarity-based grouping. 
+
+Generalization Error Measurements via Hessians 
+
+Next, we analyze the generalization behavior. by evaluating a sharpness measure based on the Hessian trace of the test loss for the policy network and the policy gradient loss. A smaller trace value suggests a flatter loss landscape. We im-plement Hutchinson’s estimator and leverage a faster version of this estimator (Meyer et al. 2021) to estimate the Hessian trace of RL models. We compute the policy gradient loss from the target tasks and measure the difference between the training loss and test loss as the generalization error. Results for the largest eigenvalue of the Hessian are similar. First, we evaluate the Hessian trace and the policy gener-alization error between single-task training, multitask train-ing on ten tasks, and training on a task group selected by POLICY GRAD EX. We begin training from the initial policy for 100 iterations, each with 2048 steps. Figure 2a shows the dynamics of the trace of the Hes-sian and the generalization errors during training. We find that they both follow a qualitatively similar trend. Next, as shown in Figure 2b, we find that single-task training yields a very low generalization error in the Meta-World bench-mark, indicating that a single policy can solve an individual task. However, when the task count reaches three, the gen-eralization error sharply increases, suggesting that a single policy struggles to perform well across multiple tasks. As the number of tasks increases, the generalization error and the Hessian trace decrease, indicating the positive transfer among tasks. In the control environments, we observe that both the generalization error and the Hessian trace decrease as α increases. 
+
+Ablation Analysis 
+
+Given that each task is solvable in the Meta-World bench-mark, our goal is to determine the minimum number of groups k required to maximize the success rate. We vary k
+
+from 1 to 4, observing average success rates of 94 .0% when 
+
+k = 3 , compared to 89 .5% when k = 2 and 95 .1% when 
+
+k = 4 . Thus, we report the final results with three groups. For the control environments, we vary k from 1 to 5. We find that the success rate stabilizes after k reaches 3, so we report results using three groups. For the random projection dimension d, we vary it from 
+
+200 to 1000 and observe that values beyond 400 yield mini-mal gains, so we fix d = 400 .
+
+# Generalization Error Analysis via Hessians 
+
+In this section, we present a generalization error analysis for the RL setting described above. We present a Hessian-based technique to quantify generalization errors, applicable to any 28614 kind of policy network used in RL training. We first describe the tools that we will use. Given a data distribution of D, let 
+
+L(fW ) = E
+
+> (x,y )∼D
+
+[ℓ(fW (x), y )] 
+
+denote the expected loss of an input sample x, y . Let ˆL(fW )
+
+denote the empirical loss given n independent samples 
+
+(x1, y 1), (x2, y 2), . . . , (xn, y n) sampled from D:
+
+ˆL(fW ) = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+ℓ(fW (xi), y i).
+
+Let W ⊆ Rd denote the weight space of W . Assume that the weighted Hessian along x is bounded by a fixed constant 
+
+H that does not grow with d or n:
+
+H := sup  
+
+> W∈W
+
+
+
+W ⊤ E
+
+> (x,y )∼D
+
+[∇2ℓ(fW (x), y )] + W
+
+
+
+,
+
+where [∇2ℓ(fW (x), y )] + means that we truncate the nega-tive eigen-directions of the Hessian to zero. Then, we have the following generalization error bound, which applies uni-formly to the hypothesis space {fW : W ∈ W} .
+
+Theorem 1. Assume that the loss function ℓ is bounded be-tween 0 and C for a fixed constant C > 0 on the data distribution D. Suppose ℓ(fW (·), ·) is twice-differentiable in W and the Hessian matrix ∇2ℓ(fW (·), ·) is Lipschitz-continuous within the weight space W. Suppose there exists a fixed bound H on the Hessian trace over any W ∈ W .Then, for any W in W, any ϵ > 0 small enough, and any small δ > 0, with probability at least 1 − δ over the random-ness of n samples, we have: 
+
+L(fW ) ≤ (1 + ϵ) ˆL(fW ) + (1 + ϵ)
+
+r C · H 
+
+n + ϵ, (6) 
+
+where ϵ = O(n−3/4 log( δ−1)) denotes the error term. 
+
+The proof of Theorem 1 is based on a PAC-Bayes analysis (Ju, Li, and Zhang 2022; Zhang, Li, and Ju 2024), and the details are in the Appendix. In particular, a new aspect of this result is that we use an anisotropic perturbation in the prior and posterior distributions. We build on a linear PAC-Bayes bound (See Theorem 2 in the Appendix), and optimize the noise distribution to obtain the H measure. In Figure 2, we visualize the Hessian trace on the Meta-World and the control tasks. Our results show that the Hes-sian trace is comparable in scale to the observed generaliza-tion errors. In the Meta-World benchmark, the generaliza-tion error increases as the number of tasks increases from one to three, suggesting negative transfer. As more tasks are added, the error decreases, indicating positive transfer. 
+
+# Related Work 
+
+Multi-objective optimization for reinforcement learning. 
+
+Early works on multitask learning use hard parameter shar-ing, where a single neural network backbone is shared among all tasks, with only the final layers or heads be-ing task-specific (Yu et al. 2020b). A canonical example is the multi-head Soft Actor-Critic (SAC) architecture, which serves as a common baseline (Yu et al. 2020b). The multitask objective provides implicit regularization across multiple tasks trained together in a shared network (Wu, Zhang, and R´ e 2020), which can be formalized in a high-dimensional regression setting (Yang et al. 2025). Training the model to learn representations useful across a diverse set of tasks helps prevent overfitting. A deeper anal-ysis of the regularization effect behind multitask RL is an interesting question for future work. 
+
+Data attribution and model interpretability. Another line of work involves data modeling, which aims to trace a model’s predictions back to its training data. One method is to retrain the model on a different subset of the dataset and estimate the Shapley value of each sample (Ghorbani and Zou 2019). A commonly used technique is influence func-tions (Koh and Liang 2017), which use Hessians to approx-imate the effect of removing a sample. Datamodels (Ilyas et al. 2022) finds that a linear regression method can accu-rately approximate the outcome of deep nets trained with a subset of samples on computer vision tasks. Li, Nguyen, and Zhang (2023) introduce a linear surrogate model for multitask learning and analyze the sample complexity of linear surrogate models. TRAK (Park et al. 2023) further demonstrates that the approximate solution of linear regres-sion computed with projected gradients delivers comparable results to the original linear model for ImageNet, CLIP, and BERT. Our work contributes to this literature by applying attribution methods to design RL algorithms. 
+
+# Conclusion 
+
+This paper introduces an efficient algorithm for multi-objective reinforcement learning. The overall approach works by first training a meta-policy via multitask learning. Then, use a gradient-estimation algorithm to adapt this meta-policy to multiple subsets of training objectives. The key ob-servation is that a policy can effectively adapt across differ-ent task subsets through a first-order approximation with a proper initialization. Leveraging this, we propose a surro-gate model to approximate the actual training performance of the policy, which enabled us to derive task affinities and subsequently cluster similar tasks into groups. In extensive reinforcement learning tasks, our method consistently im-proves performance. Lastly, we measure sharpness via Hes-sians to analyze generalization in multi-objective RL. We hope this work inspires further studies on designing prin-cipled methods for multi-objective reinforcement learning and quantifying generalization in policy learning algorithms. Further applying our approach to broader RL settings is an-other promising direction for future work. 
+
+# Acknowledgments 
+
+Thanks to the anonymous referees for their constructive feedback. This work is partially funded by NSF award IIS-2412008. Any views or opinions expressed herein are solely those of the authors listed, and may differ from those ex-pressed by NSF. 28615 References 
+
+Awasthi, P.; Bandeira, A. S.; Charikar, M.; Krishnaswamy, R.; Villar, S.; and Ward, R. 2015. Relax, no need to round: Integrality of clustering formulations. In Innovations in The-oretical Computer Science , 191–200. Caruana, R. 1997. Multitask learning. Machine Learning ,28(1): 41–75. Cobbe, K.; Klimov, O.; Hesse, C.; Kim, T.; and Schulman, J. 2019. Quantifying generalization in reinforcement learning. In International Conference on Machine Learning , 1282– 1289. Felten, F.; Alegre, L. N.; Now´ e, A.; Bazzan, A. L. C.; Talbi, E. G.; Danoy, G.; and Silva, B. C. da. 2023. A Toolkit for Re-liable Benchmarking and Research in Multi-Objective Re-inforcement Learning. In Advances in Neural Information Processing Systems .Finn, C.; Abbeel, P.; and Levine, S. 2017. Model-agnostic meta-learning for fast adaptation of deep networks. In Inter-national Conference on Machine Learning , 1126–1135. Ghorbani, A.; and Zou, J. 2019. Data shapley: Equitable val-uation of data for machine learning. In International Con-ference on Machine Learning , 2242–2251. Ilyas, A.; Park, S. M.; Engstrom, L.; Leclerc, G.; and Madry, A. 2022. Datamodels: Predicting predictions from training data. International Conference on Machine Learning .Johnson, W. B.; and Lindenstrauss, J. 1984. Extensions of Lipschitz mappings into a Hilbert space. Contemporary mathematics , 26(189-206): 1. Joshi, V.; Xu, Z.; Liu, B.; Stone, P.; and Zhang, A. 2025. Benchmarking massively parallelized multi-task reinforce-ment learning for robotics tasks. Reinforcement Learning Journal .Ju, H.; Li, D.; Sharma, A.; and Zhang, H. R. 2023. Gener-alization in graph neural networks: Improved pac-bayesian bounds on graph diffusion. In International conference on artificial intelligence and statistics , 6314–6341. Ju, H.; Li, D.; and Zhang, H. R. 2022. Robust fine-tuning of deep neural networks with hessian-based generalization guarantees. In International Conference on Machine Learn-ing , 10431–10461. Koh, P. W.; and Liang, P. 2017. Understanding black-box predictions via influence functions. In International Confer-ence on Machine Learning , 1885–1894. Li, D.; Ju, H.; Sharma, A.; and Zhang, H. R. 2023. Boost-ing multitask learning on graphs through higher-order task affinities. In Proceedings of the 29th ACM SIGKDD Con-ference on Knowledge Discovery and Data Mining , 1213– 1222. Li, D.; Nguyen, H. L.; and Zhang, H. R. 2023. Identification of negative transfers in multitask learning using surrogate models. Transactions on Machine Learning Research .Li, D.; Sharma, A.; and Zhang, H. R. 2024. Scalable Mul-titask Learning Using Gradient-based Estimation of Task Affinity. In Proceedings of the 30th ACM SIGKDD Con-ference on Knowledge Discovery and Data Mining , 1542– 1553. Li, D.; Zhang, Z.; Wang, L.; and Zhang, H. 2024. Scalable Fine-tuning from Multiple Data Sources: A First-Order Ap-proximation Approach. In Findings of the Association for Computational Linguistics: EMNLP 2024 , 5608–5623. Meyer, R. A.; Musco, C.; Musco, C.; and Woodruff, D. P. 2021. Hutch++: Optimal stochastic trace estimation. In 
+
+Symposium on Simplicity in Algorithms (SOSA) , 142–155. SIAM. Park, S. M.; Tsvetkov, Y.; K¨ olter, J. Z.; and Salakhutdinov, R. 2023. Trak: Attributing model behavior at scale. In Inter-national Conference on Machine Learning , 27457–27481. Rakelly, K.; Zhou, A.; Finn, C.; Levine, S.; and Quillen, D. 2019. Efficient off-policy meta-reinforcement learning via probabilistic context variables. In International Conference on Machine Learning , 5331–5340. Schulman, J.; Wolski, F.; Dhariwal, P.; Radford, A.; and Klimov, O. 2017. Proximal policy optimization algorithms. 
+
+arXiv preprint arXiv:1707.06347 .Sodhani, S.; Zhang, A.; and Pineau, J. 2021. Multi-task reinforcement learning with context-based representations. In International Conference on Machine Learning , 9767– 9779. Sun, S.; Shi, H.; Zhao, Z.; Wang, X.; and Zhou, J. 2022. PaCo: Parameter-compositional multi-task reinforcement learning. In International Conference on Learning Repre-sentations .Thrun, S.; and Pratt, L. 1998. Learning to learn. Springer. Towers, M.; Kwiatkowski, A.; Terry, J.; Balis, J. U.; De Cola, G.; Deleu, T.; Goul˜ ao, M.; Kallinteris, A.; Krim-mel, M.; KG, A.; Perez-Vicente, R.; Pierr´ e, A.; Schulhoff, S.; Tai, J. J.; Tan, H.; and Younis, O. G. 2025. Gymna-sium: A standard interface for reinforcement learning envi-ronments. Advances in Neural Information Processing Sys-tems Datasets and Benchmarks .Wu, S.; Zhang, H. R.; and R´ e, C. 2020. Understanding and Improving Information Transfer in Multi-Task Learning. In 
+
+International Conference on Learning Representations .Yang, F.; Zhang, H. R.; Wu, S.; Re, C.; and Su, W. J. 2025. Precise High-Dimensional Asymptotics for Quantify-ing Heterogeneous Transfers. Journal of Machine Learning Research , 26(113): 1–88. Yang, R.; Xu, H.; Wu, Y.; and Wang, X. 2020. Multi-task reinforcement learning with soft modularization. In 
+
+Advances in Neural Information Processing Systems , vol-ume 33, 4767–4777. Yin, M.; Tucker, G.; Zhou, M.; Levine, S.; and Finn, C. 2020. Meta-learning without memorization. International Conference on Learning Representations .Yu, T.; Kumar, S.; Gupta, A.; Levine, S.; Hausman, K.; and Finn, C. 2020a. Gradient surgery for multi-task learning. In Advances in Neural Information Processing Systems , vol-ume 33, 5822–5833. Yu, T.; Quillen, D.; He, Z.; Julian, R.; Hausman, K.; Finn, C.; and Levine, S. 2020b. Meta-world: A benchmark and evaluation for multi-task and meta reinforcement learning. In Conference on Robot Learning , 1094–1100. 28616 Zhang, H. R.; Li, D.; and Ju, H. 2024. Noise Stability Op-timization for Finding Flat Minima: A Hessian-based Reg-ularization Approach. Transactions on Machine Learning Research .Zhang, Z.; Zhang, Z.; Li, D.; Wang, L.; Dy, J.; and Zhang, H. R. 2025. Linear-Time Demonstration Selection for In-Context Learning via Gradient Estimation. In Proceedings of the Conference on Empirical Methods in Natural Lan-guage Processing , 16470–16488. 28617

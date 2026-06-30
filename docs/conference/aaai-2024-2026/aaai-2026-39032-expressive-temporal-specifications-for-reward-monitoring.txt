@@ -1,0 +1,504 @@
+Title: Expressive Temporal Specifications for Reward Monitoring
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/39032/42994
+
+Number of Pages: 9
+
+Markdown Content:
+# Expressive Temporal Specifications for Reward Monitoring 
+
+# Omar Adalat 1, Francesco Belardinelli 1
+
+> 1
+
+Imperial College London o.adalat24@imperial.ac.uk, francesco.belardinelli@imperial.ac.uk 
+
+Abstract        
+
+> Specifying informative and dense reward functions remains a pivotal challenge in Reinforcement Learning, as it directly af-fects the efficiency of agent training. In this work, we harness the expressive power of quantitative Linear Temporal Logic on finite traces to synthesize reward monitors that generate a dense stream of rewards for runtime -observable state trajec-tories. By providing nuanced feedback during training, these monitors guide agents toward optimal behaviour and help mitigate the well-known issue of sparse rewards under long-horizon decision-making, which arises under the Boolean se-mantics dominating the current literature. Our framework is algorithm-agnostic and only relies on a state labelling func-tion, and naturally accommodates specifying non-Markovian properties. Empirical results show that our quantitative mon-itors consistently subsume and, depending on the environ-ment, outperform Boolean monitors in maximising a quan-titative measure of task completion and in reducing conver-gence time.
+
+Code — https://github.com/nightly/quantitative-reward-monitoring 
+
+Extended version — https://arxiv.org/abs/2511.12808 
+
+# 1 Introduction 
+
+Reinforcement Learning (RL) offers a powerful framework for sequential decision-making under uncertainty, leverag-ing sampling-based methods to iteratively refine policies to optimality (Sutton, Barto et al. 1998). Central to the success of any RL algorithm is the careful design of its reward func-tion (Eschmann 2021). Ill-defined reward functions might lead to unintended behaviours (Leike et al. 2017), unfore-seen consequences (Denison et al. 2024), and catastrophic failures (Festor et al. 2022). As such, the specification of re-ward functions is key to the development of safe and robust RL, including the AI alignment problem (Christian 2021). Within this landscape, temporal logics (Baier and Katoen 2008) stand out as an elegant alternative to conventional re-ward specification approaches. By offering a formal, high-level language for expressing complex objectives and con-straints, temporal logics enable more structured reward de-sign and facilitate clearer reasoning about an agent’s goals 
+
+> Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved.
+
+and behaviour. Consequently, temporal logic-based reward definitions can reduce the burden of manual engineering, while improving interpretability and maintainability, thus paving the way for more robust RL systems (Li et al. 2019; Hasanbeig, Kroening, and Abate 2020). In the current literature, logical specifications in RL (in-cluding reward specifications) have mainly settled on qual-itative, Boolean semantics, where a formula is evaluated as true or false (Sadigh et al. 2014). However, Boolean seman-tics inherently leads to sparse rewards , as feedback is often provided only upon complete satisfaction of the relevant for-mula. Sparse rewards pose significant challenges to RL al-gorithms, as they hinder effective credit assignment and in-crease sample complexity (Andrychowicz et al. 2017), lim-iting performance in long-horizon tasks. To mitigate these issues, we investigate the use of quan-titative Linear Temporal Logic on finite traces (denoted as  
+
+> LTL f
+
+[F]) to specify and synthesize reward monitors for pro-viding richer feedback. Quantitative semantics enable as-sessing the degree to which a given formula is satisfied be-sides being just true or false. 
+
+Contributions. In this paper we provide a procedure to automatically construct quantitative reward monitors start-ing with rewards specified as formulas in LTL f [F]. Such monitors provide a reward in real-time by consuming a trace of states. The agent is ascribed a corresponding reward based on progress, using real-valued evaluation of a formula in quantitative linear temporal logic interpreted on finite traces . We evaluated the proposed approach empirically, in-vestigating the efficacy of the approach in terms of conver-gence speed and a domain-specific task completion measure, against Boolean monitors and handcrafted reward functions. We demonstrate superior performance compared to Boolean monitors (in settings where quantitative information can be exploited) and, in some cases, manually-specified reward functions. Furthermore, we show how a quantitative reward monitor can be constructed with linear overhead in the num-ber of transitions and states w.r.t. the formula size, and how non-Markovian properties are captured through temporally extended goals. Since quantitative semantics provide denser rewards, this leads to greater sample efficiency, ability to handle long-horizon tasks, and avoid sparse rewards. The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+> 19533
+
+# 2 Background 
+
+In this section we introduce the background required to build quantitative monitors from LTL f [F] specifications. 
+
+Reinforcement Learning (RL) environments are typi-cally modelled as Markov decision processes (MDPs), de-fined as tuples M = ( S, A, Pr , R, γ ), where S is a set of 
+
+states ; A is a set of actions ; Pr : S × A → ∆( S) is the 
+
+transition kernel , with ∆( S) being the set of probability dis-tributions over S, R : S × A × S → R is the (Markovian) 
+
+reward function , and γ ∈ [0 , 1] is the discount factor .In an MDP, a (stochastic) policy is a function π : S → 
+
+∆( A) and its performance is measured by the expected dis-counted return V π (s) = Eπ
+
+h P∞ 
+
+> t=0
+
+γtRt+1 S0 = s
+
+i
+
+,
+
+where the expectation is over the trajectory generated by following policy π from the initial state S0 = s. The goal of RL is to find an optimal policy π⋆ satisfying π⋆ ∈
+
+arg max π V π (s) for every s ∈ S . In this setting, the Markov property ensures that the next state and reward depend only on the current state and action. A labelled Markov deci-sion process extends an MDP by adding a labelling function 
+
+L : S → [0 , 1] P from the set S of states to the set P of atoms. 
+
+Quantitative Linear Temporal Logic on finite traces. 
+
+Linear Temporal Logic on finite traces ( LTL f ) shares the syntax with Linear Temporal Logic ( LTL ), but has different semantics, due to being interpreted on traces of finite length (De Giacomo, Vardi et al. 2013). Naturally, episodes in RL have finite length, which is suitable for specifications inter-preted on finite traces. Quantitative LTL f (LTL f [F]) shares the same syntax as LTL f , but instead of having a two-valued semantics, computations are assigned a real-valued scalar within the range [0 , 1] , thus extending Zadeh’s fuzzy propo-sitional logic with linear temporal connectives (Lamine and Kabanza 2000; Faella, Legay, and Stoelinga 2008). 
+
+Definition 1 (LTL f [F] syntax) . Given a set P of atoms, the syntax of LTL f [F] is defined as follows, where p ∈ P :
+
+φ ::= ⊤ | p | ¬ φ | φ ∧ φ | Xφ | φ U φ | φ R φ
+
+where ⊤ denotes true and ⊥ def 
+
+= ¬⊤ denotes false. 
+
+Here X (Next), U (Until), and R (Release) are the stan-dard LTL operators. The Boolean connectives, ∨ (or), →
+
+(implies), and ↔ (iff) can be introduced by their standard abbreviations. The temporal operators F (eventually) and G
+
+(always) can be derived as F φ def 
+
+= ⊤U φ and Gφ def 
+
+= ⊥ R φ.We also consider a fragment of LTL f , termed safe-LTL f ,to syntactically identify whether a given specification is purely a safety objective (Sistla 1994). 
+
+Definition 2 (Safe-LTL f ). A safe-LTL f formula φ is an until-free formula in negation normal form, such that its syn-tax comprises: 
+
+φ ::= ⊤ | p | ¬ p | φ1 ∧ φ2 | φ1 ∨ φ2 | Xφ | φ1 R φ2
+
+The semantics for LTL f [F] is provided as follows, where 
+
+λ denotes a finite trace of states, and λi represents the ith 
+
+state in the trace. 
+
+Definition 3 (Semantics of LTL f [F]). The evaluation 
+
+[[ φ, i ]]( λ) ∈ [0 , 1] of formula φ on the finite trace λ is de-fined inductively as follows: 
+
+[[ ⊤, i ]]( λ) = 1 [[ p, i ]]( λ) = L(λi)( p)[[ ¬φ, i ]]( λ) = 1 − [[ φ, i ]]( λ)[[ φ1 ∧ φ2, i ]]( λ) = min  [[ φ1, i ]]( λ), [[ φ2, i ]]( λ)
+
+[[ Xφ, i ]]( λ) = 
+
+[[ φ, i + 1]]( λ), if i < |λ|
+
+0, otherwise ,
+
+[[ φ1 U φ2, i ]]( λ) = max  
+
+> i≤j≤| λ|
+
+min 
+
+> i≤k<j
+
+
+
+[[ φ2, j ]]( λ), [[ φ1, k ]]( λ)
+
+
+
+[[ φ1 R φ2, i ]]( λ) = min  
+
+> i≤j≤| λ|
+
+max 
+
+> i≤k<j
+
+
+
+[[ φ2, j ]]( λ), [[ φ1, k ]]( λ)
+
+
+
+The truth value for derived logical connectives and tem-poral operators can be obtained from Def. 3. 
+
+Reward monitors are a type of transducer, which con-sumes a trace τ def 
+
+=  s1, s 2, . . . , s n
+
+ of states and provides as output a sequence r = ( r1, r 2, . . . , r n) of scalar rewards, one for each time step. We define a Boolean reward monitor as a specific type of transducer: 
+
+Definition 4 (BRM) . A Boolean reward monitor is a Moore machine, defined as a tuple B = ( Q, q 0, Σ, Γ, δ, θ ), where 
+
+Q is the set of the states, with initial state q0. Σ is the in-put alphabet, Γ is the output alphabet, δ : Q × Σ → Q is the transition function, θ : Q → R is the output (reward) function. 
+
+Construction of a reward monitor is given by a set of specification-reward pairs, which are defined as follows: 
+
+Definition 5 (Specification-reward pairs) . A specification-reward pair is a tuple (φ, ρ ), where φ is an LTL f or LTL f [F]
+
+formula, and ρ is the associated scalar weight. 
+
+In order to construct a Boolean reward monitor from an  
+
+> LTL f
+
+formula, one can transform the formula into a deter-ministic finite automaton (DFA) (De Giacomo, Vardi et al. 2013), and then use it as a reward machine returning a re-ward of 0 on all states, except for accepting states outputting a reward of 1 (which can be multiplied by scalar ρ). 
+
+# 3 Quantitative Reward Monitors 
+
+In this section we provide the definition of quantitative re-ward monitors, as well as the procedure to build them from  
+
+> LTL f
+
+[F] specifications. 
+
+3.1 Monitor Definition 
+
+A quantitative reward monitor is a finite state machine with registers , defined as follows: 
+
+Definition 6 (QRM) . A Quantitative Reward Monitor is de-fined as a tuple A = ( Q, q 0, δ q , V, δ v , δ r ), where Q is the set of states, with q0 ∈ Q the initial state, a set V ⊆ T × R
+
+of register-value pairs (we write V(t) to retrieve the stored register value t) where T is the set of registers, δq : Q → Q19534 01 2
+
+¬aa ∧ ¬ b a ∧ bb
+
+¬b ⊤
+
+(a) Boolean reward monitor (Moore machine) for the LTL f formula 
+
+¬a U (a ∧ F b ), where state 0 is the initial state, and state 2 can be viewed as the accepting state which outputs a reward. 
+
+0 1 2
+
+Register updates ( δv ) in State 2: 
+
+a ← L a(s′); ¬a ← 1 − V (a); min( ¬a) ← min {min( ¬a), ¬a};
+
+b ← L b(s′); max( b) ← max {F (b), b }
+
+max( a ∧ max( b)) ← max {max( a ∧ max( b)) , a ∧ max( b)}· · · 
+
+(b) Quantitative reward monitor for the LTL f [F] formula ¬a U (a ∧
+
+F b ), where state 0 is the distinguished initial state. The register up-date function is partially displayed only for state 2 for brevity. 
+
+Figure 1: A boolean monitor with LTL f semantics (left-hand side) and quantitative monitor with LTL f [F] semantics (right-hand side) constructed for the same formula: ¬a U (a ∧ F b ).
+
+is the transition function, δv : Q × T → V is the register up-date function, and δr = treward × ρ is the reward function, where treward is the reward register and ρ is the scalar in the reward specification pair. 
+
+The registers update throughout the trace, and track as-pects relevant to formula evaluation, for example the mini-mum and maximum of a subformula as required by the se-mantics of temporal operators F and G respectively. Intu-itively, the reward register treward denotes the degree of sat-isfaction of a given specification’s formula, hence providing quantitative feedback. In Figure 1 we demonstrate how both Boolean and quantitative monitors would be constructed for the same formula ¬a U (a ∧ F b ).
+
+3.2 Safety Specifications 
+
+Reward monitors (both Boolean and quantitative) focus on two principal classes of objectives, namely reachability and 
+
+safety objectives. From φ in a reward-specification pair, we can syntactically infer whether the specification comprises a safety objective (according to Def. 2), where we denote a safety formula (syntactically inferred) by φsaf ety .A safety specification requires that once φsaf ety is vi-olated at any time step, the monitor emits a fixed penalty for the remainder of the trace; that is, rewards are clamped to ζ ∈ R with ζ ≤ 0 (typically ζ = 0 or a negative constant). This covers both terminating failures, where the episode ends immediately, as well as non-terminating haz-ards, where the agent should not be able to recover to a posi-tive return after an unsafe act (e.g. a self-driving car running a red light). Formally, if a safety formula φsafety is violated at index i, then δr outputs ζ for all subsequent time indices 
+
+t ≥ i. Temporal credit assignment enables propagating the penalty back to the unsafe action. 
+
+3.3 Monitor Synthesis 
+
+Function CONSTRUCT for constructing a reward monitor Aφ
+
+is defined inductively on the LTL f [F] formula φ, with the support of the memoization function SYNTH . As many sub-monitors are created recursively, storing them becomes use-ful to avoid repetitive computation, which is the purpose of Algorithm 1 SYNTH .Let Lp(s) denote the value of the atomic proposition p
+
+in state s, where s ∈ S of the labelled MDP, the function  
+
+> CONSTRUCT
+
+works as follows: • For φ = ⊤, the monitor is assigned states Q ← { q0}, set of register-value pairs V ← (t⊤, 1) , transition func-tion δq ← (q0, q 0) , register update function δv ← ∅ ,and reward function δr ← V (t⊤).• For φ = p for p ∈ P , the monitor is assigned states 
+
+Q ← { q0, q 1}, set of register-value pairs V ← (tp, 0) ,transition function δq ← (q0, q 1), (q1, q 1) , register up-date function δv (q0, t p) ← L p(s), and reward function 
+
+δr ← V (tp).• For negation φ = ¬ψ, let us create Aψ from pro-cedure S YNTH , where Q ← Qψ , q0 ← qψ 
+
+> 0
+
+, V ←Vψ ∪ (t¬ψ , 1 − V ψ (tψ )) , δq = δψq , δv ← δψv , and then δr ← V (t¬ψ ). Finally, for all states q ∈ Q, assign 
+
+δv (q, t ¬ψ ) = 1 − V (tψ ).• For conjunction φ = φ1 ∧ φ2, let us create Aφ1 and 
+
+Aφ2 from procedure S YNTH . Then we can take the Cartesian product of the two monitors, such that Q =
+
+Qφ1 × Qφ2 = {(qφ1 , q φ2 ) | qφ1 ∈ Qφ1 , q φ2 ∈
+
+Qφ2 }, q0 ← (qφ1 
+
+> 0
+
+, q φ2 
+
+> 0
+
+), and V ← Vφ1 ∪ V φ2 ∪{(tφ1∧φ2 , min( V(tφ1 ), V(tφ2 ))) }, and δq : Qφ1 ×
+
+Qφ2 → Qφ1 × Qφ2 . Then, for all states q ∈ Q,we can assign δv ← δφ1 
+
+> v
+
+∪ δφ2 
+
+> v
+
+and δv (q, t φ1∧φ2 ) ←
+
+min( V(tφ1 ), V(tφ2 )) . Finally, let δr ← V (tφ1∧φ2 ).• For temporal next φ = Xψ , the procedure is identical to an atomic proposition p, but the labelling of s′ (as a result of taking action a in state s) is considered instead of s.• For temporal until φ = φ1 U φ2, let us start by ob-taining Aφ1 and Aφ2 from procedure SYNTH . Let 
+
+q−1 and q−2 denote the final state of a monitor and the penultimate state of a monitor respectively. We form a new monitor Aφ as follows, comprising a state space of Q = Qφ1 × Qφ2 = {(qφ1 , q φ2 ) | qφ1 ∈
+
+Qφ1 , q φ2 ∈ Qφ2 }, and q0 ← (qφ1 
+
+> 0
+
+, qφ2 
+
+> 0
+
+). Then, 19535 we can state V ← Vφ1 ∪ Vφ2 ∪ (tmin φ1 , 1) ∪(tmax φ2 , 0) ∪ (tφ1 U φ2 , 0) . Then, for all states q ∈ Q, we can assign δv (q, t min φ1 ) ←
+
+min( V(tmin φ1 ), V(tφ1 )) , δv (q, t max φ2 ) ←
+
+max( V(tmax φ2 ), V(tφ2 )) , and δv (q, t φ1 U φ2 ) ←
+
+max( V(tφ1 U φ2 ), min( V(tmin φ1 ), V(tmax φ2 ))) . To support continuous updates, we assign δq (q−1) ← q−2,
+
+δv (q−2, t ) ← δv (q−1, t ) ∀t, and all contained atomic registers are renamed (to avoid name clashing), and at initialisation are filled with the initial state labels 
+
+Lp(S0), updatable with δv (q0, t p) → L p(s′). Finally, we can assign δr ← V (tφ1 U φ2 ).• For temporal release φ = φ1 R φ2, the same procedure as until U can be followed, substituting any instances of 
+
+min with max and vice versa. Monitors for temporal operators F (Eventually) and G (Al-ways) can also be constructed primitively, with fewer reg-isters as an implementation optimisation, only needing to track the max and min resp. of the associated subformula. Further details of optimisations and abbreviated connectives are provided in the extended paper’s appendix. 
+
+Theorem 1. The state and transition overhead of quantita-tive reward monitor construction from a LTL f [F] formula φ
+
+is linear with respect to the size of φ.
+
+Theorem 1’s proof is provided in the extended paper. Note that for LTL f a monitor using alternating automata can also be constructed in linear time (De Giacomo, Vardi et al. 2015). 
+
+Algorithm 1: SYNTH . Monitor construction with memoization for an LTL f [F] formula. 
+
+Input: LTL f [F] formula φ, Cache 
+
+Output: A reward monitor A = ( Q, q 0, δ q , V, δ v , δ r )
+
+if φ is in Cache then return Cache[ φ]
+
+end 
+
+A ← CONSTRUCT (φ) // Build inductively 
+
+Cache[ φ] ← A 
+
+return A
+
+Lemma 2. The procedure SYNTH returns a quantitative re-ward monitor for the provided LTL f [F] formula. 
+
+The proof of Lemma 2 appears in the extended version. 
+
+Theorem 3 (Correctness) . Let φ be an LTL f [F] formula, 
+
+Aφ the QRM constructed from φ as per Alg. 1, and λ a finite trace of length n. Let val Aϕ ( φ, i ) denote the value stored in the reward register at time index i. Then, for each index 
+
+1 ≤ i ≤ n,
+
+val Aϕ ( φ, i ) = [φ, i ](λ)
+
+We provide the details of the proof of Theorem 3 in the extended paper. 
+
+3.4 Composition and Learning 
+
+Learning involves taking the product between the quantita-tive monitor A and the MDP of the environment M. We can define this product as the extended MDP M ⊗ A as follows: 
+
+Definition 7 (Extended MDP) . Let M =(S, A, Pr , R, γ, L) be a labelled MDP and A =(Q, q 0, δ q , V, δ v , δ r ) a quantitative reward monitor. Their synchronous product M ⊗ A = ( S′, A, Pr ′, R′, γ, L)
+
+is defined as follows, where q ∈ Q, a ∈ A, and s ∈ S :
+
+• State-space S′ def 
+
+= Q × S 
+
+• Transition kernel: Pr ′ (q, s ), a, (q′, s ′) def 
+
+=
+
+(Pr( s, a, s ′) if δq
+
+ (q, s ) = q′,
+
+0 otherwise. 
+
+• Reward function: R′(( q, s ), a, (q′, s ′)) def 
+
+= δr (V′ =
+
+δv (( q′, s ′), L(s′)) , ρ )
+
+• Remaining elements are inherited unchanged. 
+
+The extended state-space including q ∈ Q permits spec-ifying non-Markovian (temporally extended) goals. How-ever, a Markovian policy suffices when considering the product M ⊗ A , as stated in Theorem 4. 
+
+Theorem 4. A Markovian policy π in MDP M ⊗ A suffices to optimally capture the non-Markovian goals encoded by the monitor. 
+
+A proof is provided in the extended version. 
+
+# 4 Experimental Evaluation 
+
+In this paper, we consider the notion of reward convergence 
+
+with respect to the different reward mechanisms: Boolean monitors, quantitative monitors, and the pre-defined reward function, as provided in Definition 8, measuring reward sta-bility to check convergence and agent performance (Dulac-Arnold et al. 2021; Machado et al. 2018; Brockman et al. 2016). 
+
+Definition 8 (Reward Convergence) . Given episodic re-wards {R t}Tt=1 , define the exponentially moving average Et
+
+as 
+
+Etdef 
+
+= βE t−1 + (1 − β)Rt, β def 
+
+= 1 − 2  
+
+> N+1
+
+,
+
+with span N . Define checkpoints every N steps: Cidef 
+
+= EiN .An RL run converges (reward-wise) if, given a tolerance 
+
+τ , for the last P checkpoint pairs, 
+
+|Ci − Ci−1| ≤ τ for all such i. 
+
+To objectively measure learning performance, one method would be tracking convergence , although this can be hin-dered by the fact that an agent may still converge to a sub-optimal policy, particularly when using a non-informative reward function. Additionally, it is also the case that cumu-lative rewards themselves are not as useful as a metric when the quantitative monitor and handcrafted function (from the original environment implementation) are able to produce a reward at each time step (as contrasted to the Boolean mon-itor), and at arbitrary magnitudes of intermediate rewards. Therefore, we use the notion of task completion , which is an evaluative (unobservable for the agent) performance function run at the terminal time point of the episode, and is universally suitable and uniform for all reward producers. This is similar to the performance function used in (Leike et al. 2017). 19536 Mean Episode Number Mean Time (seconds) Task Completion (%, mean ± 95% CI) Base Boolean Quant. Base Boolean Quant. Base Boolean Quant. Classic                                                                                                                                                 
+
+> Acrobot None 600* None None 133.95* None 99.07% ±0.09% 4.84% ±0.40% 94.77% ±0.30%
+> Cartpole None None None None None None 44.67% ±0.42% 30.92% ±0.35% 33.34% ±0.37%
+> Mountain Car 600* 600* None 41.46* 42.98* None 39.82% ±0.07% 37.04% ±0.06% 42.28% ±0.07%
+> Pendulum None 600* None None 181.17* None 74.39% ±0.27% 45.03% ±0.18% 72.11% ±0.28%
+> Toy
+> Frozen Lake 216* 45 29* 0.04* 0.03 0.01* 58.86% ±0.10% 62.16% ±0.10% 58.96% ±0.10%
+> Cliff Walking 21 25 2.3 0.01 0.04 0.003 85.33% ±0.05% 84.38% ±0.05% 84.95% ±0.05%
+> Taxi 11 1301* 1221* 0.01 13.89* 4.26 71.19% ±0.07% 46.50% ±0.03% 52.76% ±0.03%
+> Box2D
+> Bipedal Walker None None None None None None 16.78% ±0.54% 7.43% ±0.15% 14.43% ±0.41%
+> Lunar Lander None None None None None None 57.45% ±0.36% 43.44% ±0.17% 45.61% ±0.16%
+> Safety Gridworlds
+> Island Navigation 1302 71* 144* 0.43 0.05* 0.10* 96.81% ±0.02% 76.37% ±0.03% 76.72% ±0.03%
+> Conveyor Belt 191 *468* 518* 0.15 0.7* 0.7* 60.96% ±0.10% 27.1% ±0.09% 28.70% ±0.09%
+> Sokoban 1129* 71* 103 0.47* 0.11* 0.14 50.23% ±0.01% 52.00% ±0.01% 53.15% ±0.02%
+
+Table 1: Convergence data for all environments, split by base reward function, Boolean and quantitative monitors. Task com-pletion entries are mean ± 95% confidence interval (half-width). (*) denotes suboptimal (comparatively) policy convergence. 
+
+Definition 9 (Task completion) . A performance function which assigns a scalar in the range of [0 , 1] , computed at the terminal time step (whether the episode ends by success, termination, or truncation). This signal is hidden from the agent during training, and is only used for evaluation. 
+
+As for the scalars ρ in the specification-reward pair, we select them to be the same in the Boolean and quantitative monitors in cases where the formulas are equivalent. The full Boolean and quantitative specifications accompanying each environment are provided in the extended paper. 
+
+4.1 Environments 
+
+Environments in our experiments used the following groups: • C LASSIC : low-dimensional continuous-control bench-marks based upon classical control theory problems (Sut-ton 1995; Barto, Sutton, and Anderson 1983; Moore 1990; Åström and Furuta 2000) that test stabilisation and swing-up behaviour. • T OY : small grid-world domains with finite state-action spaces that permit exact dynamic-programming or tab-ular RL evaluation (Dietterich 2000; Brockman et al. 2016; Sutton, Barto et al. 1998), which illustrate path-planning under severe penalties as well as hierarchical goal decomposition. • B OX 2D: continuous-control problems with contact dy-namics simulated in the Box2D engine (Brockman et al. 2016), requiring balance, locomotion, or soft landing. • S AFETY GRIDWORLDS : a set of 2D gridworld environ-ments provided by DeepMind (Leike et al. 2017), that evaluate the safety of RL agents against undesirable be-haviours such as unsafe exploration, safe interruptibility, and irreversible side effects. For each of these environments, we compare the manually specified reward function (e.g. provided by G YMNASIUM ), a Boolean reward monitor, and a quantitative reward moni-tor. The complete descriptions and specification of all envi-ronments including all fluent definitions (both Boolean and quantitative) against the observation and action trajectories is detailed in the extended paper. 
+
+Specifying quantitative properties For each environ-ment specified, we need to specify Boolean and quantita-tive properties for our labelled MDP. We also make use of a quantitative measure of task completion. Let us consider the environment of C ARTPOLE in Example 1. 
+
+Example 1 (Cartpole’s complete environmental spec-ification) . The relevant reward-specification pairs for CARTPOLE can be defined as the following for both the Boolean and quantitative settings:  (F (G(reach _goal )) , 2) , (G(balanced ), 4) , with the former expressing a persistence property and the latter a safety property. For the first specification, we want to ensure that we always remain in an intended goal position (not slipping backwards or forwards, here we can assume 
+
+goal _pos = 2 ). The second specification requires always remaining balanced, which is useful regardless of how far the agent is from the goal position. Below is the mathematical form of definitions for the la-bels used by the labelling function L(s) of the labelled MDP, or in other words the quantitative properties: balanced =
+
+( 0.209 −| angle | 
+
+> 0.209
+
+, if |angle | ≤ 0.209 0, else reach_goal =
+
+( current _pos goal _pos , if current _pos > 0.01 0, else In the case of Boolean atoms, balanced returns ⊤ iff 
+
+angle ≤ 0.209 , else ⊥. As for reach _goal , it is true if the agent is within 0.1 of the goal _pos . The task completion measure (performance function) is specified as an equally weighted mean of reach _goal and balanced .
+
+4.2 Reinforcement Learning Algorithms 
+
+The following section briefly describes the algorithms we use, including both tabular and policy gradient settings. 
+
+Tabular Q-learning is used with T OY and S AFETY GRID - 
+
+> WORLDS
+
+environments, due to faring well with the relatively small discrete state-action spaces. Proximal policy optimiza-tion is used with C LASSIC and B OX 2D environments to ad-equately handle continuous state and action spaces. 19537 Figure 2: Task-completion percentages across SAFETY -GRIDWORLDS and TOY environments, ± 95% confidence interval. 
+
+Q-learning (Watkins and Dayan 1992) is a value-based method that iteratively updates the action-value function 
+
+Q(s, a ) according to the Bellman optimality equation: 
+
+Q(s, a ) ← Q(s, a ) + α r + γ max  
+
+> a′
+
+Q(s′, a ′) − Q(s, a ),
+
+where α is the learning rate, γ is the discount factor, r is the reward observed, (s, a ) denotes the current state-action pair, and (s′, a ′) denotes the next state-action pair. 
+
+Proximal policy optimization (PPO) (Schulman et al. 2017) is a policy-gradient method designed for continuous or high-dimensional state and action spaces. Instead of di-rectly estimating action-values in a table, PPO maintains a parameterized policy πθ (a|s) and optimizes it by maximiz-ing a clipped surrogate objective: 
+
+LCLIP (θ) = ˆEt
+
+h
+
+min( rt(θ) ˆAt, clip (rt(θ), 1 − ϵ, 1 + ϵ) ˆAt)
+
+i
+
+,
+
+where rt(θ) = πθ (at|st)  
+
+> πθold (at|st)
+
+is the probability ratio between the new and old policies, ˆAt is the advantage function esti-mate at time step t, and ϵ is a hyperparameter that bounds the ratio, helping to prevent destructive policy updates. Due to its on-policy nature, PPO is relatively stable. 
+
+4.3 Experimental Results 
+
+Table 1 presents our results in terms of reward convergence time and episode number, as well as our evaluation metric of quantitative task completion. The mean convergence time and episode number are taken from averaging a number of runs, with each run containing a fixed amount of training episode iterations. Likewise, the task completion metric is averaged over a number of runs, for each episode across the learning, where the terminal time step outputs the task com-pletion progress. The number of episodes and runs used de-pends on the environment, where the number of episodes is shown in the graphs in Figure 2, and the remaining hyperpa-rameters are specified in the extended paper. Across environments, the quantitative monitor consis-tently matches or outperforms the Boolean monitor, and sometimes surpasses the manually specified reward func-tion. Within simple and small gridworld-like environments, it was often simpler to use Boolean signals, rather than distance metrics such as Manhattan distance, as they do not take into account obstacles (thus encouraging explor-ing around non-optimal areas). Hence, the performance dif-ference between Boolean and quantitative monitors is more pronounced in C LASSIC and B OX 2D environments. We re-stricted ourselves to defining a quantitative specification us-ing only the information known to the agent (observations and actions), which is not always the case where manually-specified reward functions are used. Our approach is easily extensible to incorporating such environmental signals by extending the scope of the labelling function. The learning performance gap of the quantitative and Boolean monitors is entirely determined by how well a quantitative measure can be defined per environment using the state trajectory, which is domain-dependent. However, in cases where writ-ing a quantitative specification proves difficult, the perfor-mance should always be at least equal to using a Boolean monitor. 19538 5 Related Work 
+
+Reward engineering is the practice of designing and tun-ing the reward structure to better align with the intended learning outcomes. Certain approaches exist specifically to counter sparse and delayed rewards, which remain compati-ble with QRMs and are useful for environments where feed-back can only be provided towards the end of an episode. 
+
+Reward redistribution techniques such as Align-RUDDER (Patil et al. 2022) shift terminal returns onto a few decisive actions, densifying feedback while preserving optimal poli-cies. Causal variants (Zhang et al. 2023) relax alignment, but are susceptible to weak confounding. Hindsight Expe-rience Replay (HER) (Andrychowicz et al. 2017) retroac-tively relabels failed roll-outs with achieved goals, generat-ing synthetic dense rewards, though goal selection becomes intractable in large or partially observed spaces and may bias value estimates. Reward shaping augments each step-return with F (st, s t+1 ) = γΦ( st+1 ) − Φ( st), guaranteeing pol-icy invariance (Ng, Harada, and Russell 1999). Potentials 
+
+Φ are either handcrafted (e.g., distance-to-goal) or learned (Grze´ s and Kudenko 2010), which must be informative yet low-variance. 
+
+Temporal logic rewards. A survey of reinforcement learning with temporal logic rewards is presented in (Liao 2020). In (Brafman, De Giacomo, and Patrizi 2018; De Gi-acomo et al. 2019), non-Markovian reward formulas ex-pressed in LTL f /LDL f are translated into minimal DFA. The extended MDP is obtained as the synchronous product of the original MDP with these DFA components, guarantee-ing minimality; because the DFA can be progressed symbol-by-symbol, the construction can also be carried out on-the-fly. The approach was refined in (De Giacomo et al. 2020), which merges the individual DFA into a single reward trans-ducer, which can provide exponential savings. This compact transducer supports the four-valued runtime-monitoring se-mantics for LTL f . Furthermore, our reward monitor can be constructed in linear time. Prior work has integrated GYM 
+
+environments with reward monitors using the runtime moni-toring language (Unniyankal et al. 2023; Hasanbeig, Kroen-ing, and Abate 2020). Compared to these works, our ap-proach has rewards that are densely provided with quanti-tative information, which is critical for addressing sparse re-wards and sample efficiency. 
+
+Reward Machines (Icarte et al. 2022, 2018) represent non-Markovian rewards as Mealy machines whose edges are represented by modelled events. This makes them intuitive when crisp, symbolic events are available and supports au-tomated potential-based shaping once the reward machine is given, although the effectiveness of the automated shaping is limited to simple monitors as the states and actions of the en-vironment are not considered in the shaping, merely desired paths through the monitor provide further rewards. Recent works include extensions with counting automata (Bester et al. 2023), first order representations (Ardon et al. 2024), and learning of reward machines (Parac et al. 2024) for in-verse RL. 
+
+Quantitative semantics. Li, Vasile, and Belta (2017) in-troduces quantitative semantics for robustness, but requires the whole trace to produce a robustness reward, therefore not being useful against sparse rewards and for long-horizon tasks. Balakrishnan and Deshmukh (2019) use quantitative Signal Temporal Logic (STL), for reward shaping, but as-sumes a bounded window length to keep complexity low and uses unnormalised atoms. Hamilton, Robinette, and Johnson (2022) outsources STL monitoring to an exter-nal tool making compositionality non-trivial, which is cru-cial for safety specifications and adequately handling non-Markovian properties, also again relying on unnormalised atoms. Jothimurugan, Alur, and Bastani (2019) use quanti-tative semantics, but the reward produced is not dense: a raw reward of −∞ is given until the final monitor state, thus the method is based on reward shaping, and assumes bounds are supplied. There are scaling concerns, as each monitor state involves a separate policy head neural network. Numeric reward machines are introduced by Levina et al. (2024) which retain Boolean transitions but introduce nega-tive distance-to-goal formulas for providing denser rewards. However, quantitative temporal semantics are not used, nor is any synthesis algorithm provided to construct such ma-chines from a formal specification. Finally, all of the aforementioned papers overlook safety in the compositionality process, whereby safety properties are able to veto all rewards globally. 
+
+# 6 Conclusions and Future Work 
+
+In this paper, we have shown how to construct reward moni-tors using quantitative, linear time LTL f [F] specifications, and then demonstrated the effectiveness of our approach against Boolean monitors and handcrafted reward functions, across various environments with differing reward character-istics. We empirically showed that our quantitative monitor surpasses or matches the performance of a Boolean mon-itor, and in some cases, surpasses the performance of the manually-specified reward function. Learning uses the prod-uct between the environment MDP and the composite re-ward monitor formed from all specification-reward pairs. Additionally, we syntactically identify which monitors tar-get safety properties, which when violated, have the power to block rewards received from all other monitors indefi-nitely. For future work, it would be interesting to consider dis-counted rewards which could form part of the specification tuple, or be used more directly through discounted LTL (Alur et al. 2023). Quantitative temporal operators could also be incorporated, such as in (Frigeri, Pasquale, and Spoletini 2012; Mu, Liu, and Li 2025), where Ft denotes eventually in the next t instants ("within"), similarly for always within the next t instants, as well as other more complex operators such as "almost always" and "soon", "nearly always", "grad-ually", which use fuzzy semantics, and may assist in learn-ing convergence. Another aspect that could be investigated is robustness specifications (Anevlavis et al. 2022), which could help with other aspects such as curriculum learning (i.e., being confident that an agent has learnt a principal sub-task prior to advancing to a more difficult task). Our ap-proach would also be suitable for the multi-agent setting, where ATL f [F] (Ferrando et al. 2024) could be used. 19539 Acknowledgments 
+
+The research described in this paper was partially sup-ported by the EPSRC (grant number EP/X015823/1) and the UKRI Centre for Doctoral Training in Safe and Trusted AI (grant number EP/S0233356/1). We also thank Jialue Xu and Alexander Philipp Rader for contributing some of the original code for the reward monitors. 
+
+# References 
+
+Alur, R.; Bastani, O.; Jothimurugan, K.; Perez, M.; Somenzi, F.; and Trivedi, A. 2023. Policy synthesis and reinforcement learning for discounted LTL. In International Conference on Computer Aided Verification , 415–435. Springer. Andrychowicz, M.; Wolski, F.; Ray, A.; Schneider, J.; Fong, R.; Welinder, P.; McGrew, B.; Tobin, J.; Pieter Abbeel, O.; and Zaremba, W. 2017. Hindsight experience replay. Ad-vances in neural information processing systems , 30. Anevlavis, T.; Philippe, M.; Neider, D.; and Tabuada, P. 2022. Being correct is not enough: efficient verification us-ing robust linear temporal logic. ACM Transactions on Com-putational Logic (TOCL) , 23(2): 1–39. Ardon, L.; Furelos-Blanco, D.; Parac, R.; and Russo, A. 2024. FORM: Learning Expressive and Transfer-able First-Order Logic Reward Machines. arXiv preprint arXiv:2501.00364 .Åström, K. J.; and Furuta, K. 2000. Swinging up a pendulum by energy control. Automatica , 36(2): 287–295. Baier, C.; and Katoen, J.-P. 2008. Principles of model check-ing . MIT press. Balakrishnan, A.; and Deshmukh, J. V. 2019. Structured reward shaping using signal temporal logic specifications. In 2019 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 3481–3486. IEEE. Barto, A. G.; Sutton, R. S.; and Anderson, C. W. 1983. Neu-ronlike adaptive elements that can solve difficult learning control problems. IEEE Transactions on Systems, Man, and Cybernetics , SMC-13(5): 834–846. Bester, T.; Rosman, B.; James, S.; and Tasse, G. N. 2023. Counting Reward Automata: Sample Efficient Reinforce-ment Learning Through The Exploitation of Reward Func-tion Structure. arXiv preprint arXiv:2312.11364 .Brafman, R.; De Giacomo, G.; and Patrizi, F. 2018. LTLf/LDLf non-markovian rewards. In Proceedings of the AAAI conference on artificial intelligence , volume 32. Brockman, G.; Cheung, V.; Pettersson, L.; Schneider, J.; Schulman, J.; Tang, J.; and Zaremba, W. 2016. OpenAI Gym. arXiv preprint arXiv:1606.01540 .Christian, B. 2021. The alignment problem: How can ma-chines learn human values? Atlantic Books. De Giacomo, G.; Favorito, M.; Iocchi, L.; Patrizi, F.; Ronca, A.; et al. 2020. Temporal logic monitoring rewards via trans-ducers. In Proceedings of the 17th International Conference on Principles of Knowledge Representation and Reasoning ,860–870. De Giacomo, G.; Iocchi, L.; Favorito, M.; and Patrizi, F. 2019. Foundations for restraining bolts: Reinforcement learning with LTLf/LDLf restraining specifications. In Pro-ceedings of the international conference on automated plan-ning and scheduling , volume 29, 128–136. De Giacomo, G.; Vardi, M. Y.; et al. 2013. Linear Temporal Logic and Linear Dynamic Logic on Finite Traces. In Ijcai ,volume 13, 854–860. De Giacomo, G.; Vardi, M. Y.; et al. 2015. Synthesis for LTL and LDL on finite traces. In Proceedings of the Twenty-Fourth International Joint Conference on Artificial Intelli-gence, IJCAI 2015 , 1558–1564. AAAI Press. Denison, C.; MacDiarmid, M.; Barez, F.; Duvenaud, D.; Kravec, S.; Marks, S.; Schiefer, N.; Soklaski, R.; Tamkin, A.; Kaplan, J.; et al. 2024. Sycophancy to subterfuge: Inves-tigating reward-tampering in large language models. arXiv preprint arXiv:2406.10162 .Dietterich, T. G. 2000. Hierarchical reinforcement learning with the MAXQ value function decomposition. Journal of artificial intelligence research , 13: 227–303. Dulac-Arnold, G.; Levine, N.; Mankowitz, D. J.; Li, J.; Paduraru, C.; Gowal, S.; and Hester, T. 2021. Challenges of real-world reinforcement learning: definitions, benchmarks and analysis. Machine Learning , 110(9): 2419–2468. Eschmann, J. 2021. Reward function design in reinforce-ment learning. Reinforcement learning algorithms: Analysis and Applications , 25–33. Faella, M.; Legay, A.; and Stoelinga, M. I. A. 2008. Model checking quantitative linear time logic. In 6th Workshop on Quantitative Aspects of Programming Languages, QAPL 2008 , 61–77. Elsevier. Ferrando, A.; Luongo, G.; Malvone, V.; and Murano, A. 2024. Theory and Practice of Quantitative ATL. In Interna-tional Conference on Principles and Practice of Multi-Agent Systems , 231–247. Springer. Festor, P.; Jia, Y.; Gordon, A. C.; Faisal, A. A.; Habli, I.; and Komorowski, M. 2022. Assuring the safety of AI-based clin-ical decision support systems: a case study of the AI Clin-ician for sepsis treatment. BMJ health & care informatics ,29(1): e100549. Frigeri, A.; Pasquale, L.; and Spoletini, P. 2012. Fuzzy time in LTL. arXiv preprint arXiv:1203.6278 .Grze´ s, M.; and Kudenko, D. 2010. Online learning of shap-ing rewards in reinforcement learning. Neural networks ,23(4): 541–550. Hamilton, N.; Robinette, P. K.; and Johnson, T. T. 2022. Training agents to satisfy timed and untimed signal temporal logic specifications with reinforcement learning. In Inter-national Conference on Software Engineering and Formal Methods , 190–206. Springer. Hasanbeig, M.; Kroening, D.; and Abate, A. 2020. Deep reinforcement learning with temporal logics. In Formal Modeling and Analysis of Timed Systems: 18th International Conference, FORMATS 2020, Vienna, Austria, September 1–3, 2020, Proceedings 18 , 1–22. Springer. 19540 Icarte, R. T.; Klassen, T.; Valenzano, R.; and McIlraith, S. 2018. Using reward machines for high-level task specifi-cation and decomposition in reinforcement learning. In In-ternational Conference on Machine Learning , 2107–2116. PMLR. Icarte, R. T.; Klassen, T. Q.; Valenzano, R.; and McIlraith, S. A. 2022. Reward machines: Exploiting reward function structure in reinforcement learning. Journal of Artificial In-telligence Research , 73: 173–208. Jothimurugan, K.; Alur, R.; and Bastani, O. 2019. A com-posable specification language for reinforcement learning tasks. Advances in Neural Information Processing Systems ,32. Lamine, K. B.; and Kabanza, F. 2000. Using fuzzy temporal logic for monitoring behavior-based mobile robots. In Proc. of IASTED Int. Conf. on Robotics and Applications , 116– 121. Leike, J.; Martic, M.; Krakovna, V.; Ortega, P. A.; Everitt, T.; Lefrancq, A.; Orseau, L.; and Legg, S. 2017. AI safety gridworlds. arXiv preprint arXiv:1711.09883 .Levina, K.; Pappas, N.; Karapantelakis, A.; Feljan, A. V.; and Seipp, J. 2024. Numeric Reward Machines. arXiv preprint arXiv:2404.19370 .Li, X.; Serlin, Z.; Yang, G.; and Belta, C. 2019. A formal methods approach to interpretable reinforcement learning for robotic planning. Science Robotics , 4(37): eaay6276. Li, X.; Vasile, C.-I.; and Belta, C. 2017. Reinforcement learning with temporal logic rewards. In 2017 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 3834–3839. IEEE. Liao, H.-C. 2020. A survey of reinforcement learning with temporal logic rewards. Machado, M. C.; Bellemare, M. G.; Talvitie, E.; Veness, J.; Hausknecht, M.; and Bowling, M. 2018. Revisiting the ar-cade learning environment: Evaluation protocols and open problems for general agents. Journal of Artificial Intelli-gence Research , 61: 523–562. Moore, A. W. 1990. Efficient memory-based learning for robot control. Technical report, University of Cambridge, Computer Laboratory. Mu, C.; Liu, W.; and Li, Y. 2025. Checking with Fuzzy Tem-poral Logic Operators. In Theoretical Computer Science: 42nd National Conference, NCTCS 2024, Qingdao, China, July 19–21, 2024, Revised Selected Papers , volume 2354, 81. Springer Nature. Ng, A. Y.; Harada, D.; and Russell, S. 1999. Policy invari-ance under reward transformations: Theory and application to reward shaping. In Icml , volume 99, 278–287. Citeseer. Parac, R.; Nodari, L.; Ardon, L.; Furelos-Blanco, D.; Cerutti, F.; and Russo, A. 2024. Learning robust reward ma-chines from noisy labels. arXiv preprint arXiv:2408.14871 .Patil, V.; Hofmarcher, M.; Dinu, M.-C.; Dorfer, M.; Blies, P. M.; Brandstetter, J.; Arjona-Medina, J.; and Hochreiter, S. 2022. Align-RUDDER: Learning From Few Demonstra-tions by Reward Redistribution. In International Conference on Machine Learning , 17531–17572. PMLR. Sadigh, D.; Kim, E. S.; Coogan, S.; Sastry, S. S.; and Seshia, S. A. 2014. A learning based approach to control synthe-sis of markov decision processes for linear temporal logic specifications. In 53rd IEEE Conference on Decision and Control , 1091–1096. IEEE. Schulman, J.; Wolski, F.; Dhariwal, P.; Radford, A.; and Klimov, O. 2017. Proximal policy optimization algorithms. 
+
+arXiv preprint arXiv:1707.06347 .Sistla, A. P. 1994. Safety, liveness and fairness in temporal logic. Formal Aspects of Computing , 6(5): 495–511. Sutton, R. S. 1995. Generalization in reinforcement learn-ing: Successful examples using sparse coarse coding. Ad-vances in neural information processing systems , 8. Sutton, R. S.; Barto, A. G.; et al. 1998. Reinforcement learn-ing: An introduction , volume 1. MIT press Cambridge. Unniyankal, H.; Belardinelli, F.; Ferrando, A.; and Malvone, V. 2023. RMLGym: a Formal Reward Machine Framework for Reinforcement Learning. In WOA , 1–16. Watkins, C. J.; and Dayan, P. 1992. Q-learning. Machine learning , 8: 279–292. Zhang, Y.; Du, Y.; Huang, B.; Wang, Z.; Wang, J.; Fang, M.; and Pechenizkiy, M. 2023. Interpretable reward re-distribution in reinforcement learning: A causal approach. 
+
+Advances in Neural Information Processing Systems , 36: 20208–20229. 19541

@@ -1,0 +1,355 @@
+Title: DEALT: LLM-driven Diversity-Enhanced Data Augmentation for Long-Tail Text Classification
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/40508/44469
+
+Number of Pages: 9
+
+Markdown Content:
+# DEALT: LLM-driven Diversity-Enhanced Data Augmentation for Long-Tail Text Classification 
+
+# Wayne Lu 1* , Xiaoxi Cui 2*† ,
+
+> 1
+
+Independent Researcher 
+
+> 2
+
+Takway.AI, Beijing, China lu.wayne0603@gmail.com, cxxneu@163.com 
+
+Abstract 
+
+Real-world text classification datasets frequently exhibit long-tail distributions, where numerous classes have sparse data, significantly degrading model performance on these underrepresented categories. While Large Language Models (LLMs) offer promise for data augmentation, existing meth-ods often produce semantically limited samples, neglect ”im-plicit long-tails” (sparse sub-patterns within classes), and lack cost-effective optimization. To address these challenges, we propose DEALT (LLM-driven Diversity-Enhanced Data Augmentation for Long-Tail Text Classification) , a novel cognitive-inspired framework emulating the human learn-ing process of ”recognize, explore, generate, and optimize.” DEALT systematically enhances augmented data diversity by first detecting both explicit and implicit long-tails. It then employs an LLM for diversity-aware planning of augmen-tation strategies, followed by conditional generation. A low-overhead quality and diversity validator filters the synthetic data, and an adaptive incremental sampler refines future aug-mentation efforts based on proxy model feedback, ensuring efficient and budget-aware optimization. Extensive experi-ments on multiple public text classification datasets demon-strate DEALT’s superiority over state-of-the-art methods in improving tail-class performance and overall model robust-ness by generating more diverse and high-fidelity augmented data. 
+
+# Introduction 
+
+Text classification is a fundamental task in Natural Lan-guage Processing (NLP), crucial for diverse applications like sentiment analysis (Wankhade, Rao, and Kulkarni 2022) and intention recognition (Weld et al. 2022). However, real-world datasets frequently exhibit a severe long-tail distri-bution (Audibert, Gauffre, and Amini 2024), where a small number of ”head” classes dominate, leaving numerous ”tail” classes with sparse data. This sparsity significantly degrades the generalization capability and accuracy of deep learning models on underrepresented classes (He et al. 2024; Jia et al. 2024). Data Augmentation (DA) is a pivotal strategy to mit-igate this by generating synthetic samples for sparse classes, 
+
+> *
+
+These authors contributed equally. 
+
+> †
+
+Corresponding author. Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+aiming to rebalance the data distribution and improve model robustness. While traditional DA methods, such as edit-based tech-niques (Shorten, Khoshgoftaar, and Furht 2021) or Back-translation (Sugiyama and Yoshinaga 2019), are computa-tionally simple, they often produce synthetic samples that closely resemble the original instances, lacking true seman-tic diversity. This limits their ability to introduce novel varia-tions. Large Language Models (LLMs) (Radford et al. 2018; Touvron et al. 2023), with their remarkable text understand-ing and generation prowess, have opened new frontiers for text data augmentation (Dai et al. 2025; Wang et al. 2024). Despite progress, existing LLM-based methods still face significant challenges: • Semantic Diversity Bottleneck : Many LLM augmen-tation methods tend to generate ”neighboring” samples that offer only minor variations in phrasing or syntax, largely overlapping in core semantics (Li et al. 2024a). Such low-diversity augmented data struggles to introduce truly novel semantic information or cover distinct sub-concepts within a class, thus offering limited improve-ment to tail-class generalization. Effective augmentation critically requires generating semantically diverse sam-ples, distinct from originals yet label-consistent, to ex-pand class boundaries. • Neglect of Implicit Long-Tail Patterns : Most research focuses on the explicit imbalance between class sample counts (Ding et al. 2024). However, even within seem-ingly data-rich classes, specific sub-patterns or themes may be extremely sparse, forming an ”implicit long-tail”. This fine-grained sparsity is a significant learning bottle-neck that existing methods often overlook. • High Cost and Lack of Guided Optimization : Current LLM-based DA often relies on heuristic prompting (Dai et al. 2025; Zhang et al. 2025), lacking fine-grained, in-terpretable guidance for diversity dimensions. Validating the generated data’s utility typically necessitates expen-sive LLM API calls and costly, full downstream model retraining. This trial-and-error process is inefficient and hinders the development of a systematic optimization loop. To address these limitations, we propose a novel cognitive-inspired framework for long-tailed text classifica-The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+32338 tion: LLM-driven Diversity-Enhanced Data Augmentation for Long-Tail Text Classification ( DEALT ). Inspired by the human cognitive process of ”recognize, explore, generate, and optimize” when learning new concepts (Binz and Schulz 2023; Guo et al. 2024), DEALT systematically enhances the diversity and effectiveness of augmented data while signifi-cantly reducing operational overhead. 
+
+DEALT achieves this through a suite of innovative and synergistic modules. It first employs a Long-tail Distribution Detector to precisely identify explicit and implicit data sparsity. Building on this, a Diversity Planning module leverages LLM reasoning to devise varied augmentation strategies with specific diversity ob-jectives. A Conditional Diversity Generation 
+
+component then faithfully executes these plans to cre-ate initial samples. These raw samples are then fil-tered by a low-overhead Quality and Diversity Validator using rapid checks and targeted LLM assess-ment. Finally, an Adaptive Incremental Sampler and Evaluator uses feedback from proxy evaluations to refine future augmentation efforts, ensuring efficient, budget-aware optimization. The main contributions of this paper are as follows: • We propose DEALT , a novel cognitive-inspired frame-work emulating the ”recognize-explore-generate-optimize” process. It systematically tackles both explicit and implicit long-tail issues, significantly enhancing augmented data diversity. To our knowledge, this is the first work to explicitly apply this cognitive-inspired pipeline to LLM-driven long-tail data augmentation. • We introduce the Diversity Planning module, which innovatively employs LLM’s Chain-of-Thought capabilities for explicit, structured planning of augmen-tation strategies based on predefined diversity dimen-sions, moving beyond heuristic or random approaches. • We design low-overhead Quality and Diversity Validator and Adaptive Incremental Sampler and Evaluator mechanisms. These ensure high-quality and diverse augmented data gener-ation while dramatically reducing LLM API calls and dependence on full downstream model retraining. • Extensive experiments on multiple public text classifica-tion datasets demonstrate the superiority of DEALT over state-of-the-art methods, particularly in improving tail-class performance and overall model robustness. 
+
+# Related Work 
+
+Data augmentation has long addressed data scarcity in NLP, from early EDA (Wei and Zou 2019) and back-translation (Tiedemann and Thottingal 2020) to more con-textualized schemes using BERT (Devlin et al. 2019) and GPT-3 prompting (Brown et al. 2020), which mitigate distortion (Zhang, Zhao, and LeCun 2015). Its develop-ment parallels advances in in-context learning, where mul-timodal and efficient ICL frameworks such as TACO (Li et al. 2025g), M 2IV (Li et al. 2025b), CATP (Li et al. 2025e), and CAMA (Li et al. 2025f) emphasize prompt structuring and token-efficient representations. LLM-driven augmentation methods—including AugGPT (Dai et al. 2025), DoAug (Wang et al. 2025), and DPO-enhanced pipelines (Rafailov et al. 2023)—expand sample diver-sity, complemented by automatic instruction creation (Self-LLMDA (Li et al. 2024b)), class-separability prompting (TARDiS (Kim et al. 2025)), and fully zero-shot synthesis (ZeroGen (Ye et al. 2022)). Broader data-centric research likewise seeks robustness and controllability: in misinformation detection, multi-view and multimodal frameworks such as URS (Zeng et al. 2025a), IMOL (Zeng et al. 2025b), debiasing (Zeng et al. 2024), and long-tail GNN modeling (Zhang, Zhang, and Yuan 2024) improve generalization under shift; in search ranking, mixture-of-experts systems (Li et al. 2025h,i), semi-supervised approaches (Li et al. 2025c,d), satisfaction-driven objectives (Li et al. 2025a), and LLM-based multi-agent retrieval (Chen et al. 2025) optimize data utilization. Complementary efforts on data unlearn-ing—including multi-objective methods (Li et al. 2025j), error-decomposition (Li et al. 2023a), post-training era-sure (Chen et al. 2024), and user-indistinguishability (Li et al. 2023b), summarized in (Li et al. 2024c)—highlight the importance of principled data manipulation. Our work aligns with this trajectory but focuses on automated, controllable, and efficient LLM-based augmentation. 
+
+# Methodology 
+
+In this section, we present our proposed LLM-driven 
+
+Diversity-Enhanced Data Augmentation for Long-Tail Text Classification ( DEALT ). This framework is designed to en-hance text classification datasets by systematically generat-ing diverse and high-quality samples for underrepresented (long-tail) classes, leveraging the advanced capabilities of Large Language Models. Figure 1 illustrates the overall workflow of DEALT. We will now elaborate on each of its five core components: the Long-tail Distribution Detector (LDT), Diversity Planning (DP), Conditional Diversity Gen-eration (CDG), Quality and Diversity Validator (QDV), and Adaptive Incremental Sampler and Evaluator (AISE). 
+
+Long-tail Distribution Detector (LDT) 
+
+The primary purpose of the LDT is to automatically identify both explicit long-tail classes (globally underrepresented) and implicit long-tail patterns (semantically distinct, sparse sub-groups within any class) from the original training dataset Dtrain . This targeted identification ensures that sub-sequent augmentation efforts are focused on the most crit-ical areas needing data enhancement for improving model robustness on rare cases. To achieve this, as shown in Figure 1(a), the LDT first identifies explicit long-tail classes Yexp tail based on a prede-fined sample count threshold kexplicit (set, for example, to identify classes with fewer samples than the 25th percentile of class sizes in our experiments). For identifying implicit long-tail patterns Cimp tail within each class, we employ a two-step process. First, samples xi belonging to a given class are mapped to a high-dimensional embedding space using a pre-trained sentence encoder, specifically Sentence-BERT, 32339 Figure 1: Overview of the proposed DEALT framework: (a) The Long-tail distribution detector identifies explicit and implicit tail samples from the training data. (b) Diversity planning leverages seed data and knowledge to create diverse generation instructions. (c) Conditional diversity generation uses an LLM to produce raw augmented samples based on the plan. (d) The Quality and diversity validator filters samples through rapid screening, metric-based diversity assessment, and LLM-powered adjudication. (e) The Adaptive incremental sampler and evaluator closes the loop by assessing proxy model performance, analyzing results, and refining the strategy. which maps xi to an embedding ei. Second, the DBSCAN clustering algorithm is applied to these class-conditional em-beddings. DBSCAN is selected for its ability to discover clusters of arbitrary shapes and to identify noise points, mak-ing it suitable for uncovering nuanced sub-patterns. A clus-ter c discovered by DBSCAN is identified as an ”implicit long-tail” if its size (number of samples) is less than a pre-defined threshold kimplicit . In our implementation, kimplicit is set to 5, targeting very sparse sub-patterns, though this value is adjustable based on dataset characteristics. The target samples Starget for augmentation are then ag-gregated from both explicit and implicit long-tails: 
+
+Starget = [
+
+> y∈Y exp tail
+
+{xi|yi = y}∪ [
+
+> c∈C imp tail
+
+Select rep (c, k rep ). (1) The function Select rep (c, k rep ) selects krep representative samples from each identified implicit long-tail cluster c. In our framework, krep is set to 1, and the selected sample is the one closest to the geometric median of the cluster, providing a robust representation for potentially non-convex clusters. The DBSCAN ‘eps‘ parameter, defining the neighborhood distance, is individually tuned for each dataset by analyzing its embedding space using k-distance plots to find an opti-mal value, typically falling within the 0.3 to 0.5 range for the normalized embeddings used. The ‘min samples‘ parameter for DBSCAN is set to 3. 
+
+Diversity Planning (DP) 
+
+The goal of the Diversity Planning (DP) module is to trans-form a single seed sample xseed ∈ Starget into a struc-tured plan Pplan containing N distinct, high-quality gener-ation instructions. This process utilizes an LLM’s Chain-of-Thought (CoT) capability (Wei et al. 2022; Kojima et al. 2022) to explicitly plan diverse augmentation strategies, in-corporating domain knowledge from Kpool and thereby mov-ing beyond simple paraphrasing or predefined rule-based op-erations. As depicted in Figure 1(b), the knowledge pool Kpool is first dynamically constructed: the LLM is prompted to list concepts and terms related to the seed sample xseed and its label yseed . Subsequently, the planner LLM for the DP mod-ule, denoted LLM CoT , is engaged using a CoT prompt. This prompt directs the LLM CoT to first analyze xseed along pre-defined diversity dimensions D (which, in our implementa-tion, include lexical substitution, syntactic restructuring, and 32340 semantic scenario alteration). It then utilizes the generated 
+
+Kpool to propose concrete modifications along these dimen-sions, ensuring the N (set to 3 in our experiments) resulting instructions in Pplan are designed to be distinct and action-able for the subsequent generation phase: 
+
+Pplan = LLM CoT (xseed , y seed , Kpool , D, N ). (2) where LLM CoT operates in CoT mode, xseed , y seed are the seed sample and label, Kpool provides relevant concepts, D
+
+guides the planning within the DP module, and N dictates the number of instructions generated. 
+
+Conditional Diversity Generation (CDG) 
+
+The CDG aims to faithfully execute the generation instruc-tions from Pplan to produce diverse augmented text samples 
+
+xaug j . The objective is to ensure the LLM’s generation is pre-cisely guided by the planned strategy, translating it into con-crete textual variations that are consistent with the original label yseed .As shown in Figure 1(c), for each instruction inst j ∈Pplan for seed xseed (label yseed ), we employ a generative LLM Lgen (can share the same base model as LLM CoT 
+
+but used with a generation prompt). A carefully formatted prompt is constructed before calling the LLM: 
+
+xaug j = Lgen (Prompt gen (xseed , y seed , inst j )) . (3) where Prompt gen (·) constructs the input string for Lgen , ex-plicitly including the original sample, label, and instruction, 
+
+"Original (label: [yseed ]): ’[ xseed ]’. Instruction: ’[ inst j ]’. Generate new sample per instruction, valid for ’[ yseed ]’." The resulting raw samples form Daug raw .
+
+Quality and Diversity Validator (QDV) 
+
+The purpose of the QDV is to rigorously assess each gener-ated sample xaug j ∈ D aug raw for semantic quality (label fidelity, plausibility) and meaningful diversity (novelty against xseed 
+
+and other accepted samples Daug val ). A cost-effective, hierar-chical validation pipeline combining automated checks with targeted LLM judgments is employed. As illustrated in Figure 1(d), validation starts with a proxy model Mproxy checking label consistency ( ypred = yseed ). Diversity is measured using Diversity (xaug j , x seed , Daug val \{xaug j }), a composite score based on embedding distance (cosine distance from xseed ’s embedding eseed ) and lexical novelty (1-BLEU). LLM validation LLM val is triggered if proxy confidence is below τconf or diversity is below τdiv :Validate (xaug j , x seed , Dtrain ) → { accept, reject }. (4) where a sample is accepted if it passes initial checks with high confidence/diversity, or if it passes a triggered LLM val 
+
+assessment. Thresholds τconf , τ div are hyperparameters. Ac-cepted samples form Daug val .
+
+Adaptive Incremental Sampler and Evaluator (AISE) 
+
+The AISE creates an intelligent closed-loop system to dy-namically steer augmentation by selecting impactful sam-ples for the next round and evaluating utility via proxy met-rics, optimizing the process iteratively under budget con-straints. As shown in Figure 1(e), validated samples Daug val up-date a temporary training set D′
+
+> train
+
+. The proxy Mproxy is retrained/evaluated on Dval . The Adapt function uses per-formance change ( ∆Perf), error analysis (ErrAnalysis from 
+
+Logs ), and remaining budget (Budget rem ) to determine the next targets S′ 
+
+> target
+
+and updated parameters Ψ:
+
+(S′
+
+> target
+
+, Ψ) = Adapt (∆ Perf Mproxy (Dval ),
+
+ErrAnalysis , Budget rem ). (5) where Adapt (·) prioritizes S′ 
+
+> target
+
+from classes/clusters with poor ∆Perf or high error rates, using uncertainty sampling via Mproxy . Ψ might adjust D weights based on success-ful instruction types noted in Logs . Iteration stops when Budget rem is zero or ∆Perf plateaus below tolerance ϵ. If the iteration continues, the newly determined S′ 
+
+> target
+
+and up-dated parameters Ψ are then fed back to the Diversity Plan-ning (DP) module to initiate the next round of augmentation strategy formulation. 
+
+# Experiments 
+
+To comprehensively evaluate the proposed DEALT frame-work, we conduct a series of experiments on several pub-lic text classification datasets, covering various task types and long-tail distribution characteristics. We aim to assess 
+
+DEALT ’s effectiveness in improving long-tailed classifica-tion performance, its ability to generate diverse and faithful augmentations, and the contributions of its core components. 
+
+Experimental Setup 
+
+Datasets. We selected six English text classification datasets: AG News (Zhang, Zhao, and LeCun 2015), Yelp Reviews Polarity (Zhang, Zhao, and LeCun 2015), CLINC150 (Larson et al. 2019), HWU64 (Casanueva et al. 2020), TREC (Li and Roth 2002), and Symptoms (Dai et al. 2025). Long-tailed AG News (IF=100) and Yelp (IF=50) versions were created via exponential decay sampling, a common strategy in long-tail research (Wang et al. 2024). CLINC150 (Larson et al. 2019) and HWU64 (Casanueva et al. 2020) were used in standard 10-shot settings, rel-evant to few-shot studies like (Kim et al. 2025). Low-resource TREC (Li and Roth 2002) (20-shot) and Symp-toms (Dai et al. 2025) scenarios were simulated, aligning with low-resource augmentation practices (Choi et al. 2024). All datasets underwent standard preprocessing. Experimen-tal outline provides further details 
+
+Evaluation Metrics. Primary classification metrics in-clude overall Accuracy and Macro-F1. For AG News and Yelp, we also report per-class F1 scores for head, medium, and tail categories. Augmentation diversity is measured by semantic dissimilarity (average cosine dissimilarity us-ing all-MiniLM-L6-v2 (Reimers and Gurevych 2019) embeddings) and lexical diversity (distinct-1, distinct-2 n-grams (Li et al. 2015)). Fidelity is assessed by human evalu-ation of label consistency on a subset of augmented samples, 32341 reporting label consistency rate and Fleiss’ Kappa. LLM ef-ficiency is measured by API call counts or total token usage. 
+
+Baselines. We compare DEALT against: (1) No Aug-mentation (Original). (2) Traditional DA: EDA (Wei and Zou 2019) and Back-Translation (Tiedemann and Thottingal 2020). (3) Classical Long-tail Methods: Random Oversam-pling and Class-balanced Loss (Re-weighting). (4) Simple LLM DA: LLM-Paraphrase (Zero-shot and Few-shot). (5) SOTA LLM DA: AugGPT (reproduced) (Dai et al. 2025), DoAug (core idea reproduced with DPO (Rafailov et al. 2023)) (Wang et al. 2025), Self-LLMDA (instruction set simulated) (Li et al. 2024b), TARDiS (Spark Thoughts simu-lated) (Kim et al. 2025), and ZeroGen (reproduced) (Ye et al. 2022). 
+
+Implementation Details. The DEALT framework pri-marily utilizes GPT-4o-mini for its LLM-driven components (DP, CDG, and LLM judgments in QDV). The downstream classification task for all experiments and baselines em-ployed a bert-base-cased model (Devlin et al. 2019) fine-tuned on the respective training sets (original or aug-mented). For bert-base-cased , we used a learning rate of 2 × 10 −5, a batch size of 16, and trained for 5 epochs with early stopping based on validation performance. The maximum sequence length was set to 256 tokens. Specific configurations for DEALT’s components and LLM prompt-ing are detailed in Appendix. All experiments were run 3 times with different random seeds, and we report mean per-formance with standard deviation. 
+
+Main Results: Performance on Long-Tailed Classification 
+
+Table 1 presents the primary classification results, in-cluding both Macro-F1 (F1) and Accuracy (Acc) scores, of DEALT compared to baseline methods across all six datasets. DEALT consistently outperforms all baseline meth-ods across most datasets and metrics. For instance, on AG News (IF=100), DEALT achieves a Macro-F1 of 78 .52% 
+
+and an Accuracy of 86 .89% . This is a significant improve-ment over No Augmentation (F1 68 .73% , Acc 79 .52% ) and even SOTA LLM DA methods like DoAug (Reproduced) (F1 77 .58% , Acc 84 .71% ) and TARDiS (Sim.) (F1 77 .58% ,Acc 84 .98% ). Similar strong trends for DEALT are observed on Yelp Polarity (IF=50), where it achieves F1 55 .05% and Acc 58 .07% .For the naturally fine-grained and implicitly long-tailed datasets CLINC150 and HWU64, DEALT demonstrates sub-stantial gains. On CLINC150 (10-shot), DEALT achieves a Macro-F1 of 86 .33% (Acc 86 .57% ), compared to 85 .42% 
+
+F1 (Acc 85 .55% ) for DoAug (Reproduced), the second-best on this F1 metric, and 85 .35% F1 (Acc 85 .76% ) for TARDiS (Sim.). This highlights DEALT ’s capability in handling sce-narios with sparse data per class and generating discrimi-native samples. On the low-resource TREC and Symptoms datasets, DEALT also shows strong performance, indicat-ing its robustness in diverse low-data regimes. For TREC, 
+
+DEALT reaches F1 92 .58% and Acc 92 .59% . For Symp-toms, it scores F1 77 .80% and Acc 77 .58% . The consistent improvements underscore DEALT ’s effectiveness in lever-
+
+Figure 2: Ablation study results (Macro-F1 %). DEALT w/o X means component X is removed. w/o Implicit means Im-plicit long-tail handling in LDT is removed. aging LLMs for targeted and diversity-aware data augmen-tation in long-tailed settings. Specifically, the tail-class performance on AG News and Yelp sees notable improvements with DEALT . For example, on AG News, the average F1 for tail classes improves from 
+
+29 .35% (No Aug.) to 58 .10% (DEALT ), demonstrating its ability to effectively augment under-represented categories. This suggests that the diversity-aware strategies and implicit long-tail handling in DEALT are crucial for boosting tail-class recognition. (Note: You might need to adjust the text description if the H/M/T values are no longer explicitly in the table, or refer to supplementary material for those de-tails.) 
+
+Ablation Studies 
+
+To understand the contribution of each component in 
+
+DEALT , we conduct ablation studies on the CLINC150 and AG News (IF=100) datasets. The results are presented in Figure 2. Removing the LDT leads to a significant performance drop ( 1.58% on CLINC150, 2.34% on AG News). This un-derscores the importance of identifying both explicit and implicit long-tails and selecting representative seeds. Dis-abling the DP results in a Macro-F1 decrease of 1.23% on CLINC150 and 1.57% on AG News, highlighting the ben-efit of dynamically generating diverse augmentation strate-gies. Excluding the explicit handling of implicit long-tails causes a drop, particularly on CLINC150 ( 0.68% ), confirm-ing the value of addressing class-internal imbalances. Op-erating without the QDV degrades performance by 2.12% 
+
+and 2.72% on CLINC150 and AG News respectively, show-ing the necessity of a quality control mechanism. Finally, removing the AISE (single-round augmentation) shows a notable drop, with performance decreasing by 1.03% on CLINC150. This indicates that iterative refinement and budget-aware augmentation are key to DEALT ’s success. These ablations collectively demonstrate that all compo-nents of DEALT contribute positively to its overall perfor-mance, with LDT and QDV showing particularly strong im-pact. 
+
+Diversity and Fidelity Evaluation 
+
+We evaluate the diversity of augmented data generated by 
+
+DEALT and baselines on the Symptoms dataset. Results are 32342 Table 1: Main Results: Macro-F1 / Accuracy (%) scores on long-tailed text classification datasets. Best F1 results per dataset are in bold , second best are underlined; corresponding Acc scores are highlighted similarly. 
+
+Traditional DA Classical Long-tail Simple LLM DA SOTA LLM DA 
+
+Dataset 
+
+> (Setting)
+
+No Aug. 
+
+> F1/Acc
+
+EDA 
+
+> F1/Acc
+
+Back-Tr. 
+
+> F1/Acc
+
+Rand. OS 
+
+> F1/Acc
+
+CB Loss 
+
+> F1/Acc
+
+LLM-P (0) 
+
+> F1/Acc
+
+LLM-P (F) 
+
+> F1/Acc
+
+AugGPT 
+
+> F1/Acc
+
+DoAug 
+
+> F1/Acc
+
+Self-LLM 
+
+> F1/Acc
+
+TARDiS 
+
+> F1/Acc
+
+ZeroGen 
+
+> F1/Acc
+
+DEALT 
+
+> F1/Acc
+
+AG News 
+
+> (IF=100)
+
+68.73 79.52 70.87 80.31 70.05 80.01 72.10 81.28 71.38 80.93 74.65 82.83 75.38 83.32 76.20 84.05 77.58 84.71 75.72 83.64 77.58 84.98 73.81 82.11 
+
+78.52 86.89 
+
+Yelp Pol. 
+
+> (IF=50)
+
+50.68 51.67 51.69 52.45 50.93 52.11 51.94 53.37 52.35 53.06 52.65 54.70 52.95 55.26 53.73 55.84 54.78 56.25 53.35 55.53 54.15 56.44 53.75 54.03 
+
+55.05 58.07 
+
+CLINC150 
+
+> (10-shot)
+
+81.92 82.51 82.53 83.12 82.24 82.99 82.01 82.73 81.95 82.65 83.71 84.24 84.02 84.56 84.53 85.01 85.42 85.55 84.80 85.24 85.35 85.76 83.22 83.86 
+
+86.33 86.57 
+
+HWU64 
+
+> (10-shot)
+
+78.21 78.91 78.82 79.52 78.53 79.25 78.31 79.04 78.25 78.99 80.03 80.53 80.35 80.82 80.81 81.33 81.50 81.96 81.03 81.06 81.77 82.14 79.45 80.07 
+
+82.95 83.03 
+
+TREC 
+
+> (20-shot)
+
+87.93 88.57 88.61 89.22 88.35 89.05 88.11 88.86 87.99 88.54 89.70 90.18 90.12 90.59 90.60 91.03 91.13 91.54 90.42 90.80 91.35 91.77 89.30 89.88 
+
+92.58 92.59 
+
+Symptoms 
+
+> (15-shot)
+
+69.50 70.23 70.82 71.57 70.21 71.05 70.03 70.83 69.88 70.53 72.91 73.55 73.40 74.03 74.55 75.16 75.41 76.02 74.10 74.75 75.12 76.39 72.15 72.89 
+
+77.80 77.58 
+
+Table 2: Diversity and Fidelity on the Symptoms dataset. Higher semantic dissimilarity, distinct-1/2 are better. Higher label consistency is better.                                                           
+
+> Method Semantic Dissim. (Seed-Aug / Aug-Aug) Distinct-1 Distinct-2 Label Consist. (% / Kappa)
+> Original (ref) - / 0.37 0.077 0.264 -EDA 0.18 /0.22 0.089 0.295 91 .2% /0.83
+> Back-Translation 0.22 /0.25 0.083 0.288 93 .5% /0.84
+> LLM-Para. (0-shot) 0.25 /0.33 0.089 0.345 94 .8% /0.88
+> AugGPT (Rep.) 0.28 /0.38 0.098 0.375 95 .5% /0.90
+> DoAug (Rep.) 0.32 /0.41 0.093 0.361 96 .1% /0.91
+> DEALT (Ours) 0.38 /0.49 0.105 0.421 97.2% /0.93
+
+shown in Table 2. (This table did not contain \pm values initially, so it remains largely unchanged in content.) 
+
+DEALT achieves the highest semantic dissimilarity scores, both between seed-augmented pairs (0.38 ) and within the augmented set itself ( 0.49 ). This indicates that 
+
+DEALT generates paraphrases that are meaningfully differ-ent from the original seeds and also diverse among them-selves. It also scores highest on lexical diversity. Crucially, this diversity does not come at the cost of semantic integrity. Human evaluation shows a label consistency rate of 97 .2% 
+
+for DEALT , with a Fleiss’ Kappa of 0.93 , indicating substan-tial agreement among annotators and high fidelity of the aug-mented samples. This is comparable to or better than SOTA LLM DA methods like DoAug (Rep.), and significantly bet-ter than traditional methods like EDA. These results suggest that DEALT ’s DP and QDV work effectively to produce var-ied yet semantically coherent augmentations. 
+
+Efficiency and Cost Analysis 
+
+To evaluate the practical efficiency of our method, we con-ducted an empirical analysis of the LLM API calls required for augmenting the TREC dataset. The experiment was con-figured with 20 shots per class for 6 classes (total 120 seed Table 3: Empirical LLM API calls for augmenting TREC (20-shot), averaged over 5 runs. Values indicate mean ± stan-dard deviation, reflecting the operational stability of each method.                                     
+
+> Method Observed LLM Calls (Synthesis Only)
+> LLM-Paraphrase (0-shot, 1 aug/seed) 124 ±3calls AugGPT (Rep., 1 aug/seed) 127 ±5calls DoAug (Rep., 1 aug/seed after DPO) DPO cost (High) + 122 ±2calls Self-LLMDA (Sim., 1 aug/seed, rand instr.) 126 ±8calls
+> DEALT (Ours, 3 strat/seed, tail focus)
+> - DP (strategy gen.) 191 ±9calls - CDG (sample gen.) 63 ±3calls - QDV (LLM adjudication) 8±2calls
+> Total DEALT (1st round, tail only) ∼262 calls
+
+samples), focusing augmentation on 3 identified tail classes. For each seed, DEALT was set to generate N=3 diversity strategies. We performed 5 independent runs and recorded the actual number of API calls, reporting the mean and stan-dard deviation to capture real-world performance. Table 3 shows the observed API calls, with variance re-flecting real-world factors like API retries. Method stability varied as expected: the DPO-tuned DoAug was most reliable (122 ± 2 calls), while the instruction-based Self-LLMDA showed the highest variance ( 126 ± 8). For our method, 
+
+DEALT , the creative DP stage was the primary source of variance ( 191 ± 9), whereas the subsequent CDG stage was highly stable ( 63 ± 3). Including a few LLM adjudications in QDV ( 8 ± 2), DEALT ’s total first-round cost was approx-imately 262 calls. While higher than one-pass methods, this is far more efficient than the costly DPO fine-tuning required by DoAug. The AISE module further refines this process ef-ficiently in subsequent rounds. 32343 Figure 3: Hyperparameter sensitivity on CLINC150. Left: Varying kimplicit (N=3). Right: Varying N (kimplicit =10%). 
+
+Analysis of Implicit Long-Tail Handling 
+
+To specifically evaluate the impact of handling implicitly long-tailed distributions, we compare the full DEALT frame-work against a variant where the LDT only identifies ex-plicitly tail classes (based on global sample counts) on the CLINC150 dataset. As shown in Fig. 2 (row ”w/o Implicit LT Handling”), disabling the class-internal clustering and implicit pat-tern mining results in a Macro-F1 drop from 86 .33% 
+
+to 85 .65% on CLINC150. This 0.68% difference high-lights that a significant portion of the performance gain on such fine-grained datasets comes from DEALT ’s abil-ity to identify and augment under-represented sub-clusters or ”implicit tails” within seemingly well-represented classes. For example, within a broad ”book flight” in-tent, DEALT might identify a sub-cluster related to ”book-ing flights with specific dietary requirements” which has few examples, and then generate targeted diverse strategies for it. This capability is crucial for robust performance in real-world scenarios where data sparsity can exist at a very granular level. 
+
+Hyperparameter Sensitivity Analysis 
+
+We analyze the sensitivity of DEALT to two key hyper-parameters using experiments on CLINC150: kimplicit , the threshold for identifying implicit long-tails (as a percentage of average samples per class), and N , the number of diver-sity strategies generated per seed sample by the DP. The pri-mary evaluation metric is Macro-F1. Figure 3 conceptually illustrates these sensitivities. For 
+
+kimplicit (Figure 3, Left, with N = 3 fixed), we observe that Macro-F1 performance initially increases as kimplicit 
+
+rises from very small values, indicating that some level of focus on sub-patterns is beneficial. The performance reaches an optimal plateau or peak region when kimplicit is approximately between 10% and 15%. Excessively small 
+
+kimplicit values result in suboptimal performance, likely due to an over-focus on minor, possibly noisy, variations within classes. Interestingly, when kimplicit increases beyond the op-timal range (towards 20-30%), the performance degradation is relatively graceful, showing a slow decline or stabilization slightly below the peak. This suggests that while overly large thresholds might miss some finer-grained implicit tails, they do not drastically impair overall performance.  
+
+> (a) Sensitivity to kexplicit .
+> (b) Sensitivity to AISE itera-tive rounds.
+
+Figure 4: Sensitivity analyses on CLINC150 (Macro-F1 %). For the number of strategies N (Figure 3, Right, with 
+
+kimplicit fixed at a representative 10%), Macro-F1 perfor-mance demonstrates clear improvement as N increases from 1 to 3. The peak performance is achieved at N = 3 . When 
+
+N is further increased to 4 and 5, the gains in Macro-F1 di-minish, and a slight plateau or even a marginal decrease is observed. This suggests that while exploring multiple aug-mentation strategies is beneficial, generating an excessive number of strategies for each seed offers diminishing returns and may introduce redundancy or noise, without a propor-tional gain in performance, while also increasing computa-tional overhead. 
+
+kexplicit (LDT Module): This parameter defines the thresh-old for identifying globally long-tailed classes. As shown in Figure 4a, performance is relatively stable across a range of reasonable kexplicit values. Both overly aggressive and con-servative thresholds can lead to suboptimal performance. Our default setting (25th percentile of class sizes or mini-mum count) falls within a robust region. AISE Module (Iterative Rounds): This module iteratively refines augmentation strategies. Figure 4b indicates that Macro-F1 performance generally improves with an increas-ing number of AISE rounds, typically up to 3 rounds. Be-yond this, gains become marginal, suggesting diminishing returns. Thus, 2-3 rounds of adaptive refinement are often sufficient to achieve effective augmentation while balanc-ing computational overhead. Our default setting uses a max-imum of 3 iterations. Based on this analysis, our default choice of kimplicit =max(5 , approx. 10% of avg. class size ) and N = 3 is em-pirically supported, providing a robust balance between per-formance, diversity, and computational efficiency. 
+
+# Conclusion 
+
+To address long-tailed text classification, we propose 
+
+DEALT , a cognitive-inspired LLM data augmentation framework. Leveraging a ”recognize, explore, generate, optimize” pipeline, DEALT systematically produces high-quality, diverse data tailored to sparse classes. Extensive ex-periments demonstrate DEALT ’s superior performance over state-of-the-art methods, significantly improving tail-class recognition and robustness. This is due to its ability to gen-erate label-consistent augmented data, with ablation studies validating each component’s importance. 32344 References 
+
+Audibert, A.; Gauffre, A.; and Amini, M.-R. 2024. Ex-ploring contrastive learning for long-tailed multi-label text classification. In Joint European Conference on Machine Learning and Knowledge Discovery in Databases , 245–261. Springer. Binz, M.; and Schulz, E. 2023. Turning large language mod-els into cognitive models. arXiv preprint arXiv:2306.03917 .Brown, T.; Mann, B.; Ryder, N.; Subbiah, M.; Kaplan, J. D.; Dhariwal, P.; Neelakantan, A.; Shyam, P.; Sastry, G.; Askell, A.; et al. 2020. Language models are few-shot learners. Ad-vances in neural information processing systems , 33: 1877– 1901. Casanueva, I.; Temˇ cinas, T.; Gerz, D.; Henderson, M.; and Vuli´ c, I. 2020. Efficient intent detection with dual sentence encoders. arXiv preprint arXiv:2003.04807 .Chen, C.; Zhang, Y.; Li, Y.; Wang, J.; Qi, L.; Xu, X.; Zheng, X.; and Yin, J. 2024. Post-training attribute unlearning in recommender systems. ACM Transactions on Information Systems , 43(1): 1–28. Chen, X.; Li, Y.; Cai, H.; Ma, Z.; Chen, X.; Xiong, H.; Wang, S.; He, B.; Sun, L.; and Yin, D. 2025. Multi-Agent Proac-tive Information Seeking with Adaptive LLM Orchestration for Non-Factoid Question Answering. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 , 4341–4352. Choi, J.; Jin, K.; Lee, J.; Song, S.; and Kim, Y. 2024. AutoAugment Is What You Need: Enhancing Rule-based Augmentation Methods in Low-resource Regimes. arXiv preprint arXiv:2402.05584 .Dai, H.; Liu, Z.; Liao, W.; Huang, X.; Cao, Y.; Wu, Z.; Zhao, L.; Xu, S.; Zeng, F.; Liu, W.; et al. 2025. Auggpt: Leveraging chatgpt for text data augmentation. IEEE Transactions on Big Data .Devlin, J.; Chang, M.-W.; Lee, K.; and Toutanova, K. 2019. Bert: Pre-training of deep bidirectional transformers for lan-guage understanding. In Proceedings of the 2019 conference of the North American chapter of the association for compu-tational linguistics: human language technologies, volume 1 (long and short papers) , 4171–4186. Ding, B.; Qin, C.; Zhao, R.; Luo, T.; Li, X.; Chen, G.; Xia, W.; Hu, J.; Tuan, L. A.; and Joty, S. 2024. Data augmenta-tion using llms: Data perspectives, learning paradigms and challenges. In Findings of the Association for Computa-tional Linguistics ACL 2024 , 1679–1705. Guo, D.; Xu, W.; Ding, W.; Yao, Y.; Wang, X.; Pedrycz, W.; and Qian, Y. 2024. Concept-cognitive learning survey: Min-ing and fusing knowledge from data. Information Fusion ,109: 102426. He, Y.-C.; Ding, Y.-X.; Ye, H.-J.; and Zhou, Z.-H. 2024. Learning only when it matters: cost-aware long-tailed classi-fication. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 38, 12411–12420. Jia, Y.; Peng, X.; Wang, R.; and Zhang, M.-L. 2024. Long-tailed partial label learning by head classifier and tail classi-fier cooperation. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 38, 12857–12865. Kim, K.; Im, S.; Kim, G.; and Oh, H.-S. 2025. TARDiS: Text Augmentation for Refining Diversity and Separability. 
+
+arXiv preprint arXiv:2501.02739 .Kojima, T.; Gu, S. S.; Reid, M.; Matsuo, Y.; and Iwasawa, Y. 2022. Large language models are zero-shot reason-ers. Advances in neural information processing systems , 35: 22199–22213. Larson, S.; Mahendran, A.; Peper, J. J.; Clarke, C.; Lee, A.; Hill, P.; Kummerfeld, J. K.; Leach, K.; Laurenzano, M. A.; Tang, L.; et al. 2019. An evaluation dataset for intent classification and out-of-scope prediction. arXiv preprint arXiv:1909.02027 .Li, J.; Galley, M.; Brockett, C.; Gao, J.; and Dolan, B. 2015. A diversity-promoting objective function for neural conver-sation models. arXiv preprint arXiv:1510.03055 .Li, X.; and Roth, D. 2002. Learning question classifiers. In 
+
+COLING 2002: The 19th International Conference on Com-putational Linguistics .Li, Y.; Cai, H.; Kong, R.; Chen, X.; Chen, J.; Yang, J.; Zhang, H.; Li, J.; Wu, J.; Chen, Y.; et al. 2025a. Towards AI Search Paradigm. arXiv preprint arXiv:2506.17188 .Li, Y.; Cao, Y.; He, H.; Cheng, Q.; Fu, X.; Xiao, X.; Wang, T.; and Tang, R. 2025b. M²IV: Towards Efficient and Fine-grained Multimodal In-Context Learning via Representation Engineering. In Second Conference on Language Modeling .Li, Y.; Chen, C.; Zhang, Y.; Liu, W.; Lyu, L.; Zheng, X.; Meng, D.; and Wang, J. 2023a. Ultrare: Enhancing re-ceraser for recommendation unlearning via error decompo-sition. Advances in Neural Information Processing Systems ,36: 12611–12625. Li, Y.; Chen, C.; Zheng, X.; Zhang, Y.; Han, Z.; Meng, D.; and Wang, J. 2023b. Making users indistinguishable: Attribute-wise unlearning in recommender systems. In Pro-ceedings of the 31st ACM International Conference on Mul-timedia , 984–994. Li, Y.; Ding, K.; Wang, J.; and Lee, K. 2024a. Empowering Large Language Models for Textual Data Augmentation. In Ku, L.-W.; Martins, A.; and Srikumar, V., eds., Findings of the Association for Computational Linguistics: ACL 2024 ,12734–12751. Bangkok, Thailand: Association for Compu-tational Linguistics. Li, Y.; Ding, K.; Wang, J.; and Lee, K. 2024b. Empowering large language models for textual data augmentation. arXiv preprint arXiv:2404.17642 .Li, Y.; Feng, X.; Chen, C.; and Yang, Q. 2024c. Asurvey on recommendation unlearning: Fundamentals, tax-onomy, evaluation, and open questions. arXiv preprint arXiv:2412.12836 .Li, Y.; Lyu, Z.; Zhang, Y.; Zhang, H.; Peng, T.; Xiong, H.; Wang, S.; Kong, L.; Chen, G.; and Yin, D. 2025c. S
+
+ˆ{3} PRank: Towards Satisfaction-oriented Learning to Rank with Semi-supervised Pre-training. IEEE Transactions on Knowledge and Data Engineering .Li, Y.; Xiong, H.; Zhang, Y.; Bian, J.; Peng, T.; Li, X.; Wang, S.; Kong, L.; and Yin, D. 2025d. Rankelectra: Semi-supervised pre-training of learning-to-rank electra for web-scale search. In Proceedings of the 31st ACM SIGKDD 32345 Conference on Knowledge Discovery and Data Mining V. 1, 2415–2425. Li, Y.; Yang, J.; Shen, Z.; Han, L.; Xu, H.; and Tang, R. 2025e. CATP: Contextually Adaptive Token Pruning for Efficient and Enhanced Multimodal In-Context Learning. 
+
+arXiv preprint arXiv:2508.07871 .Li, Y.; Yang, J.; Yang, Z.; Li, B.; He, H.; Yao, Z.; Han, L.; Chen, Y. V.; Fei, S.; Liu, D.; et al. 2025f. Cama: Enhancing multimodal in-context learning with context-aware modu-lated attention. arXiv preprint arXiv:2505.17097 .Li, Y.; Yang, J.; Yun, T.; Feng, P.; Huang, J.; and Tang, R. 2025g. Taco: Enhancing multimodal in-context learning via task mapping-guided sequence configuration. In Proceed-ings of the 2025 Conference on Empirical Methods in Natu-ral Language Processing , 736–763. Li, Y.; Zhang, H.; Zhang, Y.; Cai, H.; Cai, M.; Wang, S.; Xiong, H.; Kong, L.; Yin, D.; and Chen, L. 2025h. Rankex-pert: A mixture of textual-and-behavioral experts for multi-objective learning-to-rank in web search. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discov-ery and Data Mining V. 2 , 4578–4589. Li, Y.; Zhang, H.; Zhang, Y.; Ma, X.; Ye, W.; Song, N.; Wang, S.; Xiong, H.; Yin, D.; and Chen, L. 2025i. M 2 oER-ank: Multi-Objective Mixture-of-Experts Enhanced Rank-ing for Satisfaction-Oriented Web Search. In 2025 IEEE 41st International Conference on Data Engineering (ICDE) ,4441–4454. IEEE. Li, Y.; Zhang, Y.; Liu, W.; Feng, X.; Han, Z.; Chen, C.; and Yan, C. 2025j. Multi-Objective Unlearning in Recom-mender Systems via Preference Guided Pareto Exploration. 
+
+IEEE Transactions on Services Computing .Radford, A.; Narasimhan, K.; Salimans, T.; Sutskever, I.; et al. 2018. Improving language understanding by gener-ative pre-training. Rafailov, R.; Sharma, A.; Mitchell, E.; Manning, C. D.; Ermon, S.; and Finn, C. 2023. Direct preference opti-mization: Your language model is secretly a reward model. 
+
+Advances in Neural Information Processing Systems , 36: 53728–53741. Reimers, N.; and Gurevych, I. 2019. Sentence-bert: Sen-tence embeddings using siamese bert-networks. arXiv preprint arXiv:1908.10084 .Shorten, C.; Khoshgoftaar, T. M.; and Furht, B. 2021. Text data augmentation for deep learning. Journal of big Data ,8(1): 101. Sugiyama, A.; and Yoshinaga, N. 2019. Data augmen-tation using back-translation for context-aware neural ma-chine translation. In Proceedings of the fourth workshop on discourse in machine translation (DiscoMT 2019) , 35–44. Tiedemann, J.; and Thottingal, S. 2020. OPUS-MT– Building open translation services for the World. In Annual Conference of the European Association for Machine Trans-lation , 479–480. European Association for Machine Trans-lation. Touvron, H.; Lavril, T.; Izacard, G.; Martinet, X.; Lachaux, M.-A.; Lacroix, T.; Rozi` ere, B.; Goyal, N.; Hambro, E.; Azhar, F.; et al. 2023. Llama: Open and efficient founda-tion language models. arXiv preprint arXiv:2302.13971 .Wang, P.; Zhao, Z.; Wen, H.; Wang, F.; Wang, B.; Zhang, Q.; and Wang, Y. 2024. Llm-autoda: Large language model-driven automatic data augmentation for long-tailed prob-lems. Advances in Neural Information Processing Systems ,37: 64915–64941. Wang, Z.; Zhang, J.; Zhang, X.; Liu, K.; Wang, P.; and Zhou, Y. 2025. Diversity-Oriented Data Augmentation with Large Language Models. arXiv preprint arXiv:2502.11671 .Wankhade, M.; Rao, A. C. S.; and Kulkarni, C. 2022. A sur-vey on sentiment analysis methods, applications, and chal-lenges. Artificial Intelligence Review , 55(7): 5731–5780. Wei, J.; Wang, X.; Schuurmans, D.; Bosma, M.; Xia, F.; Chi, E.; Le, Q. V.; Zhou, D.; et al. 2022. Chain-of-thought prompting elicits reasoning in large language mod-els. Advances in neural information processing systems , 35: 24824–24837. Wei, J.; and Zou, K. 2019. Eda: Easy data augmentation techniques for boosting performance on text classification tasks. arXiv preprint arXiv:1901.11196 .Weld, H.; Huang, X.; Long, S.; Poon, J.; and Han, S. C. 2022. A survey of joint intent detection and slot filling mod-els in natural language understanding. ACM Computing Sur-veys , 55(8): 1–38. Ye, J.; Gao, J.; Li, Q.; Xu, H.; Feng, J.; Wu, Z.; Yu, T.; and Kong, L. 2022. Zerogen: Efficient zero-shot learning via dataset generation. arXiv preprint arXiv:2202.07922 .Zeng, Z.; Luo, M.; Kong, X.; Liu, H.; Guo, H.; Yang, H.; Ma, Z.; and Zhao, X. 2024. Mitigating World Biases: A Mul-timodal Multi-View Debiasing Framework for Fake News Video Detection. In Proceedings of the 32nd ACM Interna-tional Conference on Multimedia , 6492–6500. Zeng, Z.; Wu, J.; Luo, M.; Kong, X.; Ma, Z.; Dai, G.; and Zheng, Q. 2025a. Understand, Refine and Summarize: Multi-View Knowledge Progressive Enhancement Learning for Fake News Video Detection. In Proceedings of the 33rd ACM International Conference on Multimedia , 9216–9225. Zeng, Z.; Wu, J.; Luo, M.; Wan, H.; Kong, X.; Ma, Z.; Dai, G.; and Zheng, Q. 2025b. IMOL: Incomplete-Modality-Tolerant Learning for Multi-Domain Fake News Video De-tection. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 30921–30933. Zhang, G.; Zhang, S.; and Yuan, G. 2024. Bayesian graph local extrema convolution with long-tail strategy for misin-formation detection. ACM Transactions on Knowledge Dis-covery from Data , 18(4): 1–21. Zhang, X.; Zhao, J.; and LeCun, Y. 2015. Character-level convolutional networks for text classification. Advances in neural information processing systems , 28. Zhang, Y.; Yang, R.; Xu, X.; Li, R.; Xiao, J.; Shen, J.; and Han, J. 2025. Teleclass: Taxonomy enrichment and llm-enhanced hierarchical text classification with minimal su-pervision. In Proceedings of the ACM on Web Conference 2025 , 2032–2042. 32346

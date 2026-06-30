@@ -1,0 +1,486 @@
+Title: A Unified Self-Regulating Training Framework for Federated Deep Reinforcement Learning
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/39946/43907
+
+Number of Pages: 9
+
+Markdown Content:
+# A Unified Self-Regulating Training Framework for Federated Deep Reinforcement Learning 
+
+# Meng Xu 1, Xinhong Chen *1 , Zhongying Chen 2, Guanyi Zhao 1, Yang Jin 3, Jianping Wang *1 
+
+> 1
+
+Department of Computer Science, City University of Hong Kong, Hong Kong, China 
+
+> 2
+
+School of Computer Science and Engineering, Southeast University, Nanjing, China 
+
+> 3
+
+Hangzhou Hikvision Digital Technology Co., Ltd., Hangzhou, China xinhong.chen@cityu.edu.hk; jianwang@cityu.edu.hk 
+
+Abstract 
+
+> Federated Deep Reinforcement Learning (FDRL) aims to en-able distributed collaborative training of multiple DRL models while preserving privacy. Existing FDRL methods function in static client environments, but real-world scenarios often involve dynamic state transitions, such as noise, which render static model topologies inadequate and result in biased policy loss. This degrades client performance and leads to subop-timal global policies. To address this challenge, we develop a generic solution, referred to as the self-regulating training framework, which can be seamlessly integrated into existing FDRL approaches to address dynamic state transitions. Specif-ically, we propose a Sparse Training (ST) method that dynam-ically sparsifies and adjusts the topology of each model during training to maximize model performance and reduce model complexity. Additionally, we introduce an auxiliary model to adaptively regulate the policy loss of client models, miti-gating loss bias and facilitating updates that yield improved returns. Experimental results demonstrate that our method en-hances six state-of-the-art (SOTA) FDRL approaches across nine tasks in terms of return.
+
+# Introduction 
+
+FDRL enables the distributed training of DRL models across a network of devices or edge nodes without sharing raw data. This approach preserves data privacy while leveraging the local knowledge of client devices in a distributed environ-ment, thus holding the potential to train a more performant global model. Consequently, FDRL has gained significant attention and is widely applied in areas such as recommen-dation systems (Javeed et al. 2023), autonomous driving (Fu et al. 2022), and robotic control (Yuan, Xu, and Zhu 2024). Existing FDRL methods are categorized into Horizontal FDRL (HFDRL) and Vertical FDRL (VFDRL). HFDRL in-volves clients’ training in independent local environments (Cha et al. 2020)(Jiang et al. 2025)(Wang et al. 2023), while VFDRL requires clients to collaborate in a shared environ-ment with diverse observations (Zhuo et al. 2019). HFDRL effectively protects client privacy while delivering superior model performance, making it the dominant approach. This work falls within this category. Current FDRL methods typ-ically assume that each client’s environment remains static, 
+
+> *Corresponding authors: Xinhong Chen, Jianping Wang. Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved.
+
+implying that state transition dynamics do not change. How-ever, real-world applications face factors like system noise and environmental variability, which introduce randomness and alter state transition dynamics, leading to dynamic tran-sitions. This variability compromises the performance of existing FDRL methods, resulting in suboptimal policies. For example, client vehicles using current FDRL methods may learn suboptimal policies due to dynamic road environments, leading to frequent collisions and traffic accidents. Despite efforts within the DRL community to address dy-namic environments, these methods fall short for FDRL for two main reasons. First, federated learning exacerbates the negative effects of dynamic environments on DRL. In FDRL, the global model is highly sensitive to the quality of client models (Jin et al. 2022)(Mai et al. 2023). Dynamic environ-ments can lead to suboptimal client models, which, when aggregated, significantly degrade the global model’s perfor-mance. This degraded model is then downloaded by clients for further training, creating a negative feedback loop. Sec-ond, FDRL imposes strict limitations on client model size and training due to the limited hardware capabilities of devices like smartphones. Current solutions often rely on larger mod-els, such as Generative Adversarial Networks (GANs) (Luo et al. 2024)(Khayatian, Nagy, and Bollinger 2021), which de-mand significant computational, storage, and communication resources to mitigate the effects of dynamic transitions. Thus, these approaches are impractical for resource-constrained clients and limited communication bandwidth. Motivated by these observations, this work proposes a generic approach that can be seamlessly integrated into ex-isting FDRL methods to address dynamic task environments. To achieve this, three challenges must be addressed. First, ex-isting research (Grooten et al. 2023) shows that static model topologies are insufficient for dynamic environments, requir-ing model topology adjustments during training to enhance performance. Second, clients cannot handle larger models, so the proposed method must minimize computational and storage costs. Finally, dynamic state transitions result in in-accurate reward signals, leading to biased loss calculations during model updates (DiMarco, Shipp, and Kishida 2024). This loss bias hinders the model’s ability to train toward optimal returns, ultimately resulting in suboptimal policies. To address the first and second challenges, we propose an ST method that sparsifies the FDRL model and dynamically The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+> 27296
+
+adjusts its sparse topology during training. This approach optimizes the model’s topology to improve performance and reduce its size. Specifically, we adjust each local model’s topology by removing a fixed number of unimportant con-nections after each update and introducing an equal number of new connections in previously unconnected areas. During the global aggregation process, each local model retains a distinct topology. When local models aggregate into a global model, they maintain their individual connections (Cha et al. 2020)(Jiang et al. 2025)(Wang et al. 2023), resulting in the global model having a different sparsity than the local mod-els. To resolve this, we apply a pruning step on the global model after aggregation to align its sparsity with that of the local models. To address the third challenge, we introduce an auxiliary model to adjust the policy loss of each local model, guiding the training process toward higher returns in dynamic environments. The auxiliary model computes an auxiliary loss, complementing the existing policy loss to reduce bias from dynamic state transitions. It is trained to maximize the Q-value by incorporating this auxiliary loss, ensuring the policy achieves greater returns. The key contributions are: 1) We present a generic solution that integrates seamlessly with existing FDRL approaches, dynamically adjusting model topology and loss to handle dy-namic state transitions. 2) We provide a complexity analysis covering computational, storage, and communication costs, along with a theoretical analysis explaining why our method outperforms existing approaches, demonstrating its superi-ority over current FDRL methods. 3) Extensive experiments show that our method outperforms six SOTA FDRL methods across nine dynamic tasks, achieving superior returns. 
+
+# Related Work 
+
+FDRL. FDRL techniques are categorized into HFDRL and VFDRL. In HFDRL, agents operate independently in local en-vironments with no mutual influence (Cha et al. 2020)(Jiang et al. 2025)(Wang et al. 2023). Key works include Sherine et al.’s hybrid FDRL approach for personalized gaming (Bo-das et al. 2018), Fan et al.’s FDRL framework addressing the Byzantine General Problem (Fan et al. 2021), and a de-centralized FDRL model (Wang et al. 2023). VFDRL in-volves agents collaborating in a shared environment with limited observations, as demonstrated by Zhuo et al.’s in-tegration of FDRL with Gaussian differentials (Zhuo et al. 2019). However, due to its inadequate privacy protection, HFDRL is more commonly used than VFDRL. Recently, FDRL research has intersected with transfer learning, multi-task learning, and policy distillation. Liang et al. propose an online FDRL method for car steering control (Liang et al. 2022), Liu et al. focus on meta-model training for lifelong learning (Liu, Wang, and Liu 2019), and Mai et al. introduce policy distillation for federated model aggregation (Mai et al. 2023). Other efforts, including (Zhou et al. 2024), (Wen et al. 2023), (Yue et al. 2024), and (Rengarajan et al. 2025), ex-plore offline FDRL. However, existing FDRL methods are constrained by static environments, with real-world noise and dynamic factors significantly affecting performance. 
+
+DRL in dynamic environments. Addressing dynamic en-vironments in DRL is a major challenge. Recent solutions focus on learning latent variables to infer environmental dy-namics (Wei and Luo 2021)(Lee et al. 2020), stable state distributions amid dynamic shifts (Xue et al. 2024), and dy-namic models for domain generalization (Cang et al. 2021). Additionally, Luo et al. (Luo et al. 2024) use a local replay buffer to capture stable dynamics, improving policy learning, while Bing et al. (Bing et al. 2023) introduce a meta-learning approach to enhance DRL. However, these solutions are not directly applicable to FDRL in dynamic environments due to two main reasons: 1) Federated learning exacerbates the impact of dynamic environments, with poor local models de-grading the global model, creating a harmful feedback loop; 2) Current methods require extensive model components, demanding significant resources that resource-limited client devices and bandwidth cannot support. 
+
+ST. Sparsification in neural networks has been a key focus in the DRL community, with past studies exploring pruning techniques. Livne and Cohen (Livne and Cohen 2020) used a dense teacher network for iterative pruning and retraining via knowledge distillation. Zhang et al. (Zhang, He, and Li 2019) paired a smaller network with a larger target network to im-prove policy and reduce sampling time. Lee et al. (Lee et al. 2021) combined weight grouping and pruning for efficient weight compression, while Vischer et al. (Vischer, Lange, and Sprekeler 2021) explored the lottery ticket hypothesis, show-ing sparse subnetworks outperform dense ones. However, iteratively pruning dense networks can be computationally expensive. Recently, ST methods have emerged for training sparse DRL from scratch, optimizing model topology, and reducing parameters (Sokar et al. 2021)(Xu, Chen, and Wang 2024)(Grooten et al. 2023)(Tan et al. 2023)(Xu et al. 2025). Yet, these ST methods apply only to regular DRL and can-not be used in FDRL, as aggregating local models increases global model connections, causing sparsity inconsistencies. 
+
+# Problem Formulation 
+
+Each client in FDRL employs DRL, training models using samples obtained through online interactions with the en-vironment. Training a convergent FDRL model is achieved by minimizing the weighted aggregation of the Temporal Difference (TD) error F (θ) across all clients, where Fi(θi)
+
+represents the TD error for the i-th client. Let γ be the dis-count factor, s the current state, a the action, r the reward, and s′ the next state. Let ij denote the index of the j-th sam-ple from the i-th client, θQi the critic for the i-th client, and 
+
+θQi ′ the target critic. The target value for the i-th client is 
+
+rij t + γ min i=1 ,2 QθQi ′
+
+
+
+sij t+1 , ˜a
+
+
+
+, and the current Q-value is QθQi
+
+
+
+sij t , a ij t
+
+
+
+. The minimization process of FDRL’s TD error is expressed as min θ F (θ) = PNa 
+
+> i=1
+
+piFi(θi), where          
+
+> Fi(θi) = X
+> j
+> 
+> QθQi
+> 
+> sij t, a ij t
+> 
+> −
+> 
+> rij t+γmin
+> i=1 ,2QθQi′
+> 
+> sij t+1 ,˜a
+>  2
+> (1)
+
+FDRL performance is evaluated based on the cumulative reward from the global model θ on the server, with a higher 27297 cumulative reward indicating better performance. While ex-isting FDRL methods have made significant progress in ag-gregating local models to enhance global model performance in static environments, real-world tasks are dynamic, influ-enced by factors such as environmental changes and sys-tem noise. These dynamics limit the effectiveness of current FDRL methods, resulting in suboptimal global models. 
+
+# Methodology 
+
+This section begins with an outline of our method’s frame-work, followed by a detailed overview of each module and a complexity analysis. The supplementary materials provide a full description of the pseudocode for our method and a theoretical analysis demonstrating its advantages. 
+
+The Framework For Our Method 
+
+The framework for our method is illustrated in Fig. 1, which introduces two modules to existing FDRL methods. The first module, the ST, aims to: 1) sparsify and adaptively adjust the topology of each local model throughout the training process to improve model performance and reduce size by dynamically removing unimportant connections and adding new ones at random locations, and 2) align the sparsity of the global model with that of each local model after aggregation on the server. The second module is the auxiliary model, integrated with each local model. The auxiliary model adjusts the actor’s loss in each local model by calculating an auxiliary loss, guiding the policy toward higher returns. The auxiliary model is trained using auxiliary mini-batches of the same size as the regular ones, randomly sampled from the local replay buffer, which stores the samples collected by each client from its interactions with the environment. 
+
+The Training For The Local Model 
+
+We now illustrate the client-side training process using a DRL model with one actor and two critics as an example, outlined as follows. (1) Initialization. Let θμ denote the actor, θQ1 and θQ2 rep-resent the two critics, and ˆθ is the auxiliary model. Let L be the number of layers in each network. The target actor and target critics, denoted as θμ′, θQ1 ′, and θQ2 ′, share the same initial sparse topology as the current networks. The sparsification of each model is implemented using a binary mask M = M i Li=1 , which indicates the locations of connections between layers. For M ij ∈ { 0, 1}, M ij = 1 
+
+indicates the presence of a connection j from layer i − 1 to layer i, while M ij = 0 signifies no connection. Let ni−1
+
+and ni represent the number of neurons in layers i − 1 and i,respectively. Following the current ST approach (Sokar et al. 2021)(Xu, Chen, and Wang 2024)(Grooten et al. 2023)(Tan et al. 2023)(Xu et al. 2025), we initialize the sparse topology of each layer i using an Erd ˝os-R ´enyi random graph, where the mask probability PM i for layer i is given by PM i =
+
+ξi n i+ni−1 
+
+> ni×ni−1
+
+. Here, ξi controls the sparsity level for layer i,and 1 − PM i represents the sparsity of the layer. Let M θμ
+
+denote the binary mask for the actor, and M θQ1 , M θQ2 , M ˆθ
+
+represent the binary masks for each critic and auxiliary model, respectively. The sparse topology for the actor, critic, and auxiliary model is then defined as θμ = θμ ⊙ M θμ ; ˆθ =ˆθ ⊙ M ˆθ ; θQl = θQl ⊙ M θQl , ∀l ∈ { 1, 2}. Here, ⊙ is the element-wise multiplication operator. (2) Training with the auxiliary model. We now introduce the training of the actor, the critics, and the auxiliary model separately. Before model updates, a mini-batch D0 of |D 0|
+
+samples {(s, a, r, s ′)} is drawn from the replay buffer D to update both the actor and the critics. Additionally, a sepa-rate auxiliary mini-batch Daux  
+
+> 0
+
+of |D aux  
+
+> 0
+
+| transitions, denoted as 
+
+n 
+
+ˆs, ˆa, ˆr, ˆs′
+
+o 
+
+, is sampled from the replay buffer D to update the auxiliary model. Note that |D aux  
+
+> 0
+
+| = |D 0|.(2.1) The update of critics. The critic θQi is updated using the loss function L(θQi ), defined as follows: 
+
+L(θQi ) = argmin θQi |D 0|−1 X
+
+> (s,a )∈D 0
+
+(y − QθQi (s, a )) 2
+
+(2) Here, y ← r + γ min i=1 ,2 QθQi ′ (s′, ˜a), where ˜a ←
+
+πθμ′ (s′) + ϵ, with ϵ ∼ N (0 , 0.2) representing noise added to the target actor’s actions, which are clipped to the range 
+
+(−0.5, 0.5) .(2.2) The update of the actor. The actor is updated using the mini-batch D0 in two steps: 1) the standard policy gradient update, and 2) the update using the auxiliary model. The first step involves the conventional update, J(θμ), as follows: 
+
+J(θμ) = |D 0|−1 X
+
+> (s,a )∈D 0
+
+∇aQθQ1 (s, π θμ(s))∇θμ πθμ (s)
+
+(3) After the standard update, we compute the actor’s loss on the auxiliary mini-batch Daux  
+
+> 0
+
+, denoted as Jaux1 (θμ), as follows: 
+
+Jaux 1(θμ) = −|D aux  
+
+> 0
+
+|−1 X
+
+> (ˆ s, ˆa)∈D aux
+> 0
+
+QθQ1 (ˆ s, π θμ(ˆ s)) (4) Next, we update the actor using the auxiliary model, a process referred to as the auxiliary update, as follows. Typically, the actor πθμ (s) = ¯ π(˜ π(s)) is viewed as both a feature extraction module ˜πθμ and a decision-making module ¯πθμ , with the decision-making module implemented as the final layer of the actor network. The features extracted by ˜πθμ , along with the state s and action a, are then input into an auxiliary model 
+
+ˆθ, consisting of a three-layer sparse Multi-Layer Perceptron (MLP). The output of this model is used to compute the loss 
+
+La(θμ) as follows: 
+
+La(θμ) = |D 0|−1 X
+
+> (s,a )∈D 0
+
+ˆθ (˜ πθμ , s, a ) (5) where ˆθ (˜ πθμ , s, a ) is the output of the auxiliary model when input ˜πθμ , s and a. The actor is then updated using the auxil-iary loss La(θμ) as follows: θμ ← θμ + α∇aLa(θμ) where 
+
+α is the learning rate. After updating the actor with the aux-iliary model and letting ¯θμ represent the updated actor, we compute the actor’s loss Jaux 2( ¯θμ) using the auxiliary mini-batch Daux  
+
+> 0
+
+, as follows: 27298 Replay buffer     
+
+> Sparse
+> Critic I
+> Sparse
+> Actor Local Model
+> Update
+> Mini-batch
+> Sparse
+> Critic II
+> Sparse Auxiliary
+> Model
+> Q-
+> value
+> Update
+> Auxiliary mini-batch Server
+> Local Model 1 Local Model 2 Local Model N Local Model N-1
+> Global Model
+
+…
+
+…
+
+…  
+
+> Download
+> Upload
+> Adjustment of topology
+> Auxiliary loss Update
+> Drop connections
+> Grow connections
+> Drop
+> Grow
+
+Figure 1: The framework for our method. Here, we illustrate our approach using a DRL model with two critics and one actor. 
+
+Jaux 2( ¯θμ) = −|D aux  
+
+> 0
+
+|−1 X
+
+> (ˆ s, ˆa)∈D aux
+> 0
+
+QθQ1 (ˆ s, π ¯θμ(ˆ s)) (6) (2.3) The update of the auxiliary model. Once the actor and critic have been updated, we proceed to update the auxil-iary model. The auxiliary model improves actor updates by reducing actor loss on the mini-batch Daux  
+
+> 0
+
+after the auxil-iary update, compared to before. This reduction indicates the actor’s benefit from the auxiliary model, resulting in better updates. Additionally, lower actor loss correlates with higher Q-values, reflecting greater long-term returns. Consequently, the loss for the auxiliary model consists of two parts. The first part, L1, represents the TD loss on the auxiliary mini-batch 
+
+Daux  
+
+> 0
+
+, and is given by: 
+
+L1 =
+
+> 2
+
+X
+
+> i=1
+
+|D aux  
+
+> 0
+
+|−1 X
+
+> (ˆ s, ˆa)∈D aux
+> 0
+
+(ˆ y − QθQi (ˆ s, ˆa)) 2
+
+ (7) Here, ˆy ← ˆr + γ min i=1 ,2 QθQi ′ (ˆ s′, ˜a), where ˜a ←
+
+πθμ′ (ˆ s′) + ϵ, with ϵ ∼ N (0 , 0.2) representing noise, which is clipped to the range (−0.5, 0.5) . The first part focuses on min-imizing the TD loss to ensure the convergence of the auxiliary model. Regarding the second part of the loss, −Jaux 2( ¯θμ)
+
+represents the Q-value (long-term value) of the actor’s ac-tions after the auxiliary update, while −Jaux 1(θμ) represents the Q-value before the update. The goal is to maximize the difference −Jaux 2( ¯θμ) − (−Jaux 1(θμ)) . Therefore, the sec-ond part, L2, aims to minimize Jaux 2( ¯θμ) − Jaux 1(θμ), as given by: 
+
+L2 = tanh (Jaux 2( ¯θμ) − Jaux 1(θμ)) (8) where the tanh function smoothly normalizes the difference 
+
+Jaux 2( ¯θμ) − Jaux 1(θμ), ensuring the output remains within the [−1, 1] range, thereby preventing excessive values. Based on the above, the auxiliary model ˆθ is updated as follows: 
+
+ˆθ ← ˆθ + α∇ˆθ (L1 + L2) (9) (3) Dynamic adjustment of sparse topology. After updating the networks, we dynamically adjust their sparse topology using a two-step ”drop and grow” procedure. Importance values identify connections to remove, while new connec-tions are grown randomly. Following SOTA ST methods in DRL (Sokar et al. 2021)(Xu, Chen, and Wang 2024), we use absolute values to represent connection importance, where lower absolute values indicate lower importance. (3.1) Drop connections. We first identify a subgroup of con-nections within each layer with the lowest importance based on their absolute values, referred to as low Iθi . The num-ber of these low-importance connections is denoted by Nd.To remove these connections, we use a mask M θ , which sets their values to 0. The mask is updated as follows: 
+
+M θ = M θ − 1 (−I θi , N d) , for all i ∈ { 1, . . . , ∥θ∥0}.Here, the norm ∥ · ∥ 0 represents the standard L0 norm, and 
+
+θi denotes the connection at index i. The function 1 is an indicator that converts the value to 1 based on the condition 
+
+−I θi (lower importance) and the count Nd.(3.2) Grow connections. In the second step, we ran-domly add Ng connections to positions where no con-nections currently exist. Here, Ng is equal to Nd. Simi-larly, the connection growth is achieved using M θ . The update process for M θ is as follows: M θ = M θ +
+
+1 (( θi == 0) ∧ Random , N g ) , for all i ∈ { 1, . . . , ∥θ∥0}.Here, ∧ denotes the logical AND operator, and θi == 0 
+
+indicates that no connection exists at the given position. Any newly added connections are initialized with zero values. Af-ter computing M θ , we update the model θ using the element-wise multiplication: θ = θ ⊙ M θ .(4) Updating the target networks. The target networks consist of an actor and two critics, and are updated using a soft update method with a delay. The update process is as follows: 
+
+θμ′ ← τ θ μ +(1 −τ )θμ′; θQi ′ ← τ θ Qi +(1 −τ )θQi ′, i = 1 , 2.Here, τ is the update coefficient. 
+
+Global Aggregation 
+
+After each local model is trained for a specified duration, defined by the communication frequency Nc according to the configuration of the integrated baseline FDRL method, the local models are uploaded to the server. These local models are then aggregated into a global model, as follows: 
+
+θagg = F (θ1, θ2, . . . , θNa ). Here, Na denotes the number 27299 of local models, F (·) is the aggregation function, and θj
+
+represents the parameters of the j-th local model. Different aggregation functions result in different global models. When applying our method to various baseline FDRL approaches, the aggregation function aligns with the specific method. For example, the average aggregation function is given by: 
+
+F (θ1, θ2, . . . , θNa ) = PNa  
+
+> j=1 1
+> Na
+
+θj .After aggregating local models into a global model, each client downloads it to continue local training. Since local models have distinct sparse topologies, current aggregation methods like average aggregation retain existing connec-tions but recalculate their values (Cha et al. 2020)(Jiang et al. 2025)(Wang et al. 2023). This results in a global model with reduced sparsity, prompting pruning post-aggregation to match the sparsity of the local models. First, we com-pute the absolute value ˜θagg j of each connection in the global model, where j = 1 , 2, . . . , ∥˜θagg j ∥0, and ∥˜θagg j ∥0 represents the total number of connections. The values are sorted in descending order, and the k largest connections to retain are identified, with k determined based on the sparsity of the global model. Next, we remove connections whose absolute value is smaller than the k-th largest connection, ˜θagg k (i.e., 
+
+˜θagg j < ˜θagg k ). The pruned connections are set to zero using a binary mask M θagg , defined as: θagg = θagg ⊙ M θagg .
+
+Complexity Analysis 
+
+This section evaluates the complexity of our method, includ-ing floating-point operations (FLOPs), storage consumption, and communication cost. The FLOPs reflect the computa-tional cost of our approach. Let θbaseline denote the dense model of the baseline FDRL, ˆθ the dense auxiliary model, I
+
+the input dimension of a fully connected layer (FCL), O the output dimension of the FCL, and S the sparsity. (1) FLOPs: To evaluate the FLOPs of our approach, we use an MLP as a representative example. Previous studies (Sokar et al. 2021)(Xu, Chen, and Wang 2024)(Grooten et al. 2023) show that the total FLOPs of a network are the sum of the FLOPs of each FCL. The FLOPs for an individual FCL are expressed as (1 − S) × (2 × I − 1) × O. Additionally, the computational cost of adjusting the network topology, such as adding or removing connections, is relatively small com-pared to the model’s computation and training and is often overlooked in current research (Sokar et al. 2021)(Tan et al. 2023)(Xu et al. 2025). Based on these factors, the FLOPs of our method with 50% sparsity are linearly related to the net-work’s parameter size, i.e., O(0 .5 ∗ ∥ θbaseline ∥0 + 0 .5∥ ˆθ∥0),while the FLOPs of baseline FDRL methods are linearly related to O(∥θbaseline ∥0). Furthermore, since ˆθ is equiva-lent in size to a critic in existing FDRL methods, we have 
+
+O(0 .5∗∥ θbaseline ∥0 +0 .5∥ ˆθ∥0) < O (∥θbaseline ∥0), demon-strating that the FLOPs of our method are lower than those of baseline FDRL methods. (2) Storage Consumption: The storage consumption of our method is O(0 .5 ∗ ∥ θbaseline ∥0 + |D| + 0 .5 ∗ ∥ ˆθ∥0) when the model sparsity is 50%. The storage consumption of ex-isting FDRL methods is O(∥θbaseline ∥0 + |D| ). Since ˆθ
+
+in our approach is equivalent in size to a single critic in DRL, we have O(0 .5 ∗ ∥ θbaseline ∥0 + |D| + 0 .5 ∗ ∥ ˆθ∥0) <O(∥θbaseline ∥0 + |D| ). As a result, the storage consumption of our method is lower than that of existing FDRL methods. (3) Communication cost: In FDRL, each client uploads its model to the server and downloads the global model, so com-munication costs directly depend on the network size. The network size, determined by the number of parameters in the network, is given by PN −1 
+
+> i=1
+
+(1 − Si)ni × ni+1 , as illustrated using the example of an N-layer MLP. With 50% sparsity applied to each component θbaseline and ˆθ in our method, the network size is smaller compared to baseline FDRL methods that use dense models, as shown in the analysis of FLOPs and storage overhead above. Therefore, our method results in lower communication costs due to its reduced network size. 
+
+# Experiments 
+
+We use Torch 1.2.0, Gym 0.16.0, and mujoco-py 1.50.0.1 for software, while the hardware consists of an Intel Core i7-9700 processor, 64GB RAM, and an NVIDIA RTX 2080 GPU. Each method is tested with five different random seeds. The supplementary materials provide implementation details of our method and the evolution curves of episode returns for each test unit. 
+
+Experiment Settings 
+
+Baselines. Six SOTA FDRL methods are used as base-lines: Server-Client Collaborative Distillation (SCCD) (Mai et al. 2023), Federated Reinforcement Distillation (FRD) (Jiang et al. 2025), FedKL (Xie and Song 2023), QAvg (Jin et al. 2022), Federated Reinforcement Learning (FRL) (Chen 2024), and Asynchronous Federated Reinforcement Learning with Policy Gradient Updates (AFedPG) (Lan et al. 2024). 
+
+Benchmarks. We use nine learning tasks, consisting of five MuJoCo tasks (Grooten et al. 2023): HalfCheetah-v2, Hopper-v2, Walker2d-v2, Ant-v2, and Humanoid-v2, and four Gym tasks (Mai et al. 2023): CartPole, Pendulum, BipedalWalkerHardcore, and LunarLander. Five clients are deployed for each task. For the five MuJoCo tasks, we implement dynamic, hetero-geneous client environments as described in (Grooten et al. 2023), introducing random noise from a normal distribution, 
+
+ψN (0 , 1) , to each client’s observations. Here, N (0 , 1) de-notes the standard normal distribution, and ψ represents the disturbance level, which can be set to 0, 1, or 3, with ψ = 3 
+
+representing maximum disturbance and making the task most challenging. The communication frequency for these Mu-JoCo tasks is set to every 10,000 steps, with a total of 100 communication rounds. For the four Gym tasks, we configure different environment parameters for each client, following the approach in (Mai et al. 2023), creating heterogeneous environments. For example, CartPole and Pendulum involve variations in pole length, gravity, and mass across clients, BipedalWalkerHardcore introduces diverse obstacles with varying appearance probabilities, and LunarLander features irregular lunar surface conditions and varying landing pad heights. To ensure dynamic environments, physical parame-ters for each client vary within a 50% range of the original values, introducing significant disturbances. For instance, in 27300 CartPole, the pole length fluctuates within ±50% of its orig-inal value. Communication frequencies follow the settings from (Mai et al. 2023): 20 steps for CartPole, 100 steps for Pendulum, 400 steps for BipedalWalkerHardcore, and 300 steps for LunarLander. 
+
+Metrics. Given that we have shown our method outper-forms existing FDRL approaches in complexity analysis, we evaluate the global model’s performance using two key metrics: the final return and the episode return. The main text focuses on the final return, the average reward from the global model over the last 10 communication rounds. The supplementary material discusses the episode return, which calculates the average reward per communication round and is typically presented as a progression curve. Higher values in both metrics indicate better model performance. 
+
+Hyperparameters. We set the sparsity level to 50% ( ξ1 =
+
+ξ2 = 64 ), which was identified as the optimal value through parameter sensitivity testing. Additionally, Nd is set equal to Ng , using the optimal value verified in existing literature (Sokar et al. 2021)(Xu, Chen, and Wang 2024), which is 10% of the current model parameters. 
+
+Experimental Result 
+
+Comparison under MuJoCo tasks. This section evalu-ates our method’s improvements over three SOTA FDRL approaches: QAvg, FRL, and AFedPG. We use noisy Mu-JoCo tasks for validation, focusing on the final return. The noise level ψ is set to 0, 1, and 3, respectively. Table 1 presents the experimental results, highlighting the final return. It shows the mean return, calculated as the aver-age return of the global model over the last 10 communication rounds from five runs with different random seeds, along with the standard deviation. All tables in the experimental section follow this format. From the results, two conclusions can be drawn. First, baseline FDRL methods show a progressively severe decline in returns as the noise level increases from 0 to 3, with the most significant drop at level 3. This suggests that dynamic environments, with more stochastic state transition dynamics, degrade FDRL performance. Second, when our method is integrated, including Ours+QAvg, Ours+FRL, and Ours+AFedPG, returns exceed those of the baseline meth-ods in most cases, demonstrating that our approach enhances FDRL performance in high-dimensional control tasks across various levels of perturbation. Dynamic transitions render static model topologies unsuitable, while also causing biased rewards and losses in each local model, which leads to sub-optimal policies. When aggregated, these suboptimal local models degrade the global model’s performance, creating a negative feedback loop that further trains local models on the degraded global model. As disturbances increase, the perfor-mance of existing FDRL methods continues to deteriorate. The performance gains of our method stem from ST and the auxiliary model. ST dynamically adjusts the topology of each local model, boosting performance, while the auxiliary loss regulates policy loss, steering the policy toward higher returns. By integrating ST and the auxiliary model, each local model dynamically adapts its topology and loss, leading to improved performance in current FDRL methods. 
+
+Comparison under Gym tasks. This section evaluates the improvements of our method over three SOTA FDRL ap-proaches: SCCD, FRD, and FedKL, using Gym tasks for val-idation, with a focus on final returns. Perturbation levels for each client are set at 50%. Table 2 presents the experimental results, highlighting that incorporating our method, includ-ing Ours+SCCD, Ours+FRD, and Ours+FedKL, boosts the performance of baseline FDRL methods, leading to higher returns. These results validate the effectiveness of our ap-proach in improving FDRL methods across various dynamic Gym tasks. Our method improves upon existing approaches by using ST to dynamically adjust client model topologies in different environments, and the auxiliary model adapts policy loss to guide the model toward higher returns. 
+
+Ablation verification. This section validates the effective-ness of the two modules in our method: ST and the Auxiliary Model (AM). We evaluate various methods using SCCD and FedKL as baseline FDRL algorithms across two standard Gym tasks, CartPole and Pendulum, with 5 clients and a 50% disturbance level. Performance is assessed based on the final return, with results presented in Table 3. The findings show that using ST or AM individually, such as ST+SCCD or AM+SCCD, does not yield optimal performance; both configurations are outperformed by the full version of our method, emphasizing the need for both modules. The ST module adjusts model topology, while the Auxiliary Model regulates policy loss. Together, they enable self-regulation during training, leading to optimal performance. 
+
+Hyperparameter sensitivity testing. This section exam-ines the impact of model sparsity, a hyperparameter, on the performance of our method. We evaluate various methods using SCCD and FedKL as baseline FDRL algorithms on two Gym tasks, CartPole and Pendulum, with 5 clients and a 50% disturbance level. Model sparsity is set at 50%, 70%, and 90%, with 50% chosen for this study. Performance is assessed based on the final return, and results are presented in Table 4. The findings show that when sparsity exceeds 50%, increasing sparsity reduces model parameters, lower-ing both training and communication burdens. However, this also leads to a decline in performance. At 50% sparsity, our method achieves optimal performance while reducing train-ing and communication costs compared to baseline methods. Therefore, we adopt a sparsity level of 50%. 
+
+Comparison with varying participant numbers. This section compares our method’s performance with baseline methods as the number of clients in federated learning in-creases. We evaluate Ours+SCCD and Ours+FedKL on two standard Gym tasks, CartPole and Pendulum, using 5, 10, and 15 clients, with a 50% disturbance level for clients. Table 5 shows the results in terms of final return. The findings indi-cate that the same FDRL method performs differently with varying client numbers. However, integrating our method with these approaches consistently improves model perfor-mance, demonstrating its effectiveness. Despite variations in client numbers, the learning process remains consistent. Our method dynamically adjusts model topology using ST and regulates policy loss through the auxiliary model, enhancing 27301 Static environment (A disturbance level of 0) Methods HalfCheetah Hopper Walker2d Ant Humanoid QAvg 10470 .72 ± 571 .24 1587 .7 ± 812 .27 739 .68 ± 508 .72 2133 .83 ± 1284 .37 2858 .84 ± 804 .25 
+
+Ours+QAvg 10649 .88 ± 1032 .78 2283 .57 ± 1197 .35 3370 .63 ± 1279 .05 5098 .16 ± 446 .74 3012 .95 ± 872 .47 
+
+FRL 10413 .22 ± 657 .27 2397 .48 ± 1026 .72 4336 .6 ± 986 .66 2307 .97 ± 893 .52 2759 .49 ± 1852 .01 
+
+Ours+FRL 10365 .02 ± 1721 .2 2913 .37 ± 1063 .85 4500 .55 ± 649 .08 4566 .21 ± 819 .91 4330 .87 ± 935 .47 
+
+AFedPG 10253 .8 ± 1489 .44 3147 .12 ± 812 .26 4073 .8 ± 640 .73 3534 .45 ± 828 .12 3832 .78 ± 712 .39 
+
+Ours+AFedPG 12062 .33 ± 1751 .76 3454 .37 ± 402 .17 4143 .91 ± 1251 .4 4205 .8 ± 602 .48 4316 .23 ± 828 .68 
+
+A disturbance level of 1 QAvg 8063 .06 ± 953 .99 757 .49 ± 511 .41 424 .88 ± 289 .63 1939 .87 ± 1170 .18 2815 .56 ± 749 .1
+
+Ours+QAvg 8651 .54 ± 669 .54 831 .13 ± 469 .43 1195 .06 ± 572 .41 3987 .09 ± 867 .08 4443 .03 ± 4089 .87 
+
+FRL 7356 .14 ± 1174 .69 481 .98 ± 308 .37 1526 .48 ± 1176 .06 2472 .42 ± 1150 .22 1928 .98 ± 1268 .21 
+
+Ours+FRL 9341 .62 ± 621 .23 1301 .02 ± 969 .22 2138 .87 ± 906 .19 4224 .7 ± 1018 .19 4308 .19 ± 703 .64 
+
+AFedPG 7927 .79 ± 858 .08 741 .85 ± 346 .6 463 .5 ± 218 .6 3393 .69 ± 1437 .34 3845 .11 ± 1033 .81 
+
+Ours+AFedPG 9347 .46 ± 479 .42 1563 .17 ± 873 .19 2508 .24 ± 1059 .08 3987 .09 ± 867 .08 4321 .83 ± 957 .36 
+
+A disturbance level of 3 QAvg 5765 .02 ± 630 .17 291 .74 ± 54 .15 308 .05 ± 53 .35 −178 .61 ± 176 .28 1262 .3 ± 942 .77 
+
+Ours+QAvg 7234 .65 ± 602 .27 440 .57 ± 210 .76 284 .08 ± 169 .47 779 .42 ± 285 .49 2858 .84 ± 804 .25 
+
+FRL 5915 .04 ± 419 .58 257 .98 ± 77 .87 371 .06 ± 83 .02 2304 .22 ± 1328 .07 921 .34 ± 225 .16 
+
+Ours+FRL 7828 .79 ± 395 .78 1472 .49 ± 840 .67 3009 .24 ± 1099 .04 3951 .14 ± 803 .0 4606 .58 ± 722 .08 
+
+AFedPG 5396 .47 ± 682 .48 286 .17 ± 98 .28 365 .43 ± 48 .51 2405 .04 ± 890 .72 3895 .28 ± 917 .21 
+
+Ours+AFedPG 8036 .75 ± 778 .22 1670 .02 ± 986 .72 1573 .29 ± 629 .63 2981 .54 ± 1230 .07 4217 .13 ± 638 .15 
+
+Table 1: Performance comparison under MuJoCo tasks (Mean ± Standard Deviation). Here, Ours+QAvg refers to the QAvg method incorporating our approach. The bolded results indicate that our method achieves a higher average return (Mean) compared to the baseline. 
+
+Methods CartPole Pendulum SCCD 148 .15 ± 18 .0 −456 .25 ± 182 .33 
+
+Ours+SCCD 159 .77 ± 10 .69 −290 .94 ± 75 .92 
+
+FRD 83 .46 ± 7.98 −540 .4 ± 214 .91 
+
+Ours+FRD 174 .22 ± 26 .81 −283 .53 ± 150 .59 
+
+FedKL 86 .12 ± 25 .56 −395 .8 ± 181 .63 
+
+Ours+FedKL 151 .98 ± 56 .86 −302 .61 ± 171 .84 
+
+Methods BipedalWalkerHardcore Lunar Lander SCCD 169 .6 ± 30 .28 99 .11 ± 98 .07 
+
+Ours+SCCD 195 .68 ± 32 .35 240 .66 ± 32 .85 
+
+FRD 135 .01 ± 72 .22 236 .24 ± 54 .26 
+
+Ours+FRD 165 .4 ± 58 .38 254 .03 ± 27 .44 
+
+FedKL 130 .39 ± 47 .35 265 .69 ± 10 .94 
+
+Ours+FedKL 218 .44 ± 47 .67 275 .08 ± 13 .33 
+
+Table 2: Performance comparison of our method under Gym tasks (Mean ± Standard Deviation). 
+
+Methods CartPole Pendulum ST+SCCD 126 .63 ± 17 .44 −419 .76 ± 106 .97 
+
+AM+SCCD 135 .91 ± 25 .59 −445 .86 ± 66 .22 
+
+Ours+SCCD 159 .77 ± 10 .69 −290 .94 ± 75 .92 
+
+ST+FedKL 120 .27 ± 41 .39 −354 .07 ± 24 .76 
+
+AM+FedKL 105 .35 ± 29 .02 −355 .93 ± 41 .96 
+
+Ours+FedKL 151 .98 ± 56 .86 −302 .61 ± 171 .84 
+
+Table 3: Ablation verification (Mean ± Standard deviation). 
+
+Methods CartPole Pendulum 
+
+Ours+SCCD (50%) 159 .77 ± 10 .69 −290 .94 ± 75 .92 
+
+Ours+FedKL (50%) 151 .98 ± 56 .86 −302 .61 ± 171 .84 
+
+Ours+SCCD (70%) 140 .22 ± 21 .73 −512 .9 ± 209 .59 
+
+Ours+FedKL (70%) 142 .19 ± 63 .23 −311 .28 ± 180 .6
+
+Ours+SCCD (90%) 123 .28 ± 24 .8 −679 .47 ± 309 .34 
+
+Ours+FedKL (90%) 132 .64 ± 51 .13 −358 .58 ± 182 .84 
+
+Table 4: Hyperparameter sensitivity (Mean ± Standard devi-ation). 
+
+Methods CartPole Pendulum SCCD (5) 148 .15 ± 18 .0 −456 .25 ± 182 .33 
+
+Ours+SCCD (5) 159 .77 ± 10 .69 −290 .94 ± 75 .92 
+
+FedKL (5) 86 .12 ± 25 .56 −395 .8 ± 181 .63 
+
+Ours+FedKL (5) 151 .98 ± 56 .86 −302 .61 ± 171 .84 
+
+SCCD (10) 160 .11 ± 11 .42 −504 .84 ± 73 .71 
+
+Ours+SCCD (10) 167 .38 ± 13 .57 −469 .26 ± 58 .42 
+
+FedKL (10) 69 .47 ± 20 .2 −455 .49 ± 127 .03 
+
+Ours+FedKL (10) 151 .19 ± 7.3 −437 .92 ± 132 .43 
+
+SCCD (15) 159 .74 ± 10 .94 −543 .35 ± 59 .61 
+
+Ours+SCCD (15) 172 .07 ± 10 .82 −464 .07 ± 28 .22 
+
+FedKL (15) 60 .13 ± 23 .23 −552 .42 ± 36 .51 
+
+Ours+FedKL (15) 154 .17 ± 9.06 −397 .81 ± 141 .0
+
+Table 5: Performance comparison under varying client quan-tities (Mean ± Standard deviation). Here, Ours+SCCD (5) represents the performance of the Ours+SCCD method with five clients. the performance of existing FDRL methods across different client quantities. 
+
+# Conclusion 
+
+This work presents a generic method that can be seamlessly integrated into existing FDRL approaches to address dy-namic state transitions. We introduce ST to adaptively adjust the model topology, enhancing performance during training while reducing model parameters. Additionally, we propose an auxiliary model to regulate the policy loss of local models, facilitating updates toward higher returns. We validate our method across nine dynamic environments, showing signif-icant improvements in six SOTA FDRL methods in terms of return. Future work will explore using higher model spar-sity to further reduce the FDRL model complexity without compromising performance in dynamic environments. 27302 Acknowledgements 
+
+This work is supported in part by the Hong Kong Re-search Grant Council under General Research Fund (GRF) 11216323 and Research Impact Fund (RIF) project R5060-19. This work acknowledges the Hon Hai-CityU Joint Research Center and Hon Hai Research Institute for their financial and technical support. 
+
+# References 
+
+Bing, Z.; Lerch, D.; Huang, K.; and Knoll, A. 2023. Meta-Reinforcement Learning in Non-Stationary and Dynamic Environments. IEEE Transactions on Pattern Analysis and Machine Intelligence , 45(3): 3476–3491. Bodas, A.; Upadhyay, B.; Nadiger, C.; and Abdelhak, S. 2018. Reinforcement learning for game personalization on edge devices. In 2018 International Conference on Information and Computer Technologies (ICICT) , 119–122. IEEE. Cang, C.; Rajeswaran, A.; Abbeel, P.; and Laskin, M. 2021. Behavioral priors and dynamics models: Improving perfor-mance and domain transfer in offline rl. arXiv preprint arXiv:2106.09119 .Cha, H.; Park, J.; Kim, H.; Bennis, M.; and Kim, S.-L. 2020. Proxy experience replay: Federated distillation for distributed reinforcement learning. IEEE Intelligent Systems , 35(4): 94– 101. Chen, X. 2024. Federated Reinforcement Learning-Driven Offloading Strategy for Edge Computing. In 2024 6th Inter-national Conference on Electronics and Communication, Net-work and Computer Technology (ECNCT) , 467–470. IEEE. DiMarco, E. K.; Shipp, A. R.; and Kishida, K. T. 2024. Ex-pected reward value and reward prediction errors reinforce but also interfere with human time perception. bioRxiv , 2024– 04. Fan, X.; Ma, Y.; Dai, Z.; Jing, W.; Tan, C.; and Low, B. K. H. 2021. Fault-tolerant federated reinforcement learning with theoretical guarantee. Advances in Neural Information Processing Systems , 34: 1007–1021. Fu, Y.; Li, C.; Yu, F. R.; Luan, T. H.; and Zhang, Y. 2022. A selective federated reinforcement learning strategy for au-tonomous driving. IEEE Transactions on Intelligent Trans-portation Systems , 24(2): 1655–1668. Grooten, B.; Sokar, G.; Dohare, S.; Mocanu, E.; Taylor, M. E.; Pechenizkiy, M.; and Mocanu, D. C. 2023. Automatic noise filtering with dynamic sparse training in deep reinforcement learning. arXiv preprint arXiv:2302.06548 .Javeed, D.; Saeed, M. S.; Kumar, P.; Jolfaei, A.; Islam, S.; and Islam, A. N. 2023. Federated learning-based person-alized recommendation systems: An overview on security and privacy challenges. IEEE Transactions on Consumer Electronics , 70(1): 2618–2627. Jiang, W.; Wang, J.; Zhang, X.; Bao, W.; Tan, C.; and Fan, F. X. 2025. FedHPD: Heterogeneous Federated Re-inforcement Learning via Policy Distillation. arXiv preprint arXiv:2502.00870 .Jin, H.; Peng, Y.; Yang, W.; Wang, S.; and Zhang, Z. 2022. Federated reinforcement learning with environment hetero-geneity. In International Conference on Artificial Intelligence and Statistics , 18–37. PMLR. Khayatian, F.; Nagy, Z.; and Bollinger, A. 2021. Using generative adversarial networks to evaluate robustness of reinforcement learning agents against uncertainties. Energy and Buildings , 251: 111334. Lan, G.; Han, D.-J.; Hashemi, A.; Aggarwal, V.; and Brinton, C. G. 2024. Asynchronous federated reinforcement learning with policy gradient updates: Algorithm design and conver-gence analysis. arXiv preprint arXiv:2404.08003 .Lee, J.; Kim, S.; Kim, S.; Jo, W.; and Yoo, H.-J. 2021. Gst: Group-sparse training for accelerating deep reinforcement learning. arXiv preprint arXiv:2101.09650 .Lee, K.; Seo, Y.; Lee, S.; Lee, H.; and Shin, J. 2020. Context-aware dynamics model for generalization in model-based reinforcement learning. In International Conference on Ma-chine Learning , 5757–5766. PMLR. Liang, X.; Liu, Y.; Chen, T.; Liu, M.; and Yang, Q. 2022. Fed-erated transfer reinforcement learning for autonomous driv-ing. In Federated and Transfer Learning , 357–371. Springer. Liu, B.; Wang, L.; and Liu, M. 2019. Lifelong federated reinforcement learning: a learning architecture for navigation in cloud robotic systems. IEEE Robotics and Automation Letters , 4(4): 4555–4562. Livne, D.; and Cohen, K. 2020. Pops: Policy pruning and shrinking for deep reinforcement learning. IEEE Journal of Selected Topics in Signal Processing , 14(4): 789–801. Luo, Y.; Ji, T.; Sun, F.; Zhang, J.; Xu, H.; and Zhan, X. 2024. OMPO: A Unified Framework for RL under Policy and Dynamics Shifts. arXiv preprint arXiv:2405.19080 .Mai, W.; Yao, J.; Chen, G.; Zhang, Y.; Cheung, Y.-M.; and Han, B. 2023. Server-Client Collaborative Distillation for Federated Reinforcement Learning. ACM Transactions on Knowledge Discovery from Data , 18(1): 1–22. Rengarajan, D.; Ragothaman, N.; Kalathil, D.; and Shakkot-tai, S. 2025. Federated ensemble-directed offline reinforce-ment learning. Advances in Neural Information Processing Systems , 37: 6154–6179. Sokar, G.; Mocanu, E.; Mocanu, D. C.; Pechenizkiy, M.; and Stone, P. 2021. Dynamic sparse training for deep reinforce-ment learning. arXiv preprint arXiv:2106.04217 .Tan, Y.; Hu, P.; Pan, L.; Huang, J.; and Huang, L. 2023. Rlx2: Training a sparse deep reinforcement learning model from scratch. International Conference on Learning Representa-tions .Vischer, M. A.; Lange, R. T.; and Sprekeler, H. 2021. On lottery tickets and minimal task representations in deep rein-forcement learning. arXiv preprint arXiv:2105.01648 .Wang, J.; Hu, J.; Mills, J.; Min, G.; Xia, M.; and Georgalas, N. 2023. Federated Ensemble Model-Based Reinforcement Learning in Edge Computing. IEEE Transactions on Parallel and Distributed Systems , 34(6): 1848–1859. Wei, C.-Y.; and Luo, H. 2021. Non-stationary reinforcement learning without prior knowledge: An optimal black-box 27303 approach. In Conference on learning theory , 4300–4354. PMLR. Wen, J.; Dai, H.; He, J.; Xi, M.; Xiao, S.; and Yang, J. 2023. Federated offline reinforcement learning with multimodal data. IEEE transactions on consumer electronics , 70(1): 4266–4276. Xie, Z.; and Song, S. 2023. Fedkl: Tackling data hetero-geneity in federated reinforcement learning by penalizing kl divergence. IEEE Journal on Selected Areas in Communica-tions , 41(4): 1227–1242. Xu, M.; Chen, X.; Fu, W.; Lin, Y.-R.; Li, Y.-H.; and Wang, J. 2025. A Unified Sparse Training Framework for Lightweight Lifelong Deep Reinforcement Learning. IEEE Transactions on Systems, Man, and Cybernetics: Systems , 1–15. Xu, M.; Chen, X.; and Wang, J. 2024. A Novel Topology Adaptation Strategy for Dynamic Sparse Training in Deep Reinforcement Learning. IEEE Transactions on Neural Net-works and Learning Systems , 1–13. Xue, Z.; Cai, Q.; Liu, S.; Zheng, D.; Jiang, P.; Gai, K.; and An, B. 2024. State regularized policy optimization on data with dynamics shift. Advances in neural information processing systems , 36. Yuan, Z.; Xu, S.; and Zhu, M. 2024. Federated reinforcement learning for robot motion planning with zero-shot generaliza-tion. Automatica , 166: 111709. Yue, S.; Deng, Y.; Wang, G.; Ren, J.; and Zhang, Y. 2024. Federated offline reinforcement learning with proximal policy evaluation. Chinese Journal of Electronics , 33(6): 1360– 1372. Zhang, H.; He, Z.; and Li, J. 2019. Accelerating the deep reinforcement learning with neural network compression. In 
+
+2019 International Joint Conference on Neural Networks (IJCNN) , 1–8. IEEE. Zhou, D.; Zhang, Y.; Sonabend-W, A.; Wang, Z.; Lu, J.; and Cai, T. 2024. Federated offline reinforcement learning. 
+
+Journal of the American Statistical Association , 119(548): 3152–3163. Zhuo, H. H.; Feng, W.; Lin, Y.; Xu, Q.; and Yang, Q. 2019. Federated deep reinforcement learning. arXiv preprint arXiv:1901.08277 .27304

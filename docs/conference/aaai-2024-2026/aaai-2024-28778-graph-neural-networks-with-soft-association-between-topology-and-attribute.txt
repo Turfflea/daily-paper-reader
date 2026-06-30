@@ -1,0 +1,421 @@
+Title: Graph Neural Networks with Soft Association between Topology and Attribute
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/28778/29491
+
+Number of Pages: 9
+
+Markdown Content:
+# Graph Neural Networks with Soft Association between Topology and Attribute 
+
+# Yachao Yang 1, Yanfeng Sun 1* , Shaofan Wang 1, Jipeng Guo 2,Junbin Gao 3, Fujiao Ju 1, Baocai Yin 1
+
+> 1
+
+Beijing Key Laboratory of Multimedia and Intelligent Software Technology, Beijing Institute of Artificial Intelligence, Faculty of Information Technology, Beijing University of Technology, Beijing, China 
+
+> 2
+
+College of Information Science and Technology, Beijing University of Chemical Technology, China 
+
+> 3
+
+Discipline of Business Analytics, The University of Sydney Business School, The University of Sydney, Camperdown, NSW 2006, Australia. yangyc@emails.bjut.edu.cn, {yfsun, wangshaofan, jfj2017, ybc }@bjut.edu.cn, guojipeng@buct.edu.cn, junbin.gao@sydney.edu.au 
+
+Abstract 
+
+Graph Neural Networks (GNNs) have shown great perfor-mance in learning representations for graph-structured data. However, recent studies have found that the interference be-tween topology and attribute can lead to distorted node rep-resentations. Most GNNs are designed based on homophily assumptions, thus they cannot be applied to graphs with heterophily. This research critically analyzes the propaga-tion principles of various GNNs and the corresponding chal-lenges from an optimization perspective. A novel GNN called Graph Neural Networks with Soft Association be-tween Topology and Attribute (GNN-SATA) is proposed. Different embeddings are utilized to gain insights into at-tributes and structures while establishing their interconnec-tions through soft association . Further as integral compo-nents of the soft association, a Graph Pruning Module (GPM) and Graph Augmentation Module (GAM) are developed. These modules dynamically remove or add edges to the adjacency relationships to make the model better fit with graphs with homophily or heterophily. Experimental results on homophilic and heterophilic graph datasets convincingly demonstrate that the proposed GNN-SATA effectively cap-tures more accurate adjacency relationships and outperforms state-of-the-art approaches. Especially on the heterophilic graph dataset Squirrel, GNN-SATA achieves a 2.81% im-provement in accuracy, utilizing merely 27.19% of the orig-inal number of adjacency relationships. Our code is released at https://github.com/wwwfadecom/GNN-SATA. 
+
+# Introduction 
+
+A growing trend has recently been observed in generating data characterized by intricate relationships and interdepen-dencies between objects, frequently represented as graph data. Illustrative examples encompass social networks (Guo et al. 2022), citation networks (Zhao et al. 2021), and fi-nancial networks (Bi et al. 2022). Graph neural networks (GNNs) have been proven highly effective in various graph data applications, including recommender systems (Fan et al. 2019), data mining (Wu et al. 2020a), and natural lan-guage processing tasks (Wu et al. 2020b). 
+
+> *
+
+Corresponding author. Copyright © 2024, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+GNNs can be broadly classified into two categories: spectral-based GNNs and spatial-based GNNs. Spectral-based GNNs utilize the eigendecomposition of the Lapla-cian matrix of the graph to update node representations by transforming and aggregating the eigenvectors. Spatial-based GNNs perform information propagation and aggrega-tion directly in the graph structure. Some researchers (Ma et al. 2021; Yang et al. 2021; Zhu et al. 2021) have shown that spectral-based GNNs are designed to optimize a unified objective optimization framework, including a graph Lapla-cian regularization and feature-fitting term. The Laplacian regularization term utilizes the topology smooth feature to acquire a stable embedding that eliminates noise, and the feature fitting term establishes a link between the node em-bedding and the node attributes. However, recent studies have revealed that the inter-ference between topology and attribute can have a detri-mental impact on the performance of GNNs. On the one hand, topology frequently influences the representation of attributes. GNNs that prioritize topological smoothness tend to minimize differences between interconnected nodes, lead-ing to over-smoothing issues when multiple layers are stacked and resulting in the loss of node attribute informa-tion (Jin et al. 2021). The challenge becomes more pro-nounced in the context of heterophilic graphs, as relying on inaccurate topological relations for transfer can yield entirely distinct representations for two seemingly similar nodes. On the other hand, inaccurate or incomplete node at-tributes may distort the encoding of topology. In tasks like node link prediction, GNNs that rely on both attribute and topology often exhibit inferior performance compared to en-coding methods that exclusively hinge on topology, such as matrix factorization (Mnih and Salakhutdinov 2007) and random block model (Airoldi et al. 2008). In a recent development, Yang et al. (Yang et al. 2022) introduced the utilization of the Hilbert-Schmidt Indepen-dence Criterion (HSIC) (Gretton et al. 2005) to enforce the mutual exclusivity of attribute and topology. By doing so, they effectively eliminate shared information and de-rive two independent representations. This approach serves to mitigate the interference that arises from the interplay between attribute and topology. Compared with the previ-ous methods, Yang et al.’s model exhibits impressive perfor-The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+9260 mance on heterophilic data, although its performance on ho-mophilic data is generally consistent. This distinction can be attributed to the relatively dependable relationship between attributes and structures in homophilic data. Consequently, opting for a straightforward learning of mutually exclusive representations may not be the optimal choice in such sce-narios. In order to alleviate the interference between topological structures and attributes, this paper proposes a novel graph neural network model called GNN-SATA, which aims to ad-dress the problem of node embedding and topological distor-tion caused by attribute and topological interference. It em-ploys different representations for learning node attributes and topology, and recognizes the interconnectedness of fea-tures and structures by a soft association. Further, we intro-duce two modules, GPM and GAM, to explore an adaptive graph relationship in which GPM is used to prune the origi-nal adjacency relationship according to the established asso-ciation, and GAM is used to enhance the adjacency relation-ship. Finally, the model is trained based on the cross-entropy loss of the semi-supervised node classification. The contri-butions of this paper can be summarized as follows: • We proposed GNN-SATA, a novel GNN model that ad-dresses the interference between attribute and topology by establishing a soft association between node attributes and topology. • To investigate more reliable graph relations, we propose two modules, namely GAM and GPM, to explore the topological relationships among nodes dynamically. Ex-perimental results demonstrate the effectiveness of these modules in enhancing the homophily of graph data and improving the model’s performance. • Compared with state-of-the-art methods, extensive com-parative experiments are conducted on six benchmark datasets highlight the superiority of GNN-SATA. 
+
+# Relate Works 
+
+Typical Graph Neural Networks 
+
+The information propagation of GNNs involves the transfor-mation and aggregation of node characteristics at a specific depth based on topological information. Various GNN mod-els employ different propagation techniques. The following are the message passing formulae of Graph Convolutional networks (GCN) (Kipf and Welling 2017) and Simplifying Graph Convolutional networks (SGC) (Wu et al. 2019): GCN : Zk+1 = σ( ¯AZ kWk) (1) SGC : Zk+1 = ¯AZ k (2) where X is node feature matrix, Z0 = X, ¯A is the reg-ularized adjacency matrix which includes a self-loop, and 
+
+σ = Relu and W are the non-linear activation function and the weight matrix of the corresponding layer, respec-tively. To learn the representation of nodes, GCN applies linear transformation and non-linear activation K times. SGC eliminates the non-linear activation and weight ma-trix, which lessens the computational complexity of GCN and improves performance for some straightforward graph shapes while being brief and effective. GCN and SGC learn the data representation Z by opti-mizing the following objective: 
+
+min  
+
+> Z
+
+tr 
+
+
+
+Z⊤ ˜LZ 
+
+
+
+=
+
+> N
+
+X
+
+> i,j
+
+¯Ai,j ∥Zi − Zj ∥2 , Z = XW ∗ (3) where W∗ = W0 · · · Wk−1. and N is the number of nodes. In essence, this acts as a low-pass filter on the in-put node by smoothing two adjacency nodes to assign them with a more comparable representation. However, when numerous GCN or SGC layers are stacked together, the over-smoothing issue arises. A few networks focused on solving the over-smoothing problem were suggested, such as APPNP (Gasteiger, Bojchevski, and G¨ unnemann 2019), GCNII (Chen et al. 2020), JKNet (Xu et al. 2018) and DAGNN (Liu, Gao, and Ji 2020). Their inter-layer connec-tion may be described as follows: APPNP : Zk+1 = (1 − λ) ¯AZ k + λX
+
+GCNII : Zk+1 = (1 − λ)  ZkW + λX
+
+JKNet : Zk+1 =
+
+> k+1
+
+X
+
+> t=1
+
+λt ¯AtXW ∗
+
+DAGNN : Zk+1 =
+
+> k+1
+
+X
+
+> t=0
+
+λt ¯AtH, H = fθ (X)
+
+(4) where fθ (X) is the non-linear feature transformation utiliz-ing an MLP before the propagation process, λ and λt are the appropriate balancing coefficients. By creating a link be-tween the convolutional layer’s output and the original in-put, APPNP and GCNII reduce the over-smoothing problem and improve node discrimination. JKNet and DAGNN alle-viate the over-smoothing issue by fusing multi-scale infor-mation from different layers. The optimization objective of the above four methods can be expressed as: 
+
+min  
+
+> Z
+
+∥Z − X∥2 
+
+> F
+
++ α1 tr 
+
+
+
+Z⊤ ˜LZ 
+
+
+
+(5) compared with Eq.(3), the above formula retains more orig-inal feature information X to alleviate the over-smoothing problem. 
+
+Homophily and Heterophily 
+
+In graph networks, homophily refers to a situation in which similar pairs of nodes may be more likely to be linked than other pairs, and heterophily refers to a situation in which dissimilar pairings are more likely to be connected. Smooth-based GNNs and their variations are built on the homophily assumption while omitting the fact that heterophilic graph architectures are frequently found in the real world. To ad-dress the challenges posed by heterophilic graphs, Pei et al. (Pei et al. 2020) employed geometric transformations in conjunction with graph neural networks to better capture interactions between nodes in heterophilic graphs. Zhu et al. (Zhu et al. 2020a) introduced the concept of hypergraphs, The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+> 9261
+
+Figure 1: An overview of the proposed GNN-SATA model. which enable edges to connect multiple nodes, enhancing their capacity to represent and manage diverse connections. Yang et al. (Yang et al. 2022) iteratively update node repre-sentations by collecting semantic information and removing common information to improve the model’s performance in heterophilic networks. Additionally, Huang et al. (Huang et al. 2023) proposed a straightforward and efficient mid-pass filter with increased resilience. These approaches offer promising insights into handling heterophily in graph net-works and contribute to advancing graph neural network re-search. 
+
+# Model Formulation 
+
+Let G = {X, V, E, A} be an attribute graph with C class nodes. V = {v1, . . . , v N } and E represent the sets of nodes and edges respectively, N = |V| is the number of nodes. 
+
+X = [ x1, . . . , xN ]⊤ ∈ RN ×d is node feature matrix, d
+
+is the dimension of features. VL is labeled training set, and the corresponding labels are YL = {y1, y 2, . . . , y L}.
+
+1 = {1}N ×N , A = ( aij )N ×N ∈ RN ×N is an adjacency matrix of G, aij = 1 if a connecting edge (i.e., (vi, v j ) ∈ E )between node vi and vj exists, else aij = 0 . The degree ma-trix of A is denoted as D, and ¯A = eD− 12 eA eD− 12 is the regu-larized adjacency matrix, where eA = A + I is an adjacency matrix with self-connections and eD = D + I. eL = I − ¯A is the Laplacian matrix that represents a normalized symmetric positive semi-definite network. The node classification task is to classify {x1, . . . , xN } into C categories. 
+
+The Proposed GNN-SATA 
+
+The objective of Eq.(5) is to acquire a representation Z that closely aligns with the attributes of a node while also satis-fying the topological constraints. However, it is challenging to extract optimal attribute and structural embedding simul-taneously (Yang et al. 2022). Furthermore, in the case of high heterophilic graph data, a feature smooth representa-tion based on inaccurate graph structure may not effect node representation extraction and may have the opposite influ-ence (Zhu et al. 2020a; Jin et al. 2021; Yang et al. 2023). Consequently, we propose to learn feature-structure repre-sentation separately while simultaneously establishing the soft association between attribute and topology via Eq.(6). That is: 
+
+min  
+
+> Z,U
+
+∥U − X∥2 
+
+> F
+
++α1 tr 
+
+
+
+Z⊤ ˜LZ 
+
+
+
++α2 UU ⊤ − A 2 
+
+> F
+
+(6) where U and Z denote the attribute and topology represen-tation of graph data, respectively, which are associated with each other by soft association via the third term. Specifically, we use the representation U extracted from the features to construct a similarity matrix, bringing this matrix close to the original adjacency matrix A to establish connections be-tween features and structures. The third term is balanced by the weight coefficient α2, which acts as an appropriate con-straint in the learning process of U and Z.In order to further enhance the versatility of the model on homophilic and heterophilic graphs, the GNN-SATA model has been proposed, consisting of the Graph Pruning Module (GPM) and the Graph Augmentation Module (GAM). The GPM is responsible for removing irrelevant or false edges from the original graph to ensure these edges do not affect the network. Simultaneously, the GAM module investigates the absence of edge connections and supplements the origi-nal graph. The GPM achieves this by introducing a learnable matrix 
+
+EP to prune the original adjacency matrix A, using A⊙EP
+
+instead of A. Pruning edges is guided by the soft association between attribute and downstream tasks. Nodes with low feature similarity are likelier to have no connections, and the feedback from downstream tasks aids the model in making decisions. However, for graphs with high heterophily, sim-ply deleting edges may cause the GNN to rely on fewer or no edges during iteration. To address this, we incorporated a mechanism to the model attempting to add edges while removing untrusted edges. Like edge pruning, an adaptive matrix EA is introduced to act on the complementary matrix 
+
+(1 − A) of A. The objective function of GNN-SATA can be expressed as: 
+
+min  
+
+> Z,U,EP,EA
+
+∥U − X∥2 
+
+> F
+
++ α1 tr 
+
+
+
+Z⊤ ˜LAZ
+
+
+
++ α2 UU ⊤ − (A⊙EP + ( 1 − A) ⊙ EA) 2 
+
+> F
+
+.
+
+(7) where ⊙ represents element-wise multiplication. And note The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+> 9262
+
+Algorithm 1: Optimization Algorithm of GNN-SATA 
+
+Input :Feature matrix X, adjacency matrix A, iterations T =200 and K ∈ { 2, 3, 4}, Labels YL, Hyper-parameter α1, α2.
+
+Parameter : WL, WU.
+
+Output : Classification results M′.
+
+1: Initializing EP and EA.
+
+2: for iter1 = 1,2, · · · ,T do 
+
+3: for iter2 = 1,2, · · · ,K do 
+
+4: Calculate Uk+1 , Zk+1 , Ek+1  
+
+> A
+
+, Ek+1  
+
+> P
+
+by Eq.(15), (16),(17),(18). 
+
+5: end for 
+
+6: Calculate M = [ UK ∥ZK ]
+
+7: Calculate classification results M′ by Eq.(8). 
+
+8: Calculate classification loss by Eq.(9) 
+
+9: Update parameter WL, WU by gradient descent. 
+
+10: end for 
+
+that when the model applies to non-boolean adjacency ma-trix A, we replace 1 − A with 1 − B(A) where B(·) denotes the elementwise boolean operator. GNN-SATA utilizes the concatenated representation of 
+
+UK and ZK for classification tasks. The spliced encod-ing is expressed as M = [ UK ∥ZK ] and is used for semi-supervised node classification tasks after linear transforma-tion and softmax function: 
+
+M′ = sof tmax (WL · M + b) (8) where M′ik represents the possibility that the i-th node be-longs to the k-th class. Similarly, the loss function of labeled data can be expressed as: 
+
+L = X
+
+> vi∈V L
+
+ℓ (m′
+
+> i
+
+, yi) (9) where yi is the one-hot encoding of yi and ℓ(·) is the cross entropy function. Algorithm 1 shows the entire optimization process of GNN-SATA. 
+
+Model Optimization 
+
+To determine U and Z, we use the alternating direction op-timization by vanishing the partial derivative of the target function of Eq.(7) for all variables, i.e. U, Z, EP , EA. For convenience, let A′ = ( 1−A) and A = A⊙EP +A′⊙EA),then 
+
+2( U − X) + 2 α2(2 UU ⊤ − ¯A)U = 0 (10) 
+
+2α1 ˜LAZ = 0 (11) 
+
+VP + 2 α2(−A ⊙ ˆUP + A ⊙ A ⊙ EP ) = 0 (12) 
+
+VA + 2 α2(−A′ ⊙ ˆUA + A′ ⊙ A′ ⊙ EA) = 0 (13) where ¯A is the regularized adjacency matrix like ¯A,VP ij = 
+
+> 12
+
+α1Aij ∥Zi −Zj ∥22, ¯A,VAij = 12 α1A′ij ∥Zi −Zj ∥22, ˆUP =
+
+UU ⊤ − A′ ⊙ EA, ˆUA = UU ⊤ − A ⊙ EP . The iterative relationship between the k-th layer and the k + 1 -th layer of 
+
+Dataset Nodes Features Classes Edges H(A)
+
+Cora 2708 1433 7 5429 0.809 Citeseer 3327 3703 6 4732 0.721 Photo 7650 745 8 119081 0.824 Computer 13752 767 10 245861 0.791 Squirrel 5201 2089 5 217073 0.203 Chameleon 2277 2325 5 36101 0.233 
+
+Table 1: The statistics of six datasets. the model can be expressed as: 
+
+Uk+1 = X − α2(2 UkUk⊤ − ¯A)Uk (14) 
+
+Zk+1 = ¯AZk (15) 
+
+Ek+1  
+
+> P
+
+= (2 α2A ⊙ ˆUkP − VkP )/(2 α2A ⊙ A) (16) 
+
+Ek+1  
+
+> A
+
+= (2 α2A′ ⊙ ˆUkA − VkA)/(2 α2A′ ⊙ A′) (17) where Vkij = 12 α1Aij ∥Zk+1  
+
+> i
+
+− Zk+1  
+
+> j
+
+∥22, ˆUk =
+
+Uk+1 Uk+1 ⊤ − A′ ⊙ EA. And we introduced additional training parameters WU and the activation function σ =
+
+Relu to Eq.(14) to enhance the model’s capacity for repre-sentation and optimize the training process while simultane-ously repeatedly updating Uk+1 and Zk+1 to minimize the optimization objective. The following is the optimized iter-ation method of Eq (14): 
+
+Uk+1 = X − α2σ[(2 UkUk⊤ − ¯A)UkWU] (18) in Eq (18), UkUk⊤ − ¯A represents the difference between the feature-based similarity relationship and the adaptive matrix A, and X − α2σ[(2 UkUk⊤ − ¯A)UkWU] repre-sents the component that eliminates the difference while re-taining the commonality, thereby establishing a soft asso-ciation between features and structures. The feature-based representation U allows us to discover the structure’s com-monalities while preserving the original features’ unique-ness. In Eq (15), ¯AZk is the label propagation algorithm (LPA) (Raghavan, Albert, and Kumara 2007) in community detection. 
+
+# Experiments 
+
+This section describes the datasets, comprised methods, and experimental parameter configurations to evaluate GNN-SATA. In addition, we analyze the experimental results and demonstrate the significance of the proposed soft associa-tion, GPM and GAM through ablation studies. 
+
+Datasets 
+
+The proposed GNN-SATA is evaluated on four high ho-mophilic datasets (Cora, Citeseer, Photo, Computer) and two heterophilic (Squirrel, Chameleon) datasets. The attribute statistics of datasets are shown in Table 1. The training process iterates for 200 epochs on a machine with RTX 3090 Ti GPU. In order to assess the effectiveness of the proposed model in classification tasks, we partitioned the nodes of each class in all datasets into three sets: 60% The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+9263 for training, 20% for validation, and 20% for testing like other baselines. We utilized Accuracy (ACC), a commonly employed and significant evaluation metric to measure the model’s performance. A higher value of this metric signi-fies the superior performance of the model. In comparison, the results of the baseline methods are reported according to their original references. 
+
+Competitive Methods 
+
+We demonstrate the efficacy of GNN-SATA by comparing it to 13 classical and state-of-the-art baselines. According to their role, all methods can be divided into three categories: 
+
+Classical GCN methods: GCN (Kipf and Welling 2017), GAT (Veliˇ ckovi´ c et al. 2017) and GraphSAGE (Hamilton, Ying, and Leskovec 2017) are three classical GNNs. 
+
+Methods for alleviating the over-smoothing prob-lem : GCNII (Chen et al. 2020) introduces a personal-ity initialization method. APPNP (Gasteiger, Bojchevski, and G¨ unnemann 2019) incorporates personalized features. JKNet (Xu et al. 2018) alleviates over-smoothing with skip connections. 
+
+Methods for handling heterophilic graphs: Geom-GCN (Pei et al. 2020) incorporates geometric info for ef-fective graph convolutions. GPRGNN (Chien et al. 2021) adapts weights using graph pagerank for feature extraction. FAGCN (Bo et al. 2021) uses adaptive gating for signal in-tegration in message passing. H2GCN (Zhu et al. 2020b) learns from heterophilic graphs with multiple modalities. Ordered GNN (Song et al. 2023) utilizes an ordered gating mechanism to prevent the mixing of node features within a hop to enhance the robustness of the model. 
+
+Analysis of Results 
+
+The classification results of both the proposed method and the comparison methods on six benchmark datasets are pre-sented in Table 2. Table 2 reveals the following observations: GNN-SATA demonstrates strong performance across all datasets. On average, the proposed method improves by 1.82% compared to the optimal baseline results across the six datasets, with a remarkable 2.81% improvement specif-ically on the Squirrel dataset, confirming the method’s su-periority. GNN-SATA employs a more straightforward and efficient process by concatenating the final representations of attributes and structures, in contrast to the comparative method H2GCN which enhances the representation ability by integrating self-encoding, neighbor encoding, high-order adjacency encoding, and intermediate layer encoding to ad-dress the challenges posed by heterophilic graphs. However, this approach requires significant memory resources and be-comes unfeasible for large graphs. The MLP-based methods outperform several classic and advanced graph neural network methods, including GCN, GAT, GraphSAGE, and Geom-GCN, on the highly het-erophilic Squirrel and Chameleon datasets. These graph neural network approaches rely too much on homophily as-sumption which leads to poor results on datasets with het-erophily due to topology and attribute interference. Further-more, although GNN-BC achieves suboptimal results on most graph data with low homophily, it exhibits moderate performance on homophilic data. This can be attributed to the authors’ treating features and structures as opposing en-tities, enforcing HSIC constraints that render the representa-tions of features and structures mutually exclusive. Conse-quently, the interconnection between features and structures must be considered for effective results. In contrast, GNN-SATA enhances the independence of attribute and topology by learning their respective information separately and cap-turing their commonality via establishing soft associations between attribute and topology. Therefore, the best results have been achieved in both homophilic and heterophilic graphs. Besides, the proposed model can significantly improve on datasets with heterophily, especially the Squirrel and Chameleon datasets. We analyze that this is due to the criti-cal role played by the proposed GAM and GPM models. For datasets with high heterophily, the pruning and enhancement of the adjacency matrix can alleviate the negative impact caused by inaccurate structure to a certain extent so that the learned structural information is more accurate and better re-sults can be obtained. And the Ablation Study substantiates this statement. 
+
+Ablation Study 
+
+Ablation experiments are conducted to assess the individual contributions of different modules in our model. The four variants tested were: SATA-S, SATA-P, SATA-A, and SATA-AP, and the experimental results are shown in Table 3. • SATA-S : The proposed variant model, denoted as SATA-S, is essentially GNN-SATA with the exclusion of soft association. To avoid a trivial solution where U = X, a two-layer MLP is employed for nonlinear transformation of features. • SATA-P : The SATA-P variant refers to the GNN-SATA model without the GPM, which implies that the model eliminates the edge pruning in the soft association com-ponent and solely preserves the edge augmentation. • SATA-A : The SATA-A variant refers to the GNN-SATA model without the GAM, which implies that the model eliminates add edges in the soft association component and solely preserves the edge pruning. • SATA-AP : The SATA-AP variant pertains to the GNN-SATA model that lacks GAM and GPM. Consequently, the edges in the soft association component of the model remain fixed and cannot be modified. The guidance re-lations become unidirectional, generated solely by topol-ogy guidance features. The SATA-S exhibits a decreased performance on all datasets. The variant model independently acquires knowl-edge of feature representation and topology structure and subsequently merges the representation. It is illogical to con-sider the attribute and topology of identical data as two unre-lated entities. Moreover, the SATA-S outperforms the GCN and MLP, indicating the indispensability of integrating at-tribute and topology learning. The effect of SATA-AP is decreased in all datasets, but the decline was more evident in datasets with heterophily. The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+> 9264
+
+Dataset Cora Citeseer Photo Computer Squirrel Chameleon GCN 85.77 ± 0.2 73.68 ± 0.31 90.54 ± 0.21 82.52 ± 0.32 23.96 ± 0.26 28.18 ± 0.23 GAT 86.37 ± 0.30 74.32 ± 0.27 90.09 ± 0.27 81.95 ± 0.38 30.03 ± 0.25 42.93 ± 0.28 GraphSAGE 87.77 ± 1.04 71.09 ± 1.30 90.51 ± 0.25 83.11 ± 0.23 36.28 ± 1.73 49.24 ± 1.68 MLP 74.82 ± 2.22 70.94 ± 0.39 78.69 ± 0.30 70.48 ± 0.28 37.04 ± 0.46 49.67 ± 0.78 GCNII 88.49 ± 2.78 77.08 ± 1.21 90.98 ± 0.93 86.13 ± 0.51 37.85 ± 2.76 60.61 ± 2.00 APPNP 87.87 ± 0.85 76.53 ± 1.33 91.11 ± 0.26 81.99 ± 0.26 33.29 ± 1.72 54.30 ± 0.34 JKNet 88.93 ± 1.35 74.37 ± 1.53 87.70 ± 0.70 77.80 ± 0.97 44.24 ± 2.11 62.31 ± 2.76 Geom-GCN-I 85.19 ± 1.13 77.99 ± 1.23 NA NA 33.32 ± 1.59 60.31 ± 1.77 Geom-GCN-P 84.93 ± 0.51 75.14 ± 1.50 NA NA 38.14 ± 1.23 60.90 ± 1.13 Geom-GCN-S 85.27 ± 1.48 74.71 ± 1.17 NA NA 36.24 ± 1.05 59.96 ± 2.03 GPRGNN 88.65 ± 1.37 77.99 ± 1.64 91.93 ± 0.26 82.90 ± 0.37 49.93 ± 1.34 67.48 ± 1.98 FAGCN 87.77 ± 1.69 74.66 ± 2.27 91.96 ± 0.71 86.09 ± 0.40 40.88 ± 2.02 61.12 ± 1.95 H2GCN-1 86.92 ± 1.37 77.07 ± 1.64 OOM OOM 36.42 ± 1.89 57.11 ± 1.58 H2GCN-2 87.81 ± 1.35 76.88 ± 1.77 OOM OOM 37.90 ± 2.02 59.39 ± 1.98 GNN-BC 88.75 ± 1.21 76.70 ± 0.77 93.17 ± 0.67 89.60 ± 0.89 61.41 ± 1.55 74.63 ± 0.93 Ordered GNN 88.37 ± 0.75 77.31 ± 1.73 NA NA 62.44 ± 1.96 72.28 ± 2.29 GNN-SATA 91.24 ± 0.69 78.03 ± 0.75 93.62 ± 0.55 91.34 ± 0.29 65.25 ± 1.33 77.12 ± 0.96 
+
+Table 2: The classification results on all six datasets. The best classification results are bolded, and the second-best results are underlined. Examples include the Squirrel and Chameleon datasets. We conclude that this is because edge pruning and augmenting are more critical for heterophily datasets. On the one hand, untrue edges can be deleted. On the other hand, connections can be established based on soft associations to explore reli-able edges. The next Section Analysis of Adaptive Matrix 
+
+A illustrates that the proposed method significantly reduces the heterophily of nodes. Simultaneously, the outcomes of SATA-A and SATA-P exhibit superior performance on all datasets compared to SATA-AP, signifying the contribution of both GAM and GPM modules in enhancing the model’s efficacy. The ex-perimental findings reveal that SATA-A yields higher results than SATA-P, indicating the greater significance of GPM in adapting topology relationships. Adding edges requires ex-ploring edges that don’t exist, making it more challenging than pruning existing edges. Consequently, GAM’s effect on improving the model’s performance is comparatively lesser than GPM’s. 
+
+Analysis of Adaptive Matrix A
+
+Initially, this study introduces a homophily rate H(·) pro-posed by Pei et al. (Pei et al. 2020) to measure the proportion of edges connecting nodes with the same class in a graph.                                
+
+> Dataset SATA-S SATA-A SATA-P SATA-AP GNN-SATA Cora 86.33 91.24 90.05 89.23 91.24
+> Citeseer 75.01 76.60 76.30 76.00 78.33
+> Photo 91.33 93.30 92.33 92.12 93.62
+> Computer 82.32 90.76 90.26 90.14 91.34
+> Squirrel 35.23 63.38 61.95 61.23 65.25
+> Chameleon 50.44 75.60 73.76 72.89 77.12
+
+Table 3: The ablation experiment results of five modules. The best classification results are bolded, and the second-best results are underlined. The matching rate of the adaptive adjacency matrix H(A)
+
+can be expressed as: 
+
+H(A) = |{ (u, v ) : ( u, v ) ∈ E A ∧ yu = yv }| |E A| . (19) To analyze the A matrix more specifically, statistical anal-ysis was conducted on the edges of the matrix, as presented in Table 4. From Table 4, we can get the following conclu-sions: It can be seen from |E A|/|E A| that datasets with high ho-mophily tend to learn more edges. This is because it is easier to add edges to datasets with high homophily, and the ho-mophily rate can be increased by adding more homophilic edges so that the edge-increasing effect of GAM is more prominent. On the contrary, graph data with heterophily contains more heterophilic edges, and GPM enhances the homophily ratio by removing such edges. For instance, in the Squirrel dataset, utilizing merely 27.19% of the original number of adjacency relationships and achieve better results than the baseline methods. Furthermore, H(A)/H(A) > 1 on all datasets demon-strates that the proposed model has enhanced the homophily rate for all datasets, and the improvement effect is more ob-vious for datasets with lower homophily. 
+
+Analysis of Parameters 
+
+This section examines the two hyperparameters α1 and α2 in Eq (7). The purpose of parameter α1 is to balance the loss as-sociated with topological smoothness constraints, while pa-rameter α2 is used to balance the loss related to soft associ-ation constraints. The value of parameter α1 is chosen from the set [1 , 3, 5, 7, 10] , while parameter α2 is selected from the set [0 .001 , 0.01 , 0.1, 1] . From Figure 3, it is evident that GNN-SATA demonstrates robustness in response to varia-tions in α1. However, changes in α2 have a pronounced im-pact on the model. Similar results across both homophilic and heterophilic graphs, as observed in cases like Cora and The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+> 9265
+
+Dataset Cora Citeseer Photo Computers Squirrel Chameleon 
+
+|{ (u, v ) : ( u, v ) ∈ E A ∧ yu = yv }| 5858 5044 97966 102265 203679 4154 
+
+|{ (u, v ) : ( u, v ) ∈ E A ∧ yu̸ = yv }| 1118 1310 20956 51888 44973 9939 
+
+|E A| 6976 6354 123221 255567 59024 14039 
+
+|E A|/|E A| 1.286 1.35 1.035 1.04 0.271 0.389 
+
+H(A) 0.84 0.794 0.83 0.797 0.238 0.296 
+
+H(A)/H(A) 1.038 1.101 1.007 1.008 1.172 1.265 Table 4: The statistical data pertaining to A.          
+
+> (a) Cora-RAW (b) Citeseer-RAW (c) Photo-RAW (d) Computer-RAW (e) Squirrel-RAW (f) Chameleon-RAW
+> (g) Cora-SATA (h) Citeseer-SATA (i) Photo-SATA (j) Computer-SATA (k) Squirrel-SATA (l) Chameleon-SATA
+
+Figure 2: The visualization of classification results. 1       
+
+> 0.00 1
+> 0.001
+> 82
+> 86
+> 90
+> 0.01 0.1 1
+> 3
+> 7
+> 10
+> 5
+> (a) Cora 1
+> 0.00 1
+> 0.001
+> 74
+> 76
+> 0.01 0.1 1
+> 3
+> 7
+> 10
+> 5(b) Chameleon
+
+Figure 3: The accuracy of node classification with different parameters α1 and α2.Chameleon. For parameter α1, the model achieves superior results when its value is set to 3 or 5, indicating that ap-propriate topology smoothing constraints lead to improved performance. Additionally, parameter α2 yields the best results when its value is set to 0.01 , while a value of 1 produces poor results. This discrepancy arises because the proposed soft association constraint aims to establish a more flexible as-sociation between topology and attribute, thereby mitigat-ing issues related to over-smoothing and distortion of node representations. Setting large values of α2 causes the model to degenerate to an approximation to Eq.(3). Consequently, avoiding setting the α2 too high is advisable. 
+
+Classification Result Visualization 
+
+Figure 2 visually presents the classification results in a two-dimensional space using the T-SNE (Van der Maaten and Hinton 2008) algorithm to provide a more intuitive verifica-tion of the proposed model’s effectiveness. In contrast to the original raw irregular data distribution (-RAW), GNN-SATA (-SATA) effectively categorizes the data into distinct groups, providing compelling evidence of the proposed model’s ca-pability in classifying various irregular data. 
+
+# Conclusion 
+
+This paper proposes a novel graph neural network for semi-supervised node classification called GNN-SATA. The net-work is designed based on the optimization principle of graph neural networks and incorporates a soft association constraint. The soft associations aim to address the issues of node representation distortion arising from the compromise between attribute and topology. Additionally, GNN-SATA utilizes the GAM and GPM to adaptively adjust the soft as-sociation by adding or removing edges based on the topol-ogy, node attribute, and classification tasks. The analysis of the adjacency matrix A demonstrates that the GAM and GPM techniques effectively enhance homophily and signif-icantly impact the addition and removal of adjacency matrix edges. Furthermore, the performance of node classification serves as evidence of the efficacy of the GNN-SATA model. The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+> 9266
+
+# Acknowledgments 
+
+This research was supported by the National Key R&D Pro-gram of China (No.2021ZD0111902), NSFC (62172023, U21B2038, U19B2039), Beijing Natural Science Founda-tion (4222021) and the China Postdoctoral Science Founda-tion under Grant 2023M740201. 
+
+# References 
+
+Airoldi, E. M.; Blei, D.; Fienberg, S.; and Xing, E. 2008. Mixed membership stochastic blockmodels. Advances in Neural Information Processing Systems , 21. Bi, W.; Xu, B.; Sun, X.; Wang, Z.; Shen, H.; and Cheng, X. 2022. Company-as-tribe: Company financial risk assess-ment on tribe-style graph with hierarchical graph neural net-works. In ACM SIGKDD Conference on Knowledge Discov-ery and Data Mining , 2712–2720. Bo, D.; Wang, X.; Shi, C.; and Shen, H. 2021. Beyond low-frequency information in graph convolutional networks. In AAAI Conference on Artificial Intelligence , volume 35, 3950–3957. Chen, M.; Wei, Z.; Huang, Z.; Ding, B.; and Li, Y. 2020. Simple and deep graph convolutional networks. In Interna-tional Conference on Machine Learning , 1725–1735. Chien, E.; Peng, J.; Li, P.; and Milenkovic, O. 2021. Adap-tive universal generalized pagerank graph neural network. In 
+
+International Conference on Learning Representations .Fan, W.; Ma, Y.; Li, Q.; He, Y.; Zhao, E.; Tang, J.; and Yin, D. 2019. Graph neural networks for social recommendation. In The World Wide Web Conference , 417–426. Gasteiger, J.; Bojchevski, A.; and G¨ unnemann, S. 2019. Pre-dict then propagate: Graph neural networks meet person-alized pagerank. In International Conference on Learning Representations .Gretton, A.; Bousquet, O.; Smola, A.; and Sch¨ olkopf, B. 2005. Measuring statistical dependence with Hilbert-Schmidt norms. In International Conference on Algorithmic Learning Theory , 63–77. Springer. Guo, Z.; Yu, K.; Jolfaei, A.; Li, G.; Ding, F.; and Beheshti, A. 2022. Mixed graph neural network-based fake news detection for sustainable vehicular social networks. IEEE Transactions on Intelligent Transportation Systems , 1–13. Hamilton, W.; Ying, Z.; and Leskovec, J. 2017. Inductive representation learning on large graphs. Advances in Neural Information Processing Systems , 30. Huang, J.; Du, L.; Chen, X.; Fu, Q.; Han, S.; and Zhang, D. 2023. Robust Mid-Pass Filtering Graph Convolutional Networks. arXiv:2302.08048 .Jin, W.; Derr, T.; Wang, Y.; Ma, Y.; Liu, Z.; and Tang, J. 2021. Node similarity preserving graph convolutional net-works. In ACM International Conference on Web Search and Data Mining , 148–156. Kipf, T. N.; and Welling, M. 2017. Semi-Supervised Clas-sification with Graph Convolutional Networks. In Interna-tional Conference on Learning Representations .Liu, M.; Gao, H.; and Ji, S. 2020. Towards deeper graph neu-ral networks. In ACM SIGKDD International Conference on Knowledge Discovery & Data Mining , 338–348. Ma, Y.; Liu, X.; Zhao, T.; Liu, Y.; Tang, J.; and Shah, N. 2021. A unified view on graph neural networks as graph signal denoising. In ACM International Conference on In-formation & Knowledge Management , 1202–1211. Mnih, A.; and Salakhutdinov, R. R. 2007. Probabilistic ma-trix factorization. Advances in Neural Information Process-ing Systems , 20. Pei, H.; Wei, B.; Chang, K. C.-C.; Lei, Y.; and Yang, B. 2020. Geom-gcn: Geometric graph convolutional networks. In International Conference on Learning Representations .Raghavan, U. N.; Albert, R.; and Kumara, S. 2007. Near lin-ear time algorithm to detect community structures in large-scale networks. Physical Review E , 76(3): 036106. Song, Y.; Zhou, C.; Wang, X.; and Lin, Z. 2023. Ordered GNN: Ordering Message Passing to Deal with Heterophily and Over-smoothing. In International Conference on Learn-ing Representations .Van der Maaten, L.; and Hinton, G. 2008. Visualizing data using t-SNE. Journal of Machine Learning Research , 9(11). Veliˇ ckovi´ c, P.; Cucurull, G.; Casanova, A.; Romero, A.; Lio, P.; and Bengio, Y. 2017. Graph attention networks. 
+
+arXiv:1710.10903 .Wu, F.; Souza, A.; Zhang, T.; Fifty, C.; Yu, T.; and Wein-berger, K. 2019. Simplifying graph convolutional networks. In International Conference on Machine Learning , 6861– 6871. PMLR. Wu, Z.; Pan, S.; Chen, F.; Long, G.; Zhang, C.; and Philip, S. Y. 2020a. A comprehensive survey on graph neural net-works. IEEE Transactions on Neural Networks and Learn-ing Systems , 32(1): 4–24. Wu, Z.; Pan, S.; Chen, F.; Long, G.; Zhang, C.; and Philip, S. Y. 2020b. A comprehensive survey on graph neural net-works. IEEE Transactions on Neural Networks and Learn-ing Systems , 32(1): 4–24. Xu, K.; Li, C.; Tian, Y.; Sonobe, T.; Kawarabayashi, K.-i.; and Jegelka, S. 2018. Representation learning on graphs with jumping knowledge networks. In International Con-ference on Machine Learning , 5453–5462. Yang, L.; Wang, C.; Gu, J.; Cao, X.; and Niu, B. 2021. Why do attributes propagate in graph convolutional neural net-works? In AAAI Conference on Artificial Intelligence , vol-ume 35, 4590–4598. Yang, L.; Zhou, W.; Peng, W.; Niu, B.; Gu, J.; Wang, C.; Cao, X.; and He, D. 2022. Graph Neural Networks Beyond Compromise Between Attribute and Topology. In ACM Web Conference , 1127–1135. Yang, Y.; Sun, Y.; Ju, F.; Wang, S.; Gao, J.; and Yin, B. 2023. Multi-graph Fusion Graph Convolutional Networks with pseudo-label supervision. Neural Networks , 158: 305– 317. Zhao, T.; Liu, Y.; Neves, L.; Woodford, O.; Jiang, M.; and Shah, N. 2021. Data augmentation for graph neural net-works. In AAAI Conference on Artificial Intelligence , vol-ume 35, 11015–11023. The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+> 9267
+
+Zhu, J.; Yan, Y.; Zhao, L.; Heimann, M.; Akoglu, L.; and Koutra, D. 2020a. Beyond homophily in graph neural net-works: Current limitations and effective designs. Advances in Neural Information Processing Systems , 33: 7793–7804. Zhu, J.; Yan, Y.; Zhao, L.; Heimann, M.; Akoglu, L.; and Koutra, D. 2020b. Beyond homophily in graph neural net-works: Current limitations and effective designs. Advances in Neural Information Processing Systems , 33: 7793–7804. Zhu, M.; Wang, X.; Shi, C.; Ji, H.; and Cui, P. 2021. In-terpreting and unifying graph neural networks with an opti-mization framework. In ACM Web Conference , 1215–1226. The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+9268

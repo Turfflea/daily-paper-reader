@@ -1,0 +1,288 @@
+Title: Toward Improving Robustness and Accuracy in Unsupervised Domain Adaptation
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/32750/34905
+
+Number of Pages: 9
+
+Markdown Content:
+# Toward Improving Robustness and Accuracy in Unsupervised Domain Adaptation 
+
+# Aishwarya Soni and Tanima Dutta 
+
+Department of Computer Science and Engineering, Indian Institute of Technology (BHU) Varanas, India 
+
+{aishwaryasoni.rs.cse19, tanima.cse }@iitbhu.ac.in 
+
+Abstract 
+
+Adversarial robustness in the context of Unsupervised Do-main Adaptation (UDA) is particularly challenging due to the lack of labels in the target domain. Pseudo labels are often used to make adversarial robust models but compromise ro-bustness and accuracy, falling short of the performance due to noise and inaccuracies in these pseudo labels. The main chal-lenges in achieving robustness and accuracy include ensuring reliable pseudo labels and developing effective training meth-ods that bring alignment between clean and adversarial exam-ples of target data. To address these challenges, we propose a novel training method within the self-training paradigm Con-sistent Attention Mapping with Self Pseudo Label Refinement (CAM+SPLR) . It begins with the pre-training of the UDA model, resulting in a UDA pre-trained model, which is ini-tialized into two separate models: the Anchor model and the TargetNet model. The Anchor model encourages the atten-tion maps of clean images and their adversarial counterparts to be similar, while the TargetNet model simultaneously per-forms self-training using Adversarial target data and refin-ing the pseudo labels. CAM+SPLR improves both semanti-cally relevant key features and pseudo-labels through a two-step stochastic gradient descent process during training. We conducted extensive experiments on benchmark datasets, in-cluding OfficeHome, PACS, and VisDA, demonstrating sig-nificant improvements in both robustness and accuracy. Our method achieves an average accuracy improvement of 6% and 8.1% and an average robustness improvement of 10.2% and 4.9%, compared to state-of-the-art methods on the PACS and VisDA datasets. 
+
+# Introduction 
+
+Unsupervised Domain Adaptation (UDA) (Ganin and Lem-pitsky 2015; Wilson and Cook 2020) has achieved signifi-cant success in transferring learned representations from a labelled source domain to an unlabeled target domain. Ex-isting methods (Ganin et al. 2016; Long et al. 2018, 2017; Saito et al. 2018; Sun and Saenko 2016; Xu et al. 2019; Choi et al. 2019; Yang et al. 2021b) focus on improving the model’s ability to generalize and accurately map these rep-resentations to the target domain. However, in real-world ap-plications, it’s crucial for UDA models to be secure against potential threats like adversarial examples (AEs). UDA are 
+
+Copyright © 2025, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+particularly vulnerable to adversarial attacks, where even small perturbations can significantly degrade their perfor-mance. Despite this vulnerability, the robustness of UDA methods against adversarial attacks has been largely over-looked, as highlighted in recent studies (Lo and Patel 2022; Zhu et al. 2023). This gap presents a major challenge for deploying UDA models in safety-critical applications. 
+
+Cl Image Desk Lamp Adv Image Radio Computer 
+
+Cl Image Push Pin Adv Image Push Pin Hammer (a) (b) (c) (d) (e) 
+
+Figure 1: (a) Clean image, (b) Corresponding attention map where red regions indicate areas contributing more to the model’s classification, (c) Adversarial example of (a), (d) Attention map of adversarial example illustrating the atten-tion shift relative to the attention map of the corresponding clean image, as depicted in (b), (e) Attention shift due to noisy labels, focusing on the background or semantically ir-relevant features. (Cl: Clean, Adv: Adversarial) Adversarial Training (AT) is a proven strategy in deep neural networks (DNNs) for defending against adver-sarial attacks. Several AT approaches have been devel-oped (Szegedy et al. 2013; Goodfellow, Shlens, and Szegedy 2014; Madry et al. 2017; Dong et al. 2018; Lo and Patel 2021) to enhance the robustness of DNNs by training mod-els on adversarial examples using a max-min optimization process. However, this approach typically relies on ground-truth labels to generate adversarial examples, which limits its application in UDA where labeled target data are un-available. Moreover, the self-training method is effective in using adversarial examples from the target data to enhance robustness. These adversarial examples are generated using pseudo labels predicted by a pre-trained UDA model. How-ever, there are still significant challenges in self-training to direct the use of pseudo labels. When pseudo labels are used to generate adversarial ex-amples, the noise and inaccuracies in these labels can cause the model to overfit specifically to these adversarial exam-The Thirty-Ninth AAAI Conference on Artificial Intelligence (AAAI-25) 
+
+6987 ples in target domain. This overfitting results in suboptimal performance on unseen adversarial examples. Moreover, in self-training, model may start focusing on misleading irrele-vant features introduced by adversarial perturbations, driven by noisy or inaccurate pseudo labels, rather than concentrat-ing on meaningful, semantically relevant features. In Figure 1, we visualized the attention map of a clean im-age and its corresponding adversarial image using a ResNet-50 backbone pre-trained on ImageNet and fine-tuned on source-target data for domain adaption task. The clean im-age is originally labeled as “Desk Lamp,” and the model cor-rectly focuses on key features such as the lamp’s shape and light source. However, after adversarial perturbations are added, the model’s attention may shift to irrelevant features due to the erratic patterns introduced by the perturbation. This shift occurs in the case of “Desk Lamp” but not in the case of “Push Pin.” As a result, the model incorrectly classi-fies the image as “Radio” instead of “Desk Lamp” due to the shift, while it correctly classifies the image as “Push Pin” in the case of “Push Pin” as shown in column (d). When adver-sarial examples are generated and trained with incorrect or noisy pseudo labels, model may focus on irrelevant features, as seen in column (e). This results in incorrect classifica-tions, such as “Computer” for “Desk Lamp” and “Hammer” for “Push Pin.” This shift in focus impairs model’s perfor-mance on adversarial and clean examples by prioritizing pe-ripheral regions or semantically irrelevant features. In this paper, we propose a method called Consistent Attention Mapping with Self Pseudo Label Refinement (CAM+SPLR), which redesigns the self-training method in UDA. Our method aims to enhance both adversarial ro-bustness and clean accuracy in UDA models by focusing on two key aspects: 1) Enhance robust feature representa-tion using Consistent Attention Mapping (CAM) by empha-sizing semantically informative features. 2) Improving the pseudo-label quality of the target data using Self Pseudo Label Refinement (SPLR) by incorporating two Stochastic Gradient Descent (SGD) step updates using both labelled source data and unlabelled target data. We begin by training a UDA model using both source and target data, resulting in a UDA pre-trained model. This model is then initialized into two separate models: the Anchor model and the TargetNet model. The Anchor Model, which is frozen and processes clean target images, generates attention maps that help to reconstruct robust feature representations. This is achieved by encouraging the attention maps of clean examples and their adversarial counterparts, processed by the TargetNet model, to be similar by activating semantically relevant key areas. Meanwhile, the TargetNet model generates pseudo la-bels and performs self-training using adversarial examples of the target data, along with self-refinement of the pseudo labels. The simultaneous updation of pseudo labels, along with the minimization of attention loss during self-training, is achieved through a two-step-stochastic Gradient Descent (SGD) process in each epoch. In the first step, the TargetNet model’s parameters are updated using conventional SGD, with a combined loss consisting of cross-entropy loss and attention loss. In the second step, the TargetNet model’s updated parameters are again updated using conventional SGD, with a combined loss consisting of semi-supervised loss and unsupervised data augmentation loss. Our contributions are as follows: 
+
+• We first introduce the novel self-training method Con-sistent Attention Mapping with Self Pseudo Label Refine-ment(CAM+SPLR), which simultaneously improves the ro-bustness and accuracy of the UDA model. 
+
+• We propose the Consistent Attention Mapping (CAM) method for the self-training pipeline (CAM+SPLR). This effectively prevents the model from focusing on less infor-mative regions influenced by adversarial perturbations and noisy pseudo-labels. It activates semantically relevant key areas with attention mapping, which enhances learning more discriminative features. 
+
+• We further proposed the Self Pseudo Label Refinement (SPLR) method that prevent the model overfitting due to in-evitable noisy pseudo labels. This method employs a two-step gradient update process during training to progressively refine the pseudo labels without relying on any additional model. 
+
+• We achieve improvement in robustness and gain in stan-dard accuracy across multiple datasets (OfficeHome (Wang et al. 2021), PACS (Li et al. 2017), VisDA (Peng et al. 2017)) compared to state-of-the-art methods (DART (Wang et al. 2024), SRoUDA (Zhu et al. 2023), and ARTUDA (Yang et al. 2021a)). Specifically, we observed remarkable aver-age robustness gain at  = 2 /255 of 5.2%, 4.9%, and 10.2% on the OfficeHome, VisDA, and PACS datasets, respectively . Additionally, average accuracy improved by 0.9%, 8.1%, and 6% over the UDA baseline Domain-Adversarial Neural Network (DANN) (Ganin et al. 2016) on the OfficeHome, VisDA, and PACS datasets, respectively. The remainder of the paper first introduces the proposed methodology, covering its concepts and architecture, and then presents our experimental setup and results. Finally, we concludes the paper. Preliminaries are given in the Supple-mentary. 
+
+# Methodology 
+
+This section outlines our proposed methodology, detail-ing the training pipeline of the TargetNet model with the help of the frozen Anchor model. Figure 2 illustrates the CAM+SPLR training process for the TargetNet model us-ing adversarial examples derived from pseudo-labeled tar-get data. Key semantic features are progressively enhanced throughout the training, while the pseudo labels are self-refined based on the model’s performance on both the source and target data. 
+
+## Pre-training of DANN 
+
+We employ a pre-trained UDA model to generate accurate pseudo-labels for training the TargetNet model. To achieve this, we utilize the DANN method (Ganin et al. 2016), which optimizes two classifiers simultaneously: (1) a label classi-fier and (2) a domain discriminator. The label classifier pre-dicts the labels and is used during both training and testing, while the domain discriminator differentiates between the source and target domains during training. This joint opti-mization promotes the learning of domain-invariant features. 6988 Adversarial Pseudo label Generation of Pseudo label prediction Training TargetNet Model Source Data First SGD (lamp_shade) TargetNet Model Second SGD Anchor Model (frozen) Adversarial Example (lamp_shade) Target Data Target Data Target Data 
+
+Attention Loss Figure 2: A schematic representation of CAM+SPLR train-ing, where the TargetNet model is trained on adversarial examples generated from pseudo-labeled target data to en-hance the key semantic features and self-refining pseudo la-bels. SGD: Stochastic Gradient descent. It minimizes cross-entropy loss, LCE (·, ·) and domain dis-criminator loss, Ldd (·, ·) as;     
+
+> min ( LCE (Fs(xs), y s) + ωLdd (xs, x t)) ,(1)
+
+where ω is a hyperparameter, often referred to as a regu-larization parameter, which controls the trade-off between the classification loss and the discriminator or domain loss. We set ω = 0 .1 throughout the entire training process and use the DANN method for UDA pre-training. However, our proposed method can be easily integrated with any of the existing UDA baselines. 
+
+## Consistent Attention Mapping (CAM) 
+
+In this section, our goal is to help the TargetNet model learn robust feature representations by focusing on semantically relevant regions of the input. We achieve this by enforcing consistency between the Attention Maps of clean target ex-amples and their adversarial counterparts. Specifically, we align the attention maps to maintain focus on key areas of the input, ensuring that adversarial perturbations do not di-vert attention away from critical regions. Let S denote the set of indices corresponding to the activation layer pairs that are prioritized in this attention alignment. Then, we can de-fine the attention loss ( LATT ) as: 
+
+LAT T = ∑
+
+> z∈S
+
+∥∥∥∥
+
+P ADV 
+
+> z
+
+‖P ADV  
+
+> z
+
+‖2
+
+− P CLEAN 
+
+> z
+
+‖P CLEAN  
+
+> z
+
+‖2
+
+∥∥∥∥2
+
+, (2) where CLEAN and ADV denote clean examples and their adversarial examples, respectively. P CLEAN  
+
+> z
+
+=
+
+vec (F (BCLEAN 
+
+> z
+
+)) and P ADV  
+
+> z
+
+= vec (F (BADV 
+
+> z
+
+)) are the 
+
+z-th pair of clean examples and their adversarial examples attention maps in vectorized form. This alignment encour-ages the model to maintain a consistent focus on semanti-cally important regions, even under adversarial perturbation driven by inaccurate labels. 
+
+## Consistent Attention Mapping with Self Pseudo Label Refinement 
+
+Figure 2 illustrates the method of CAM+SPLR of the Tar-getNet model in the presence of the Anchor model. The TargetNet model possesses the UDA feature extractor and classifier architecture, and the re-designed self-training is performed using adversarial examples of target data. Dur-ing self-training, the model concurrently enhances the fea-ture representation using attention mappings and refines the pseudo labels. To achieve this, we first pass a mini-batch of unlabeled clean target data xt to the TargetNet model to get pseudo-label predictions yt. The model utilizes pseudo-labels with confidence scores (yit ≥ T ) to guide the train-ing process, where T represents the predefined confidence threshold. Subsequently, adversarial examples ˆxt are gener-ated from these pseudo-labeled target data, and the Target-Net model is trained using these adversarial examples. Dur-ing training, we perform two gradient descent steps in each epoch. In the first step, we calculate the attention loss LAT T 
+
+as defined in Eq. 2, along with the cross-entropy loss LCE .To calculate these losses, a batch of clean target examples is passed through the Anchor model, while the correspond-ing adversarial examples are passed through the TargetNet model. We then extract attention maps from the different layers in both models. We aim to leverage the attention su-pervision from the Anchor model to align the TargetNet’s features with semantically relevant regions by minimizing the attention loss between clean target examples and their adversarial counterparts. This attention loss strengthens the model’s ability to learn robust feature representations. In ad-dition, during supervision, the weights of the Anchor model remain fixed and have not been updated. Furthermore, to fa-cilitate accurate classification of the TargetNet Model, we calculate the Cross-Entropy Loss between the soft label pre-diction ( ˆpt) from the TargetNet Model and the hard pseudo labels ( yt):    
+
+> LCE =CE (ˆ pt, y t),(3)
+
+where ˆxt represents the adversarial example of the target data, yt = arg max( Gt(xt)) is the hard pseudo-label for the clean target data xt and ˆpt = Gt(ˆ xt) is the soft label pre-diction for the target adversarial examples outputs from the TargetNet model. Initially, the pseudo-labels may be noisy, so the TargetNet model is progressively updated to refine them. The combined loss L1(θM ) is defined as the sum of the attention loss LATT and the cross-entropy loss LCE :       
+
+> L1(θM) = LCE +λ1· L AT T ,(4)
+
+where λ1 is a hyperparameter used to balance the two terms in loss. With this calculated loss L1(θM ), we update the first gradient step such as:          
+
+> First SGD: θM′=θM−η1· ∇L 1(θM).(5)
+
+In the second gradient step, we generate new predictions on labelled source data and unlabelled target data using the up-dated model parameters. The parameters are then updated again by optimizing the second objective function, which includes Unsupervised Data Augmentation Loss (UDA) and Semi-Supervised Loss (SSL) terms:      
+
+> L2(θ′
+> M) = LUDA +λ2LSSL .(6) 6989
+
+Here, LUDA denotes the Unsupervised Adversarial Consis-tency Loss, and LSSL represents the Semi-Supervised Loss for refining pseudo-labels. The hyperparameter λ2 balances these two losses. In the second gradient step, LSSL refines the pseudo-labels for target data, while LUDA enforces con-sistency between predictions on clean and adversarial target examples, promoting the learning of robust, generalizable features. This consistency constraint improves performance by ensuring stable predictions across data variations. The 
+
+LUDA loss is computed as follows:       
+
+> LUDA =CE (Gt(xs), y s) + βkE[−ptlog(ˆ pt)] ,(7)
+
+βk = β0 · min(1 , k + 1 
+
+a ).
+
+The first term is the cross-entropy loss calculated on the labeled source data and second term the consistency reg-ularization term, enforcing that the model’s predictions on clean target examples pt remain aligned with their adversar-ial counterparts ˆpt. βk serves as a warm-up coefficient that progressively increases its value until a constant a is reached during training. This warm-up process ensures that pseudo-labels do not overly influence the model in the early stages of training. Further, the semi-supervised loss is a critical component of the second gradient update, specifically de-signed to refine pseudo-labels by leveraging feedback from the model’s performance. This LSSL loss is used to evaluate the model’s performance after the first gradient update and is computed as:      
+
+> LSSL = ∆ CE ·CE ( ˆ pt,ˆyt),(8)
+
+where ∆CE represents the difference in cross-entropy loss calculated on the labeled source data before and after the first gradient update. CE ( ˆ pt, y t) is the cross entropy loss on the pseudo-labels, where ˆpt are the soft predictions and yt
+
+are the hard pseudo-labels for the clean target examples. In addition, to reduce the variance in SSL , we subtract the pre-vious moving average of ∆CE from the current ∆CE when calculating the SSL term. This approach helps stabilize the learning process, ensuring consistent and reliable feedback during pseudo-label refinement. Then we do a second gradi-ent update by using this combined loss L2(θM ), which will act as a feedback signal:          
+
+> Second SGD: θM′′ =θ′
+> M−η2· ∇L 2(θ′
+> M),(9)
+
+where η2 is the learning rate for the second gradient step. The algorithm of our CAM+SPLR is summarized in the sup-plementary of Algorithm 1. 
+
+# Experiments 
+
+Dataset. We evaluate our method on the three multi-domain datasets: OfficeHome (Wang et al. 2021) which has four do-mains across 65 categories i.e., Art (Ar, 2427 images), Cli-pArt (Cl, 4365 images), Product(Pr, 4439 images) and Re-alWorld (Re, 4357 images), PACS (Li et al. 2017) has four domains with seven categories, namely Photo (Ph, 1670 im-ages), Art Painting (Ar, 2048 images), Cartoon (Ca, 2344 
+
+images) and Sketch (Sk, 3929 images), and VisDA (Peng et al. 2017) is a large dataset having two domains with 12                                    
+
+> S→TSyn →Re Cl →Re Ph →Ar Method Clean PGD Clean PGD Clean PGD DANN 67.5 0.3 68.0 0.0 89.0 0.0 CAM+SPLR (L-AT) 64.9 52.8 59.2 53.8 74.5 67.5 CAM+SPLR (M-AT) 66.1 54.7 61.1 54.5 79.2 69.9 CAM+SPLR (H-AT) 67.4 56.2 63.3 56.4 81.5 72.6 CAM+SPLR (A-AT) 69.5 57.8 65.8 57.5 83.6 74.5
+
+Table 1: Experimental results on attention maps used with CAM+SPLR and UDA baseline DANN (Ganin et al. 2016). (L: Low Level, M: Mid Level, H: High Level, A: All Levels, AT: Attention Map.) categories namely, Synthetic images (Syn, 152409 ) and Real images (Re, 55400 ). 
+
+Comparison. Here, 1.) UDA baseline: a simple UDA model trained without considering robustness, 2.) UDA+AT: 
+
+initially trains a DANN (Ganin et al. 2016) to predict pseudo-labels for the unlabeled target data, followed by ap-plying standard adversarial loss for training the target model on the pseudo-labels, 3.) UDA+Trades: it is similar to the UDA+AT, but the standard adversarial loss is replaced with Trades loss (Zhang et al. 2019), and 4.) UDA+Mart: em-ploy Mart loss instead of standard adversarial loss (Wang et al. 2019). 5.) Comparison with state-of-the-art: AR-TUDA (Yang et al. 2021a), 6.) SRoUDA (Zhu et al. 2023), and 7.) DART (Wang et al. 2024). 
+
+Implementation details. We use ResNet-50 (He et al. 2016) (pre-trained using ImageNet) as the backbone fea-ture extractor for all the datasets in the experiments. Dur-ing pre-training of DANN, we use Transfer-Learning-library (TLL) (Junguang Jiang 2020) to set up the experimen-tal environment for UDA and follow the training hyper-parameters as in (Wang et al. 2024). Next, we incorporate data augmentation techniques, like resizing to 224 ×224 pix-els, random horizontal flips, and rotations, for target training data. The training batch size is set to 32 with Adam opti-mizer and a learning rate of 0.001 . We train the CAM+SPLR to 25 K iteration using two stochastic gradient descent steps in every training epoch. We consider adversarial perturba-tion under L∞ norm, with adversarial examples generated using 10 steps of PGD with  = 2 /255 and  = 8 /255 .Finally, we evaluate all the methods on the target data using standard accuracy and robustness computed on 20 -step PGD (PGD 20 ) attack with  = 2 /255 on all the datasets except 
+
+8/255 on the VisDA dataset and PACs dataset. Results pre-sented in the tables/graphs are expressed as % accuracy or robustness. Related work and additional results are provided in the supplementary materials and the Experiment section, including Table 1, which presents performance comparisons under black-box robustness settings; Figures 1 and 2 illus-trate hyperparameter analyses; and Figure 4, highlights ro-bustness evaluations in the feature space. 
+
+CAM+SPLR with attention maps at different feature levels. We use ResNet-50 as the backbone and leverage different stages of convolution blocks within the activa-tion layers to generate attention maps. The levels from low to high correspond to the attention maps generated by 6990 (a) Original Image (b) Adversarial Image Low Level Mid Level-1 Mid Level-2 High Level Low Level Mid Level-1 Mid Level-2 High Level             
+
+> (c) UDA Baseline, labeled as “Knife” (d) UDA Baseline, labeled as “Aeroplane” Low Level Mid Level-1 Mid Level-2 High Level Low Level Mid Level-1 Mid Level-2 High Level
+> (e) CAM, labeled as “Plant” (f) SPLR, labeled as “Skateboard” Low Level Mid Level-1 Mid Level-2 High Level
+> (g) CAM+SPLR, labeled as “Knife”
+
+Figure 3: (a) Clean image and (b) corresponding adversarial example. (c) and (d) depict attention maps of clean and adversarial examples at different feature levels along with their predicted labels by the UDA baseline. (e) and (f) show attention maps generated by CAM and SPLR methods, respectively, for adversarial examples at different feature levels and their predicted labels. (g) presents attention maps produced by the CAM+SPLR method and their corresponding predicted labels. four groups of convolutional structures (Zagoruyko and Ko-modakis 2017) in ResNet-50, namely conv2 x, conv3 x, conv4 x, and conv5 x. These groups extract features at vary-ing levels: low-level features, mid-level features, and high-level features. In Figure 3, we presented attention maps that illustrate the effectiveness of our defence method against PGD20 attacks. ResNet-50, initially pre-trained on the Ima-geNet dataset and later fine-tuned on the VisDA dataset for the syn-to-real domain adaptation task, referred to as the UDA baseline model. Our analysis reveals that combining CAM and SPLR significantly improves the ability to accu-rately capture the outline and texture of a knife. If only CAM method is used, it labels the “Knife” as “Plant” due to noise and inaccuracies in the pseudo label. If only SPLR is used alone, it labels the “Knife” as “Sket-board” due to the attention shift of the TargetNet model as it focuses on irrelevant features, which leads to incorrect pre-diction. However, the combined CAM+SPLR approach con-sistently generates precise predictions by activating relevant features across the entire knife. Moreover, we conducted an ablation study to identify which feature level of attention map contributes most to enhancing robustness and accuracy. This study examines the behaviour of the CAM+SPLR ap-proach when applying attention maps at different feature levels: low, mid, and high. The evaluation was performed under a PGD20 attack with  = 8 /255 across three source-target domain pairs: Synthetic →Real, Clipart → RealWorld, and Photo →Art, using the VisDA, OfficeHome, and PACS datasets. If only CAM is used alone, it labels the “Knife” as “Plant” due to noise and inaccuracies in the pseudo la-bel. If only SPLR is used alone, it labels the “Knife” as “Skateboard” due to the attention shift of the TargetNet model as it focuses on irrelevant features, leading to incor-rect predictions. However, the combined CAM+SPLR ap-proach consistently generates precise predictions by activat-ing relevant features across the entire knife. Moreover, we conducted an ablation study to identify which feature level of the attention map contributes most to enhancing robust-ness and accuracy. This study examines the behavior of the CAM+SPLR approach when applying attention maps at dif-ferent feature levels: low, mid, and high. The evaluation was performed under a PGD20 attack with  = 8 /255 across three source-target domain pairs: Synthetic → Real, Clipart 
+
+→ RealWorld, and Photo → Art, using the VisDA, Office-Home, and PACS datasets. As shown in Table 1, our pro-posed method, which incorporates attention mapping at all feature levels, achieved approximately 2−3% improvement in accuracy and robustness compared to using only high-level attention mapping. Additionally, it outperformed low-level and mid-level attention mapping by 3−5% and 7−8% ,respectively, in terms of accuracy and robustness. 
+
+Comparison on PGD 20 attack at  = 2 /255 . We present a comprehensive comparison of various methods in Table 2 for the PACS dataset, Table 3 for the OfficeHome dataset and Table 4 for the VisDA dataset are provided in the exper-iment section of the supplementary. In the experiment, we 6991 S → T Ph → Ar Ph → Ca Ph → Sk Ca → Ar Ca → Ph Ca → Re Method Clean PGD Clean PGD Clean PGD Clean PGD Clean PGD Clean PGD DANN 89 .0 5.5 80 .5 11 .5 74 .2 24 .0 84 .8 0.5 92 .3 1.0 78 .0 25 .8                                                                                                                                                                                                                                       
+
+> UDA+AT 82 .159 .085 .277 .178 .075 .376 .255 .093 .180 .280 .177 .2
+> UDA + Trades 82 .063 .084 .276 .578 .675 .278 .558 .092 .282 .179 .977 .6
+> UDA + Mart 80 .562 .781 .277 .677 .275 .876 .257 .891 .782 .679 .178 .2
+> ARTUDA 85 .960 .187 .578 .174 .970 .476 .553 .389 .475 .080 .374 .9
+> SRoUDA 76 .156 .482 .471 .771 .963 .772 .050 .990 .379 .976 .772 .3
+> DART 85 .258 .089 .480 .582 .579 .977 .454 .694 .279 .884 .981 .0
+> Ours 87 .663 .492 .582 .683 .281 .981 .861 .594 .983 .585 .382 .6
+> S→TAr →Ca Ar →Ph Ar →Sk Sk →Ar Sk →Ca Sk →Ph Avg Accuracy Method Clean PGD Clean PGD Clean PGD Clean PGD Clean PGD Clean PGD Clean PGD DANN 84 .212 .597 .92.784 .90.568 .045 72 .114 .271 .30.181 .411 .9
+> UDA+AT 85 .076 .395 .083 .184 .881 .162 .137 .572 .564 .088 .873 .681 .970 .0
+> UDA+Trades 85 .177 .098 .382 .286 .083 .369 .044 .276 .663 .889 .676 .483 .371 .6
+> UDA+Mart 84 .978 .195 .582 .585 .283 .767 .545 .671 .863 .188 .377 .181 .672 .1
+> ARTUDA 88 .176 .095 .078 .580 .361 .549 .531 .738 .128 .548 .940 .474 .560 .7
+> SRoUDA 84 .275 .894 .181 .577 .373 .224 .822 .472 .462 .391 .973 .176 .265 .3
+> DART 89 .179 .198 .981 .489 .586 .471 .953 .178 .469 .287 .876 .885 .773 .3
+> Ours 90 .583 .197 .585 .090 .886 .773 .556 .981 .673 .889 .479 .287 .476 .7
+
+Table 2: Comparison on PGD 20 attack at  = 2 /255 using PACS dataset. Avg accuracy calculated using both (top and bottom). used DANN as the UDA baseline and considered the white-box attack using PGD 20 with perturbation size  = 2 /255 
+
+to assess model robustness and derive various observations. From the results, we observe that the proposed CAM+SPLR method significantly enhances both adversarial robustness and accuracy under the UDA scenario and outperforms other UDA baselines and state-of-the-art methods. Specifically, CAM+SPLR achieves substantial improvements in model robustness and accuracy across all datasets as shown in Fig-ure 4. Some interesting observations include enhancement in average robustness ranging from 1.4% to 45 .9% for the Of-ficeHome dataset, 11 .9% to 76 .7% for the PACS dataset, and 
+
+0.4% to 74 .0% for the VisDA dataset. Further, our method achieves better average accuracy, 1% to 7% , as compared to the UDA baseline DANN method for all the datasets. 
+
+Comparison on PGD 20 attack at  = 8 /255 . We present a comparison of different methods on the VisDA dataset in Table 3. We used DANN as the UDA baseline and consid-ered the white-box attack using PGD 20 with  = 8 /255 to assess model robustness and accuracy. Our method achieves average robustness 0.4% to 62 .1% on the VisDA Dataset. In comparison with the SRoUDA (Zhu et al. 2023) method, our method improved the average accuracy and robustness of 
+
+23 .3% and 24 .8% , respectively. Our proposed CAM+SPLR method significantly improves both the adversarial robust-ness and accuracy in comparison to the other state-of-the-art methods, as shown in Table 3. Additionally, we conduct ex-periments on the Real →Synthetic source-target pair of the VISDA dataset under various adversarial attacks (FGSM, PGD10, PGD20, CW ∞), as shown in Table 4. 
+
+Component ablation of CAM+SPLR. We evaluate the effectiveness of the individual components in our CAM+SPLR method by conducting experiments on the PACS dataset, specifically on the Photo →Clipart and Photo →Sketch source target pairs. The results, presented                                                                
+
+> S→TSyn →Re Re →Syn Avg Accuracy Method Clean PGD Clean PGD Clean PGD DANN 67 .50.378 .50.573 .00.4
+> UDA+AT 49 .629 .352 .833 .551 .231 .4
+> Trades 51 .736 .157 .445 .654 .640 .9
+> Mart 50 .838 .456 .046 .853 .442 .6
+> ARTUDA 54 .942 .759 .547 .257 .245 .0
+> SRoUDA 51 .335 .461 .649 .356 .542 .4
+> DART 65 .651 .273 .860 .169 .755 .7
+> Ours 69 .557.8 79 .166.4 74 .362.1
+
+Table 3: An illustration of comparison on PGD 20 attack at 
+
+ = 8 /255 using VisDA dataset.                                    
+
+> Method Clean FGSM PGD 10 PGD 20 CW ∞
+> DANN 78.5 19.5 1.2 0.4 0.06 UDA+AT 52.8 45.0 37.4 33.5 30.8 ARTUDA 59.6 54.3 50.4 47.2 44.7 SRoUDA 61.6 57.2 53.8 49.3 46.5 DART 73.8 68.6 64.5 60.1 57.3
+> Ours 79.1 69.7 67.8 66.4 61.5
+
+Table 4: Robustness comparison against different adversar-ial attacks (FGSM, PGD 10, PGD 20, CW ∞) for various methods using VISDA dataset (Real →synthetic). in Table 6, compare the following scenarios: 1) Perform standard adversarial training (UDA+AT) on the TargetNet model, 2) Training the TargetNet model with CAM exclud-ing SPLR method, 3) Training the TargetNet model with SPLR excluding CAM method, and 4)Training with our proposed CAM+SPLR method. We perform the experiment on perturbation size of  = 8 /255 . We observed that dur-ing standard adversarial training (UDA+AT), the TargetNet model’s performance in terms of robustness and accuracy is approximately 10 to 14% lower compared to our pro-6992 UDA DAN JAN DANN S→T Re →Cl Re →Cl Re →Cl Method Clean PGD Clean PGD Clean PGD Baseline 53 .0 0.0 54 .3 0.0 55 .5 0.0
+
+ARTUDA 49 .3 28 .2 50 .4 34 .8 54 .7 33 .9
+
+SRoUDA 48 .9 31 .7 49 .5 34 .1 51 .6 36 .2
+
+DART 52 .8 34 .4 53 .9 36 .7 54 .1 38 .5
+
+Ours 55.1 39.6 56.3 41.2 57.5 43.4 
+
+Table 5: UDA Baseline comparison on PGD 20 attack at  =8/255 on Realworld →Clipart of OfficeHome dataset. posed method. Additionally, both CAM without SPLR and SPLR without CAM demonstrated improvements in robust-ness and accuracy over the DANN and UDA+AT methods. 
+
+S→T Photo →Clipart Photo →Sketch Method Clean PGD Clean PGD 
+
+DANN 80 .2 0.7 74 .5 0.6
+
+UDA + AT 79 .5 61 .2 69 .5 59 .6
+
+CAM w/o SPLR 83 .3 64 .6 75 .5 63 .2
+
+SPLR w/o CAM 84 .8 68 .9 77 .1 67 .7
+
+CAM+SPLR 86.7 71.5 80.5 74.3 
+
+Table 6: Results on component ablations of CAM+SPLR at perturbation size  = 8 /255 on PACs dataset 40 60 80 UDA+AT UDA+Trades UDA+Mart ARTUDA SRoUDA DART Ours 
+
+> Robustness (%) Methods
+> OfficeHome PACS VisDA 60 70 80 90 DANN UDA+AT UDA+Trades UDA+Mart ARTUDA SRoUDA DART Ours OfficeHome PACS VisDA
+> Accuracy (%) Methods
+
+Figure 4: Comparison of robustness and accuracy on the OfficeHome, VisDA, PACS dataset. 
+
+Comparison with using different UDA baseline. We leverage different UDA baseline methods to initialize the pre-trained model, which is trained on source-target pairs for the domain adaptation task. To compare this, we use the DAN (Long et al. 2015), JAN (Long et al. 2017) and DANN (Ganin et al. 2016) as the UDA-baseline on the source target pair of OfficeHome dataset, specifically 20 40 60 80 0 0.05 0.10 0.15 0.20 0.25      
+
+> Ours DART SRoUDA Mart Trade ATRUDA UDA+AT
+> Robustness (%) Pertubation size 20 40 60 80 010 20 30 40 50
+> Robustness (%) Attack iterations
+
+Figure 5: Robustness as a function of perturbation size and attack iteration for different methods on PACS (Sketch →Cartoon). Realworld →Clipart. We compare our method with the ex-isting state-of-the-art methods: ARTUDA, SRoUDA, and DART, as shown in Table 5. We observe that our method outperforms all the UDA baselines in comparison to other state-of-the-art. However, the accuracy and robustness vary with the UDA baselines. Thus, a better UDA baseline can help improve the robustness and accuracy of our method. 
+
+Evaluation on attack budget. We evaluate the scalabil-ity of our CAM+SPLR method to various attack budgets through two aspects: 1) increasing the perturbation size and 2) increasing the number of attack iterations while keeping the  = 2 /255 . In Figure 5(c), it is evident that increasing the perturbation budget size directly impacts the robustness accuracy. We conducted evaluations on the PACS dataset (Sketch →Cartoon) and observed that all methods experi-enced a decrease in robustness with the perturbation size. However, our method consistently outperformed other meth-ods across all perturbation sizes. When the perturbation sizes became sufficiently large, robustness dropped to zero for all. Additionally, Figure 5(d) demonstrates that 20 attack itera-tions can achieve the strongest PGD attack within the given perturbation size of 2/255 observed with all method also in-cluding DANN method. 
+
+# Conclusion 
+
+In this paper, we tackle the challenge of enhancing both ro-bustness and accuracy in unsupervised domain adaptation (UDA) models. We introduce a novel self-training method called Consistent Attention Mapping with Self Pseudo La-bel Refinement (CAM+SPLR), which incorporates a two-step gradient update process. This method is specifically de-signed to improve adversarial robustness and accuracy in UDA by encouraging the attention maps of both clean and adversarial examples to be consistent. Additionally, it refines the pseudo labels to minimize inaccuracies, further boosting the model’s performance. 6993 Acknowledgments 
+
+We thank SERB MTR/2021/604 and ECR/2017/002419 for supporting this research. 
+
+# References 
+
+Choi, J.; Jeong, M.; Kim, T.; and Kim, C. 2019. Pseudo-Labeling Curriculum for Unsupervised Domain Adaptation. arXiv:1908.00262. Dong, Y.; Liao, F.; Pang, T.; Su, H.; Zhu, J.; Hu, X.; and Li, J. 2018. Boosting adversarial attacks with momentum. In 
+
+Proceedings of the IEEE conference on computer vision and pattern recognition , 9185–9193. IEEE. Ganin, Y.; and Lempitsky, V. 2015. Unsupervised Domain Adaptation by Backpropagation. In Bach, F.; and Blei, D., eds., Proceedings of the 32nd International Conference on Machine Learning , volume 37, 1180–1189. Ganin, Y.; Ustinova, E.; Ajakan, H.; Germain, P.; Larochelle, H.; Laviolette, F.; March, M.; and Lempitsky, V. 2016. Domain-Adversarial Training of Neural Networks. Journal of Machine Learning Research , 17(59): 1–35. Goodfellow, I. J.; Shlens, J.; and Szegedy, C. 2014. Explain-ing and harnessing adversarial examples. arXiv preprint arXiv:1412.6572 .He, K.; Zhang, X.; Ren, S.; and Sun, J. 2016. Deep Resid-ual Learning for Image Recognition. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recogni-tion (CVPR) , 770–778. IEEE. Junguang Jiang, B. F. M. L., Baixu Chen. 2020. Transfer-Learning-library. Li, D.; Yang, Y.; Song, Y.-Z.; and Hospedales, T. M. 2017. Deeper, Broader and Artier Domain Generalization. In Pro-ceedings of the IEEE International Conference on Computer Vision (ICCV) , 5542–5550. IEEE. Lo, S.-Y.; and Patel, V. 2022. Exploring Adversarially Ro-bust Training for Unsupervised Domain Adaptation. In 
+
+Proceedings of the Asian Conference on Computer Vision (ACCV) , 4093–4109. Springer. Lo, S.-Y.; and Patel, V. M. 2021. Multav: Multiplicative adversarial videos. In 2021 17th IEEE International Con-ference on Advanced Video and Signal Based Surveillance (AVSS) , 1–6. Long, M.; Cao, Y.; Wang, J.; and Jordan, M. 2015. Learn-ing Transferable Features with Deep Adaptation Networks. In Proceedings of the International Conference on Machine Learning (ICML) , 97–105. PMLR. Long, M.; CAO, Z.; Wang, J.; and Jordan, M. I. 2018. Con-ditional Adversarial Domain Adaptation. In Advances in Neural Information Processing Systems , 1–11. Curran As-sociates, Inc. Long, M.; Zhu, H.; Wang, J.; and Jordan, M. I. 2017. Deep Transfer Learning with Joint Adaptation Networks. In Pro-ceedings of the International Conference on Machine Learn-ing (ICML) , 2208–2217. PMLR. Madry, A.; Makelov, A.; Schmidt, L.; Tsipras, D.; and Vladu, A. 2017. Towards deep learning models resistant to adversarial attacks. arXiv preprint arXiv:1706.06083 .Peng, X.; Usman, B.; Kaushik, N.; Hoffman, J.; Wang, D.; and Saenko, K. 2017. Visda: The visual domain adaptation challenge. arXiv preprint arXiv:1710.06924 .Saito, K.; Watanabe, K.; Ushiku, Y.; and Harada, T. 2018. Maximum Classifier Discrepancy for Unsupervised Domain Adaptation. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) .Sun, B.; and Saenko, K. 2016. Deep CORAL: Correlation Alignment for Deep Domain Adaptation. In Computer Vi-sion – ECCV 2016 Workshops , 443–450. Cham: Springer International Publishing. Szegedy, C.; Zaremba, W.; Sutskever, I.; Bruna, J.; Erhan, D.; Goodfellow, I.; and Fergus, R. 2013. Intriguing proper-ties of neural networks. arXiv preprint arXiv:1312.6199 .Wang, J.; Tian, K.; Ding, D.; Yang, G.; and Li, X. 2021. Unsupervised Domain Expansion for Visual Categorization. 
+
+ACM Transactions on Multimedia Computing Communica-tions and Applications (TOMM) . In press. Wang, Y.; Hazimeh, H.; Ponomareva, N.; Kurakin, A.; Hammoud, I.; and Arora, R. 2024. DART: A Principled Approach to Adversarially Robust Unsupervised Domain Adaptation. arXiv preprint arXiv:2402.11120 .Wang, Y.; Zou, D.; Yi, J.; Bailey, J.; Ma, X.; and Gu, Q. 2019. Improving Adversarial Robustness Requires Revis-iting Misclassified Examples. In Proceedings of the Inter-national Conference on Learning Representations (ICLR) ,1–14. Wilson, G.; and Cook, D. J. 2020. A Survey of Unsupervised Deep Domain Adaptation. ACM Transactions on Intelligent Systems and Technology (TIST) , 11(5). Xu, R.; Li, G.; Yang, J.; and Lin, L. 2019. Larger Norm More Transferable: An Adaptive Feature Norm Approach for Unsupervised Domain Adaptation. In Proceedings of the IEEE/CVF International Conference on Computer Vi-sion (ICCV) , 1426–1435. Yang, J.; Li, C.; An, W.; Ma, H.; Guo, Y.; Rong, Y.; Zhao, P.; and Huang, J. 2021a. Exploring robustness of unsupervised domain adaptation in semantic segmentation. In Proceed-ings of the IEEE/CVF International Conference on Com-puter Vision , 9194–9203. Yang, J.; Shi, S.; Wang, Z.; Li, H.; and Qi, X. 2021b. ST3D: Self-Training for Unsupervised Domain Adaptation on 3D Object Detection. In Proceedings of the IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition (CVPR) ,10368–10378. Zagoruyko, S.; and Komodakis, N. 2017. Paying More At-tention to Attention: Improving the Performance of Convo-lutional Neural Networks via Attention Transfer. In Pro-ceedings of the International Conference on Learning Rep-resentations (ICLR) . OpenReview.net. Zhang, H.; Yu, Y.; Jiao, J.; Xing, E.; El Ghaoui, L.; and Jor-dan, M. 2019. Theoretically principled trade-off between robustness and accuracy. In International conference on ma-chine learning , 7472–7482. PMLR. 6994 Zhu, W.; Yin, J.-L.; Chen, B.-H.; and Liu, X. 2023. SRoUDA: Meta Self-Training for Robust Unsupervised Do-main Adaptation. In Proceedings of the AAAI Conference on Artificial Intelligence , 3852–3860. The MIT Press. 6995

@@ -1,0 +1,532 @@
+Title: DGPO: Discovering Multiple Strategies with Diversity-Guided Policy Optimization
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/29019/29933
+
+Number of Pages: 9
+
+Markdown Content:
+# DGPO: Discovering Multiple Strategies with Diversity-Guided Policy Optimization 
+
+## Wentse Chen 1, Shiyu Huang 2, Yuan Chiang 3, Tim Pearce 4, Wei-Wei Tu 2, Ting Chen 3, Jun Zhu 3
+
+> 1
+
+Carnegie Mellon University, Pittsburgh, USA 
+
+> 2
+
+4Paradigm Inc., Beijing, China 
+
+> 3
+
+Tsinghua University, Beijing, China 
+
+> 4
+
+Microsoft Research, Cambridge, United Kingdom wentsec@andrew.cmu.edu, huangsy1314@163.com, yjennice2001@gmail.com, tim.pearce@microsoft.com, tuweiwei@4paradigm.com, tingchen@tsinghua.edu.cn, dcszj@tsinghua.edu.cn 
+
+Abstract 
+
+Most reinforcement learning algorithms seek a single opti-mal strategy that solves a given task. However, it can often be valuable to learn a diverse set of solutions, for instance, to make an agent’s interaction with users more engaging, or im-prove the robustness of a policy to an unexpected perturbance. We propose Diversity-Guided Policy Optimization (DGPO), an on-policy algorithm that discovers multiple strategies for solving a given task. Unlike prior work, it achieves this with a shared policy network trained over a single run. Specifi-cally, we design an intrinsic reward based on an information-theoretic diversity objective. Our final objective alternately constraints on the diversity of the strategies and on the extrin-sic reward. We solve the constrained optimization problem by casting it as a probabilistic inference task and use policy iteration to maximize the derived lower bound. Experimen-tal results show that our method efficiently discovers diverse strategies in a wide variety of reinforcement learning tasks. Compared to baseline methods, DGPO achieves comparable rewards, while discovering more diverse strategies, and often with better sample efficiency. 
+
+## Introduction 
+
+Reinforcement Learning (RL) has pioneered breakthroughs in various domains ranging from video games (Vinyals et al. 2019; Berner et al. 2019; Huang et al. 2019a, 2021) to robotics (Raffin et al. 2018; Yu et al. 2021b). While its achievements are remarkable, RL is not devoid of chal-lenges. A paramount issue is the innate pursuit of RL algo-rithms for a singular optimal solution, even when a myriad of equally viable strategies exists. This tunnel vision for op-timization can inadvertently introduce weaknesses. For instance, RL algorithms are known for ”overfitting” tasks. By zeroing in on just one strategy, they often miss out on exploring a wealth of high-quality alternative solutions. This over-specialization renders the agent vulnerable to un-predictable environmental changes, as it lacks the robustness multiple strategies could have offered (Kumar et al. 2020). In competitive arenas, predictability can be an Achilles heel, with adversaries exploiting the agent’s inflexibility. A di-versified approach would obfuscate the agent’s strategies, 
+
+Copyright © 2024, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+improving its competitive edge (Lanctot et al. 2017). Fur-thermore, in domains like dialogue systems, monotony can dull user interactions, whereas varied responses could sig-nificantly enhance user experience (Li et al. 2016; Gao et al. 2019; Pavel, Budulan, and Rebedea 2020; Xu et al. 2022; Chow et al. 2022). For instance, RL algorithms are known for ”overfitting” tasks. By zeroing in on just one strategy, they often miss out on exploring a wealth of high-quality alternative solutions. This over-specialization renders the agent vulnerable to un-predictable environmental changes, as it lacks the robustness multiple strategies could have offered (Kumar et al. 2020). In competitive arenas, predictability can be an Achilles heel, with adversaries exploiting the agent’s inflexibility. A di-versified approach would obfuscate the agent’s strategies, improving its competitive edge (Lanctot et al. 2017). Fur-thermore, in domains like dialogue systems, monotony can dull user interactions, whereas varied responses could sig-nificantly enhance user experience (Li et al. 2016; Gao et al. 2019; Pavel, Budulan, and Rebedea 2020; Xu et al. 2022; Chow et al. 2022). We identify two key scenarios where multiple strategies are beneficial: 1. The margin for error is inconsequential to the task’s success. In such cases, agents can operate opti-mally without adhering strictly to the best strategy, enabling a spread of near-optimal strategies (Zahavy et al. 2021). 2. The task inherently allows multiple optimal solutions, such as a maze offering two equally efficient paths (Osa, Tangkaratt, and Sugiyama 2021; Zhou et al. 2022). Crafting an algorithm that harnesses diverse high-reward solutions efficiently is intricate. With the Diversity-Guided Policy Optimization (DGPO) we propose, we aim to address several requisites for such an algorithm: 
+
+Strategy Representation : the diversity of a policy suite is evaluated in DGPO using a metric grounded on the mu-tual information between states and the latent variable, im-plemented through a learned discriminator. 
+
+Diversity Evaluation : The diversity of a policy suite is evaluated in DGPO using a metric grounded on the mutual information between states and the latent variable, imple-mented through a learned discriminator. 
+
+Diversity Exploration : DGPO embarks on exploration that encourages deviation from familiar strategies while The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+11390 safeguarding performance. This is achieved using a con-strained optimization method that harmonizes performance and diversity. 
+
+Sample Efficiency : Unlike predecessors like RSPO (Zhou et al. 2022) and RPG (Tang et al. 2021), which neces-sitated multiple networks and training phases, DGPO em-ploys a shared network for concurrent learning of strategies, resulting in superior sample efficiency. In encapsulation, this work makes three pivotal contribu-tions: (1) We introduce a structured approach to discover di-verse high-reward policies by framing it as two constrained optimization problems, coupled with tailored diversity re-wards to guide the policy learning. (2) DGPO, a novel on-policy algorithm, is unveiled, designed to seamlessly un-cover a diverse suite of high-quality strategies. (3) Our em-pirical evaluations elucidate that DGPO not only holds its own against benchmarks but frequently surpasses them in terms of diversity, performance, and sample efficiency. 
+
+## Related Works 
+
+In this section, we provide an overview of prior research that encompasses two main aspects: the representation of rein-forcement learning (RL) as a probabilistic graphical model (PGM), and the explicit integration of diversity learning with RL. 
+
+Reinforcement Learning as Probabilistic Graphical Model 
+
+PGM’s have proven to be a useful way of framing the RL problem (Ziebart et al. 2008; Furmston and Barber 2010; Levine 2018). The soft actor-critic (SAC) algo-rithm (Haarnoja et al. 2018b) formalizes RL as probabilis-tic inference and maximizes an evidence lower bound by adding an entropy term to the training objective, encour-aging exploration. PGM’s also serve as useful tools for studying partially observable Markov decision processes (POMDP’s) (Igl et al. 2018; Huang et al. 2019b; Lee et al. 2019). Haarnoja et al. (Haarnoja et al. 2018a) use PGM’s to construct a hierarchical reinforcement learning algorithm. Hausman et al. (Hausman et al. 2018) optimize a multi-task policy through a variational bound, allowing for the discov-ery of multiple solutions with a minimum number of dis-tinct skills. In this work, we modify the PGM of a Markov decision process (MDP) by introducing a latent variable to induce diversity into the MDP. We then derive the evidence lower bound of the new PGM, allowing us to construct a novel RL algorithm. 
+
+Diversity in Reinforcement Learning 
+
+Achieving diversity has been studied in various contexts in RL (Mouret and Doncieux 2009; Mohamed and Rezende 2015; Eysenbach et al. 2018; Osa, Tangkaratt, and Sugiyama 2021; Derek and Isola 2021). Eysenbach et al. (Eysen-bach et al. 2018) proposed DIAYN to maximize the mu-tual information between states and skills, which results in a maximum entropy policy. Osa et al. (Osa, Tangkaratt, and Sugiyama 2021) proposed a method that can learn infinitely 
+
+Figure 1: (a) The graphical model of MDPs. (b) The graph-ical model of diverse MDPs. Grey nodes are observed, and white nodes are hidden. As introduced in (Levine 2018), Ot
+
+is a binary random variable, where Ot = 1 denotes that the action is optimal at time t, and Ot = 0 denotes that the ac-tion is not optimal. many solutions by training a policy conditioned on a con-tinuous or discrete low-dimensional latent variable. Their method can learn diverse solutions in continuous control tasks via variational information maximization. There is also a growing corpus of work on diversity in multi-agent re-inforcement learning (Mahajan et al. 2019; Lee, Yang, and Lim 2019; He, Shao, and Ji 2020). Mahajan et al. (Mahajan et al. 2019) proposed MAVEN, a method that overcomes the detrimental effects of QMIX’s (Rashid et al. 2018) mono-tonicity constraint on exploration by maximizing the mutual information between latent variables and trajectories. How-ever, their method can not find multiple diverse strategies for a specified task. He et al. (He, Shao, and Ji 2020) in-vestigated multi-agent algorithms for learning diverse skills using information bottlenecks with unsupervised rewards. However, their method operates in an unsupervised manner, without external rewards. More recently, RSPO (Zhou et al. 2022) was proposed to derive diverse strategies. However, it requires multiple training stages, which results in poor sam-ple efficiency – our method trains diverse strategies simulta-neously which reduces sample complexity. 
+
+## Preliminaries 
+
+RL can be formalized as an MDP. An MDP is a tuple 
+
+(S, A, P, r, γ ), where S and A represent state and action space respectively, P (s, a ) : S × A → S is the transition probability density, r(s, a ) : S × A → R is a reward func-tion, and γ ∈ [0 , 1] is the discount factor. 
+
+Latent conditioned policy: We consider a policy πθ that is conditioned on latent variable z to model diverse strate-gies, where θ represents policy parameters. For compact-ness, we will omit θ in our notation. We denote the latent-conditioned policy as π(a|s, z ) and a latent conditioned critic network as V π (s, z ). For each episode, a single latent variable is sampled, z ∼ p(z) from a categorical distribution with nz categories. In our work, we choose p(z) to be a uni-form distribution. The agent then conditions on this latent code z, to produce a trajectory τz .
+
+Discounted state occupancy: The discounted state oc-cupancy measure for policy π is defined as ρπ (s) = (1 −
+
+γ) P∞ 
+
+> t=0
+
+γtP πt (s), where P πt (s) is the probability that pol-icy π visit state s at time t. The goal of the RL agent is to The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+> 11391
+
+train a policy π to maximize the discounted accumulated re-ward J(θ) = Ez∼p(z),s ∼ρπ (s),a ∼π(·| s,z )[P 
+
+> t
+
+γtr(st, a t)] .
+
+RL as probabilistic graphical model : An MDP can be framed as a probabilistic graphical model as shown in Fig. 1(a) and the optimal control problem can be solved as a probabilistic inference task (Levine 2018). In this paper, we propose a new probabilistic graphical model, denoted as the diverse MDP, as shown in Fig. 1(b). We introduce a binary random variable Ot and an integer random variable z into the model. Ot = 1 denotes that action at is optimal at time step t and Ot = 0 denotes it is not. Previous work(Levine 2018) has defined, p(Ot = 1 |st, a t, z ) ∝ exp( r(st, a t)) .The evidence lower bound (ELBO) is given by: 
+
+log p(O1: T )
+
+≥ Eτ ∼D π [log p(O1: T , a 1: T , s 1: T , z )
+
+− log π(a1: T , s 1: T , z )] = Eτ ∼D π [log p(Ot|st, a t, z )+ log p(z|st, a t) − log π(at|st, z )] ,
+
+(1) where the trajectory τ = {a1: T , s 1: T , z } is sampled from a trajectory dataset Dπ . The proof of Eq. 1 can be found in Appendix C. Note that the introduction of z gives rise to the term p(z|st, a t), which represents how identifiable the latent code is from the current policy behavior. This will be a crucial ingredient of DGPO, guiding the policy to explore and discover a set of diverse strategies. 
+
+## Methodology 
+
+In this section, we will introduce our algorithm in detail. Our algorithm can be divided into two stages. In the first stage, we will focus on improving the agent’s performance while maintaining its diversity. In the second stage, we will focus more on enhancing diverse strategies. Finally, we will intro-duce our final algorithm, denoted as Diversity-Guided Pol-icy Optimization (DGPO), that unifies the two-stage training processes and also the implementation details. 
+
+Diversity Measurement 
+
+In this section, we present a diversity score capable of eval-uating the diversity of a given set of policies. We then derive a diversity objective from this score to facilitate exploration. Eysenbach et al. (Eysenbach et al. 2018) proposed a diver-sity score based on mutual information between states and latent codes z,
+
+I(s; z) = Ez∼p(z),s ∼ρπ (s)[log p(z|s) − log p(z)] , (2) where I(·, ·) stands for mutual information. As we can not directly calculate p(z|s), we approximate it with a learned discriminator qϕ(z|s) and derive the ELBO as 
+
+Ez∼p(z),s ∼ρπ (s)[log qϕ(z|s) − log p(z)] , where ϕ are the pa-rameters of the discriminator network. Mutual information is equal to the KL distance be-tween the state marginal distribution of one policy and the average state marginal distribution, i.e., I(s; z) =
+
+Ez∼p(z)[DKL (ρπ (s|z)|| ρπ (s))] (Eysenbach, Salakhutdi-nov, and Levine 2021). This means that I(s; z) captures the diversity averaged over the whole set of policies. In DGPO, we wish to ensure that any given pair of strategies is dif-ferent, rather than on average. As such, we define a novel, stricter diversity score, 
+
+DIV( πθ ) = Ez∼p(z)[min   
+
+> z′̸=z
+
+DKL (ρπθ (s|z)|| ρπθ (s|z′))] . (3) Instead of comparing policy with the average state marginal distribution, we compare it with the nearest pol-icy in ρπ (s) space. In this way, setting DIV( πθ ) ≥ δ means that each pair of policies have at least δ distance in terms of expectation. In order to optimize Eq. 3, we first derive a lower bound, 
+
+DIV( πθ ) ≥ Ez,s 
+
+
+
+min   
+
+> z′̸=z
+
+log p(z|s)
+
+p(z|s) + p(z′|s)
+
+
+
+. (4) The proof is given in Appendix D. To maximize this lower bound, we first assume we can learn a latent code discrim-inator, qϕ(z|s), to approximate p(z|s). We then define an intrinsic reward, 
+
+rin t = min   
+
+> z′̸=z
+
+log qϕ(z|st+1 )
+
+qϕ(z|st+1 ) + qϕ(z′|st+1 ) . (5) This allows us to define our final diversity objective, 
+
+JDiv (θ) = Ez∼p(z),s ∼ρπ (s),a ∼π(·| s,z )[X
+
+> t
+
+γtrin t ]. (6) A straightforward way to incorporate the diversity metric into a PGM is defining elements in Eq. 1 as, 
+
+p(Ot = 1 |st, a t, z ) = exp ( r(st, a t)) ,p(z|st, a t) = exp  rin t
+
+ . (7) However, the simple combination of extrinsic and intrin-sic rewards may lead to poor performance. In the following paragraph, we formulate the algorithm as constrained op-timization problems and mask elements in Eq. 7 based on constraints to guide the policy to explore. 
+
+Stage 1: Diversity-Constrained Optimization 
+
+Strategies that solve a given RL task may be very distinct. One can think of these as a set of discrete points in ρπ (s)
+
+space – if the distance between the points is large, perturb-ing around one single solution may not allow the discov-ery of all optimal strategies. Thus, we formulate the policy optimization process as a diversity-constrained optimization problem, 
+
+max 
+
+> πθ
+
+J(θ), s.t. J Div (θ) ≥ δ. (8) Under this objective, individual policies are constrained to keep a certain distance δ apart from each other, and sys-tematically explore their own regions. We can introduce a Lagrange multiplier λ to tackle this constrained optimiza-tion problem, 
+
+max 
+
+> πθ
+
+min  
+
+> λ≥0
+
+J(θ) + λ(JDiv (θ) − δ)
+
+≥ max 
+
+> πθ
+
+Ez∼p(z),s ∼ρπ (s)[min  
+
+> λ≥0
+
+Ea∼π(·| s,z )
+
+[X
+
+> t
+
+γtr(st, a t)] + λ(X
+
+> t
+
+γtrin t − δ)] .
+
+(9) The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+11392 MLP 
+
+GRU 
+
+MLP 
+
+ℎ𝑡 −1 
+
+> 𝑠
+
+ℎ𝑡 
+
+> 𝑠
+
+MLP 
+
+MLP 
+
+GRU 
+
+MLP 
+
+ℎ𝑡 −1 
+
+> 𝑠
+
+ℎ𝑡 
+
+> 𝑠
+
+𝐶𝑟𝑖𝑡𝑖𝑐 𝑒𝑥 
+
+# - 𝐴𝑐𝑡𝑜𝑟 
+
+MLP 
+
+GRU 
+
+MLP 
+
+ℎ𝑡 −1 
+
+> 𝑠
+
+ℎ𝑡 
+
+> 𝑠
+
+𝐶𝑟𝑖𝑡𝑖𝑐 𝑖𝑛 
+
+> Per episode
+
+𝑅𝑢𝑛𝑛𝑖𝑛𝑔 
+
+Average 
+
+r 𝑠 𝑡 , 𝑎 𝑡  𝑟 𝑡 
+
+> 𝑡𝑜𝑡𝑎𝑙
+
+𝑚𝑎𝑠𝑘 𝑟 
+
+𝑅 𝑡𝑎𝑟𝑔𝑒𝑡 
+
+> 𝐷𝑖𝑠𝑐𝑟𝑖𝑚𝑖𝑛𝑎𝑡𝑜𝑟
+
+TD Loss  TD Loss  Policy Gradient CE Loss 
+
+𝑟 𝑡    
+
+> 𝑖𝑛 𝑚𝑎𝑠𝑘 𝑑 1−𝑚𝑎𝑠𝑘 𝑑
+
+Figure 2: The overall framework of the DGPO algorithm. The top illustrates the way of calculating rtotal t , where mask r =
+
+I[J(θ) ≥ Rtarget ] and mask d = I[JDiv (θ) ≥ δ]. The center shows the network structure and the data flow of the DGPO algorithm. The bottom shows the latent variable sampling process. The proof can be found in Appendix E. Eq. 9 provides a lower bound on the Lagrange multiplier objective, which can be optimized more easily than the original problem. Eq. 9 can be interpreted as optimizing the extrinsic-rewards, J(θ),when diversity is greater than some threshold. Otherwise, the intrinsic rewards objective JDiv (θ) are optimized. From another perspective, one can think of masking out terms in elements in Eq. 1 based on a diversity metric. The updated objective can be written, 
+
+p(Ot = 1 |st, a t, z ) = exp ( I[JDiv (θ) ≥ δ]r(st, a t)) ,p(z|st, a t) = exp  (1 − I[JDiv (θ) ≥ δ]) rin t
+
+ , (10) where I[·] is the indicator function. 
+
+Stage 2: Extrinsic-Reward-Constrained Optimization 
+
+The objective developed in the previous section can return a set of discrete optimal points. However, sometimes two strategies may still converge to the same sub-optimal point. This can destabilize the training process since both strate-gies are attracted to the same optimal point but simultane-ously repelled by each other. To stabilize the training process and improve diversity, we relax the definition of “optimal” and assume that a policy with accumulated extrinsic rewards greater than some target value Rtarget is an optimal policy. Thus, the policy optimization process can be formulated as an extrinsic-reward-constrained optimization problem, 
+
+max 
+
+> πθ
+
+JDiv (θ), s.t. J(θ) ≥ Rtarget . (11) This means that if two strategies try to converge to the same sub-optimal point. They are allowed to find their des-tiny in the neighborhood of the optimal point to further max-imize the level of diversity. On the other hand, for those policies that are already sufficiently distinct, the diversity objective serves as an intrinsic reward to encourage explo-ration. Similar to how we deal with diversity-constrained op-timization. We implement Eq. 11 by injecting an extrinsic-rewards-constraint into the framework. The updated ele-ments in Eq. 1 can be defined as: 
+
+p(Ot = 1 |st, a t, z ) = exp( r(st, a t)) ,p(z|st, a t) = exp( I[J(θ) ≥ Rtarget ]rin t ). (12) 
+
+Diversity-Guided Policy Optimization 
+
+In this section, we will introduce our final algorithm which unifies the two-stage training processes into one unified al-gorithm We develop a new variation of PPO (Schulman et al. 2017) by considering policy network and critic network that are conditioned on latent variable z, i.e., π(at|st, z ). The critic network is divided into two parts, i.e., V πψex (o1: t, z )
+
+and V πψin (o1: t, z ), where ψex and ψin are their parameters. The parameters of critic networks can be trained by a tem-poral difference (TD) loss (Sutton and Barto 2018): 
+
+L(ψex ) = M SE 
+
+
+
+V πψex (o1: t, z ),
+
+> ∞
+
+X
+
+> t′=t
+
+γt′−tI[JDiv (θ) ≥ δ]r(st′ , a t′ )
+
+
+
+,L(ψin ) = M SE 
+
+
+
+V πψin (o1: t, z ),
+
+> ∞
+
+X
+
+> t′=t
+
+γt′−t
+
+[(1 − I[JDiv (θ) ≥ δ]) + I [J(θ) ≥ Rtarget ]] rin t′
+
+
+
+,
+
+(13) where L(·) stands for loss function and M SE (·)
+
+stands for mean square error. We maintain arunning average of V πψex (st, z ) to approximate 
+
+Es∼ρπ (s),a ∼π(·| s)[P 
+
+> t
+
+γtr(st, a t)] . We also construct aThe Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+11393 8.4 8.2 8.0 7.8 7.6    
+
+> Episode Rewards
+> 4
+> 3
+> 2
+> 1
+> 0
+> Diversity Score
+> Better
+> Spread(easy)
+> 0.4
+> 0.2
+> 0.0 Spread(hard)
+> RSPO MAPPO DIAYN SMERL DGPO(ours)
+> 110 100 90
+> Episode Rewards
+> 4
+> 2
+
+(a) 0 1 2 3 4Steps( x10 5)   
+
+> 0
+> 1
+> 2
+> 3
+> 4
+> Found Optimal Policy Count
+> Spread(easy)
+> 012Steps( x10 6)
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> Spread(hard)
+> RSPO MAPPO DIAYN SMERL DGPO(ours)
+
+(b) 
+
+Figure 3: Experimental results in two MPE scenarios – Spread (easy) and Spread (hard) – each with multiple optimal solutions. (a) Plot showing extrinsic reward performance vs. how diverse the set of discovered strategies are. Positions in the upper–right corner are preferred – DGPO is located here. (b) Plot showing at which point in training each optimal strategy is discovered. Results show that only DGPO and RSPO can find all the solutions. But DGPO achieved over 1.7× and 15 × speedup in convergence speed compared to RSPO in the Spread (easy) and Spread (hard) scenarios, respectively. discriminator qϕ(z|st) that takes the state as input and predict the probability of latent variable z, where ϕ is the parameter of the discriminator network. And the discriminator can be trained in a supervised manner: 
+
+L(ϕ) = E(st,a t,z )∼D π [CE (qϕ(st), z )] , (14) where CE (·, ·) stands for cross entropy loss. We implement DGPO by incorporating diversity-constrained optimization and extrinsic-reward-constrained optimization into the same framework, i.e., the total value of the state and the total re-ward can be defined as below: 
+
+V πtotal (o1: t, z ) = V πψin (o1: t, z ) + V πψex (o1: t, z ),rtotal t = I[JDiv (θ) ≥ δ]r(st′ , a t′ )+ [(1 − I[JDiv (θ) ≥ δ]) + I [J(θ) ≥ Rtarget ]] rin t′ .
+
+(15) In theory, it is not feasible to simultaneously conduct diversity-constrained optimization and extrinsic-reward-constrained optimization. As a result, the aforementioned implementation serves as an approximation to the original objective. We posit that this approximation is reasonable, as the empirical findings demonstrate that the two training stages are not concurrent. Fig. 2 shows the overall frame-work of the DGPO algorithm. The detailed training process of DGPO can be found in the Appendix G. 
+
+## Experiments 
+
+In this section, we evaluate our algorithm on sev-eral RL benchmarks – Multi-agent Particle Environment (MPE) (Mordatch and Abbeel 2018), StarCraft Multi-Agent Challenge (SMAC) (Samvelyan et al. 2019), and Atari (Bellemare et al. 2013). We compare our algorithm to four baseline algorithms: 
+
+MAPPO (Yu et al. 2021a): MAPPO adapts the single-agent PPO (Schulman et al. 2017) algorithm to the multi-agent set-ting by using a centralized value function with shared team-based rewards. 
+
+DIAYN (Eysenbach et al. 2018): DIAYN trains agents with a mutual-information based intrinsic reward to discover a diverse set of skills. In our setup, these intrinsic rewards are combined with extrinsic rewards. 
+
+SMERL (Kumar et al. 2020): SMERL maximizes aweighted combination of intrinsic rewards and extrinsic re-wards when the return of extrinsic reward is greater than some given threshold. 
+
+RSPO (Zhou et al. 2022): RSPO is an iterative algorithm for discovering a diverse set of quality strategies. It toggles be-tween extrinsic and intrinsic rewards based on a trajectory-based novelty measurement. As far as possible, all methods use the same hyper-parameters. However, there is some difference for RSPO, for which we use the open-source implementation. (Full hyper-parameters are listed in the Appendix B.) All experiments were performed on a machine with 128 GB RAM, one 32-core CPU, and one GeForce RTX 3090 GPU. 
+
+Multi-Agent Particle Environment 
+
+We evaluate on two scenarios shown per Fig. 5, Spread (easy) and Spread (hard). In Spread (easy), there are four landmarks and one agent. The agent starts from the center and aims to reach one of the landmarks, giving four optimal solutions. In Spread (hard), there are three agents and three landmarks. Agents cooperate to cover all the landmarks and avoid colliding with others, giving two optimal solutions. Model weights are shared across agents. Similar to (Parker-Holder et al. 2020), we intro-duce a metric to quantitatively evaluate the diversity score of the given set of policies, Π: MDiv (Π) =
+
+> 1
+> nz
+
+Pnz
+
+> i=1
+
+Pnz 
+
+> j=i+1
+
+ln( ∥Φ( πi) − Φ( πj )∥2), where Φ( π) is the behavior embedding of the policy π. For MPE, Φ( π) is represented by the concatenated agents’ positions over an episode. We set nz = 4 in Spread (easy) and nz = 2 in Spread (hard) to test whether an algorithm can discover all optimal The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+11394 18 19 20         
+
+> Episode Rewards
+> 1000
+> 2000
+> 3000
+> 4000
+> 5000
+> Diversity Score
+> Better
+> Pong
+> 75 80 85 90 95 100
+> Episode Rewards
+> 0
+> 250
+> 500
+> 750
+> 1000
+> 1250
+> 1500
+> Boxing
+> PPO DIAYN SMERL DGPO(ours)
+
+(a) 0.2 0.4 0.6 0.8 1.0 Win Rate         
+
+> 10 0
+> 10 1
+> Diversity Score
+> Better
+> 2s vs. 1sc
+> 0.2 0.4 0.6 0.8 1.0 Win Rate
+> 0
+> 10
+> 20
+> 30
+> 40
+> 3m
+> MAPPO DIAYN SMERL DGPO(ours)
+
+(b) 
+
+Figure 4: Plots showing extrinsic reward performance vs. the diversity of the set of discovered strategies. (a) In two Atari games. (b) In two SMAC scenarios. 
+
+(a) Easy (b) Hard 
+
+Figure 5: The initial state of Spread (easy) and Spread (hard). In both scenarios, Agents (orange dots) aim to reach one of the destinies (blue dots). We highlight the optimal solutions with arrows of different colors. solutions. The performance, diversity score, and steps re-quired for convergence for all algorithms are given in Fig. 3. Results are averaged over five seeds. DGPO provides a favorable combination of high diversity, and high reward. It also exhibits rapid convergence. MAPPO only recovers a single solution in each setting. DIAYN only finds 2/4 optimal solutions in Spread (easy) and often only 1/2 in Spread (hard). This supports our earlier claim that a naive combination of extrinsic and intrinsic rewards is in-sufficient. SMERL is only able to discover new strategies by perturbing around a discovered global optimal. Thus, it is unable to find more than one optimal strategy. RSPO is the only other method also to recover all optimal strategies. However, relative to DGPO, RSPO achieves lower overall reward and slower convergence. 
+
+Atari 
+
+We evaluate DGPO on the Atari games Pong and Boxing, to test the performance for tasks with image observations. DGPO’s diversity metric is defined similarly to the one used in MPE (full details in Appendix F). In each environment, we set nz = 2 . Results are summarized in Fig. 4(a), av-eraged over five seeds. We also reported the experimental results for nz = 10 in Appendix I. DGPO again delivers a favorable trade-off between external reward and strategy diversity. Fig. 6(a) visualizes the results of the two strate-𝑧 = 0 𝑧 = 1
+
+(a) Pong 𝑧 = 0 𝑧 = 1
+
+(b) Boxing 
+
+Figure 6: Screen shots and heat maps of agents’ trajectories on Pong and Boxing. (a) In the Pong game, our agent con-trols the paddle (green block) to hit the ball (white dot). (b) In the Boxing game, our agent (in white) has a boxing match with the opponent (in black). gies obtained by DGPO on Pong. In this game, the agent controls the green paddle. When z = 0 the agent holds the paddle at the bottom of the screen until the ball is near, while when z = 1 , the default position of the paddle is at the top of the screen. Fig. 6(b) similarly shows the different strate-gies obtained by DGPO on Boxing, where the agent controls the white character, and is rewarded for punching the black opponent. The heatmap shows DGPO learns to attack from different sides. Other baseline algorithms tend to remain in a single corner. The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+11395 𝑧 = 0
+
+𝑧 = 1 𝑧 = 2Figure 7: Visualization results of the three strategies ob-tained by DGPO on 3m map. The green arrows show the trajectories of our agents (in green). 
+
+StarCraft II 
+
+We conduct experiments on two StarCraft II maps (2s vs. 1sc & 3m ) from SMAC. We set nz = 3 and mea-sure the mean win rates over five seeds. Fig. 4(b) shows that, relative to other algorithms, DGPO discovers sets of strate-gies that are both diverse and achieve good win rates. Fig. 7 visualizes three strategies obtained by DGPO on 3m map. In this map, we control the three green agents to combat the red built-in agents. We visualize the trajectories of our agents with green arrows. When z = 0 , the policy produces an aggressive strategy, with agents moving directly forward to attack the enemies. When z = 1 , the agents display a kit-ing strategy, alternating between attacking and moving. This allows them to attack enemies while limiting the taken dam-age. When z = 2 , the policy produces another kiting strategy but now with a downwards, rather than upwards drift. 
+
+Ablation Study 
+
+We performed ablation studies on MPE Spread (hard) tasks, systematically removing each element of our algorithm to assess its impact on diversity. The empirical result is shown in Fig. 8(a). Throughout this section, we set nz = 3
+
+and the result is averaged over 5 seeds. Change-Diversity-Measurement uses mutual information as shown in Eq. 2 as diversity metric. Experimental results indicate that in the Spread (hard) scenario, the diversity score of Change-Diversity-Measurement is lower than that of DGPO. While optimizing three policies simultaneously, the limited number of optimal solutions (only two) leads to one policy behaving differently while the other two exhibit similar behavior. Con-sequently, the diversity score based on mutual information becomes artificially high (as it reflects the overall diversity level of the policy set), causing the policy to stop optimizing diversity, even though two policies continue to behave sim-ilarly. No-Diversity-Constrained-Optimization excludes diversity-constrained optimization. Empirical results reveal that it only identifies one optimal solution. This suggests that utilizing the diversity metric as a constraint, rather than blending it with extrinsic rewards during the ini-tial stages of training, significantly enhances the algo-rithm’s effectiveness. No-Extrinsic-Reward-Constrained-Optimization omits extrinsic-reward-constrained optimiza-1.0      
+
+> 0.5
+> 0.0
+> Diversity Score
+> Change-Div-Measurement No-Extrinsic-Rew-Constrained No-Div-Constrained DGPO(ours)
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Steps ( x10 6)
+> 3
+> 2
+
+(a) 0.0 0.5 1.0 1.5 2.0 2.5      
+
+> Steps( x10 5)
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Ratio
+> ratio of data that satisfy JDiv ()
+> ratio of data that satisfy J()Rtarget
+
+(b) 
+
+Figure 8: (a) The impact of each component of our algorithm on diversity scores in the MPE Spread (hard) scenario. (b) DGPO can be distinctly divided into two stages: diversity-constrained optimization and extrinsic-reward-constrained optimization. tion. While DGPO continues to enhance the diversity score as the expected return surpasses Rtarget , No-Extrinsic-Reward-Constrained-Optimization fails to do so. Conse-quently, it ultimately attains a lower diversity score com-pared to DGPO. Our algorithm can be divided into two distinct stages, as depicted in Fig. 8(b). In the initial stage, we focus on diversity-constrained optimization until policies exhibit sufficient behavioral differences. Once the expected re-turn reaches Rtarget , we transition to the extrinsic-reward-constrained optimization stage. Here, we maintain a fixed performance level at Rtarget while maximizing the diver-sity score. These stages are clearly separated and non-overlapping. 
+
+## Conclusions 
+
+In conclusion, this paper introduced the Diversity-Guided Policy Optimization (DGPO) algorithm, which demon-strates its capability to efficiently uncover diverse strate-gies that yield high rewards. By framing the training pro-cess as a pair of constrained optimization problems and solving them through probabilistic inference, DGPO stands out as a promising on-policy algorithm. Through experi-ments, we observed that DGPO strikes a favorable balance between diversity scores and rewards, all while exhibiting improved sample efficiency. Moving forward, we envision delving deeper into its potential to handle challenges such as exploration, self-play, and robustness. The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+11396 References 
+
+Bellemare, M. G.; Naddaf, Y.; Veness, J.; and Bowling, M. 2013. The arcade learning environment: An evaluation plat-form for general agents. Journal of Artificial Intelligence Research , 47: 253–279. Berner, C.; Brockman, G.; Chan, B.; Cheung, V.; Debiak, P.; Dennison, C.; Farhi, D.; Fischer, Q.; Hashme, S.; Hesse, C.; et al. 2019. Dota 2 with large scale deep reinforcement learning. arXiv preprint arXiv:1912.06680 .Chow, Y.; Tulepbergenov, A.; Nachum, O.; Ryu, M.; Ghavamzadeh, M.; and Boutilier, C. 2022. A Mixture-of-Expert Approach to RL-based Dialogue Management. arXiv preprint arXiv:2206.00059 .Derek, K.; and Isola, P. 2021. Adaptable Agent Populations via a Generative Model of Policies. Advances in Neural In-formation Processing Systems , 34: 3902–3913. Eysenbach, B.; Gupta, A.; Ibarz, J.; and Levine, S. 2018. Diversity is all you need: Learning skills without a reward function. arXiv preprint arXiv:1802.06070 .Eysenbach, B.; Salakhutdinov, R.; and Levine, S. 2021. The Information Geometry of Unsupervised Reinforcement Learning. arXiv preprint arXiv:2110.02719 .Furmston, T.; and Barber, D. 2010. Variational methods for reinforcement learning. In Proceedings of the Thirteenth In-ternational Conference on Artificial Intelligence and Statis-tics , 241–248. JMLR Workshop and Conference Proceed-ings. Gao, J.; Bi, W.; Liu, X.; Li, J.; and Shi, S. 2019. Gener-ating multiple diverse responses for short-text conversation. In Proceedings of the AAAI Conference on Artificial Intelli-gence , volume 33, 6383–6390. Haarnoja, T.; Hartikainen, K.; Abbeel, P.; and Levine, S. 2018a. Latent space policies for hierarchical reinforcement learning. In International Conference on Machine Learning ,1851–1860. PMLR. Haarnoja, T.; Zhou, A.; Hartikainen, K.; Tucker, G.; Ha, S.; Tan, J.; Kumar, V.; Zhu, H.; Gupta, A.; Abbeel, P.; et al. 2018b. Soft actor-critic algorithms and applications. arXiv preprint arXiv:1812.05905 .Hausman, K.; Springenberg, J. T.; Wang, Z.; Heess, N.; and Riedmiller, M. 2018. Learning an embedding space for transferable robot skills. In International Conference on Learning Representations .He, S.; Shao, J.; and Ji, X. 2020. Skill Discovery of Co-ordination in Multi-agent Reinforcement Learning. arXiv preprint arXiv:2006.04021 .Huang, S.; Chen, W.; Zhang, L.; Li, Z.; Zhu, F.; Ye, D.; Chen, T.; and Zhu, J. 2021. TiKick: Towards Playing Multi-agent Football Full Games from Single-agent Demonstra-tions. arXiv preprint arXiv:2110.04507 .Huang, S.; Su, H.; Zhu, J.; and Chen, T. 2019a. Combo-action: Training agent for fps game with auxiliary tasks. In Proceedings of the AAAI Conference on Artificial Intel-ligence , volume 33, 954–961. Huang, S.; Su, H.; Zhu, J.; and Chen, T. 2019b. SVQN: Sequential Variational Soft Q-Learning Networks. In Inter-national Conference on Learning Representations .Igl, M.; Zintgraf, L.; Le, T. A.; Wood, F.; and Whiteson, S. 2018. Deep variational reinforcement learning for POMDPs. In International Conference on Machine Learning , 2117– 2126. PMLR. Kumar, S.; Kumar, A.; Levine, S.; and Finn, C. 2020. One solution is not all you need: Few-shot extrapolation via structured maxent rl. Advances in Neural Information Pro-cessing Systems , 33: 8198–8210. Lanctot, M.; Zambaldi, V.; Gruslys, A.; Lazaridou, A.; Tuyls, K.; P´ erolat, J.; Silver, D.; and Graepel, T. 2017. A uni-fied game-theoretic approach to multiagent reinforcement learning. Advances in neural information processing sys-tems , 30. Lee, A. X.; Nagabandi, A.; Abbeel, P.; and Levine, S. 2019. Stochastic latent actor-critic: Deep reinforcement learning with a latent variable model. arXiv preprint arXiv:1907.00953 .Lee, Y.; Yang, J.; and Lim, J. J. 2019. Learning to coordi-nate manipulation skills via skill behavior diversification. In 
+
+International Conference on Learning Representations .Levine, S. 2018. Reinforcement learning and control as probabilistic inference: Tutorial and review. arXiv preprint arXiv:1805.00909 .Li, J.; Monroe, W.; Ritter, A.; Galley, M.; Gao, J.; and Ju-rafsky, D. 2016. Deep reinforcement learning for dialogue generation. arXiv preprint arXiv:1606.01541 .Mahajan, A.; Rashid, T.; Samvelyan, M.; and Whiteson, S. 2019. Maven: Multi-agent variational exploration. arXiv preprint arXiv:1910.07483 .Mohamed, S.; and Rezende, D. J. 2015. Variational informa-tion maximisation for intrinsically motivated reinforcement learning. arXiv preprint arXiv:1509.08731 .Mordatch, I.; and Abbeel, P. 2018. Emergence of grounded compositional language in multi-agent populations. In Pro-ceedings of the AAAI Conference on Artificial Intelligence ,volume 32. Mouret, J.-B.; and Doncieux, S. 2009. Overcoming the boot-strap problem in evolutionary robotics using behavioral di-versity. In 2009 IEEE Congress on Evolutionary Computa-tion , 1161–1168. IEEE. Osa, T.; Tangkaratt, V.; and Sugiyama, M. 2021. Discover-ing diverse solutions in deep reinforcement learning. arXiv preprint arXiv:2103.07084 .Parker-Holder, J.; Pacchiano, A.; Choromanski, K. M.; and Roberts, S. J. 2020. Effective diversity in population based reinforcement learning. Advances in Neural Information Processing Systems , 33: 18050–18062. Pavel, C.; Budulan, S.; and Rebedea, T. 2020. Increasing Diversity with Deep Reinforcement Learning for Chatbots. In RoCHI , 123–128. Raffin, A.; Hill, A.; Traor´ e, R.; Lesort, T.; D´ ıaz-Rodr´ ıguez, N.; and Filliat, D. 2018. S-RL Toolbox: Environments, The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24) 
+
+> 11397
+
+Datasets and Evaluation Metrics for State Representation Learning. arXiv preprint arXiv:1809.09369 .Rashid, T.; Samvelyan, M.; Schroeder, C.; Farquhar, G.; Fo-erster, J.; and Whiteson, S. 2018. Qmix: Monotonic value function factorisation for deep multi-agent reinforcement learning. In International Conference on Machine Learn-ing , 4295–4304. PMLR. Samvelyan, M.; Rashid, T.; De Witt, C. S.; Farquhar, G.; Nardelli, N.; Rudner, T. G.; Hung, C.-M.; Torr, P. H.; Fo-erster, J.; and Whiteson, S. 2019. The starcraft multi-agent challenge. arXiv preprint arXiv:1902.04043 .Schulman, J.; Wolski, F.; Dhariwal, P.; Radford, A.; and Klimov, O. 2017. Proximal policy optimization algorithms. 
+
+arXiv preprint arXiv:1707.06347 .Sutton, R. S.; and Barto, A. G. 2018. Reinforcement learn-ing: An introduction . MIT press. Tang, Z.; Yu, C.; Chen, B.; Xu, H.; Wang, X.; Fang, F.; Du, S.; Wang, Y.; and Wu, Y. 2021. Discovering Diverse Multi-Agent Strategic Behavior via Reward Randomization. arXiv preprint arXiv:2103.04564 .Vinyals, O.; Babuschkin, I.; Czarnecki, W. M.; Mathieu, M.; Dudzik, A.; Chung, J.; Choi, D. H.; Powell, R.; Ewalds, T.; Georgiev, P.; et al. 2019. Grandmaster level in Star-Craft II using multi-agent reinforcement learning. Nature ,575(7782): 350–354. Xu, F.; Xu, G.; Wang, Y.; Wang, R.; Ding, Q.; Liu, P.; and Zhu, Z. 2022. Diverse dialogue generation by fusing mutual persona-aware and self-transferrer. Applied Intelligence , 1– 14. Yu, C.; Velu, A.; Vinitsky, E.; Wang, Y.; Bayen, A.; and Wu, Y. 2021a. The Surprising Effectiveness of MAPPO in Cooperative, Multi-Agent Games. arXiv preprint arXiv:2103.01955 .Yu, C.; Yang, X.; Gao, J.; Yang, H.; Wang, Y.; and Wu, Y. 2021b. Learning Efficient Multi-Agent Cooperative Visual Exploration. arXiv preprint arXiv:2110.05734 .Zahavy, T.; O’Donoghue, B.; Barreto, A.; Flennerhag, S.; Mnih, V.; and Singh, S. 2021. Discovering diverse nearly op-timal policies with successor features. In ICML 2021 Work-shop on Unsupervised Reinforcement Learning .Zhou, Z.; Fu, W.; Zhang, B.; and Wu, Y. 2022. Continuously Discovering Novel Strategies via Reward-Switching Policy Optimization. arXiv preprint arXiv:2204.02246 .Ziebart, B. D.; Maas, A. L.; Bagnell, J. A.; and Dey, A. K. 2008. Maximum entropy inverse reinforcement learning. In 
+
+Aaai , volume 8, 1433–1438. Chicago, IL, USA. The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24)

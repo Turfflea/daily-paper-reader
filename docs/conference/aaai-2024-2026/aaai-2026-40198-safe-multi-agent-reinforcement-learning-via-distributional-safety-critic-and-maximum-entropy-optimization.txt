@@ -1,0 +1,632 @@
+Title: Safe Multi-Agent Reinforcement Learning via Distributional Safety Critic and Maximum Entropy Optimization
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/40198/44159
+
+Number of Pages: 9
+
+Markdown Content:
+# Safe Multi-Agent Reinforcement Learning via Distributional Cost Critic and Maximum Entropy Optimization 
+
+# Qiwei Liu 1,2 , Ye Yuan 1, Lingyue Zhang 1, Kaitian Chen 1, Yunkai Lv 1,3 , Sheng Gao 1, Huaicheng Yan 1,4* 
+
+> 1
+
+The Key Laboratory of Smart Manufacturing in Energy Chemical Process of the Ministry of Education East China University of Science and Technology (ECUST), Shanghai, China 
+
+> 2
+
+Shanghai Institute of Intelligent Science and Technology, Tongji University 
+
+> 3
+
+Key Laboratory of System Control and Information Processing, Shanghai Jiao Tong University 
+
+> 4
+
+Faculty of Artificial Intelligence, Shanghai University of Electric Power 
+
+{qw liu,yye,22012221,ktchen }@mail.ecust.edu.cn, {yunkailv,sheng gao,hcyan }@ecust.edu.cn 
+
+Abstract 
+
+Deploying multi-agent reinforcement learning (MARL) in safety-critical systems faces significant challenges due to insufficient agent exploration and inadequate safety con-straint guarantees. Current approaches are constrained by two fundamental limitations: inefficient exploration lead-ing to suboptimal policies, and expected-cost-based con-straint frameworks failing to ensure full-process safety. To address these challenges, this paper proposes a novel safety-aware maximum entropy (MaxEnt) MARL framework us-ing Conditional Value-at-Risk (CVaR) as a joint safety met-ric, which quantifies constraint satisfaction under worst-case scenarios for multi-agent systems. Moreover, we develop the Worst-Case Multi-Agent Soft Actor-Critic (WCMASAC) al-gorithm, incorporating sequential update mechanisms and maximum entropy optimization for heterogeneous agents, enhanced with distributed safety critics. Theoretically, we establish the monotonic improvement property, guaranteed constraint satisfaction, and convergence to a quantum re-sponse equilibrium for WCMASAC. Extensive experiments on safety gymnasium-based benchmarks demonstrate that WCMASAC outperforms state-of-the-art baselines in both task reward acquisition and safety constraint violation re-duction, while exhibiting superior exploration efficiency and risk-aware control capabilities. 
+
+Extended version —https://github.com/YeY-YYe/WCMASAC 
+
+# 1 Introduction 
+
+As a core framework for decentralized decision-making, MARL encounters substantial difficulties in scenarios de-manding rigorous safety guarantees. While traditional MARL algorithms optimize cooperative efficiency through long-term return maximization, their neglect of explicit safety constraints renders them incapable of ensuring com-pliance with safety boundary constraints in the state-action space of agent joint actions. This limitation substantially re-stricts the practical applications of MARL. In particular, safe 
+
+> *
+
+Corresponding Author. Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+reinforcement learning (RL) for a single agent has achieved safe exploration capabilities in complex environments (Liu et al. 2022; Yang et al. 2021; Ha et al. 2021; Li et al. 2024; Yang et al. 2023; Zhang, Vuong, and Ross 2020). However, the non-stationary nature of multi-agent sys-tems introduces fundamental theoretical challenges that hin-der the extension of such methods to multi-agent systems. Firstly, partial observability impedes individual agents from modeling the global risk distribution of joint actions. Sec-ondly, the interactions require each agent to pay attention to its own actions and to consider the impact of other agents’ decisions on safety (Gu et al. 2024). To address these chal-lenges, several pioneering results on safe MARL have been published (Zhang et al. 2020; Lu et al. 2021; Liu et al. 2021; Gu et al. 2023; Zhang et al. 2024; Du, Gou, and Cai 2025). Dec-PG (Lu et al. 2021) integrates decentralized policy gra-dient with primal-duality methods to identify saddle points between task rewards and safety costs. However, its reliance on a parameter-sharing mechanism among agents may lead to suboptimal convergence. CMIX (Liu et al. 2021) extends QMIX (Rashid et al. 2020b) by incorporating peak and av-erage constraints. Although all agents empirically satisfy these constraints in experiments, the method still lacks theo-retical safety guarantees. Furthermore, it depends on value decomposition methods that are inherently limited by re-strictive underlying assumptions. Based on HARL (Zhong et al. 2024), MACPO and MAPPO-Lagrangian (Gu et al. 2023) integrate constrained optimization with advantage de-composition theory (Kuba et al. 2021), ensuring both multi-agent safety constraint satisfaction and monotonic policy improvement properties, thereby establishing a novel theo-retical framework for safe MARL. Although the MACPO framework is theoretically sound and has demonstrated promising performance, it still faces several critical challenges. First, the MACPO and MAPPO-Lagrangian algorithm, which ensures agent safety during training and execution by constraining the expectation of cost, lacks quantitative modeling capabilities for tail risks associated with safety constraints. Such constraints based on the expectation of cost can regulate the average rate of con-straint violations but fail to suppress instantaneous safety vi-olations that may occur during execution (Yang et al. 2021, The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+29555 2023). Risk-sensitive RL approaches inspired by return dis-tribution learning offer a potential solution to this challenge (Dabney et al. 2018a; Qiu et al. 2021; Hu et al. 2022; Sun et al. 2023; Shen et al. 2023). These methods enhance agents’ sensitivity to risky behaviors and demonstrate supe-rior performance in long-term returns by learning return dis-tributions or designing risk-sensitive functions. Regrettably, existing distributional MARL methods primarily focus on the evolution of return probability distributions while failing to explicitly consider state-action joint safety constraints in multi-agent systems, thereby being unable to guarantee exe-cution safety for agents. Additionally, safety-constrained RL methods based on the MACPO framework may encounter insufficient exploration issues (Liu et al. 2023; Kuba et al. 2022; Sutton, Barto et al. 1998). While policy optimization approaches like MACPO ensure the safety feasibility of iterative policies, their con-servative safety constraint mechanisms significantly restrict the exploration scope of the joint action space. In sparse safety feedback scenarios, this phenomenon triggers prema-ture policy convergence, causing systems to settle for local safe optima at the expense of global performance. A po-tential solution involves enabling agents to learn stochas-tic behaviors for effective exploration of the reward space (Haarnoja et al. 2018). This creates dynamic game conflicts between individual entropy maximization objectives and global safety constraints, potentially leading some agents to exceed local safety thresholds in pursuit of enhanced ex-ploration. While MaxEnt safe RL has advanced in single-agent settings (Yang et al. 2021), its extension to multi-agent systems remains largely unexplored, particularly in learning stochastic policies under safety constraints. Recent work by (Liu et al. 2023) proposes a MaxEnt heterogeneous agent reinforcement learning framework (MaxEnt-HARL), which ensures convergence of stochastic policies in unconstrained scenarios through decoupling of advantage functions. How-ever, this approach fails to address dynamically evolving feasibility boundaries induced by safety constraints, limit-ing its applicability to safety-critical multi-agent coordina-tion tasks. Inspired by the above discussion, the principal contribu-tions of this work are fourfold: 1. We establish the first theoretically-grounded MaxEnt safe MARL framework under distributional RL princi-ples, providing a novel paradigm for stochastic policy optimization in constrained environments. Specifically, we innovatively employ mixed CVaR as a joint safety constraint metric for multi-agent systems, constructing a risk-sensitive safety mechanism by analyzing cost tail distribution. 2. We theoretically demonstrate the existence of equilib-rium policies for constrained MaxEnt MARL optimiza-tion via a dual-decoupling design (risk-aware and advan-tage decomposition), while establishing theoretical guar-antees for monotonic policy improvement and conver-gence to generalized Nash equilibrium. 3. Building upon this theoretical foundation, we propose WCMASAC, the first multi-agent soft actor-critic algo-rithm incorporating distributional safety critics, which achieves risk-aware joint policy optimization through worst-case value estimation. 4. Comprehensive experiments in safe Multi-MuJoCo co-operative control scenarios validate WCMASAC’s su-perior performance, demonstrating higher sample effi-ciency and fewer constraint violations compared to state-of-the-art baselines (Ji et al. 2023), thereby offering a reliable solution for safety-critical multi-agent deploy-ments. 
+
+# 2 Preliminaries and Problem Formulation 
+
+2.1 Constrained Cooperative Markov Game 
+
+Similarly to (Gu et al. 2022), a fully cooperative safe MARL described as a decentralized constrained Markov game is considered, which is denoted as a tuple <
+
+N , S, A, P, R, C, d >. N = {1, 2, . . . , n } is the set of agents. S is the state space. A denotes the joint action space and there exists |A| < ∞, where A = nQ
+
+> i=1
+
+Ai is the product of the action spaces of all agents. Let a(t) = (a1(t), . . . , a n(t)) ∈ A be the joint action, and the joint pol-icy can be expressed as π(a(t)|s(t)) = nQ
+
+> i=1
+
+πi(ai(t)|s(t)) .The probabilistic state transition function is presented as 
+
+P : S ×A×S → [0 , 1] . When the system employs an action 
+
+a(t) in state s(t), the probability of transferring to the next moment state s(t + 1) is P(s(t + 1) |s(t), a(t)) , and agents receive the reward R(s(t), a(t)) . The primary goal of each agent is to maximize the expectation of standard cumula-tive rewards J(π) = Es0: ∞∼P,a0: ∞∼π = [ ∞P
+
+> t=1
+
+R(s(t), a(t))] .Each agent’s action may adversely affect the overall safety of the whole multi-agent system. Therefore, the safety con-straints are modeled as joint safety constraints under the ac-tions of all agents, and C = {Jij }i∈N  
+
+> 1≤j≤h
+
+can be considered as the set of cost functions Jij for agent i, where h is the number of constraints. Then, agent i ∈ N also has the following accumulated safety cost: 
+
+Cij (π) = Es0: ∞∼P,a0: ∞∼π [
+
+> ∞
+
+X
+
+> t=0
+
+Jij (s(t), a i(t), a−i(t))] ,
+
+(1) which should satisfy Cij (π) ≤ dij . a−i(t) denotes the ac-tions of all the other agents except for the agent i. The set of constraint thresholds is given as d = {dij }i∈N 
+
+> 1≤j≤h
+
+.
+
+2.2 Safety Based on Joint CVaR 
+
+Existing safe RL methods typically ensure system safety by constraining the expected cost, where agents optimize policies to maximize the expected return while ensuring that the expected cost remains below a predefined thresh-old (Gu et al. 2023, 2022; Zhang et al. 2024). However, long-term safety costs exhibit stochastic characteristics un-der the combined effects of policy stochasticity, agent inter-actions inducing environmental non-stationarity, and other 29556 factors. This renders safety constraint frameworks based on expected cost inadequate for addressing potential risks aris-ing from heavy-tailed distributions in long-term safety costs, making them unsuitable for direct application in safety-critical systems (Yang et al. 2021). Therefore, inspired by distributional RL (Shen et al. 2023) and WCSAC (Yang et al. 2021), we adopt the Conditional Value-at-Risk (CVaR) (Rockafellar, Uryasev et al. 2000) safety measure to replace the expected cost as the safety con-straint, with the essential definitions provided as follows. 
+
+Definition 1. (CV aR ω with Risk level ω). Let Cij := 
+
+Cij (s(t), a i(t), a−i(t)) for convenience. Then for any safe cost Cij (s(t), ai(t), a−i(t)) , its risk function 
+
+CV aR ω under policy π is expressed as ϕπ 
+
+> 1−ω
+
+(Cij ) := 
+
+Ea0: ∞∼π [Cij |Cij ≥ F −1
+
+> Cij
+
+(1 − ω)] where F −1
+
+> Cij
+
+denotes the inverse function of Cij ’s cumulative distribution function and the scalar ω ∈ (0 , 1] denotes the level of risk. ω closer to 0 implies stronger safety, and vice versa represents a risk-neutral case. 
+
+Definition 2. (CV aR ω -based safety constraint). Given a risk level ω and the safety threshold value dij , if the fol-lowing constraint holds for the system under the policy π:
+
+ϕπ 
+
+> 1−ω
+
+(Cij ) ≤ dij ∀t ∈ [0 , ∞), ∀i ∈ N , 1 ≤ j ≤ h. (2) The joint policy π can be considered as a worst-case safe policy. In most fully cooperative multi-agent scenarios, a local safety constraint violation by an individual agent may induce global systemic risks. For instance, abrupt torque variations in a single robotic joint may lead to overall imbalance, or unexpected acceleration/deceleration behaviors of a mem-ber in a formation may trigger cascading collisions. There-fore, this paper comprehensively considers heavy-tailed dis-tributional safety risks and assumes, without loss of gener-ality, that any individual agent’s safety constraint violation will adversely affect the system’s global safety. Specifically, we assume that the system’s safety cost adheres to the fol-lowing Risk-sensitive Individual-Global-Max (RIGM) cri-terion proposed in (Shen et al. 2023). For any joint safety cost ϕπ 
+
+> 1−ω
+
+(Cij (s(t), a i(t), a−i(t)) , the following condition exists: 
+
+arg max 
+
+> a
+
+ϕπ 
+
+> 1−ω
+
+[Cij (s(t), a i(t), a−i(t))] = (arg max 
+
+> a1
+
+ϕπ 
+
+> 1−ω
+
+[Cij (s(t), a 1(t))] ,. . . , arg max 
+
+> an
+
+ϕπ 
+
+> 1−ω
+
+[Cij (s(t), a n(t))]) 
+
+(3) where a = ( a1, . . . , a n) is the joint action. 
+
+# 3 Method 
+
+This section proposes a worst-case MaxEnt safe RL frame-work, aiming to address two critical limitations of state-of-the-art safe MARL methods: (1) suboptimal convergence caused by insufficient exploration and (2) the inability to guarantee safety constraint satisfaction during stochastic policy learning. First, we formally derive the worst-case MaxEnt MARL objective function and characterize its gen-eralized Nash equilibrium solution in Section 3.1. Next, Sec-tion 3.2 provides a rigorous theoretical analysis of the pro-posed framework, focusing on monotonic policy improve-ment and guarantees of Nash convergence. Finally, Sec-tion 3.3 details the specific algorithmic workflow of WC-MASAC. 
+
+3.1 Worst-Case Safe MaxEnt MARL 
+
+Based on probabilistic graphical inference (Levine 2018), the MaxEnt objective function without safety constraints was successfully derived in (Liu et al. 2023). Building upon (Levine 2018; Liu et al. 2023) and (2), the constrained op-timization objective for safe MaxEnt MARL can be formu-lated as 
+
+max  
+
+> π
+
+J(π) = Es0: ∞∼P,a0: ∞∼π
+
+ ∞X
+
+> t=1
+
+γt
+
+R(s(t), a(t)) + β
+
+> n
+
+X
+
+> i=1
+
+H(πi(·| s(t)) 
+
+(4) 
+
+s.t. ϕπ 
+
+> 1−ω
+
+[Cij (s, a i, a−i))] ≤ dij , ∀i ∈ N , 1 ≤ j ≤ h. 
+
+(5) where γ ∈ (0 , 1] is the discounted factor. H is the entropy term of πi, and β is the temperature-like constant that regu-lates the degree of exploration randomness. When the safety constraint and the entropy term are con-sidered in the objective function, all agents will consider the comprehensive benefit of the safety cost and the reward, as-sign the mass probability, and eventually converge to the Quantum Response Equilibrium (QRE) (Liu et al. 2023; McKelvey and Palfrey 1995). The following Theorem 1 pro-vides an expression for the equilibrium policy of the game. 
+
+Theorem 1. For all agents i ∈ N , the system policy con-verges to the QRE equilibrium policy if no agents can in-crease the system reward payoff by unilaterally changing their policy. In this case, define the Q-function as 
+
+Qπ (s(t), a(t)) = R(s(t), a(t)) + Es0: ∞∼P,a0: ∞∼π
+
+ ∞X
+
+> l=0
+
+γl
+
+R(s(t + l), a(t + l)) + β
+
+> n
+
+X
+
+> i=1
+
+H(πi(·| s(t))) 
+
+
+
+(6) 
+
+Then, the QRE equilibrium policy π∗ 
+
+> i
+
+of agent i is expressed as 
+
+π∗ 
+
+> i
+
+(ai|s) = Ω( ai)
+
+P
+
+> bi∈A i
+
+Ω( bi) , (7) 
+
+in which 
+
+Ω( ai) = exp β−1 Ea−i ∼ π−iQπ (s, a i, a−i)
+
+−
+
+> h
+
+X
+
+> j=1
+
+μij
+
+ω Ea−i∼π∗−i
+
+ ˆϕπi
+
+> 1−ω
+
+ Cij (s, a i, a−i) !! 
+
+.
+
+(8) 29557 and 
+
+ˆϕπi 
+
+> 1−ω
+
+(Cij (s, a i, a−i)) := Cij (s, a i, a−i)
+
+× 1{Cij (s, a i, a−i) ≥ F −1
+
+> Cij
+
+(1 − ω)}
+
+(9) 
+
+where 1{·} is indicate function. μij is the Lagrangian mul-tiplier of the corresponding safety constraints, which is ob-tained by solving the following dual optimization problem: 
+
+μ∗ 
+
+> ij
+
+= arg min 
+
+> μij
+
+gi(μij ) = arg min 
+
+> μij
+> h
+
+X
+
+> j=1
+
+μij dij
+
+−
+
+> h
+
+X
+
+> j=1
+
+μij Ea−i∼π∗−i [ ˆϕ1−ω (Cij (s, a i, a−i))] . (10) The proof can be seen in the Appendix A. 
+
+3.2 Theoretical Analysis of WCMASAC 
+
+In the framework of the Worst-Case Safe MaxEnt MARL algorithm, agents first perform joint soft policy evaluation and distributional cost policy evaluation for rewards and safety costs, respectively, and then perform soft policy im-provement. This section briefly introduces the convergence of the policy evaluation process and then rigorously analyzes the convergence of the policy improvement process of WC-MASAC in theory. 
+
+Joint Soft Policy Evaluation Under the mechanism of centralized training and decentralized execution, the multi-agent joint policy evaluation process is a direct extension of the single-agent results. For the joint soft policy evalua-tion concerning rewards, the application of the soft Bellman backup operator directly ensures that the policy evaluation process converges to the joint soft Q-function (Zhang et al. 2021; Liu et al. 2023). Besides, existing results (Yang et al. 2021; Tang, Zhang, and Salakhutdinov 2019; Dabney et al. 2018b) have demonstrated that the distributional Bellman operator constitutes a contraction operator when employing the p-th Wasserstein metric for joint cost distributional pol-icy evaluation. 
+
+Joint Safe Soft Policy Improvement When performing policy improvement, it is essential to introduce two critical lemmas: the advantage decomposition lemma (Zhong et al. 2024; Kuba et al. 2021) and the distributional decomposi-tion lemma under RIGM (Shen et al. 2023), to rigorously demonstrate the equivalence between the results of the local policy update of individual agents under a sequential update mechanism and joint soft policy updates. These lemmas es-tablish a theoretical foundation for proving that decentral-ized policy adjustments align with centralized optimization objectives in risk-sensitive multi-agent settings. 
+
+Lemma 1. (Multi-Agent Advantage Decomposition) (Kuba et al. 2021) For i ∈ N , let i1: m denote the subset of N
+
+consisting of m agents. Then the following equation holds for a given joint policy π and any state s:
+
+Aπi1: K (s, ai1: K ) = 
+
+> K
+
+X
+
+> k=1
+
+Aπik (s, ai1: k−1 , a ik ) (11) in which the multi-agent advantage function is defined as: 
+
+Aπi1: K (s, ai1: K ) = 
+
+> K
+
+X
+
+> k=1
+
+ Qπi1: k (s, ai1: k )
+
+−Qπi1: k−1 (s, ai1: k−1 )
+
+
+
+.
+
+Lemma 2. (Multi-Agent Joint Cost Distribution Decom-position) (Shen et al. 2023) Let φ(s, a, ν m) be a quan-tile sample function at sample point νm with probability 
+
+p(φ(s, a, ν m)) of the cost distribution. Then, any joint cost distribution Cij (s, a i, a−i), i ∈ N , 0 ≤ j ≤ h satisfying RIGM: 
+
+Cij (s, a i, a−i) = 
+
+> M
+
+X
+
+> m=1
+
+pm(s, a, ν m)δ(φ(s, a, ν m)) 
+
+φ(s, a, ν m) = 
+
+> N
+
+X
+
+> i=1
+
+ϖiφi(s, a i, ν m) (12) can be distributionally factorized by [Ci(s, a i)] Ni=1 with 
+
+CV aR ω metric ϕ1−ω . δ is a Dirac Delta function, and M is the number of sample νm. ϖi is the weight of the weighted summation. Lemma 1 shows that in response to task rewards, agents can perform arbitrary sequential updates while taking into account the actions of other agents, without the need for tra-ditional value decomposition assumptions (Qiu et al. 2021; Hu et al. 2023; Rashid et al. 2020a). In addition, Lemma 2 further shows that the safe joint cost risk measure for all agent actions acting together can be decomposed into a weighted sum of each agent. As we mentioned in Section 2.2, the Lemma 2 fits most multi-agent safe cooperation sce-narios. Then the following Theorem shows that sequential local policy updates can induce joint policy updates, and the jointly safe MaxEnt MARL problem can be considered as a sum of n local problems. 
+
+Theorem 2. Given a joint policy π and a permutation i1: k,suppose that for ∀k = 1 , . . . , n the agent k update its policy by 
+
+πnew ik = arg min  
+
+> πik∈A i
+
+DKL πik (·ik |s) ∥
+
+
+
+Eai1: k−1 ∼πnew i1: k−1
+
+[Zπold (s, a i1: k−1 )] 
+
+−1
+
+· exp 
+
+
+
+Eai1: k−1 ∼πnew i1: k−1
+
+[β−1Qπold i 
+
+> i1: k
+
+(s, ai1: k−1 , a ik )] 
+
+− Eai1: k−1 ∼πnew i1: k−1
+
+h
+
+β−1
+
+> h
+
+X
+
+> j=1
+
+μij
+
+ω
+
+ k−1X
+
+> l=1
+
+ˆϕπnew l
+
+> 1−ω
+
+(Cij (s, a l)) + ˆϕπold i 
+
+> 1−ω
+
+(Cij (s, a ik )) 
+
+i !
+
+(13) 
+
+where Zπold is a partition function to normalize the distri-bution, and Qπ denotes the Q-function under the policy π.29558 Figure 1: The framework of the WCMASAC. 
+
+Then the joint policy update process is 
+
+πnew = arg min 
+
+> π∈A
+
+DKL π(·| s) ∥
+
+
+
+exp  β−1(Qπold 
+
+> i1: k
+
+(s, ai1: k−1 , a ik ) −
+
+> n
+
+X
+
+> i=1
+> n
+
+X
+
+> j=1
+
+μij
+
+ω ˆϕ(Cij (s, ·))) 
+
+· (Zπold (s)) −1
+
+!
+
+(14) The proof can be seen in the Appendix B. Theorem 2 states that an individual agent can induce a joint soft pol-icy by sequentially optimizing the KL divergence locally. Based on Theorem 2, the following lemma and theorem the-oretically verify the monotonic improvement and QRE con-vergence of the policy, respectively. 
+
+Lemma 3. (Monotonic Improvement) Let i1: k be a permu-tation. Then for ∀k = 1 , . . . , n , if agent ik acquires a new policy πnew ki from πold ik ∈ A ik through formula (13), then 
+
+Qπnew (s, a ) ≥ Qπold (s, a ) will hold and ensure that the safety constraints are satisfied. Proof can be found in the Appendix C. Lemma 3 indi-cates that the agents can achieve monotonic improvement in performance while maintaining safety during policy update. Then the following Theorem shows that agents can perform policy evaluation and policy improvement alternately to sat-isfy the safety constraints and converge to QRE. 
+
+Theorem 3. (QRE Convergence) If all agents perform pol-icy evaluation and policy improvement alternately, the joint policy π eventually converges to the QRE equilibrium policy and satisfies the safe constraint. 
+
+Proof can be found in the Appendix D. Theorem 3 pro-vides a theoretical guarantee that agents monotonically im-prove their policies under safety constraints and converge to QRE, after which all agents do not unilaterally improve their own policies. 
+
+3.3 Practical Implementation of WCMASAC 
+
+In practical applications, we employ neural network-based approximators to estimate the centralized soft Q-function for rewards and decentralized policies for individual agents, while utilizing a hybrid approach combining quantile regres-sion with a multi-head attention mechanism to approximate the risk measure of the centralized safety cost. Specifically, let θr , θc, and θik 
+
+> a
+
+denote the network parameters of the re-ward critic, cost critic, and ik’s actor, respectively. These neural networks are optimized alternately via stochastic gra-dient descent to ensure coordinated learning of reward max-imization, safety constraint satisfaction, and policy decen-tralization. Let s := s(t), a := a(t) and s′ = s(t + 1) , a ′ =
+
+a(t+1) for convenience, then the centralized soft Q-function is optimized by minimizing the Bellman residual as 
+
+Jloss (θr ) = E(s, a)∼D 
+
+"
+
+12
+
+
+
+Qθr (s, a) −
+
+
+
+R(s, a)+ γEs′∼P, a∼π [Qθr (s′, a′) + β
+
+> n
+
+X
+
+> i=1
+
+H(πi(ai′|s′))] 
+
+2#
+
+.
+
+(15) Similar to the Quantile Regression (QR) loss (Dabney et al. 2018b), the jth parameterized joint cost critic Cθc,j , which gathers all agents cost Cij , achieves parameter optimization by minimizing the Huber loss between the safe cost distri-29559 bution and the target distribution as 
+
+Jloss (θc,j ) = H
+
+
+
+E(s, a)∼D 
+
+h
+
+Cθc,j (s, a)
+
+−  cj + γEs′∼P, a∼π [Cθc,j (s′, a′)] i (16) where H means the Huber loss (Huber 1992) and cj is the current joint cost. Then, all the agents minimize the expected KL-divergence (2) in a sequential update manner to improve their policies, which can derive the loss of the ik’s actor as follows: 
+
+Jloss (θik 
+
+> a
+
+) = E(s, a)∼D 
+
+
+
+Eai1: k−1 ∼πˆθi1: k−1
+
+> a
+> ,a i∼πθika
+
+h
+
+Qθr (s, ai1: k−1 , a ik ) − λik
+
+
+
+ϕ1−ω [Cθc,j (s, ai1: k−1 ,aik )] 
+
+
+
+− α log πθik a 
+
+
+
+aik 
+
+> θaik
+
+|s
+
+ i 
+
+(17) where ˆθi1: k−1 
+
+> a
+
+means the improved parameters of agents 
+
+i1: k−1. The framework can be seen in Figure 1, and the pro-cedure as WCMASAC can be seen in the Appendix E. 
+
+# 4 Experimental Setting and Results 
+
+4.1 Experimental Setting 
+
+To thoroughly evaluate the efficacy and robustness of our proposed WCMASAC algorithm, we conducted a series of experiments using the Safety-Gymnasium benchmark (Ji et al. 2023) in this section. This benchmark provides several challenging multi-agent environments specifically designed for safe RL research. We conduct comparative experiments on six velocity-constrained tasks: 2x4Ant , 4x2Ant ,
+
+2x3HalfCheetah , 6x1HalfCheetah , 3x1Hopper ,and 2x3Walker2D . These experiments evaluate our method against SOTA safe MARL algorithms, including MACPO, MAPPO-Lagrangian (Gu et al. 2023), and the SOTA MARL baseline HASAC (Liu et al. 2023). The tasks simulate scenarios where agents must maximize their movement speed to achieve high rewards while strictly complying with safety constraints, particularly velocity thresholds. This setup rigorously examines the trade-off between reward optimization and safety-critical constraint satisfaction, ensuring agents avoid hazardous velocity violations during operation. Specifically, the experiments incorporate two key perfor-mance metrics, average episode reward and average episode cost, which are evaluated during the testing phase. The first metric quantifies the overall performance of the agents’ tasks, while the second measures the severity of violations of the safety constraints per episode. Each agent is required to maximize cumulative rewards while ensuring that the episode cost does not exceed predefined safety thresholds. Furthermore, agents are encouraged to minimize the ac-cumulated cost throughout the operation, thereby balanc-ing reward-seeking behavior with strict adherence to safety-critical constraints. This dual-objective evaluation frame-work rigorously assesses the trade-off between task effi-ciency and safety compliance in multi-agent systems.    
+
+> (a) Safety 2x3HalfCheetah (b) Safety 2x3Walker2d
+> (c) Safety 2x4Ant (d) Safety 3x1Hopper
+> (e) Safety 4x2Ant (f) Safety 6x1HalfCheetah
+
+Figure 2: Reward comparisons on selected tasks of multiple benchmarks. Moreover, Constrained-HASAC is developed to ensure fair comparisons. Unlike WCMASAC, it does not constrain the CVaR. Instead, it directly constrains the joint expectation of all agents. All algorithms are implemented in a standard framework. Details of network architectures, hyperparameters, train-ing procedures, and specific choices of optimizers, learning rates, and batch sizes are provided in the Appendix F.1. 
+
+4.2 Experimental Results 
+
+Reward Comparison : As shown in the comparison of re-ward with SOTA safe MARL algorithms and the uncon-strained SOTA MARL algorithms in Figure 2, our pro-posed WCMASAC and Constrained-HASAC show supe-rior task reward performance compared to MACPO and MAPPO-Lag in all the six safety environments, though trail-ing HASAC. Notably, HASAC exhibits multiple risk-prone behaviors due to the absence of safety constraints (see Fig-ure 3). Furthermore, WCMASAC achieves faster learning convergence rates, as its intrinsic exploration-encouraging mechanism enables more efficient exploration of the reward landscape, thereby accelerating the acquisition of optimal behaviors. 
+
+Cost Comparison : Figure 3 presents the cumulative safety costs and constraint violation statistics of differ-ent algorithms under identical environments. First, due to the absence of safety constraints, the SOTA MARL algo-rithm HASAC exhibits cumulative costs that exceed the safety threshold by a substantial margin and are significantly higher than those of safety-aware MARL baselines. This in-dicates that HASAC’s policy execution compromises system 29560 (a) Safety 2x3HalfCheetah (b) Safety 2x3Walker2d   
+
+> (c) Safety 2x4Ant (d) Safety 3x1Hopper
+> (e) Safety 4x2Ant (f) Safety 6x1HalfCheetah
+
+Figure 3: Cost comparisons on selected tasks of multiple benchmarks. safety through hazardous behaviors, confirming the critical necessity of explicit safety constraints in real-world deploy-ments. Compared to MACPO, the proposed WCMASAC achieves lower costs in all environments while achiev-ing higher task rewards with reduced execution risks, as evidenced in Figure 2-3. Notably, MACPO vio-lates safety constraints in most environments, except the 
+
+Safety2x4AntVelocity scenario, indicating danger-ous agent behaviors during task execution and its failure to guarantee full-process safety. In contrast, WCMASAC and Constrained-HASAC ensure system safety throughout all operational phases in every environment, demonstrating that modeling tail risk distributions of agent costs effectively reduces the probability of selecting high-risk actions. Figure 4 provides further safety performance compar-isons between all the algorithms with safety constrains: MAPPO-Lag, MACPO, Constrained-HASAC and WC-MASAC. Overall, WCMASAC and Constrained-HASAC demonstrate comparable safety performance to MAPPO-Lag but with a much lower probability of constraint vi-olations. Specifically, from Figure 4a and Figure 4f we can see that WCMASAC and Constrained-HASAC achieve lower costs than MAPPO-Lag in the 2x3HalfCheetah 
+
+and 6x1HalfCheetah environments, which means that our algorithms have better safety performance. In 2x3Ant 
+
+(Figure 4c), 3x1Hopper (Figure 4d), and 4x2Ant (Fig-ure 4e) environments, WCMASAC exhibits slightly higher costs than MAPPO-Lag due to exploration encouragement. Notably, in the 2x3HalfCheetah , 2x3Walker2D , and 
+
+3x1Hopper environments, MAPPO-Lag occasionally vio-   
+
+> (a) Safety 2x3HalfCheetah (b) Safety 2x3Walker2d
+> (c) Safety 2x4Ant (d) Safety 3x1Hopper
+> (e) Safety 4x2Ant (f) Safety 6x1HalfCheetah
+
+Figure 4: Cost comparisons on selected tasks of multiple safety benchmarks(without HASAC). lates safety constraints, indicating that agents execute risk-prone behaviors that jeopardize system safety. In contrast, the proposed WCMASAC maintains strict constraint com-pliance across all environments, validating the effectiveness of the distributional safe critic in mitigating high-risk action selection. Moreover, WCMASAC outperforms Constrained-HASAC in most environments with lower costs in most environments(see Figure 4b,Figure 4c,Figure 4d and Fig-ure 4e), which demonstrates the effectiveness of the CVaR constraint. More detailed information such as safety thresholds and analysis can be found in the Appendix G. 
+
+Analysis of risk-level parameters : We investigate the impact of the risk-level parameter ω on task rewards and safety costs in the system. As 1 − ω approaches 1, agents adopt more conservative policies to ensure higher safety lev-els. We evaluate cumulative rewards and safety performance across all environments under 1−ω values of 0.01 , 0.5, 0.99 .Results reveal a declining trend in overall task rewards as 
+
+1 − ω increases, accompanied by substantial improvements in system safety (see Figure 5 above and Figure 2 in the Ap-pendix G for detalied experiment results). This demonstrates the feasibility of adjusting ω based on different task require-ments to balance reward maximization and safety assurance. 
+
+# 5 Conclusion 
+
+This work proposes a MaxEnt safe MARL framework with a safe distributional critic, enabling multi-agent systems to learn stochastic policies for enhanced exploration while guaranteeing safety constraint compliance throughout the 29561 Figure 5: Average reward and average cost under different risk level parameter ω.entire operation. The proposed method effectively improves the system’s final task reward and significantly reduces the probability of agents adopting high-risk behaviors. Theoret-ically, the framework provides closed-form expressions for game-theoretic equilibrium policies through rigorous math-ematical proofs, ensuring monotonicity and convergence during policy improvement. Furthermore, we implement the algorithm as WCMASAC and demonstrate its superior performance in both task efficiency and safety compliance within the Safe Multi-Mujoco benchmark environments. Fu-ture work will focus on enhancing the algorithm’s scalabil-ity in large-scale networks and exploring its deployment in practical multi-agent collaborative scenarios. 
+
+# Acknowledgments 
+
+This work is supported by in part by the National Nat-ural Science Foundation of China (62333005, 62403200, 62503174, 62473133, 62533002), in part by the Shang-hai International Science and Technology Cooperation Project (24510714000), in part by the Shanghai Nat-ural Science Foundation (24ZR1416200), in part by the China University-Industry-Research Innovation Founds (2024IT032), in part by the opening project of the State Key Laboratory of Autonomous Intelligent Unmanned Systems (ZZKF2025-1-24), and in part by the Fundamental Research Funds for the Central Universities. 
+
+# References 
+
+Dabney, W.; Ostrovski, G.; Silver, D.; and Munos, R. 2018a. Implicit quantile networks for distributional reinforcement learning. In International conference on machine learning ,1096–1105. PMLR. Dabney, W.; Rowland, M.; Bellemare, M.; and Munos, R. 2018b. Distributional reinforcement learning with quantile regression. In Proceedings of the AAAI conference on artifi-cial intelligence , volume 32. Du, H.; Gou, F.; and Cai, Y. 2025. Scalable Safe Multi-Agent Reinforcement Learning for Multi-Agent System. 
+
+arXiv preprint arXiv:2501.13727 .Gu, S.; Kuba, J. G.; Chen, Y.; Du, Y.; Yang, L.; Knoll, A.; and Yang, Y. 2023. Safe multi-agent reinforcement learning for multi-robot control. Artificial Intelligence , 319: 103905. Gu, S.; Yang, L.; Du, Y.; Chen, G.; Walter, F.; Wang, J.; and Knoll, A. 2022. A review of safe reinforcement learning: Methods, theory and applications. arXiv preprint arXiv:2205.10330 .Gu, S.; Yang, L.; Du, Y.; Chen, G.; Walter, F.; Wang, J.; and Knoll, A. 2024. A Review of Safe Reinforcement Learning: Methods, Theories, and Applications. IEEE Transactions on Pattern Analysis and Machine Intelligence , 46(12): 11216– 11235. Ha, S.; Xu, P.; Tan, Z.; Levine, S.; and Tan, J. 2021. Learning to Walk in the Real World with Minimal Human Effort. In 
+
+Conference on Robot Learning , 1110–1120. PMLR. Haarnoja, T.; Zhou, A.; Hartikainen, K.; Tucker, G.; Ha, S.; Tan, J.; Kumar, V.; Zhu, H.; Gupta, A.; Abbeel, P.; et al. 2018. Soft actor-critic algorithms and applications. arXiv preprint arXiv:1812.05905 .Hu, J.; Sun, Y.; Chen, H.; Huang, S.; Chang, Y.; Sun, L.; et al. 2022. Distributional reward estimation for effective multi-agent deep reinforcement learning. Advances in Neu-ral Information Processing Systems , 35: 12619–12632. Hu, T.; Luo, B.; Yang, C.; and Huang, T. 2023. MO-MIX: Multi-Objective Multi-Agent Cooperative Decision-Making With Deep Reinforcement Learning. IEEE Transactions on Pattern Analysis and Machine Intelligence , 45(10): 12098– 12112. Huber, P. J. 1992. Robust estimation of a location parame-ter. In Breakthroughs in statistics: Methodology and distri-bution , 492–518. Springer. Ji, J.; Zhang, B.; Zhou, J.; Pan, X.; Huang, W.; Sun, R.; Geng, Y.; Zhong, Y.; Dai, J.; and Yang, Y. 2023. Safety gymnasium: A unified safe reinforcement learning bench-mark. Advances in Neural Information Processing Systems ,36: 18964–18993. Kuba, J. G.; Feng, X.; Ding, S.; Dong, H.; Wang, J.; and Yang, Y. 2022. Heterogeneous-agent mirror learning: A continuum of solutions to cooperative marl. arXiv preprint arXiv:2208.01682 .Kuba, J. G.; Wen, M.; Meng, L.; Zhang, H.; Mguni, D.; Wang, J.; Yang, Y.; et al. 2021. Settling the variance of multi-agent policy gradients. Advances in Neural Informa-tion Processing Systems , 34: 13458–13470. Levine, S. 2018. Reinforcement Learning and Con-trol as Probabilistic Inference: Tutorial and Review. arXiv:1805.00909. 29562 Li, Z.; Hu, C.; Wang, Y.; Yang, Y.; and Li, S. E. 2024. Safe Reinforcement Learning With Dual Robustness. IEEE Transactions on Pattern Analysis and Machine Intelligence ,46(12): 10876–10890. Liu, C.; Geng, N.; Aggarwal, V.; Lan, T.; Yang, Y.; and Xu, M. 2021. Cmix: Deep multi-agent reinforcement learning with peak and average constraints. In Machine Learning and Knowledge Discovery in Databases. Research Track: European Conference, ECML PKDD 2021, Bilbao, Spain, September 13–17, 2021, Proceedings, Part I 21 , 157–173. Springer. Liu, J.; Zhong, Y.; Hu, S.; Fu, H.; Fu, Q.; Chang, X.; and Yang, Y. 2023. Maximum entropy heterogeneous-agent re-inforcement learning. arXiv preprint arXiv:2306.10715 .Liu, Z.; Cen, Z.; Isenbaev, V.; Liu, W.; Wu, S.; Li, B.; and Zhao, D. 2022. Constrained variational policy optimization for safe reinforcement learning. In International Conference on Machine Learning , 13644–13668. PMLR. Lu, S.; Zhang, K.; Chen, T.; Bas ¸ar, T.; and Horesh, L. 2021. Decentralized policy gradient descent ascent for safe multi-agent reinforcement learning. In Proceedings of the AAAI conference on artificial intelligence , volume 35, 8767–8775. McKelvey, R. D.; and Palfrey, T. R. 1995. Quantal response equilibria for normal form games. Games and economic be-havior , 10(1): 6–38. Qiu, W.; Wang, X.; Yu, R.; Wang, R.; He, X.; An, B.; Obraztsova, S.; and Rabinovich, Z. 2021. RMIX: Learning risk-sensitive policies for cooperative reinforcement learn-ing agents. Advances in Neural Information Processing Sys-tems , 34: 23049–23062. Rashid, T.; Farquhar, G.; Peng, B.; and Whiteson, S. 2020a. Weighted QMIX: Expanding monotonic value func-tion factorisation for deep multi-agent reinforcement learn-ing. Advances in neural information processing systems , 33: 10199–10210. Rashid, T.; Samvelyan, M.; De Witt, C. S.; Farquhar, G.; Fo-erster, J.; and Whiteson, S. 2020b. Monotonic value func-tion factorisation for deep multi-agent reinforcement learn-ing. Journal of Machine Learning Research , 21(178): 1–51. Rockafellar, R. T.; Uryasev, S.; et al. 2000. Optimization of conditional value-at-risk. Journal of risk , 2: 21–42. Shen, S.; Ma, C.; Li, C.; Liu, W.; Fu, Y.; Mei, S.; Liu, X.; and Wang, C. 2023. RiskQ: risk-sensitive multi-agent rein-forcement learning value factorization. Advances in Neural Information Processing Systems , 36: 34791–34825. Sun, W.-F.; Lee, C.-K.; See, S.; and Lee, C.-Y. 2023. A uni-fied framework for factorizing distributional value functions for multi-agent reinforcement learning. Journal of Machine Learning Research , 24(220): 1–32. Sutton, R. S.; Barto, A. G.; et al. 1998. Reinforcement learn-ing: An introduction , volume 1. MIT press Cambridge. Tang, Y. C.; Zhang, J.; and Salakhutdinov, R. 2019. Worst cases policy gradients. arXiv preprint arXiv:1911.03618 .Yang, Q.; Sim˜ ao, T. D.; Tindemans, S. H.; and Spaan, M. T. 2021. WCSAC: Worst-case soft actor critic for safety-constrained reinforcement learning. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 35, 10639–10646. Yang, Q.; Sim˜ ao, T. D.; Tindemans, S. H.; and Spaan, M. T. 2023. Safety-constrained reinforcement learning with a dis-tributional safety critic. Machine Learning , 112(3): 859– 887. Zhang, K.; Sun, T.; Tao, Y.; Genc, S.; Mallya, S.; and Basar, T. 2020. Robust multi-agent reinforcement learning with model uncertainty. Advances in neural information process-ing systems , 33: 10571–10583. Zhang, L.; Li, L.; Wei, W.; Song, H.; Yang, Y.; and Liang, J. 2024. Scalable Constrained Policy Optimization for Safe Multi-agent Reinforcement Learning. Advances in Neural Information Processing Systems , 37: 138698–138730. Zhang, T.; Li, Y.; Wang, C.; Xie, G.; and Lu, Z. 2021. Fop: Factorizing optimal joint policy of maximum-entropy multi-agent reinforcement learning. In International conference on machine learning , 12491–12500. PMLR. Zhang, Y.; Vuong, Q.; and Ross, K. 2020. First order con-strained optimization in policy space. Advances in Neural Information Processing Systems , 33: 15338–15349. Zhong, Y.; Kuba, J. G.; Feng, X.; Hu, S.; Ji, J.; and Yang, Y. 2024. Heterogeneous-agent reinforcement learning. Journal of Machine Learning Research , 25(32): 1–67. 29563

@@ -1,0 +1,510 @@
+Title: A Differential Perspective on Distributional Reinforcement Learning
+
+URL Source: https://ojs.aaai.org/index.php/AAAI/article/download/39706/43667
+
+Number of Pages: 8
+
+Markdown Content:
+# A Differential Perspective on Distributional Reinforcement Learning 
+
+# Juan Sebastian Rojas 1, Chi-Guhn Lee 1
+
+> 1
+
+Department of Mechanical & Industrial Engineering, University of Toronto juan.rojas@mail.utoronto.ca, cglee@mie.utoronto.ca 
+
+Abstract     
+
+> To date, distributional reinforcement learning (distributional RL) methods have exclusively focused on the discounted set-ting, where an agent aims to optimize a discounted sum of rewards over time. In this work, we extend distributional RL to the average-reward setting, where an agent aims to op-timize the reward received per time step. In particular, we utilize a quantile-based approach to develop the first set of algorithms that can successfully learn and/or optimize the long-run per-step reward distribution, as well as the differen-tial return distribution of an average-reward MDP. We derive proven-convergent tabular algorithms for both prediction and control, as well as a broader family of algorithms that have appealing scaling properties. Empirically, we find that these algorithms yield competitive and sometimes superior perfor-mance when compared to their non-distributional equivalents, while also capturing rich information about the long-run per-step reward and differential return distributions.
+
+# 1 Introduction 
+
+Distributional reinforcement learning (distributional RL) (Bellemare, Dabney, and Rowland 2023) equips decision-making agents with the ability to learn and reason about the probability distribution over a given objective. This ap-proach transcends the traditional RL paradigm of focusing solely on expected values, thereby offering a more insight-ful and methodical understanding of the variability, uncer-tainty, and risk associated with a given objective. To date, distributional RL methods have exclusively focused on the 
+
+discounted setting, where an RL agent aims to optimize a potentially-discounted sum of rewards over time (e.g. Belle-mare, Dabney, and Munos (2017)). In this work, we extend distributional RL to the average-reward setting, where an RL agent aims to optimize the re-ward received per time step. This extension offers a timely opportunity to extend the benefits of distributional RL to a promising and growing family of RL methods. In particular, unlike discounted RL methods, average-reward RL methods do not face fundamental challenges in continuing control tasks that require function approximation (Naik et al. 2019). Moreover, average-reward RL methods have been shown to outperform discounted RL methods in some instances (e.g. 
+
+> Copyright © 2026, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved.
+
+Adamczyk et al. (2025)). It has even been shown that inte-grating the average-reward itself into discounted RL meth-ods can increase their performance (e.g. Naik et al. (2024)). Accordingly, extending distributional RL to the average-reward setting allows us to combine the strengths of two increasingly important RL frameworks. Through this extension, we will see that, from a distri-butional perspective, we will need to rethink the following foundational questions: what do we want to learn? and how can we learn it? In this work, we address these questions, and in the process, derive the first distributional framework for the average-reward setting. 
+
+# 2 Related Work 
+
+Early works on distributional RL include Sobel (1982), White (1988), and Morimura et al. (2010). Modern distri-butional RL is typically associated with the distributional Bellman operator, which was introduced in Bellemare, Dabney, and Munos (2017), along with empirical results which showed that such methods could outperform their non-distributional equivalents. Subsequent research has ex-panded upon this framework by developing methods that can typically be classified as either categorical (e.g. Bellemare, Dabney, and Munos (2017)) or quantile -based (e.g. Dabney et al. (2018)). While these methods have proven to be effec-tive in the discounted setting, no attention has been given to the average-reward setting. In this work, we address this gap by introducing the first distributional RL algorithms specifi-cally designed for the average-reward setting. 
+
+# 3 Preliminaries 
+
+3.1 Average-Reward Reinforcement Learning 
+
+A finite average-reward MDP is the tuple M .
+
+=
+
+⟨S , A, R, p ⟩, where S is a finite set of states, A is a fi-nite set of actions, R ⊂ R is a finite set of rewards, and 
+
+p : S × A × R × S → [0 , 1] is a probabilistic transition function that describes the dynamics of the environment. At each discrete time step, t = 0 , 1, 2, . . . , an agent chooses an action, At ∈ A , based on its current state, St ∈ S , and re-ceives a reward, Rt+1 ∈ R , while transitioning to a (poten-tially) new state, St+1 , such that p(s′, r | s, a ) = P(St+1 =
+
+s′, R t+1 = r | St = s, A t = a). In an average-reward MDP, an agent aims to find a policy, π : S → A , that optimizes the The Fortieth AAAI Conference on Artificial Intelligence (AAAI-26) 
+
+> 25160
+
+long-run (or limiting) average-reward, ¯r, which is defined as follows for a given policy, π:
+
+¯rπ (s) .
+
+= lim 
+
+> n→∞
+
+1
+
+n
+
+> n
+
+X
+
+> t=1
+
+E[Rt | S0 = s, A 0: t−1 ∼ π]. (1) In this work, we limit our discussion to stationary Markov 
+
+policies, which are time-independent policies that satisfy the Markov property. When working with average-reward MDPs, it is common to simplify Equation (1) into a more workable form by mak-ing certain assumptions about the Markov chain induced by following policy π. To this end, a unichain assumption is typically used when doing prediction (learning) because it ensures the existence of a unique limiting distribution of states, μπ (s) .
+
+= lim t→∞ P(St = s | A0: t−1 ∼ π), that is independent of the initial state, thereby simplifying Equa-tion (1) to the following: 
+
+¯rπ = X
+
+> s∈S
+
+μπ (s) X
+
+> a∈A
+
+π(a | s) X
+
+> s′∈S
+
+X
+
+> r∈R
+
+p(s′, r | s, a )r. (2) Similarly, a communicating assumption is typically used when doing control (optimization) because it ensures the ex-istence of a unique optimal average-reward, ¯r∗, that is inde-pendent of the initial state. The return of an MDP, Gt, captures how rewards are ag-gregated over the time horizon. In an average-reward MDP, the return is referred to as the differential return , and is de-fined as follows: 
+
+Gt
+
+.
+
+= Rt+1 − ¯rπ + Rt+2 − ¯rπ + Rt+3 − ¯rπ + . . . . (3) To solve an average-reward MDP, solution methods such as dynamic programming or RL are typically used in con-junction with the Bellman equation (4) for the state-value function, vπ (s) .
+
+= Eπ [Gt | St = s] = Eπ [Rt+1 − ¯rπ +
+
+Gt+1 | St = s], or the Bellman optimality equation (5) for the state-action value function, qπ (s, a ) .
+
+= Eπ [Gt | St =
+
+s, A t = a]. Solution methods for average-reward MDPs are typically referred to as differential methods because of the reward difference (i.e., r − ¯rπ ) operation that occurs in the Bellman equations (4) and (5): 
+
+vπ (s) = X
+
+> a
+
+π(a|s) X
+
+> s′,r
+
+p(s′, r | s, a )[ r − ¯rπ + vπ (s′)] , (4) 
+
+qπ (s, a ) = X
+
+> s′,r
+
+p(s′, r | s, a )[ r − ¯rπ + max  
+
+> a′
+
+qπ (s′, a ′)] . (5) 
+
+3.2 Quantile Regression 
+
+Quantile regression (Koenker 2005) refers to the process of estimating a predetermined quantile of a probability distri-bution from samples. More specifically, for τ ∈ (0 , 1) , let 
+
+F −1 
+
+> w
+
+(τ ) denote the τ th quantile that we are trying to estimate from probability distribution w (where Fw : R → [0 , 1] de-notes the CDF of w). Quantile regression maintains an es-timate, θ, of this value, and updates the estimate based on samples drawn from w (i.e., y ∼ w) as follows (Bellemare, Dabney, and Rowland 2023): 
+
+θ ←− θ + αt(τ − 1{y<θ }), (6) where αt denotes the step size for the update. The estimate for θ will continue to adjust until the equilibrium point, θ∗,which corresponds to F −1 
+
+> w
+
+(τ ), is reached (Bellemare, Dab-ney, and Rowland 2023). In other words, we have that 
+
+0 = E[( τ − 1{y<θ ∗})] (7a) 
+
+= τ − E[1{y<θ ∗}] (7b) 
+
+= τ − P(y < θ ∗) (7c) 
+
+=⇒ θ∗ = F −1 
+
+> w
+
+(τ ). (7d) 
+
+3.3 Discounted Distributional RL 
+
+Like average-reward MDPs, discounted MDPs have their own return which captures how rewards are aggregated over the time horizon. More specifically, let 
+
+Gγt = X
+
+> k≥0
+
+γkRt+k+1 = Rt+1 + γG γt+1 (8) denote the discounted return from a discounted MDP, where 
+
+Rt+1 ∈ R denotes the per-step reward and γ ∈ [0 , 1] de-notes the discount factor (Puterman 1994; Sutton and Barto 2018). The aim of discounted distributional RL is to learn the probability distribution over discounted returns. More formally, discounted distributional RL aims to learn the dis-counted return distribution function, Φγπ , such that, with a slight abuse of notation, Φγπ (s) denotes the probability dis-tribution over discounted returns when starting from state 
+
+s ∈ S and following policy π, and Φγπ (s, a ) denotes the probability distribution over discounted returns when start-ing from state s ∈ S , taking action a ∈ A , and following policy π.Broadly speaking, discounted distributional RL methods can be categorized based on how they approximate (or pa-rameterize) the discounted return distribution function. In this work, we take inspiration from quantile-based methods (Dabney et al. 2018; Rowland et al. 2024), which parame-terize the discounted return distribution function as follows: 
+
+Φγπ (s) = 
+
+> n
+
+X
+
+> i=1
+
+1
+
+n δΩγi (s) or Φγπ (s, a ) = 
+
+> n
+
+X
+
+> i=1
+
+1
+
+n δΩγi (s,a ),
+
+(9) where Ωγi denotes the τi-quantile of the discounted return distribution, and δΩγi denotes a Dirac at Ωγi .More formally, the set of τ -quantiles of a probability dis-tribution can be defined as follows: 
+
+Definition 3.1 (Rowland et al. (2024)) . Let P(R) denote the set of probability distributions over R. For a probability distribution w ∈ P(R) and parameter τ ∈ (0 , 1) , the set of τ -quantiles of w is given by the set {z ∈ R : Fw(z) = 
+
+τ } ∪ inf {y ∈ R : Fw(y) > τ }, where Fw : R → [0 , 1] is the CDF of w, defined by Fw(t) = PZ∼w(Z ≤ t) for all t ∈ R.
+
+Quantile-based discounted distributional RL methods learn the τ -quantiles of the discounted return distribution, 
+
+{Ωγi }ni=1 , from samples using quantile regression (see Equa-tion 6) as follows (Dabney et al. 2018): 
+
+Ωγi,t +1 = Ω γi,t +αt
+
+1
+
+n
+
+> n
+
+X
+
+> j=1
+
+τi − 1{ψt<0}
+
+ , ∀i = 1 , 2, . . . , n, 
+
+(10) 25161 where Ωγi,t denotes the estimate of the τi-quantile of the discounted return distribution at time t, αt denotes the step size for the update, and {τi ∈ (0 , 1) }ni=1 , such that τi = 2i−12n , i = 1, 2, . . . , n . Here, the choice of ψt depends on whether we want to do prediction (learning) or control (optimization). In the case of predic-tion, ψt = Rt+1 + γΩγj,t (St+1 ) − Ωγi,t (St). In the case of control (via Q-learning (Watkins and Dayan 1992)), 
+
+ψt = Rt+1 + γΩγj,t (St+1 , a ∗) − Ωγi,t (St, A t), where a∗ .
+
+=
+
+argmax a′ 1
+
+> n
+
+Pnk=1 Ωγk,t (St+1 , a ′).Let us take a moment to highlight the definition of the above greedy action, a∗. We are being greedy with respect to the average of the τ -quantiles of the discounted return dis-tribution, which, by definition, is equivalent to being greedy with respect to the expected discounted return, and hence, the (discounted) state-action value function. More formally, the greedy action selection rule for a distributional RL algo-rithm can be defined as follows: 
+
+Definition 3.2 (Bellemare, Dabney, and Rowland (2023)) .
+
+Let πMS denote the space of stationary Markov policies, and let Q : S × A → R denote a state-action value function. A greedy action selection rule is a mapping, G : RS×A →
+
+πMS , with the property that for any Q ∈ RS×A , G(Q) is greedy with respect to Q. That is, G(Q)( a | s) > 0 =⇒
+
+Q(s, a ) = max a′∈A Q(s, a ′).
+
+Importantly, we note that although discounted distribu-tional RL methods make it possible to capture information related to the underlying (discounted) return distribution, much of the theoretical guarantees associated with these methods in the control setting require an action selection rule that satisfies Definition 3.2. That is, they require a greedy ac-tion selection rule that is greedy with respect to the expected return, and hence, the state-action value function (Belle-mare, Dabney, and Rowland 2023). Similarly, we note that the convergence of discounted distributional RL approaches, including the above quantile-based approach, is governed by the (discounted) distribu-tional Bellman operator (Bellemare, Dabney, and Munos 2017; Bellemare, Dabney, and Rowland 2023). Importantly, under certain conditions, the distributional Bellman operator is a contraction in the Wasserstein metric, thereby ensuring convergence to a fixed point. 
+
+# 4 Differential Distributional RL 
+
+In this section, we derive and present our primary contribu-tion: the first set of distributional RL algorithms specifically designed for the average-reward setting. We call these algo-rithms, Differential Distributional RL algorithms, due to the differential nature of average-reward RL algorithms. Importantly, this extension of distributional RL into the average-reward setting requires that we move away from us-ing the discounted MDP, which forms the basis of existing distributional RL methods, and, in turn, utilize the average-reward MDP. Consequently, we cannot rely on the (dis-counted) distributional Bellman operator (Bellemare, Dab-ney, and Munos 2017; Bellemare, Dabney, and Rowland 2023) when formulating our approach. In fact, this shift requires that we rethink and answer the following foundational questions: what do we want to learn? and how can we learn it? In this section, we propose a quantile-based framework that allows us to address these two questions, and in the process, extend distributional RL into the average-reward setting. 
+
+4.1 The Differential Distributional Objective 
+
+Before we can derive our algorithms, we first need to estab-lish an appropriate distributional objective. In particular, the average-reward formulation suggests two distributions that may be of interest. The first corresponds to the probability distribution over differential returns (where the differential return is defined in Equation (3)). The second corresponds to the limiting (or long-run) per-step reward distribution, whose mean yields the regular (non-distributional) average-reward objective (i.e., Equation (1)). At a first glance, it may seem natural to mirror the ap-proach taken in the discounted setting by pursuing the dif-ferential return as the distributional objective. However, such an approach would not be fully aligned with the nature of the average-reward setting. In particular, in the average-reward setting, the differential return serves as a surrogate objec-tive, optimized only to facilitate the optimization of the long-run per-step average-reward (Equation (1)). As such, while it may be feasible to capture information about the differ-ential return distribution, such information would be of lit-tle relevance in the average-reward setting, where the long-term, per-step behaviour is what is of interest. Conversely, the limiting per-step reward distribution aligns directly with the average-reward objective (its mean yields the average-reward itself), thereby making it an appealing distributional objective for the average-reward setting. As such, given the above reasoning, which is formalized as Proposition 4.1 below, the primary focus of this work will be to derive differential algorithms that can learn and/or optimize the limiting per-step reward distribution . We will briefly revisit the return distribution from a purely empirical perspective in Section 4.3. 
+
+Proposition 4.1. The limiting per-step reward distribution is the natural distributional objective in the average-reward setting, given that its mean yields the long-run average-reward, which is the primary prediction and control objec-tive of (non-distributional) average-reward RL. 
+
+We are now ready to begin our theoretical treatment of the limiting per-step reward distribution. We begin by for-mally defining our distributional objective. In particular, for a given policy, π, let 
+
+ϕπ (s) .
+
+= lim  
+
+> t→∞
+
+P(Rt | S0 = s, A 0: t−1 ∼ π) (11) denote the limiting per-step reward distribution induced by following policy π, where Rt ∈ R denotes the per-step reward. As is standard practice with the regular average-reward objective, we can simplify Equation (11) by mak-ing certain assumptions about the Markov chain induced by following policy π. To this end, we will utilize a unichain 
+
+assumption when doing prediction (learning), because it en-sures the existence of a unique limiting distribution of per-step rewards that is independent of the initial state, such 25162 Figure 1: Illustration of the agent-environment interaction in an average-reward MDP. As t → ∞ , following policy π yields a limiting per-step reward distribution, ϕπ , with an average-reward, ¯rπ . Standard average-reward RL methods aim to learn and/or optimize the average-reward, ¯rπ . By contrast, the differential distributional RL methods proposed in this work aim to learn and/or optimize the limiting per-step reward distribution, ϕπ .that ϕπ (s) = ϕπ . Similarly, we will utilize a communi-cating assumption when doing control (optimization), be-cause it ensures the existence of a unique optimal distri-bution of per-step rewards that is independent of the initial state. Figure 1 depicts the agent-environment interaction in an average-reward MDP, where following policy π yields a limiting reward distribution, ϕπ , whose mean corresponds to the average-reward objective, ¯rπ .
+
+4.2 A Quantile-Based Approach 
+
+In this section, we take inspiration from the quantile-based methods utilized for discounted distributional RL to de-velop a quantile-based approach that can be used to learn and/or optimize the limiting per-step reward distribution of an average-reward MDP. Like the discounted setting (see Section 3.3), our overall goal and strategy is to derive an appropriate set of quantile regression-based updates that ap-proximate our target distribution. More formally, we approx-imate (or parameterize) the limiting per-step reward distribu-tion as follows: 
+
+ϕπ =
+
+> m
+
+X
+
+> i=1
+
+1
+
+m δθi , (12) where θi denotes the τi-quantile of the limiting per-step reward distribution, and δθi denotes a Dirac at θi. Here, we adopt the same formal definition for the τ -quantiles of a probability distribution as in the discounted setting (i.e., Definition 3.1). Now, let us consider the τ -quantiles of the limiting per-step reward distribution, {θi}mi=1 . As previously mentioned, we wish to approximate these quantiles using quantile re-gression. To this end, the generic quantile regression frame-work outlined in Equations (6) and (7) suggest the following set of quantile update rules for the per-step reward quantiles: 
+
+θi,t +1 = θi,t + αt
+
+ τi − 1{Rt+1 <θ i,t }
+
+ ∀i = 1 , 2, . . . , m, 
+
+(13) where θi,t denotes the estimate of the τi-quantile of the lim-iting per-step reward distribution, αt denotes the step size for the update, and Rt+1 denotes the per-step reward. When comparing this quantile update rule to that of the discounted setting (i.e., Equation (10)), we can see that both rules have a similar structure, with the key difference being that we have replaced ψt with Rt+1 − θi,t . Most notably, unlike the return-based quantile update rule used in the dis-counted setting, the per-step reward quantile update rule (13) does not contain the full TD or Q-learning targets and esti-mates. This is not necessarily an issue, so long as we can find a way to properly incorporate the quantile update rule (13) into a broader algorithm that does contain the full TD or Q-learning targets and estimates. To this end, we note that, typically, differential RL al-gorithms will learn and/or optimize the value function and average-reward simultaneously. From an algorithmic per-spective, this means that the algorithms start with initial estimates (or guesses) for the value function and average-reward, then update these estimates over time, until they have learned and/or optimized these two objectives. As such, one way through which we can incorporate the quantile up-dates into a differential algorithm is by incorporating them into the average-reward estimate update. In particular, we can relate the average-reward, ¯rπ , to the τ -quantiles of the limiting per-step reward distribution, {θi}mi=1 , as follows: 
+
+Lemma 4.2. Given a unichain, communicating, or equiv-alent assumption, consider the limiting per-step reward distribution parameterized by the τ -quantiles, {θi}mi=1 , as per Equation (12) for {τi ∈ (0 , 1) }mi=1 , such that τi = 
+
+> 2i−12m
+
+, i = 1, 2, . . . , m . The expected value of the τ -quantiles converges to the average-reward of the limiting per-step reward distribution, ¯rπ , as m → ∞ .Proof. Let F (r) denote the CDF of the limiting per-step reward distribution (which exists and is unique given a unichain, communicating, or equivalent assumption), and let 
+
+θi represent its τi-quantile, such that F (θi) = τi. The ex-pected value of the τ -quantiles is: 
+
+1
+
+m
+
+> m
+
+X
+
+> i=1
+
+θi = 1
+
+m
+
+> m
+
+X
+
+> i=1
+
+F −1
+
+ 2i − 12m
+
+
+
+, (14) where F −1 is the inverse CDF. By the definition of τi = 2i−12m , the τi values are evenly spaced over [0 , 1] , creating a uniform partition. Hence, as 
+
+m → ∞ , the summation 1
+
+> m
+
+Pmi=1 θi becomes a Riemann sum for the following integral: 25163 Z 10
+
+F −1(τ ) dτ. (15) It is a well-known result that for a random variable X with CDF F (x), E[X] = R 10 F −1(x)dx . Therefore, as m → ∞ ,
+
+1
+
+m
+
+> m
+
+X
+
+> i=1
+
+θi →
+
+Z 10
+
+F −1(τ ) dτ = ¯ rπ . (16) Thus, the expected value of the τ -quantiles converges to the average reward, ¯rπ , of the limiting per-step reward distribu-tion as m → ∞ . This completes the proof. Hence, we now have a way to express the set of quantile updates (13) as an average-reward update: 
+
+¯Rt+1 = 1
+
+m
+
+> m
+
+X
+
+> i=1
+
+θi,t +1 , where (17a) 
+
+θi,t +1 = θi,t + αi,t 
+
+ τi − 1{Rt+1 <θ i,t }
+
+ , ∀i = 1 , 2, . . . , m, 
+
+(17b) and ¯Rt+1 denotes an estimate of the average-reward, ¯rπ .Importantly, we can show that this quantile-based average-reward update converges to the average-reward of the limit-ing per-step reward distribution induced by a given policy: 
+
+Theorem 4.3. Given a unichain, communicating, or equiv-alent assumption, consider the limiting per-step reward dis-tribution induced by following policy π, and parameterized by the τ -quantiles, {θi}mi=1 , as per Equation (12) for {τi ∈
+
+(0 , 1) }mi=1 , such that τi = 2i−12m , i = 1 , 2, . . . , m . Also con-sider the quantile-based update rules for the average-reward estimate (17) , along with corresponding step sizes that sat-isfy: αt > 0, sup t≥0 αt < ∞, P∞ 
+
+> t=0
+
+αt = ∞, and αt =
+
+o(1 /log t). If the quantile estimates, {θi,t }mi=1 , converge a.s. to the τ -quantiles of the limiting per-step reward distribu-tion, then the average-reward estimate, ¯Rt, converges a.s. to the average-reward of the limiting per-step reward distribu-tion, ¯rπ , as t → ∞ .Proof. If {θi,t }mi=1 → { θi}mi=1 as t → ∞ , then, by Lemma 4.2, it directly follows that the average of these estimates, which corresponds to ¯Rt, converges, almost surely, to ¯rπ as 
+
+t → ∞ . This completes the proof. Hence, given the convergence of the τ -quantile estimates, it is intuitive to see that the average-reward estimate will also converge. We provide a full convergence proof for the τ -quantile estimates in Appendix B. As such, we now have a way to learn the limiting per-step reward distribution induced by a given policy. We can further extend these results into control-based settings by choosing an appropriate action selection rule. As in the discounted setting, we will utilize an action selection rule that is con-sistent with Definition 3.2. To this end, Algorithm 1 shows the Differential Distributional (or D2 ) Q-learning algorithm, which adopts a greedy action selection rule with respect to the state-action value function. The full set of Differential Distributional RL algorithms is included in Appendix A. Algorithm 1: Differential Distributional (D2) Q-Learning Obtain initial S
+
+while still time to train do 
+
+A ← action given by π for S
+
+Take action A, observe R, S ′
+
+for i = 1 , 2, . . . , m do 
+
+θi = θi + αθ
+
+ τi − 1{R<θ i}
+
+
+
+end for 
+
+¯R = 1
+
+> m
+
+Pmi=1 θi
+
+δ = R − ¯R + max a Q(S′, a ) − Q(S, A )
+
+Q(S, A ) = Q(S, A ) + αδ S = S′
+
+end while 
+
+return {θi}mi=1 
+
+Importantly, with the aforementioned action selection rule, we retain the regular (non-distributional) Q-learning operator for the average-reward setting: 
+
+T Q (s, a ) .
+
+= X
+
+> s′,r
+
+p(s′, r | s, a )( r + max  
+
+> a′
+
+Q(s′, a ′)) . (18) As such, we can use existing results to establish that the con-vergence of the state-action value estimates implies that the average-reward converges to the optimal average-reward: 
+
+Theorem 4.4. Let ¯rπt denote the average-reward obtained when following policy πt, such that πt is a greedy policy with respect to the state-action value estimates, Qt(s, a ), where 
+
+s ∈ S and a ∈ A . Also, let q∗ denote the solution of the Bell-man optimality equation (5) . If a communicating or equiva-lent assumption holds, such that there exists a unique q∗ up to an additive constant, then we have that if Qt → q∗ a.s. as 
+
+t → ∞ , then ¯rπt → ¯r∗ a.s. as t → ∞ .Proof. We adopt the proof technique used in Wan, Naik, and Sutton (2021) to prove a similar result. In particular, the de-sired result follows directly from Theorem 8.5.5 of Puterman (1994). More specifically, we have that: 
+
+min  
+
+> s,a
+
+(T Q t − Qt) ≤ ¯rπt
+
+≤ ¯r∗≤ max  
+
+> s,a
+
+(T Q t − Qt), (19) 
+
+=⇒ | ¯r ∗ − ¯rπt | ≤ sp (T Q t − Qt), (20) where T Q (s, a ) is defined in Equation (18). Because Qt →
+
+q∗ a.s. as t → ∞ , and sp (T Q t − Qt) is clearly a contin-uous function of Qt, we have, by the continuous mapping theorem, that sp (T Q t − Qt) → sp (T q ∗ − q∗) = 0 a.s. as t → ∞ . Hence, we can conclude that ¯rπt → ¯r∗ a.s. as 
+
+t → ∞ . This completes the proof. The above theorem requires that Qt → q∗ a.s. as t → ∞ .In this regard, we provide a full convergence proof for the convergence of Qt in Appendix B. We also provide a full proof for the convergence of the value function estimates in the prediction setting (i.e., Vt) in Appendix B. Altogether, the theoretical results provided in this section and in Ap-pendix B show the almost sure convergence of the tabular D2 algorithms for both prediction and control. 25164 Figure 2: a) Histogram showing the empirical ( ε-greedy) optimal (long-run) per-step reward distribution in the red-pill blue-pill task. b) Quantiles of the optimal per-step reward distribution in the red-pill blue-pill task. c) Convergence plot of the per-step reward quantile estimates as learning progresses when using the D2 Q-learning algorithm in the red-pill blue-pill task. 
+
+4.3 Learning the Differential Return Distribution 
+
+Although we argue in this work that the limiting per-step re-ward distribution is the natural distributional objective in the average-reward setting, it may still be useful to consider the differential return distribution from an empirical perspec-tive (i.e., it could potentially yield superior empirical perfor-mance). As such, in this work we explore such an approach from a purely empirical perspective, and propose a set of al-gorithms that parameterize the probability distribution over differential returns, as well as the limiting per-step reward distribution. We call the resulting set of algorithms, Double Differential Distributional , or D3 , algorithms because they simultaneously learn and/or optimize both distributions. To this end, when we apply an analogous framework to the one described in Section 3.3, such that ψt = Rt+1 − ¯Rt +Ωj,t (St+1 , a ∗) − Ωi,t (St, A t), and incorporate the quantile-based average-reward update (17), we arrive at the D3 Q-learning algorithm (2). The full set of Double Differential Distributional RL algorithms is included in Appendix A. Algorithm 2: D3 Q-Learning Obtain initial S
+
+while still time to train do 
+
+A ← action given by π for S
+
+Take action A, observe R, S ′
+
+θi = θi + αθ
+
+ τi − 1{R<θ i}
+
+ , ∀i = 1 , 2, . . . , m 
+
+¯R = 1
+
+> m
+
+Pmi=1 θi
+
+a∗ = argmax a′ 1
+
+> n
+
+Pnj=1 Ωj (S′, a ′)
+
+for j = 1 , 2, . . . , n do 
+
+β = 1
+
+> n
+
+Pnk=1 
+
+h
+
+τj − 1{R− ¯R+Ω k (S′,a ∗)−Ωj (S,A )<0}
+
+i
+
+Ωj (S, A ) = Ω j (S, A ) + αβ 
+
+end for 
+
+S = S′
+
+end while 
+
+return {θi}mi=1 and {Ωj }nj=1 
+
+Figure 3: Rolling average-reward when using the D2 and D3 algorithms vs. a non-distributional Differential algorithm in the red-pill blue-pill environment. A solid line denotes the mean average-reward, and the corresponding shaded region denotes a 95% confidence interval over 50 runs. 
+
+# 5 Experimental Results 
+
+In this section, we present empirical results obtained when applying our D2 and D3 algorithms on two groups of exper-iments. In the first group of experiments, we aimed to val-idate whether the D2 and D3 algorithms could successfully learn the optimal per-step reward distribution by conduct-ing experiments in environments where the optimal per-step reward distribution is known. In the second group of exper-iments, we aimed to evaluate the empirical performance of the D2 and D3 algorithms in more difficult environments. In both groups, we compared the performance of our algo-rithms to that of non-distributional Differential algorithms derived from the framework proposed in Wan, Naik, and Sutton (2021). The full set of experimental details and re-sults, including additional experiments performed, is pro-vided in Appendix C. Below, we highlight the key results. In terms of empirical results from the first group of exper-iments, Figure 2 shows the agent’s (per-step) reward quan-tile estimates as learning progresses when using the D2 25165 Figure 4: Rolling averages of the total reward per episode when using the D2 and D3 algorithms vs. non-distributional Differ-ential algorithms in the a) Breakout , b) BeamRider , and c) Freeway Atari 2600 environments. A solid line denotes the mean total reward per episode, and the corresponding shaded region denotes a 95% confidence interval over 8 runs. Q-learning algorithm in the red-pill blue-pill environment (Rojas and Lee 2025). As shown in the figure, the agent’s quantile estimates converge to the quantiles of the limiting per-step reward distribution induced by the optimal policy, thereby empirically showing that the D2 algorithm not only converges, but converges to the optimal solution. Subsequently, Figure 3 shows the rolling average-reward as learning progresses when using the D2 and D3 algorithms vs. a non-distributional Differential algorithm in the red-pill blue-pill environment. As shown in the figure, the D2 and D3 algorithms yield competitive performance when com-pared to their non-distributional counterpart, while also cap-turing rich information about the long-run reward distribu-tion (i.e., as shown in Figure 2 for the D2 algorithm). In terms of empirical results from the second group of experiments, Figure 4 shows rolling averages of the total re-ward per episode as learning progresses when using the D2 and D3 algorithms vs. a non-distributional Differential algo-rithm in various Atari 2600 games from the Arcade Learning Environment (Bellemare et al. 2013). As shown in the fig-ure, the D2 and D3 algorithms consistently outperform the non-distributional baseline, with the D3 algorithm showing better performance than the D2 algorithm. Our motivation for testing our algorithms in the Ar-cade Learning Environment (ALE) is twofold. First, ALE is a standard benchmark for evaluating distributional RL algorithms in the discounted setting, thereby making it a potentially-effective tool to use when one aims to mea-sure the relative performance gains of distributional meth-ods over their non-distributional counterparts. Second, there are currently no widely adopted benchmarks for the average-reward setting that match the scale and diversity of ALE. As such, ALE is one of the closest approximations we have for evaluating our algorithms under complex, high-dimensional environments. In this regard, as per Figure 4, we find that our algorithms fare better than the non-distributional baselines in these complex environments that do not strictly satisfy the theoretical assumptions of the average-reward setting. 
+
+# 6 Discussion, Limitations, and Future Work 
+
+In this work, we introduced the first distributional RL algo-rithms specifically designed for the average-reward setting. In particular, we motivated an appropriate distributional ob-jective for the average-reward setting, as well as derived two quantile-based approaches that can learn and/or optimize this objective. We showed, both theoretically and empiri-cally, that these Differential Distributional algorithms are able to learn the average-reward-optimal policy, as well as the corresponding (optimal) distributional objective. In terms of empirical performance, we showed that our algorithms are able to achieve competitive and sometimes superior performance when compared to non-distributional differential algorithms, while also capturing rich informa-tion about the long-run reward and return distributions. Moreover, we note that our choice of distributional ob-jective for the average-reward setting enables the resulting D2 algorithms to be more scalable in nature in compari-son to distributional RL algorithms in the discounted setting. In particular, the D2 algorithms only require m parameters to parameterize the distributional objective, where m is the number of quantiles. This is in contrast to discounted distri-butional algorithms, which require |S| × |A| × m parame-ters to parameterize the discounted distributional objective. As such, the computational complexity of our D2 algorithms remains constant with respect to the state and action-space sizes, thereby making them more scalable. In terms of limitations (in the context of the average-reward setting), it remains to be seen how different aspects (beyond the mean) of the chosen distributional objective can be optimized. Similarly, it remains to be seen how a categor-ical approach could be employed instead of a quantile-based approach. Future work should look to address these limita-tions, as well as tackle the theoretical aspects of the D3 algo-rithms. Exploring these directions may yield deeper insights, and in the process, continue unlocking the full potential of distributional approaches in the average-reward setting. 25166 Acknowledgments 
+
+We gratefully acknowledge funding from NSERC Discov-ery Grant # RGPIN-2021-02760. We are also grateful for the computing resources provided by the Digital Research Alliance of Canada. We thank the anonymous AAAI review-ers and area chair for their useful feedback and commentary during the review process. 
+
+# References 
+
+Adamczyk, J.; Makarenko, V.; Tiomkin, S.; and Kulkarni, R. V. 2025. Average-reward soft actor-critic. Reinforcement Learning Journal .Bellemare, M. G.; Dabney, W.; and Munos, R. 2017. A Dis-tributional Perspective on Reinforcement Learning. In Pro-ceedings of the 34th International Conference on Machine Learning .Bellemare, M. G.; Dabney, W.; and Rowland, M. 2023. Dis-tributional Reinforcement Learning . The MIT Press. Bellemare, M. G.; Naddaf, Y.; Veness, J.; and Bowling, M. 2013. The Arcade Learning Environment: An evaluation platform for general agents. J. Artif. Intell. Res. , 253–279. Dabney, W.; Rowland, M.; Bellemare, M.; and Munos, R. 2018. Distributional reinforcement learning with quantile regression. In AAAI Conference on Artificial Intelligence .Koenker, R. 2005. Quantile Regression . Cambridge Univer-sity Press. Morimura, T.; Sugiyama, M.; Kashima, H.; Hachiya, H.; and Tanaka, T. 2010. Nonparametric Return Distribution Ap-proximation for Reinforcement Learning. In Proceedings of the 27th International Conference on Machine Learning .Naik, A.; Shariff, R.; Yasui, N.; Yao, H.; and Sutton, R. S. 2019. Discounted reinforcement learning is not an optimiza-tion problem. Optimization Foundations for Reinforcement Learning Workshop at the Conference on Neural Informa-tion Processing Systems. Also arXiv:1910.02140 .Naik, A.; Wan, Y.; Tomar, M.; and Sutton, R. S. 2024. Reward Centering. Reinforcement Learning Journal , 4: 1995–2016. Puterman, M. L. 1994. Markov Decision Processes: Dis-crete Stochastic Dynamic Programming . John Wiley & Sons. Rojas, J. S.; and Lee, C.-G. 2025. Burning RED: Unlocking subtask-driven reinforcement learning and risk-awareness in average-reward Markov decision processes. Reinforcement Learning Journal , 6: 431–477. Rowland, M.; Munos, R.; Azar, M. G.; Tang, Y.; Ostrovski, G.; Harutyunyan, A.; Tuyls, K.; Bellemare, M. G.; and Dab-ney, W. 2024. An Analysis of Quantile Temporal-Difference Learning. J. Mach. Learn. Res. , 25: 1–47. Sobel, M. J. 1982. The variance of discounted Markov deci-sion processes. J. Appl. Probab. , 19(04): 794–802. Sutton, R. S.; and Barto, A. G. 2018. Reinforcement Learn-ing: An Introduction, 2nd edition . MIT Press. Wan, Y.; Naik, A.; and Sutton, R. S. 2021. Learning and Planning in Average-Reward Markov Decision Processes. In Proceedings of the 38th International Conference on Ma-chine Learning .Watkins, C. J.; and Dayan, P. 1992. Q-Learning. Mach. Learn. , 8: 279–292. White, D. 1988. Mean, variance, and probabilistic criteria in finite Markov decision processes: A review. Journal of Optimization Theory and Applications , 56(1): 1–29. 25167
