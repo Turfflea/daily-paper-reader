@@ -1,0 +1,847 @@
+Title: mCGCNN: A Dual-Stream Crystal Graph Convolutional Neural Network for the Efficient Prediction of Magnetic Properties of Crystalline Materials
+
+URL Source: https://arxiv.org/pdf/2606.28458v1
+
+Published Time: Tue, 30 Jun 2026 00:05:22 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+## mCGCNN: A Dual-Stream Crystal Graph Convolutional Neural Network for the Efficient Prediction of Magnetic Properties of Crystalline Materials 
+
+Sourav Mal 
+
+Harish-Chandra Research Institute, Chhatnag Road, Jhunsi, Prayagraj, 211019, India and Homi Bhabha National Institute, Training School Complex, Anushakti Nagar, Mumbai, 400094, India 
+
+Satadeep Bhattacharjee ∗
+
+Indo-Korea Science and Technology Center (IKST), Bengaluru 560 065, India 
+
+(Dated: June 30, 2026) Magnetic order in crystals is governed by moment-carrying sublattices and ligand-mediated exchange path-ways, yet standard crystal graph neural networks treat all atoms homogeneously and encode bonds primarily through pair distances. We propose mCGCNN, a magnetism-aware crystal graph network that augments the full structural graph with a dedicated magnetic subgraph. The magnetic stream performs angle-aware mes-sage passing over magnetic centers using metal–ligand–metal exchange-path descriptors motivated by Good-enough–Kanamori–Anderson physics, while layer-wise cross-coupling transfers structural and ligand-field in-formation from the full crystal graph. A separate magnetic-sublattice pooling operation prevents the mag-netic interaction from being diluted by nonmagnetic atoms. Benchmarked on a curated Materials Project spin-polarized DFT data, mCGCNN improves total magnetic moment prediction from a CGCNN test MAE of 2.54 μB to 2.02 μB, outperforming a strengthened CGCNN readout baseline and raising the test R2 from 0.644 to 0.776. When pretrained on moment regression, the same magnetic representation improves ferromag-netic/antiferromagnetic classification. The results demonstrate that incorporating exchange geometry directly into graph architectures provides a physically grounded route to predictive models of magnetic materials. 
+
+> Keywords: CGCNN, magnetic moment, message passing
+
+I. INTRODUCTION 
+
+The accurate prediction of materials properties from crystal structure alone, without the need for computationally expen-sive quantum-mechanical calculations, is one of the central goals of data-driven materials science. Graph neural networks (GNNs) have emerged as the leading framework for this task, owing to their ability to naturally encode the topology and ge-ometry of crystalline environments through iterative message passing over atom-centred graphs. Among the earliest and most influential of these architectures, the crystal graph con-volutional neural network (CGCNN) introduced by Xie and Grossman [1] represents each crystal as a graph G = ( V , E )
+
+in which atoms constitute nodes and bonds within a cutoff ra-dius constitute edges. Node features encoding atomic identity are iteratively updated by aggregating messages from bonded neighbours, and the resulting atom-level representations are pooled to a crystal-level vector that serves as input to a re-gression or classification head. Trained on large datasets derived from databases such as the Materials Project [2, 3] or AFLOW [4], CGCNN achieves mean absolute errors of 
+
+≈ 0.039 eV/atom on formation energies and ≈ 0.45 eV on band gaps, substantially below the typical density functional theory (DFT) precision threshold, making it suitable for high-throughput property screening [1]. Subsequent work has refined and extended the CGCNN paradigm in several directions. Park et al. introduced iCGCNN [5], an enhanced CGCNN architecture that im-proves predictive accuracy by integrating structural features  
+
+> ∗s.bhattacharjee@ikst.res.in
+
+from Voronoi tessellations, capturing explicit three-body atomic correlations, and utilizing a refined chemical represen-tation of interatomic bonds. The MatErials Graph Network (MEGNet) [6] extends the CGCNN framework by incorporat-ing explicit atomic, bond, and global state attributes, such as temperature and pressure. ALIGNN [7] augments the bond graph with a line graph that encodes bond angles, improv-ing performance on properties sensitive to local geometry. DimeNet [8] and its successors employ directional message passing using spherical harmonic expansions of interatomic vectors. SchNet [9] and PaiNN [10] adopt continuous-filter convolutions with equivariant representations. Alongside geo-metric enhancements, frameworks such as CrysXPP [11] have addressed the bottleneck of data scarcity by pre-training au-toencoders on large databases of unannotated crystal graphs, extracting robust structural and chemical features to predict electronic, elastic, and magnetic properties even with limited experimental data. These developments have substantially im-proved the geometric resolution of crystal GNNs and have made it possible to represent increasingly subtle structure– property relations. Nevertheless, the prediction of magnetic 
+
+properties has remained a persistent and largely unaddressed failure mode across essentially all GNN architectures in the literature. The difficulty is not merely that magnetic targets are numer-ically noisy or underrepresented in existing databases. Mag-netic order is controlled by spin-polarised electronic states, exchange pathways, orbital hybridisation, and symmetry-broken self-consistent solutions, none of which are naturally exposed by the distance-only, chemically homogeneous graph representation used in the original CGCNN. A small change in ligand identity, coordination geometry, or metal–ligand– metal angle can reverse the sign of an exchange interaction 
+
+> arXiv:2606.28458v1 [cond-mat.mtrl-sci] 26 Jun 2026
+
+2while leaving conventional pair-distance descriptors nearly unchanged. Consequently, an architecture that performs well for smooth scalar quantities such as formation energy or band gap can still fail to learn the discontinuous and highly local physics that determines magnetic response. Magnetic properties, particularly the local magnetic mo-ment on lattice site i, mi = ni↑ − ni↓, the saturation mag-netisation Ms, and the magnetic ordering temperature, there-fore present a qualitatively different prediction challenge from scalar ground-state energetics. They depend not only on the average crystal environment but also on which atoms carry spin, how those atoms are connected through non-magnetic ligands, and whether the relevant exchange pathway favours ferromagnetic or antiferromagnetic alignment. Several com-pounding factors conspire to make standard CGCNN unsuit-able for these properties, and we characterise them in detail here. 
+
+a. Homogeneous graph representation. In the standard CGCNN graph, all atoms are treated as equivalent node types, distinguished only by their initial feature vectors encoding chemical identity. The physics of magnetism is, however, overwhelmingly concentrated on atoms with partially filled 3 d
+
+or 4 f shells — transition metals such as Fe, Co, Ni, Mn, and Cr, and rare-earth elements such as Gd and Nd. A model with no mechanism to specialise its message-passing kernels to these centres cannot efficiently learn the spin-polarised elec-tronic structure that governs the local moment. 
+
+b. Magnetic behaviour dilution in the mean pool. The crystal-level representation in CGCNN is obtained by mean-pooling atom feature vectors over all N atoms in the unit cell: 
+
+c = 1 
+
+> N
+
+∑Ni=1 h(L) 
+
+> i
+
+. In a cell containing Nm ≪ N magnetic cen-tres — a common situation in dilute magnetic systems, mag-netically doped semiconductors, or complex oxides with large unit cells — the magnetic signal enters with weight Nm/N,systematically suppressed by the non-magnetic majority re-gardless of the intrinsic importance of those sites to the target property. 
+
+c. Absence of Bond-angles and the GKA rules. Stan-dard CGCNN bond features are Gaussian radial basis func-tion (RBF) expansions of pairwise interatomic distances [1]. They encode bond length but carry no information about bond 
+
+direction or bond angle . This is particularly damaging for magnetic properties, where the sign and magnitude of the superexchange integral Ji j depend critically on the M–X–M bond angle θik j at the bridging ligand k, as codified in the Goodenough–Kanamori–Anderson (GKA) rules [12–14]: 
+
+Ji j ∼
+
+(
+
+JAFM < 0 θik j ≈ 180 ◦
+
+JFM > 0 θik j ≈ 90 ◦. (1) Two M–X–M pathways with identical bond lengths but bond angles of 90 ◦ and 180 ◦ are completely indistinguishable in the CGCNN feature space, yet they correspond to qualitatively opposite magnetic couplings. This is a representational defi-ciency that cannot be overcome by additional depth or width. 
+
+d. Multi-valued DFT target function. A subtler but equally important issue is that the DFT magnetic moment is not a unique functional of the crystal structure alone. Spin-polarised DFT admits multiple self-consistent solutions cor-responding to distinct magnetic configurations — ferromag-netic (FM), antiferromagnetic (AFM), ferrimagnetic — for a given crystal structure, with the converged solution depending on the initial spin density. Training databases such as the Ma-terials Project report a single magnetic moment per entry, but structurally similar or even identical crystals may appear with different moments depending on the spin initialisation used in their respective DFT calculations. This introduces structured label noise that any regression model will tend to memorise rather than generalise from, manifesting as a large gap be-tween training and test errors. Motivated by these four drawbacks, we propose mCGCNN: a dual-stream, angle-aware, cross-coupled modification of the CGCNN architecture that explicitly encodes the physics of magnetic sublattices and superexchange geometry. The key contributions of this work are: 1. A formal characterisation of the structural limitations of CGCNN for magnetic property prediction, grounded in the physics of exchange interactions. 2. The mCGCNN architecture: a dual-stream graph con-volutional network with a dedicated magnetic subgraph stream, angle-aware M–X–M bond features, a layer-wise cross-coupling mechanism, and a complementary magnetic sublattice pooling operation. 3. Empirical demonstration on the Materials Project mag-netic moment dataset that mCGCNN improves over standard CGCNN for magnetic moment regression, with the improvement growing as a function of train-ing set size. 4. Demonstration of improved FM/AFM classification ac-curacy relative to standard CGCNN, showing that the architectural changes encode physically meaningful in-formation about magnetic ordering. The remainder of this paper is organised as follows. Sec-tion II describes the mCGCNN architecture in detail, includ-ing graph construction, dual-stream message passing, cross-coupling, dual pooling, and training protocol. We present our results on the regression studies of the magnetic saturation moment and the ferro/antiferro classification after a detailed presentation of the methodology in the following sections.   
+
+> II. METHODOLOGY A. Crystal Graph Construction
+
+Given a crystal structure with N atoms per unit cell, two graphs are constructed: a structural graph G identical to that used in the original CGCNN, and a magnetic subgraph Gm
+
+constructed from the magnetic centres only, as illustrated schematically in Fig. 1. Both are built using the pymatgen 
+
+library [15]. 3(a) Structural Graph ( G)           
+
+> Nodes ( i∈ V ): All Natoms in unit cell
+> Edges ( (i, j )∈ E ): within rstr
+> c= 8 .0˚A
+> Node Features: One-hot encoded ele-ment embeddings
+> Edge Features: Gaussian RBF expan-sion of interatomic distance
+
+(b) Magnetic Subgraph ( Gm)         
+
+> Nodes ( i∈ V m): Magnetic metal atoms only ( M)
+> Edges ( (i, j )∈ E m): within rmag
+> c= 5 .0˚A
+> Node Features: Magnetic features with one-hot encoded element embeddings
+> Edge Features: Distance and angle-aware bond features
+
+(c) Magnetic Edge Feature   
+
+> d(M1-M2)
+> d(M1-X)d(M2-X)
+> ∠M1-X-M2
+> M1M2
+> X
+> Representations:
+> – Spatial coupling distances – Fourier cosine angle expansions – Bridging ligand features
+
+FIG. 1. Dual graph representation used in the mCGCNN architecture. (a) The complete structural graph ( G ) incorporating all atoms in the unit cell, (b) The corresponding magnetic subgraph ( Gm) consisting of magnetic metal nodes, and (c) The magnetic edge features, containing the bond lengths and bond angles of the ligand bridge, alongside the ligand features. 
+
+a. Structural graph. The structural graph G = ( V , E )
+
+consists of all N atoms as nodes, with directed edges (i, j) ∈ E
+
+connecting pairs within a cutoff radius rstr  
+
+> c
+
+, padded to a fixed maximum neighbour count M. The bond feature vector for edge (i, j) is a Gaussian RBF expansion of the interatomic distance: 
+
+ϕ(ri j ) = 
+
+
+
+exp 
+
+
+
+− (ri j − μk)2
+
+2σ 2
+
+ db
+
+> k=1
+
+∈ Rdb , (2) with db = 41 Gaussian centres {μk} uniformly spaced over 
+
+[0, rstr  
+
+> c
+
+] and width σ = 0.2 ˚ A, following the original CGCNN parameterisation. 
+
+b. Magnetic subgraph. The magnetic node set is defined as 
+
+Vm = {i ∈ V : Zi ∈ Zm} , (3) where Zm is a configurable set of common transition-metal and rare-earth magnetic elements, including Ti, V, Cr, Mn, Fe, Co, Ni, Cu, Gd, Dy, and related 4 d/5 d analogues. These elements are known to carry non-negligible spin moments in spin-polarised DFT calculations. For datasets where per-site DFT moments are available, Vm can alternatively be de-fined by the data-driven threshold |mDFT  
+
+> i
+
+| > ε with ε = 0.1 μB,which naturally extends to rare-earth and organic magnetic systems without hard-coded element lists. The magnetic subgraph Gm = ( Vm, Em) connects pairs in 
+
+Vm within cutoff rmag  
+
+> c
+
+, padded to Mm neighbours. The non-magnetic set Vℓ = V \ Vm contains the bridging ligand atoms (O, F, N, S, etc. ) whose orbital character modulates the su-perexchange pathway. 
+
+c. Angle-aware magnetic bond features. For each di-rected edge (i, j) ∈ Em the shortest superexchange bridging ligand k ∈ Vℓ is identified as k∗ = arg min k∈Vℓ (rik + rk j ), and the M–X–M bond angle at k∗ is computed as cos θik ∗ j =
+
+ˆrk∗i · ˆrk∗ j. When no bridging ligand is present ( i.e. , Vℓ = /0 as in elemental metals or TM alloys such as Fe 3Co), the relevant geometric quantity is the M–M–M bond angle at the central magnetic atom, computed analogously. The magnetic bond feature vector is then defined as the concatenation: 
+
+emag  
+
+> i j
+
+= ϕ(ri j ) ∥ ϕ(rik ∗ ) ∥ ϕ(rk∗ j) ∥ ψ(θik ∗ j) ∥ eXk∗ , (4) where ψ(θ ) = [ cos θ , cos 2 θ , . . . , cos Kθ ] ∈ RK is a Fourier angular basis sufficient to represent the non-monotonic, sign-changing GKA dependence J(θ ) (Eq. 1), and eXk∗ ∈ Rnℓ is a one-hot encoding of the bridging ligand species. The total magnetic bond feature dimension is dmag  
+
+> b
+
+= 3db + K + nℓ. For the all-magnetic case the one-hot term is replaced by a species embedding of the central magnetic neighbour. 
+
+B. Dual-Stream Architecture 
+
+1. Node Feature Embedding 
+
+Each atom i in the structural graph is described by a raw feature vector vi ∈ Rd0 encoding its group number, period number, electronegativity, covalent radius, number of valence electrons, first ionization energy, electron affinity, block, and atomic volume, following the original CGCNN atom initial-ization. For the magnetic nodes in the magnetic subgraph, we augment this vector by concatenating seven additional el-emental properties relevant to magnetism: atomic number, number of d and f electrons, number of unpaired d and f
+
+electrons, along with the total spin ( S) and orbital angular mo-mentum ( L) derived from Hund’s rules. The two streams are initialised by independent linear pro-4jections: 
+
+h(0) 
+
+> i
+
+= Wstr emb vi + bstr emb , h(0) 
+
+> i
+
+∈ Rda , ∀ i ∈ V , (5) 
+
+s(0) 
+
+> i
+
+= Wmag emb vi + bmag emb , s(0) 
+
+> i
+
+∈ Rds , ∀ i ∈ Vm, (6) where da and ds are the structural and magnetic stream hidden dimensions, respectively, which may be set independently. 
+
+2. Coupled Message Passing 
+
+The two streams are advanced in lockstep for L convolu-tional layers. At each layer ℓ ∈ { 0, 1, . . . , L − 1}, three sequen-tial operations are performed. 
+
+a. Step 1 — Structural convolution (all atoms). For each atom i and structural neighbour j ∈ N (i), the message vector is the concatenation of the two atom feature vectors and the bond feature: 
+
+mi j = h(ℓ) 
+
+> i
+
+∥ h(ℓ) 
+
+> j
+
+∥ ϕ(ri j ) ∈ R2da+db . (7) A gated neighbourhood aggregation updates the structural representation: 
+
+zi j = BN 1
+
+
+
+W⊤
+
+> str
+
+mi j + bstr 
+
+
+
+∈ R2da , (8) 
+
+h(ℓ+1) 
+
+> i
+
+= σ+ h(ℓ) 
+
+> i
+
++ BN 2 ∑ 
+
+> j∈N(i)
+
+σ
+
+
+
+z( f )
+
+> i j
+
+
+
+⊙ σ+
+
+
+
+z(c)
+
+> i j
+
+!! 
+
+,
+
+(9) where z( f ) 
+
+> i j
+
+, z(c) 
+
+> i j
+
+∈ Rda are the gate and content halves obtained by splitting zi j along the feature dimension, σ (·) denotes the sigmoid activation, σ+(·) the Softplus activation, ⊙ element-wise multiplication, and BN batch normalisation. This update rule is identical to the original CGCNN ConvLayer .
+
+b. Step 2 — Cross-coupling (magnetic atoms only). The updated structural features h(ℓ+1) 
+
+> i
+
+encode the coordination ge-ometry, orbital hybridisation, and ligand-field character of each atom. For magnetic centres this information is essential for resolving the sign of the exchange coupling via the GKA rules (Eq. 1). It is injected into the magnetic stream through a learned, layer-specific linear projection: 
+
+s(ℓ) 
+
+> i
+
+← s(ℓ) 
+
+> i
+
++ W(ℓ) 
+
+> cross
+
+h(ℓ+1) 
+
+> i
+
+, ∀ i ∈ Vm, (10) where W(ℓ) 
+
+> cross
+
+∈ Rds×da has no bias term. The coupling is unidirectional: structural information flows into the magnetic stream, but not vice versa. This preserves the stability and transferability of the structural stream, which can be pre-trained on large, noise-free formation energy datasets and its weights frozen during magnetic training. The physical rationale for this coupling is straightforward: the nature of the bridging ligand k — captured in the structural stream through h(ℓ+1) 
+
+> k
+
+propagated to the magnetic centre i —determines the orbital pathway for superexchange and is thus essential for correctly predicting Ji j . The oxygen 2 p orbital character in an Fe–O–Fe pathway differs fundamentally from a fluorine 2 p pathway or a direct Fe–Fe interaction, and this distinction must reach the magnetic stream. 
+
+c. Step 3 — Magnetic convolution (magnetic atoms only). 
+
+Using the cross-coupled magnetic features and the angle-aware bond features emag  
+
+> i j
+
+(Eq. 4), the message on the magnetic subgraph is: 
+
+wi j = s(ℓ) 
+
+> i
+
+∥ s(ℓ) 
+
+> j
+
+∥ emag  
+
+> i j
+
+∈ R2ds+dmag  
+
+> b
+
+. (11) The magnetic stream is then updated by an identical gated ag-gregation: 
+
+ui j = BN m
+
+> 1
+
+
+
+W⊤
+
+> mag
+
+wi j + bmag 
+
+
+
+∈ R2ds , (12) 
+
+s(ℓ+1) 
+
+> i
+
+= σ+ s(ℓ) 
+
+> i
+
++ BN m 
+
+> 2
+
+# ∑
+
+> j∈Nm(i)
+
+σ
+
+
+
+u( f )
+
+> i j
+
+
+
+⊙ σ+
+
+
+
+u(c)
+
+> i j
+
+!! 
+
+,
+
+(13) where Nm(i) = { j ∈ Vm : (i, j) ∈ Em} is the magnetic neigh-bour set of i, and the gate and content halves u( f ) 
+
+> i j
+
+, u(c) 
+
+> i j
+
+∈ Rds
+
+are obtained by splitting ui j as in Eq. (8). The complete three-step update may be written compactly for layer ℓ as: 
+
+h(ℓ+1) 
+
+> i
+
+= σ+
+
+
+
+h(ℓ) 
+
+> i
+
++ AGG str 
+
+
+
+h(ℓ), ϕ
+
+ 
+
+, ∀ i ∈ V , (14a) 
+
+s(ℓ+1) 
+
+> i
+
+= σ+
+
+
+
+s(ℓ) 
+
+> i
+
++ W(ℓ)
+
+> cross
+
+h(ℓ+1)
+
+> i
+
++AGG mag 
+
+
+
+s(ℓ), emag  
+
+, ∀ i ∈ Vm, (14b) where AGG str and AGG mag denote the respective gated neigh-bourhood aggregation operations (Eqs. 9 and 13). The cross-coupling term W(ℓ)
+
+> cross
+
+h(ℓ+1) 
+
+> i
+
+in Eq. (14b) is the key addition absent in the original CGCNN: it ensures that the magnetic stream has access to fresh structural context at every convolu-tional layer. 
+
+C. Dual Pooling 
+
+After L rounds of coupled message passing, two crystal-level representations are extracted by separate pooling opera-tions. 
+
+a. Structural pool. The structural pool is a mean over all 
+
+N atoms, identical to the original CGCNN: 
+
+cstr = 1
+
+N ∑
+
+> i∈V
+
+h(L) 
+
+> i
+
+∈ Rda . (15) This representation captures global structural and chemical context and is the sole crystal descriptor in the standard CGCNN. 
+
+b. Magnetic sublattice pool. The magnetic pool is a mean restricted to the Nm magnetic centres: 
+
+cmag = 1
+
+Nm ∑
+
+> i∈Vm
+
+s(L) 
+
+> i
+
+∈ Rds . (16) By pooling over Vm alone, the magnetic contribution enters the crystal-level representation with full weight, independent 5of the magnetic atom concentration Nm/N. For crystals with 
+
+Nm = 0 (no magnetic atoms identified), cmag is set to the zero vector, and the model gracefully reduces to the standard single-stream CGCNN. The dual-pooled crystal representation is the concatenation of both pools: 
+
+ccrys = cstr ∥ cmag ∈ Rda+ds , (17) which is fed into the prediction head.  
+
+> D. Prediction Head and Training
+
+The crystal representation ccrys is first processed by a fusion layer that incorporates layer normalization (LN) and dropout (Drop): 
+
+c(0) = Drop  σ+
+
+ Wfuse LN (ccrys ) + bfuse 
+
+ , (18) where σ+ denotes the Softplus activation function. To facili-tate the training of a deeper network, this fused representation is then passed through a sequence of nh residual blocks. For each block k = 1, . . . , nh, the transformation is defined as: 
+
+z(k) = Wk c(k−1) + bk, (19) 
+
+c(k) = c(k−1) + Drop 
+
+
+
+σ+
+
+
+
+LN (z(k))
+
+ 
+
+, (20) where the last equation defines the residual operation. 
+
+c(k) ∈ Rhfea ,Wk ∈ Rhfea ×hfea . Finally, the output layer projects the latent representation to the target dimension: ˆy = Wout c(nh) + bout . (21) For the regression task (magnetic moment prediction), the output ˆy ∈ R is trained with mean squared error (MSE) loss. For the binary FM/AFM classification task, ˆ y is passed through a log-softmax layer and trained with negative log-likelihood loss [1].  
+
+> E. Regularisation and Optimisation
+
+The expanded parameter count of mCGCNN relative to CGCNN, primarily from the magnetic stream weights 
+
+{Wmag , bmag } and cross-coupling matrices {W(ℓ)
+
+> cross
+
+}, requires careful regularisation, particularly for smaller datasets. Sepa-rate weight-decay coefficients λstr and λmag are applied to the structural and magnetic parameter groups respectively: 
+
+Ltotal = LMSE + λstr ∥θstr ∥22 + λmag ∥θmag ∥22, (22) with λmag > λstr to account for the smaller effective sample size seen by the magnetic stream in dilute magnetic systems. Dropout with probability p = 0.3 is additionally applied to the magnetic stream features s(L) 
+
+> i
+
+before pooling. Optimisation uses SGD with momentum or Adam, with a multi-step learning rate schedule that reduces the rate by a factor of 0.1 at specified epoch milestones. A model check-point corresponding to the lowest validation MAE is retained, providing implicit early stopping.  
+
+> F. Computational Complexity
+
+The additional computational cost of mCGCNN over CGCNN is bounded by the magnetic subgraph operations. Per convolutional layer, the magnetic stream requires O(Nm · Mm ·
+
+d2 
+
+> s
+
+) floating point operations, compared to O(N ·M ·d2 
+
+> a
+
+) for the structural stream. Since Nm ≤ N and typically Mm ≤ M, the magnetic stream never exceeds the structural stream in cost. For systems where Nm ≪ N (dilute magnetic systems), the to-tal cost is dominated by the structural stream and the overhead of mCGCNN over CGCNN is negligible. The cross-coupling projection adds O(Nm · da · ds) operations per layer, which is sub-dominant under the same conditions.  
+
+> G. Dataset and Evaluation Protocol
+
+Both CGCNN and mCGCNN are trained and evaluated on magnetic datasets derived from the Materials Project database [2]. The underlying entries consist of spin-polarised DFT calculations performed at the GGA+ U level using VASP [16], with Hubbard U corrections applied to transition metal d orbitals following the scheme of Wang et al. [17]. To test the hypothesis that the performance gain of mCGCNN over CGCNN is data-limited — i.e. , that the addi-tional model capacity is wasted on small datasets but benefi-cial on larger ones — experiments are conducted across train-ing sets of varying sizes, from a few thousand to tens of thou-sands of structures. All results are reported on a held-out test set with a 80/10/10 train/validation/test split. Additionally, the FM/AFM classification task is evaluated as a binary prediction: given the crystal structure, does the ma-terial order ferromagnetically or antiferromagnetically? This task tests whether the angle-aware magnetic subgraph mes-sage passing, which encodes the GKA dependence of Ji j on bond angle (Eq. 1), provides information beyond what is avail-able to standard CGCNN through distance-only bond features.  
+
+> H. Hyperparameters
+
+Default hyperparameters are listed in Table I. The magnetic stream hidden dimension ds is set independently of the struc-tural dimension da, and may be reduced for smaller datasets to control overfitting. A single magnetic convolutional layer (nmag-conv = 1) is used for datasets below ∼10,000 training samples, reflecting the short effective range of exchange inter-actions and the limited training data available for the magnetic stream.   
+
+> III. RESULTS AND DISCUSSION A. Regression on Total Magnetic Moment
+
+A central goal of this work is to establish whether incorpo-rating an auxiliary magnetic subgraph into the standard crys-tal graph convolutional framework improves the prediction of 6Structural Graph ( )𝒢 
+
+> Embedding
+
+vmag 
+
+> i
+
+∈ ℝ99 Wmag 
+
+> emb
+
+s0 
+
+> i
+
+∈ ℝds
+
+> Crystal Structures
+> Structural Pool
+> ,
+
+cstr = 1
+
+N ∑
+
+> i∈𝒱
+
+h(L) 
+
+> i
+
+cstr ∈ ℝda
+
+> Magnetic Pool
+> ,
+
+cmag = 1
+
+Nm ∑
+
+> i∈𝒱 m
+
+s(L) 
+
+> i
+
+cmag ∈ ℝds
+
+> Dual-Pool Concatenation
+
+ccrys = cstr | | cmag ∈ ℝda+ds
+
+> Fully-Connected Head with
+> Residual Blocks
+> Prediction (Magnetic Moment, Magnetic Order, etc.)
+> Embedding
+
+vi ∈ ℝ92 Wstr 
+
+> emb
+
+h0 
+
+> i
+
+∈ ℝda 
+
+> Magnetic Subgraph
+> ()
+
+𝒢 m
+
+> ConvLayer
+> Gated aggregation on
+
+h(l) 
+
+> i
+
+→ h(l+1)
+
+> i
+
+𝒢   
+
+> 1. Gather rows
+> 2. (bias=False)
+> 3.
+
+Nm
+
+W(l) 
+
+> cross
+
+∈ ℝda×ds
+
+si + = Wcrosshi
+
+> MagConvLayer
+> Angle-aware gated
+> aggregation on
+
+s(l) 
+
+> i
+
+→ s(l+1)
+
+> i
+
+𝒢 m
+
+> Cross-Coupling
+
+gather  + residual 
+
+> Structural Stream
+> Magnetic Stream
+
+Repeated times L
+
+FIG. 2. Overall architecture of the mCGCNN. The Structural stream processes the complete crystal structures through convolutional layers to generate a pooled structural representation ( cstr ). The Magnetic stream processes the magnetic subgraph using angle-aware gated aggregations to yield a pooled magnetic representation ( cmag ). A cross-coupling mechanism unidirectionally transfers features from the structural stream to the magnetic stream ( si+ = Wcross hi) at each convolution layer. The concatenated dual-pool representation ( ccrys = cstr ∥ cmag ) is passed through a fully-connected MLP head to predict target properties, such as magnetic moment and magnetic order. 
+
+bulk magnetic properties directly from the crystal structure. We first evaluate this capability on the regression of the DFT calculated total magnetic moment (in μB) of the unit cell. The dataset used for this task comprises 24,916 inorganic crystalline materials from the materials project database, par-titioned into a training set of 19,932 samples, a validation set of 2,491 samples, and a hold-out test set of 2,493 samples. As shown in Fig. 3(a), the dataset is dominated by ternary and quaternary compounds, with ternary materials represent-ing the single largest subset. The number of atoms per unit cell spans a broad range from 2 to 20, as shown in Fig. 3(b), requiring the model to generalize across structures of substan-tially different size and complexity. Furthermore, the distri-bution of DFT-calculated total magnetic moments [Fig. 3(c)] highlights a significant skewness towards lower magnetic mo-ments, representing a non-trivial learning objective where the model must remain accurate across a densely sampled low-moment regime while still resolving the sparse, high-moment tail. The mCGCNN model was trained for 150 epochs, with the resulting learning curves tracking the evolution of the train-ing and validation mean-squared errors, as shown in Fig. 3(d). Training loss decreased steadily throughout, with a marked re-duction near epoch 80 coincident with the scheduled learning-rate decay. Validation loss decreased more slowly and ex-hibited substantially greater epoch-to-epoch variance than the training loss, consistent with the smaller size of the valida-tion partition and long-tailed target distribution noted above. 71 2 3 4 5 6
+
+> Number of elements
+> 0
+> 2000
+> 4000
+> 6000
+> 8000
+> 10000
+> 12000
+> Count
+
+(a)    
+
+> 510 15 20
+> Number of atoms
+> 0
+> 500
+> 1000
+> 1500
+> 2000
+> 2500
+> Count
+
+(b)        
+
+> 010 20 30 40 50 60
+> Total Magnetic Moment ( B)
+> 0
+> 1000
+> 2000
+> 3000
+> 4000
+> 5000
+> 6000
+> Count
+
+(c)        
+
+> 020 40 60 80 100 120 140
+> Epoch
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Mean Squared Error
+> Best Checkpoint
+> Epoch 129
+> Loss: 0.2034
+
+(d)         
+
+> Training loss
+> Validation loss
+> 020 40 60 80
+> DFT Total Magnetic Moment ( B)
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> Predicted Total Magnetic Moment (  B)
+> R2= 0.776
+> MAE = 2.016 B
+> RMSE = 3.512 B
+
+(e)   
+
+> CGCNN CGCNN+ mCGCNN
+> 1.8
+> 2.0
+> 2.2
+> 2.4
+> 2.6
+> MAE (  B)
+> -5.1%
+> -16.4%
+> 2.5433
+> 2.4129
+> 2.0163
+
+(f)   
+
+> CGCNN CGCNN+ mCGCNN
+> 0.60
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> 0.85
+> R2 Score
+> +11.7%
+> +7.8%
+> 0.6441
+> 0.7192
+> 0.7756
+
+(g) 
+
+FIG. 3. Dataset characteristics and regression performance of the mCGCNN architecture for total magnetic moment prediction. (a) Distribution of the number of unique elements per material in the dataset, showing a prevalence of ternary materials. (b)) Distribution of the total number of atoms in the unit cell across the dataset. (c) Histogram for the distribution of the DFT-calculated total magnetic moment ( μB). (d) Training and validation loss (Mean Squared Error) convergence curves for the mCGCNN model over 150 epochs. The dashed vertical line indicates the optimal model checkpoint. (e) Parity plot comparing the mCGCNN predicted total magnetic moments against the ground-truth DFT calculations for the hold-out test set. The dashed diagonal line represents perfect agreement ( y = x), with inset text displaying the final test metrics. (f, g) Direct comparison of test set performance metrics—(f) MAE and (g) R2 score—across the standard CGCNN, CGCNN+, and the proposed mCGCNN models. Annotations indicate the relative percentage improvements between architectures. 
+
+The best-performing checkpoint, selected on the basis of minimum validation loss, occurred at epoch 129 (validation MSE=0.2034) and was used for all subsequent test-set evalu-ation. On the held-out test set, the trained mCGCNN model achieved an R2 = 0.776, with a mean absolute error of 2.016 
+
+μB. The parity plot in Fig. 3(e) exhibits close agreement with the DFT reference values across the bulk of the distribution (total moment ≲ 30 μB), but also reveals systematic underes-timation for the small subset of materials with the largest mo-ments ( ≳ 40 μB), several of which are predicted at less than half their true value. This behaviour is consistent with the un-derrepresentation of high-moment compounds in the training distribution. To isolate the specific contribution of the magnetic sub-graph and its associated coupled message-passing stream with 8                                      
+
+> TABLE I. Default hyperparameters for mCGCNN. Parameters shared with the original CGCNN are indicated; new parameters in-troduced in this work are marked with ⋆.Parameter Symbol Default Structural stream hidden dim da64 Magnetic stream hidden dim ⋆ds32–64 Structural conv layers L3Magnetic conv layers ⋆Lm1–3 Gaussian RBF centres db41 Fourier angle terms ⋆K8Post-pool hidden dim hfea 128 FC layers after pool nh1Structural cutoff rstr
+> c8.0 ˚ AMagnetic cutoff ⋆rmag
+> c5.0 ˚ AMagnetic dropout ⋆p0.3 Magnetic weight decay ⋆λmag 10 −3
+> Batch size B256 Learning rate η10 −2
+> Optimiser —Adam
+
+the structure graph, mCGCNN was benchmarked against two baselines lacking this auxiliary structure: (i) stan-dard CGCNN, representing the original, distance-only im-plementation; and (ii) CGCNN+, an ablated control variant of mCGCNN. Specifically, CGCNN+ retains the structural-only single-graph message-passing framework of standard CGCNN but utilises mCGCNN’s enriched post-pooling read-out multilayer perceptron (MLP) head—featuring layer nor-malization, deep residual blocks, and dropout. This three-way baseline comparison ensures that performance improvements can be cleanly decoupled and attributed to either modern deep learning architectural enhancements (CGCNN → CGCNN+) or the localized magnetic exchange physics (CGCNN+ →
+
+mCGCNN). The comparison is summarised in Table II, and visualized in Fig. 3(f)-(g). Across all three data partitions, mCGCNN outperformed both baselines on every metric considered. On the test set, mCGCNN reduced the MAE relative to CGCNN+ by 16% (and by 20 .7% relative to standard CGCNN), while improving the R2 score by 7 .8% relative to CGCNN + (and by 20 .4% relative to standard CGCNN). Similar improvements were also seen in training and validation sets. Taken together, these results indicate that explicitly mod-elling the magnetic substructure as a parallel graph, rather than relying solely on the conventional structural crystal graph, provides a measurable and consistent improvement in predicting total magnetic moment. The remaining error is concentrated almost entirely in the high-moment tail of the distribution, pointing to data scarcity in that regime, rather than an architectural limitation, as the primary remaining bot-tleneck. We note that the resulting mCGCNN backbone, hav-ing learned a representation directly tied to a material’s mag-netic character, also provides a natural and physically mo-tivated starting point for transfer learning on related down-stream classification tasks, an application explored in the sub-sequent sections.  
+
+> B. Ferromagnetic vs. Antiferromagnetic Order Classification
+
+We evaluate mCGCNN model on a binary classification task: predicting whether a material’s ground-state magnetic ordering is ferromagnetic (FM) or antiferromagnetic (AFM) directly from its crystal structure. Distinguishing FM from AFM order is a demanding test of local geometry, since the outcome depends on the sign and spatial pattern of exchange interactions between neighboring magnetic sites — features that are subtle, non-local, and not directly encoded in conven-tional structural descriptors. The dataset for this task comprises 5,872 inorganic crys-talline compounds drawn from the Materials Project database, partitioned into training (4,697), validation (587), and test (588) splits. The FM-to-AFM ratio was fixed at exactly 1:1 by design. This exact class balance has two important conse-quences for interpreting Table III: first, a naive majority-class or random classifier achieves a baseline accuracy of exactly 50%, providing a well-defined lower bound; and second, ac-curacy and macro F1 are equivalent by definition under equal class proportions, which is confirmed empirically throughout Table III where the two metrics never differ by more than 0.0002 for any model or split. Critically, however, this classification dataset is substan-tially smaller than the regression corpus used in the preced-ing section (5,872 vs. 24,916 samples). This disparity moti-vates a transfer learning approach in which the convolutional backbone, already trained on the large total-moment regres-sion dataset, is repurposed as a physically informed initializa-tion for the classification task, rather than training from ran-dom weights. We therefore evaluate four model configura-tions: (i) CGCNN, the standard Crystal Graph Convolutional Neural Network trained directly from scratch; (ii) CGCNN-Tr, the same architecture initialized from weights pretrained on total magnetic moment regression and then fine-tuned for classification; (iii) mCGCNN, the proposed dual-graph archi-tecture trained directly from random initialization; and (iv) mCGCNN-Tr, the proposed architecture initialized from the convolution backbone pretrained on total-moment regression and then fine-tuned for classification. All results are summa-rized in Table III and Fig. 4. For the two transfer-learned configurations (CGCNN-Tr and mCGCNN-Tr), weights were transferred from the corre-sponding backbone pretrained on total magnetic moment re-gression and the fine-tuning was carried out in two sequential phases. In Phase 1 (linear probing), only the convolutional blocks of the pretrained backbone were loaded and their pa-rameters were immediately frozen, i.e., excluded from gradi-ent updates. The read-out MLP head and the classification head – a newly initialized multi-layer perceptron readout re-placing the regression output layer – was then trained alone for 15 epochs, allowing it to adapt to the binary classifica-tion objective without disturbing the pretrained representa-tions. This phase serves to find a good initialization for the head before the backbone is allowed to move, preventing the large initial gradients of a randomly initialized head from cor-rupting the pretrained convolutional weights. In Phase 2 (joint fine-tuning), all layers – convolutional blocks and classifica-9
+
+TABLE II. Performance summary of the regression models on total magnetic moment prediction. The table compares the Mean Absolute Error (MAE), Root Mean Squared Error (RMSE), and R2 score across the Training, Validation, and Test data splits, with the number of constituent materials for each split denoted in parentheses. The models evaluated include the standard Crystal Graph Convolutional Neural Network (CGCNN), a modified baseline (CGCNN+), and the proposed magnetic-aware dual-graph architecture mCGCNN. The best-performing metrics on each set are highlighted in bold. 
+
+Dataset Model Configuration MAE ( μB) RMSE ( μB) R2 Score 
+
+Training Set (19,932 samples) CGCNN 1.9635 2.9763 0.8275 CGCNN+ 1.9188 2.7799 0.8495 mCGCNN 1.2832 1.8742 0.9316 Validation Set (2,491 samples) CGCNN 2.4075 3.9238 0.7032 CGCNN+ 2.3652 3.8112 0.7200 mCGCNN 1.9374 3.2430 0.7972 Test Set (2,493 samples) CGCNN 2.5433 4.4230 0.6441 CGCNN+ 2.4129 3.9287 0.7192 mCGCNN 2.0163 3.5123 0.7756 TABLE III. Performance comparison of direct and transfer-learned classification models for FM/AFM magnetic order prediction. The table compares global accuracy and macro F1 scores alongside class-specific Precision (P), Recall (R), and F1 metrics across Training, Validation, and Test partitions. The evaluated frameworks include direct CGCNN, transfer-learned CGCNN (CGCNN-Tr), direct mCGCNN, and transfer-learned mCGCNN (mCGCNN-Tr). The best-performing metrics within each dataset split are highlighted in bold.                                                                                                           
+
+> Dataset Model Configuration Accuracy Macro F1
+> FM Class AFM Class PRF1PRF1
+> Training Set (4,697 samples) CGCNN 0.7611 0.7609 0.7798 0.7280 0.7530 0.7448 0.7943 0.7688 CGCNN-Tr 0.7673 0.7667 0.7988 0.7148 0.7544 0.7418 0.8198 0.7789 mCGCNN 0.8448 0.8447 0.8619 0.8212 0.8411 0.8292 0.8684 0.8483 mCGCNN-Tr 0.8224 0.8223 0.8068 0.8480 0.8269 0.8398 0.7968 0.8177 Validation Set (587 samples) CGCNN 0.7070 0.7069 0.7138 0.6894 0.7014 0.7007 0.7245 0.7124 CGCNN-Tr 0.7053 0.7045 0.7273 0.6553 0.6894 0.6873 0.7551 0.7196 mCGCNN 0.7496 0.7495 0.7552 0.7372 0.7461 0.7442 0.7619 0.7529 mCGCNN-Tr 0.7564 0.7556 0.7287 0.8157 0.7697 0.7915 0.6973 0.7414 Test Set (588 samples) CGCNN 0.7364 0.7363 0.7456 0.7177 0.7314 0.7279 0.7551 0.7412 CGCNN-Tr 0.7194 0.7191 0.7345 0.6871 0.7100 0.7061 0.7517 0.7282 mCGCNN 0.7279 0.7278 0.7219 0.7415 0.7315 0.7343 0.7143 0.7241 mCGCNN-Tr 0.7568 0.7563 0.7352 0.8027 0.7675 0.7828 0.7109 0.7451
+
+tion head alike – were unfrozen simultaneously and trained end-to-end, with a substantially lower learning rate applied to the pretrained backbone parameters relative to the head, to preserve the structure of the learned representations while allowing task-specific adaptation. A ReduceLROnPlateau 
+
+scheduler monitored the validation loss throughout Phase 2, and training was terminated by early stopping when no im-provement in validation loss was observed for 15 consecutive epochs. Training both architectures from scratch reveals a clear bias-variance trade-off. Standard CGCNN achieves a test ac-curacy of 73.64% and a macro F1 of 0.7363. Direct mCGCNN achieves substantially higher performance on the training par-tition (accuracy 84.48%, macro F1 0.8447, outperforming CGCNN by over 8 percentage points), indicating that its dual-graph convolutions and expanded magnetic feature space pro-vide a significantly more expressive representational capac-ity. However, this advantage does not survive to held-out data: on the test set, direct mCGCNN converges to an accuracy of 72.79% and macro F1 of 0.7278 – slightly below CGCNN’s 73.64%. The resulting training-to-test generalization gap of 11.7 percentage points is the largest of any model evaluated and is the defining failure mode of direct mCGCNN. The higher parameter count introduced by the magnetic subgraph, dual-stream convolutions, and inter-graph cross-coupling lay-ers creates additional capacity that cannot be reliably regu-larized on a training partition of fewer than 5,000 samples, leading the model to overfit to structural patterns that do not generalize. This is also directly visible in the confusion matri-ces [Fig. 4(c,e)]: direct mCGCNN and CGCNN produce very similar test-set error distributions despite mCGCNN’s enor-mous training advantage. The transfer learning results expose a pronounced and physically informative divergence between the two architec-10 (a)  (b) 
+
+(c)  (d) 
+
+(e)  (f )    
+
+> FIG. 4. Performance comparison for FM/AFM order classification in the test set. (a) Classification accuracy and (b) macro F1score across baseline and proposed models (CGCNN, CGCNN-Tr, mCGCNN, and mCGCNN-Tr). Corresponding confusion matrices illustrating the prediction of AFM versus FM ground states for (c) CGCNN, (d) CGCNN-Tr, (e) mCGCNN, and (f) mCGCNN-Tr models.
+
+tures. For the standard CGCNN backbone, transfer learn-ing from total-moment regression produces negative trans-fer: test accuracy falls from 73.64% to 71.94% and F1 drops to 0.7191, the worst test performance of the four configura-tions. The confusion matrix for CGCNN-Tr [Fig. 4(d)] re-veals that this degradation stems primarily from reduced FM recall: CGCNN-Tr correctly identifies only 202 of the 294 true FM compounds in the test set, compared to 211 for direct CGCNN. We hypothesize that a backbone lacking an explicit magnetic sublattice representation learns to associate large magnetic moments with bulk structural correlates (such as lat-tice volume or site density) during pretraining, and that these macroscopic associations do not align with the local exchange pathways that determine FM versus AFM ordering — lead-ing the transferred representations to shift away from the true classification boundary. However, we note that this remains a hypothesis; the numerical results demonstrate that negative transfer occurs, but do not by themselves identify the under-lying representational cause. In contrast, transfer learning acts as a decisive perfor-mance enabler for the mCGCNN architecture. On the test set, mCGCNN-Tr achieves the highest accuracy (75.68%) and macro F1 (0.7563) of all configurations evaluated, improv-ing over direct mCGCNN by 2.89 percentage points in ac-curacy and over direct CGCNN by 2.04 percentage points [Fig. 4(a,b)]. Equally important, the training-to-test gener-alization gap is compressed from 11.7% (direct mCGCNN) to 6.6% (mCGCNN-Tr), confirming that pretraining on total-moment regression acts as an effective regularizer for the high-capacity dual-graph network. The physical interpreta-tion is direct: by first learning to regress continuous mag-netic moments across nearly 20,000 structurally diverse ma-terials, the magnetic stream of mCGCNN develops represen-tations that encode the magnitude and spatial distribution of local magnetic contributions — precisely the features most relevant to distinguishing parallel from antiparallel spin align-ment. These pretrained weights provide a stable, physically grounded initialization that constrains the fine-tuning trajec-11 tory toward generalizable solutions rather than training-set-specific patterns. Inspection of the confusion matrix for mCGCNN-Tr [Fig. 4(f)] reveals where this improvement is concentrated. Relative to direct mCGCNN, mCGCNN-Tr reduces FM mis-classification errors substantially (58 FM samples predicted as AFM, versus 76 for direct mCGCNN), while AFM classifica-tion accuracy changes by only one sample (209 correct ver-sus 210). The test-set gain of mCGCNN-Tr over mCGCNN is therefore driven almost entirely by improved identification of ferromagnetic materials, not by a uniform improvement across both classes. Despite the dataset’s exact 1:1 class balance, mCGCNN-Tr exhibits a systematic precision-recall asymmetry between the two classes that is consistent across all three partitions. On the test set, FM recall substantially exceeds AFM recall (0.8027 vs. 0.7109), while AFM precision exceeds FM pre-cision (0.7828 vs. 0.7352). This pattern indicates that the model leans toward predicting FM when uncertain: it captures the large majority of true FM compounds at the cost of mis-classifying some true AFM compounds as FM. Because the class distribution is confirmed balanced, this asymmetry can-not arise from label imbalance. Its consistency across train-ing, validation, and test partitions further rules out sampling noise as the cause. The most likely origin is the pretraining dataset itself: total magnetic moment and FM order are phys-ically correlated, since ferromagnets typically possess larger net moments than antiferromagnets. A backbone pretrained to predict moment magnitude may therefore develop a prior disposition toward FM-like representations, which fine-tuning on 4,697 classification samples does not fully overcome. These results establish two conclusions. First, the mCGCNN architecture’s dual-graph design and expanded magnetic feature set provide a representational capacity that significantly exceeds CGCNN’s on the training data, but this capacity becomes a liability rather than an asset when the model is trained from scratch on a dataset of a smaller size. Second, pretraining on total magnetic moment regression pro-vides a physically motivated initialization that is necessary to unlock mCGCNN’s architectural advantage: without it, mCGCNN underperforms CGCNN on every held-out met-ric; with it, mCGCNN-Tr is the best-performing configuration across all aggregate and most class-resolved test metrics. The magnetic subgraph and regression-based pretraining are there-fore best understood as complementary – neither is sufficient on its own to outperform the simpler baseline, but together they produce a consistent and reproducible improvement in the classification of magnetic order.  
+
+> IV. CONCLUSIONS
+
+We have introduced mCGCNN, a dual-stream extension of the crystal graph convolutional neural network designed specifically for magnetic property prediction. The archi-tecture addresses three representational weaknesses of stan-dard CGCNN for magnetic systems: dilution of the mag-netic signal by global atom-wise pooling, absence of explicit magnetic-sublattice message passing, and the lack of angu-lar information needed to encode superexchange pathways. By combining a structural stream with a dedicated magnetic stream, angle-aware M–X–M bond features, layer-wise cross-coupling, and magnetic sublattice pooling, the model embeds key physical constraints directly into the graph representation. The benchmark results show that these modifications im-prove both regression and classification performance. For to-tal magnetic moment regression, mCGCNN increases the test 
+
+R2 from 0.644 to 0.776 on a curated Materials Project dataset of 19,932 training materials, while reducing the correspond-ing MAE values from 2.54 to 2.02 μB. In the FM/AFM classi-fication task, mCGCNN transfer learned model improves the overall accuracy from 74% to 76%. These results support the central premise of this work: magnetic materials require graph representations that distinguish magnetic centres, their exchange pathways, and the ligand environments mediating those pathways. mCGCNN provides a compact route to incor-porate this information without abandoning the computational efficiency and simplicity of CGCNN. Future work should ex-tend the evaluation to site-resolved moments, ordering tem-peratures, non-collinear magnetic structures, and larger cu-rated magnetic datasets where uncertainty from multiple DFT magnetic solutions can be explicitly quantified.  
+
+> V. ACKNOWLEDGEMENTS
+
+S. Mal acknowledges the High-Performance Computing (HPC) facility at the Harish-Chandra Research Institute (HRI), Prayagraj, India, for the computational resources used in this work ( https://www.hri.res.in/cluster/ ). All machine learning model training and related computations were carried out using the NVIDIA H100 GPU available through the HRI HPC cluster.    
+
+> [1] T. Xie and J. C. Grossman, Crystal graph convolutional neural networks for an accurate and interpretable prediction of mate-rial properties, Physical Review Letters 120 , 145301 (2018). [2] A. Jain, S. P. Ong, G. Hautier, W. Chen, W. D. Richards, S. Dacek, S. Cholia, D. Gunter, D. Skinner, G. Ceder, et al. ,Commentary: The materials project: A materials genome ap-proach to accelerating materials innovation, APL materials 1
+> (2013). [3] M. K. Horton, P. Huck, R. X. Yang, J. M. Munro, S. Dwarak-nath, A. M. Ganose, R. S. Kingsbury, M. Wen, J. X. Shen, T. S. Mathis, A. D. Kaplan, K. Berket, J. Riebesell, J. George, A. S. Rosen, E. W. C. Spotte-Smith, M. J. McDermott, O. A. Cohen, A. Dunn, M. C. Kuner, G.-M. Rignanese, G. Petretto, D. Waro-quiers, S. M. Griffin, J. B. Neaton, D. C. Chrzan, M. Asta, G. Hautier, S. Cholia, G. Ceder, S. P. Ong, A. Jain, and K. A. Persson, Accelerated data-driven materials science with the ma-
+
+12 
+
+terials project, Nature Materials 24 , 1522 (2025). [4] S. Curtarolo, W. Setyawan, G. L. W. Hart, M. Jahnatek, R. V. Chepulskii, R. H. Taylor, S. Wang, J. Xue, K. Yang, O. Levy, M. J. Mehl, H. T. Stokes, D. O. Demchenko, and D. Morgan, AFLOW: An automatic framework for high-throughput materi-als discovery, Computational Materials Science 58 , 218 (2012). [5] C. W. Park and C. Wolverton, Developing an improved crystal graph convolutional neural network framework for accelerated materials discovery, Phys. Rev. Mater. 4, 063801 (2020). [6] C. Chen, W. Ye, Y. Zuo, C. Zheng, and S. P. Ong, Graph networks as a universal machine learning framework for molecules and crystals, Chemistry of Materials 31 , 3564 (2019), https://doi.org/10.1021/acs.chemmater.9b01294. [7] K. Choudhary and B. DeCost, Atomistic line graph neural net-work for improved materials property predictions, npj Compu-tational Materials 7, 185 (2021). [8] J. Gasteiger, J. Groß, and S. G¨ unnemann, Directional message passing for molecular graphs, arXiv preprint arXiv:2003.03123 (2020). [9] K. T. Schutt, H. E. Sauceda, P.-J. Kindermans, A. Tkatchenko, and K.-R. M¨ uller, Schnet – a deep learning architecture for molecules and materials, The Journal of Chemical Physics 148 ,241722 (2018). [10] K. T. Sch¨ utt, O. T. Unke, and M. Gastegger, Equivariant mes-sage passing for the prediction of tensorial properties and molecular spectra (2021), arXiv:2102.03150 [cs.LG]. [11] K. Das, B. Samanta, P. Goyal, S.-C. Lee, S. Bhattacharjee, and N. Ganguly, Crysxpp: An explainable property predictor for crystalline materials, npj Computational Materials 8, 43 (2022). [12] J. B. Goodenough, An interpretation of the magnetic properties of the perovskite-type mixed crystals la1- xsrxcoo3- λ , Journal of Physics and chemistry of Solids 6, 287 (1958). [13] J. Kanamori, Superexchange interaction and symmetry proper-ties of electron orbitals, Journal of Physics and Chemistry of Solids 10 , 87 (1959). [14] P. W. Anderson, Antiferromagnetism. theory of superexchange interaction, Physical Review 79 , 350 (1950). [15] S. P. Ong, W. D. Richards, A. Jain, G. Hautier, M. Kocher, S. Cholia, D. Gunter, V. L. Chevrier, K. A. Persson, and G. Ceder, Python materials genomics (pymatgen): A robust, open-source python library for materials analysis, Computa-tional Materials Science 68 , 314 (2013). [16] G. Kresse and J. Furthm”uller, Efficient iterative schemes for ab initio total-energy calculations using a plane-wave basis set, Physical Review B 54 , 11169 (1996). [17] L. Wang, T. Maxisch, and G. Ceder, Oxidation energies of tran-sition metal oxides within the GGA+U framework, Physical Review B 73 , 195107 (2006).

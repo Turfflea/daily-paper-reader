@@ -1,0 +1,1732 @@
+Title: Self-supervised Internal Learning Enhances Isotropic Resolution for Three-dimensional Fluorescence Microscopy
+
+URL Source: https://www.biorxiv.org/content/10.64898/2026.06.04.717237v1.full.pdf
+
+Published Time: Thu, 11 Jun 2026 07:42:06 GMT
+
+Number of Pages: 36
+
+Markdown Content:
+1
+
+Self-supervised Internal Learning Enhances Isotropic Resolution for Three-dimensional 1
+
+Fluorescence Microscopy 2
+
+3
+
+Mingzhe Wei 1, , Pengcheng Xu 1, , Junyu Liu 1 , Xuesong Li 2 , Xuhui Feng 1 , Jun Zhu 1 , Renwei 4
+
+Dong 1 , Hengjia Ran 3 , Wentao Zhu 4 , Yubing Han 1 , Yue Li 5,* , Min Guo 1,* , and Huafeng Liu 4,* 
+
+5
+
+6
+
+1. State Key Laboratory of Extreme Photonics and Instrumentation, College of Optical Science 7
+
+and Engineering, Zhejiang University, Hangzhou, 310027, China 8
+
+2. Janelia Research Campus, Howard Hughes Medical Institute (HHMI), Ashburn, VA, USA 9
+
+3. College of Information Science and Electronic Engineering, Zhejiang University, Hangzhou, 10 
+
+310027, China 11 
+
+4. Key Laboratory for Biomedical Engineering of Ministry of Education, College of Biomedical 12 
+
+Engineering and Instrument Science, Zhejiang University, Hangzhou, 310027, China 13 
+
+5. State Key Laboratory for Vegetation Structure, Function and Construction (VegLab), College 14 
+
+of Biosystems Engineering and Food Science, Zhejiang University, Hangzhou, 310058, 15 
+
+China 16 
+
+These authors contributed equally to this work. 17 
+
+* Correspondence to:  liuhf@zju.edu.cn  (Huafeng Liu),  guom@zju.edu.cn  (Min Guo), 18 
+
+liyue94@zju.edu.cn (Yue Li) 19 
+
+20 
+
+Keywords : fluorescence microscopy, isotropic resolution, axial resolution, deep learning 21 
+
+22 2
+
+Abstract 23 
+
+Three-dimensional fluorescence microscopy often exhibits anisotropic resolution because axial 24 
+
+information is poorly sampled and more blurred than lateral information, which complicates 25 
+
+quantitative interpretation of fine 3D structures. Although optical remedies and computational 26 
+
+restoration have been explored, many approaches require demanding system calibration or rely on 27 
+
+accurate PSF models and assumptions that are difficult to satisfy across all samples and modalities. 28 
+
+Here we present DeepIso, a self-supervised isotropy restoration framework that couples supervised 29 
+
+pretraining with an internal-learning inference stage to estimate degradation directly from the 30 
+
+measured volume. Without explicit PSF specification or enforced lateral–axial structural 31 
+
+equivalence, DeepIso recovers axial frequency content and improves the continuity of elongated 32 
+
+structures while retaining fine features, with superior performance over existing computational 33 
+
+approaches in terms of both visual inspection and quantitative metrics. The method is validated on 34 
+
+synthetic benchmarks and experimental datasets, demonstrating isotropy enhancement across 35 
+
+confocal, light-sheet, and 3D structured illumination microscopy, thereby supporting downstream 36 
+
+volumetric analysis including segmentation and tracking. 37 
+
+38 
+
+1. Introduction 39 
+
+Fluorescence microscopy is an essential tool in life sciences, providing high-resolution and high-40 
+
+specificity imaging vital for investigating cellular structures 1 , cell interactions 2 , disease 41 
+
+mechanisms 3 , and drug development 4 . Unlike two-dimensional (2D) imaging, which captures a 42 
+
+single plane, three-dimensional (3D) fluorescence imaging reconstructs the specimen in its entirety, 43 
+
+offering more comprehensive volumetric coverage of biological sampless 5–7 . However, 3D 44 
+
+imaging via z-stack acquisition poses inherent challenges. Due to the intrinsic diffraction limit of 45 
+
+optics and larger axial sampling intervals, single image volumes exhibit pronounced anisotropic 46 
+
+resolution – axial information is resolved more poorly than lateral information. This anisotropy 47 
+
+significantly hinders accurate dissection and quantitative analysis of intricate 3D biological 48 
+
+structures. 49 
+
+To enhance biological interpretations, researchers have proposed various strategies aimed 50 
+
+at achieving isotropic or near-isotropic resolution in 3D fluorescence imaging. Hardware-based 51 
+
+strategies have emerged, modifying optical systems to extend axial information through 52 
+
+interference-based approaches 8–11 , multiview acquisitions 12–15 , and axially swept light-sheet 53 
+
+microscopy (ASLM) 16,17 . Although effective, these methods often impose practical constraints, 54 3
+
+such as stringent alignment requirements, increased optical complexity, and the need for precise 55 
+
+calibration 18–21 . Furthermore, the associated reconstructions frequently require computationally 56 
+
+intensive workflows for multiview fusion, hindering widespread adoption 22 .57 
+
+Alternatively, computational image restoration methods 23–31 offer another pathway toward 58 
+
+resolution isotropy. For instance, 3D deconvolution algorithms reassign out-of-focus light, thereby 59 
+
+improving the recovery of axial information. Nonetheless, the intrinsic physical and sampling 60 
+
+constraints still lead to a narrower axial optical transfer function (OTF) compared to its lateral 61 
+
+counterpart, limiting the recovery of high-frequency axial information. To overcome this limitation, 62 
+
+deep learning-based restoration techniques have been developed, effectively extracting structural 63 
+
+features from the data. Existing supervised methods, such as content aware image restoration 64 
+
+(CARE) 23 , rely on accurate estimates of the axial point spread function (PSF) and the associated 65 
+
+sampling model, which can lead to inaccuracies and mismatched reconstructions if estimations are 66 
+
+not precise. By contrast, unsupervised generative adversarial network (GAN) approaches, 67 
+
+including CycleGAN variants 32 and SelfNet 33 frameworks, are typically trained on unpaired lateral 68 
+
+and axial datasets. Their success hinges on the implicit assumption of structural similarity between 69 
+
+lateral and axial views to establish meaningful cross-view mappings. Adversarial training, however, 70 
+
+frequently suffers from optimization instability, making it highly sensitive to hyperparameters and 71 
+
+run-to-run variability, which heightens the chance of producing artifacts or hallucinated textures. 72 
+
+More recently, the SSAI-3D framework 34 reformulates isotropy restoration as semi-blind axial 73 
+
+deblurring by transferring knowledge from a natural-image-pretrained deblurring backbone to 74 
+
+microscopy data through sparse fine-tuning. While this approach shows promise, it does have 75 
+
+limitations, including incomplete axial resolution recovery and potential complications in 76 
+
+reconstructing high-resolution images due to the fundamental degradation model mismatch 77 
+
+between microscopy images and natural images. 78 
+
+Building on this body of prior work, we introduce DeepIso, a self-supervised framework 79 
+
+designed to enhance isotropic resolution in fluorescence microscopy through internal learning. 80 
+
+DeepIso integrates supervised pretraining with a self-adaptive inference stage, enabling the system 81 
+
+to learn degradation characteristics directly from the data without requiring accurate PSF 82 
+
+estimation or assuming structural similarity between lateral and axial views. Unlike existing 83 
+
+methods, DeepIso expands the effective axial-frequency bandwidth and recovers complex axial 84 
+
+morphology with high fidelity, preserving continuity of elongated structures and detailed features. 85 
+
+We validated the performance and reconstruction fidelity of DeepIso on both synthetic benchmarks 86 4
+
+and experimental datasets, demonstrating robust isotropy restoration across multiple microscopy 87 
+
+modalities, including confocal, light-sheet, and 3D structured illumination microscopy. In all cases, 88 
+
+DeepIso achieves superior performance over existing computational methods. DeepIso provides a 89 
+
+practical solution for sample-adaptive isotropy enhancement, with broad potential for downstream 90 
+
+analyses in volumetric visualization, segmentation, tracking, and long-term time-lapse analysis in 91 
+
+diverse biological applications. 92 
+
+93 
+
+2. Results 94 
+
+2.1. Framework of DeepIso for isotropic resolution enhancement 95 
+
+To achieve isotropic restoration from inherently anisotropic microscopy data, we developed 96 
+
+DeepIso, a self-supervised two-stage framework designed to bridge the resolution gap between 97 
+
+lateral and axial dimensions ( Fig. 1 ). 98 
+
+In Stage-1 Pretraining ( Fig. 1a ), an IsoNet backbone is trained to learn isotropic 99 
+
+representations from synthetically degraded data. To emulate diverse optical conditions and axial 100 
+
+blurring, we construct a coarse blur kernel library consisting of one-dimensional kernels of multiple 101 
+
+orientations and scales ( Methods ). These kernels are convolved with isotropic lateral slices to 102 
+
+generate pseudo-anisotropic inputs. Before training, a pixel alignment step is applied by 103 
+
+downsampling one spatial axis to match the axial pixel size and subsequently upsampling it back 104 
+
+to the lateral pixel size, ensuring uniform voxel spacing and consistent receptive-field sampling 105 
+
+across all directions. The IsoNet is then optimized by minimizing the reconstruction loss between 106 
+
+the isotropic ground truth and its blurred counterpart, yielding a pretrained model that captures 107 
+
+scale-invariant and orientation-invariant isotropic features. In parallel with IsoNet pretraining, we 108 
+
+introduce an auxiliary encoder–decoder pair (IsoEnc/IsoDec) to explicitly learn a compact latent 109 
+
+representation of the anisotropic observation manifold. Specifically, IsoEnc encodes the pseudo-110 
+
+anisotropic volumes generated by the coarse-kernel collection into a low-dimensional latent space, 111 
+
+and IsoDec is trained to reconstruct the corresponding anisotropic volumes by minimizing a self-112 
+
+reconstruction loss. This bottlenecked latent embedding regularizes the learning of isotropic 113 
+
+features by enforcing cross-domain consistency: the restored isotropic prediction should remain 114 
+
+explainable under the learned anisotropic generative pathway, rather than relying on unconstrained 115 
+
+hallucination. The overall design is motivated by developments in internal learning and self-/zero-116 
+
+shot super-resolution, where supervised pretraining is complemented by test-time or sample-117 
+
+specific adaptation to bridge the gap between synthetic degradations and real acquisitions (e.g., 118 5
+
+ZSSR 35,36 , meta-transfer 37 , and related self-supervised fine-tuning strategies 38 ). Consequently, 119 
+
+Stage-1 establishes a stable, modality-agnostic latent space that can be locked in the following 120 
+
+inference stage to provide a reliable internal constraint during test-time adaptation. 121 
+
+Importantly, unlike many GAN-based isotropic restoration methods, DeepIso does not rely 122 
+
+on the implicit assumption that biological structures should appear similar between lateral and axial 123 
+
+views. In Stage-2 Adapting Inference ( Fig. 1b, Supplementary Fig. 1, Supplementary Fig. 2 ), 124 
+
+the pretrained network is internally adapted to real experimental data exhibiting anisotropic 125 
+
+sampling. During this process, the encoder–decoder pair (IsoEnc/IsoDec) is locked to preserve the 126 
+
+latent-space consistency learned from pretraining, while only the intermediate IsoNet parameters 127 
+
+are fine-tuned to accommodate the domain shift. This internal adaption permits inference on raw 128 
+
+anisotropic volumes without external training data or explicit supervision, and it does so without 129 
+
+invoking the common assumption of structural similarity between lateral and axial views. 130 
+
+Consequently, DeepIso yields isotropic restorations that preserve axial morphology with high 131 
+
+fidelity while suppressing spurious artifacts across imaging views. 132 
+
+133 
+
+2.2. Class-leading performance of DeepIso on simulated volumetric data 134 
+
+We first validated the isotropic restoration capability of DeepIso using simulated volumetric data, 135 
+
+where both anisotropic inputs and isotropic ground truths were available for direct quantitative 136 
+
+comparison ( Fig. 2 ). Anisotropic inputs were obtained by blurring the simulated ground truth with 137 
+
+a simulated point spread function (PSF) to mimic the anisotropic diffraction-limited response set 138 
+
+by the objective lens and sampling. The simulation volume comprised a heterogeneous mixture of 139 
+
+primitives, including point emitters, line segments, hollow spheres, and hollow cylinders with 140 
+
+varying sizes, positions, and 3D orientations. Notably, for hollow cylinders, the circular end-cap is 141 
+
+predominantly visible in lateral views, whereas the cylindrical sidewall becomes apparent only in 142 
+
+axial views. This design intentionally breaks lateral–axial structural similarity, emulating 143 
+
+specimens where cross-view appearance differs substantially. After reconstruction, DeepIso 144 
+
+effectively recovered isotropic structures across the entire 3D volume, yielding results that closely 145 
+
+matched the ground-truth references ( Fig. 2a ). Detailed inspection of representative sub-regions 146 
+
+(Fig. 2b–e ) demonstrated that DeepIso markedly improved axial views compared with existing 147 
+
+deep-learning-based restoration models, including CARE 23 , CycleGAN 32 , SelfNet 33 , and 148 SSAI3D 34 . DeepIso preserved membrane continuity (yellow arrows), resolved fine tubular and 149 
+
+vesicular features (blue and green arrows), and minimized artifacts such as stripe-like 150 6
+
+hallucinations that were frequently observed in CycleGAN and SelfNet outputs. The recovered 151 
+
+structures exhibited smooth intensity transitions along the axial direction, confirming the model’s 152 
+
+ability to learn depth-aware isotropic representations rather than planar deconvolution priors. 153 
+
+Quantitative analysis further confirmed the superior reconstruction fidelity provided by 154 
+
+DeepIso ( Fig. 2f ). Among all evaluated methods, DeepIso achieved the highest peak signal-to-155 
+
+noise ratio (PSNR) and structural similarity index (SSIM), alongside the lowest root mean square 156 
+
+error (RMSE). These metrics indicate that DeepIso produces restorations with minimal distortion 157 
+
+and noise amplification while maintaining accurate volumetric geometry. Collectively, the results 158 
+
+on synthetic benchmarks demonstrate that DeepIso generalizes robustly to anisotropic inputs and 159 
+
+achieves class-leading isotropic restoration accuracy across a wide range of 3D structural motifs. 160 
+
+161 
+
+2.3. DeepIso performance validation with hardware-based isotropic references 162 
+
+To evaluate the capability of DeepIso to recovering fine axial details in experimental data, we 163 
+
+applied it to volumetric datasets acquired by super-resolution and light-sheet modalities, where we 164 
+
+could obtain near-isotropic ground truth ( Fig. 3 ). In a first example, we used DeepIso to restore 165 
+
+three-dimensional structured illumination microscopy (3D-SIM) 9,39 datasets of fixed U2OS cells 166 
+
+labeled with Alexa Fluor 488–immunolabeled microtubules. The restoration’s improved axial 167 
+
+resolution better revealed the microtubule filament network in lateral and orthogonal views ( Fig. 168 
+
+3a,b ). Compared to reconstructions obtained with CARE, CycleGAN, SelfNet, and SSAI3D, 169 
+
+DeepIso substantially improved the filament bundle continuity in axial views, closely resembling 170 
+
+the ground truth reference provided by the hardware-based axial resolution enhancement approach, 171 
+
+four-beam SIM (4B-SIM) 9 . Inspection of selected regions ( Fig. 3c ) confirmed that DeepIso 172 
+
+effectively recovered submicron axial features and suppressed stripe-like or granular artifacts that 173 
+
+persisted in other learning-based methods or hardware-based methods ( Supplementary Fig. 3 ). 174 
+
+Quantitative evaluation using normalized cross-correlation (NCC) in the axial direction ( Fig. 3d )175 
+
+also demonstrated that DeepIso achieved the highest structural consistency with the ground truth. 176 
+
+The corresponding normalized axial intensity profiles ( Fig. 3e ) also showed that DeepIso closely 177 
+
+matched the 4B-SIM profile, indicating faithful recovery of axial modulation depth and resolution. 178 
+
+Next, we tested DeepIso on mitochondria in live U2OS cells transfected with mEmerald– 179 
+
+Tomm20, acquired by dual-view light sheet microscopy 12,13,22 , which offers near-isotropic 180 
+
+resolution by jointly deconvolving the raw data from two orthogonal views ( Fig. 3f ). We evaluated 181 
+
+the performance of DeepIso on single-view stacks acquired at 0.8 detection NA (SPIM), against 182 7
+
+which we also had ground truth dual-view reconstructions (diSPIM, ground truth). Even under this 183 
+
+relatively modest NA, DeepIso produced isotropic restorations with better mitochondrial 184 
+
+membrane continuity and network morphology compared to the input data. In representative axial 185 
+
+slices ( Fig. 3g ), DeepIso outperformed CycleGAN, SelfNet, and SSAI3D, recovering fine axial 186 
+
+mitochondrial details that remained blurred, fragmented, or artifact-prone in other methods, and 187 
+
+more closely approached the dual-view reconstruction reference. Fourier-domain analysis ( Fig. 3h )188 
+
+further confirmed the greater axial-frequency support resembling diSPIM, consistent with 189 
+
+improved axial resolution and contrast. Quantitatively, DeepIso achieved the highest PSNR and 190 
+
+SSIM and the lowest RMSE across all tested methods ( Fig. 3i ), indicating superior restoration 191 
+
+fidelity and structural isotropy relative to the diSPIM reference. Together, these results demonstrate 192 
+
+that DeepIso robustly enhances axial resolution in both 3D-SIM of immunolabeled U2OS 193 
+
+microtubules and single-view SPIM data of live U2OS mitochondria, narrowing the gap between 194 
+
+anisotropic raw inputs and isotropic ground-truth references. 195 
+
+196 
+
+2.4. DeepIso achieves isotropic resolution across multi-modality imaging 197 
+
+We next examined whether DeepIso could generalize to conventional diffraction-limited imaging 198 
+
+modalities, focusing on confocal fluorescence microscopy, which typically suffers from 199 
+
+pronounced axial–lateral resolution anisotropy. We evaluated DeepIso on a volumetric Thy1-eYFP 200 
+
+mouse neuron dataset 33 acquired by confocal fluorescence microscopy with optical sectioning 33 .201 
+
+As reported for this dataset, optical sectioning produces a stark contrast between lateral and axial 202 
+
+resolution, with highly anisotropic voxel sampling (0.207×0.207×1 μm³) in the raw volume. 203 
+
+DeepIso resampled the volume and produced near isotropic resolution with isotropic voxels 204 
+
+(0.207×0.207×0.207 μm³) ( Fig. 4a ). The maximum-intensity projections of axial views ( Fig. 4b,d )205 
+
+revealed markedly improved axial continuity and contrast compared with the original confocal 206 
+
+inputs. Magnified subregions and corresponding Fourier spectra ( Fig. 4c,e,f ) further indicate 207 
+
+enhanced recovery of axial high-frequency components and expanded axial-frequency support in 208 
+
+the Fourier domain, enabling finer delineation of densely interwoven neuronal processes with 209 
+
+consistent morphology across viewing directions. Line profiles extracted along the axial direction 210 
+
+(Fig. 4g,h ) showed sharper peak separation and reduced axial broadening after DeepIso restoration, 211 
+
+while local region analysis ( Fig. 4i ) corroborated isotropic frequency recovery across the dataset. 212 
+
+We further evaluated DeepIso on experimental super-resolution 3D-SIM datasets 9 . In 213 
+
+bacterial membrane imaging ( Fig. 5a–d ), DeepIso markedly improved axial contrast and reduced 214 8
+
+axial elongation, enabling clearer delineation of the two closely spaced membrane layers within 215 
+
+individual bacteria, which appear axially smeared in the native 3D-SIM volume. Consistent with 216 
+
+the visual restoration, Fourier analysis ( Fig. 5b ) showed an expanded axial-frequency support after 217 
+
+DeepIso, and the corresponding magnified view comparisons and line profiles ( Fig. 5c,d )218 
+
+confirmed enhanced peak separation and reduced axial broadening. 219 
+
+We next applied DeepIso to 3D-SIM images of U2OS outer mitochondrial membranes 9
+
+220 
+
+(Fig. 5e–j ). DeepIso restored a continuous and morphologically coherent mitochondrial network 221 
+
+in lateral views ( Fig. 5e ) and substantially sharpened mitochondrial boundaries along the axial 222 
+
+direction ( Fig. 5f,i ). Line profiles ( Fig. 5g ) revealed increased axial modulation depth and 223 
+
+improved separation of adjacent structures, while enlarged ROIs ( Fig. 5h,j ) highlighted recovery 224 
+
+of fine axial details with reduced striping artifacts. Fourier spectra from selected regions ( Fig. 5j )225 
+
+further supported the restoration of higher axial-frequency components compared with 226 
+
+conventional 3D-SIM. 227 
+
+Together, these results indicate that DeepIso can enhance axial resolution and 3D structural 228 
+
+fidelity across both diffraction-limited and super-resolution modalities without requiring explicit 229 
+
+PSF specification or manual modality-specific parameter tuning, while using the same training and 230 
+
+adapting protocol per modality. 231 
+
+232 
+
+2.5. DeepIso facilitates reliable segmentation and cell tracking for time-lapse data 233 
+
+To further demonstrate the applicability of DeepIso to long-term volumetric imaging, we applied 234 
+
+it to dual-view light sheet microscopy datasets of zebrafish embryos expressing Lyn–eGFP under 235 
+
+the claudin B (cldnb) promoter 22 , which labels epithelial cell membranes around the lateral-line 236 
+
+primordium ( Fig. 6a ). The single view raw data (SPIM) exhibited characteristic axial blurring and 237 
+
+discontinuities in membrane junctions, particularly along the apical–basal direction. DeepIso 238 
+
+restoration significantly improved axial continuity and junctional delineation, producing 239 
+
+volumetric restoration comparable to the two-view reconstruction results (diSPIM), but without 240 
+
+requiring explicit two-view data acquisition and fusion ( Fig. 6b ). 241 
+
+Fourier-domain analysis ( Fig. 6c ) revealed that DeepIso expanded the recoverable axial-242 
+
+frequency range relative to the single view raw (SPIM) and corresponding deconvolution (Deconv) 243 
+
+images, reflecting enhanced resolution along the optical axis. Enlarged ROIs (Fig. 6d,e )244 
+
+demonstrated smooth and isotropic recovery of epithelial boundaries with enhanced contrast, 245 
+
+allowing clear visualization of individual cell membranes within the densely packed epithelial 246 9
+
+layers. Segmentation of the DeepIso restored volumes ( Fig. 6f,g ) further confirmed accurate and 247 
+
+continuous delineation of cell boundaries across the primordium, in contrast to the fragmented or 248 
+
+partially fused junctions in the original single view data. 249 
+
+Importantly, DeepIso facilitated manual tracking and automatic segmentation in long-term 250 
+
+time-lapse imaging. In the 6.25-hour light sheet microscopy recording, DeepIso restored isotropic 251 
+
+morphology and continuity of the migrating primordium ( Fig. 6h ) while preserving dynamic 252 
+
+subcellular features. Two distinct regions of interest ( Fig. 6i,j ) revealed two immune cells (arrows) 253 
+
+migrating between surrounding skin cells: one cell in the period of 0–165 minutes ( Fig. 6i ) and 254 
+
+another in the period of 315–375 minutes ( Fig. 6j ), highlighting DeepIso’s ability to maintain clear 255 
+
+cell outlines and continuous elongated structures across frames. 256 
+
+Together, these results demonstrate that DeepIso not only restores isotropic spatial 257 
+
+resolution in light-sheet microscopy but also enables long-term volumetric imaging with improved 258 
+
+spatiotemporal resolution. By recovering high-frequency axial information directly from single-259 
+
+view raw data, DeepIso eliminates the dependence on multi-view data acquisition and complex 260 
+
+multiview fusion procedures, thus providing a scalable framework for high-fidelity live-cell and 261 
+
+developmental imaging. 262 
+
+263 
+
+3. Discussion and conclusion 264 
+
+In this study, we introduced DeepIso, a self-supervised framework for restoring isotropic resolution 265 
+
+in three-dimensional microscopy. By leveraging a two-stage training paradigm that integrates 266 
+
+synthetic pretraining with adaptive inference, DeepIso learns modality-independent isotropic 267 
+
+features directly from the data, eliminating the need for paired high-resolution supervision or 268 
+
+explicit multi-view fusion. Across diverse imaging modalities, including 3D-SIM, SPIM, diSPIM, 269 
+
+and confocal microscopy, DeepIso consistently enhanced axial resolution, improved structural 270 
+
+isotropy, and preserved fine morphological details, while minimizing artifacts and noise 271 
+
+amplification. 272 
+
+Unlike previous learning-based restoration approaches that rely on explicit supervision (e.g., 273 
+
+CARE) or adversarial domain translation (e.g., CycleGAN, SelfNet), DeepIso performs internal 274 
+
+adaptation through latent-space consistency. The encoder–decoder pair (IsoEnc/IsoDec) remains 275 
+
+fixed during adaptation, ensuring stable feature representation and preventing overfitting to dataset-276 
+
+specific noise patterns. This design enables robust generalization across different imaging systems, 277 10 
+
+as evidenced by DeepIso’s strong performance on both simulated benchmarks and experimental 278 
+
+datasets, including live-cell and organismal imaging. 279 
+
+A key advantage of DeepIso lies in its ability to recover high-frequency axial components 280 
+
+from single-view anisotropic inputs, without the need for external calibration data. Fourier-domain 281 
+
+analysis confirmed that DeepIso effectively expands the axial-frequency support, thereby restoring 282 
+
+isotropic point-spread responses and volumetric contrast. This improvement in isotropy directly 283 
+
+benefits downstream analyses, such as segmentation and morphological quantification. Beyond 284 
+
+static imaging, DeepIso demonstrated substantial utility in time-lapse volumetric analysis. In 285 
+
+diSPIM recordings of developing zebrafish embryos, the method restored continuous epithelial 286 
+
+boundaries and facilitates manual tracking of immune-cell migration over extended durations with 287 
+
+high spatiotemporal fidelity ( Fig. 6 ). Such capability underscores DeepIso’s potential for studying 288 
+
+dynamic biological processes that require both gentle illumination and precise 3D reconstruction, 289 
+
+such as tissue morphogenesis, organ development, and intracellular transport. This application 290 
+
+highlights DeepIso’s robustness in both high-resolution anatomical imaging and time-resolved 291 
+
+dynamic analysis. 292 
+
+Although DeepIso demonstrates strong isotropic restoration performance under matched 293 
+
+imaging conditions, several limitations remain. First, its generalization across heterogeneous 294 
+
+biological samples is inherently constrained. In practice, different specimen types exhibit 295 
+
+substantially different structural organizations, signal-to-noise characteristics, and anisotropic 296 
+
+degradation patterns. Consequently, optimal performance typically requires dataset-specific 297 
+
+training or adaptation, rather than reliance on a single universal model. This limitation reflects a 298 
+
+broader challenge in microscopy image restoration, where strong domain shifts arise from 299 
+
+biological diversity and optical variability. Future work may explore generalized pretrained 300 
+
+representations 40,41 or meta-learning strategies 42 to improve cross-sample generalization with 301 
+
+reduced retraining cost. Second, DeepIso introduces additional computational cost associated with 302 
+
+its multi-component training framework. For example, in our experiments on confocal Mouse Thy1 303 
+
+neuron data, training of the IsoNet module required approximately 4.8 hours, while training of the 304 
+
+IsoEnc/IsoDec module required approximately 6.0 hours on a single NVIDIA RTX 4080 SUPER 305 
+
+GPU. The adapting-inference stage converged substantially faster, requiring approximately 13 306 
+
+minutes for 12,000 iterations. Notably, the training of IsoNet and IsoEnc/IsoDec is structurally 307 
+
+independent. When computational resources permit, these two components can be trained 308 
+
+concurrently on separate GPUs, which can effectively reduce the overall wall-clock training time. 309 11 
+
+Once training and adaptation are complete, DeepIso can be directly applied to raw biological image 310 
+
+volumes in a purely feed-forward manner, analogous to conventional end-to-end restoration 311 
+
+networks such as CARE 23 or RCAN3D 26 . In this inference stage, no additional optimization or 312 
+
+parameter updating is required, and large volumetric datasets can be processed efficiently using 313 
+
+standard block-wise reconstruction strategies. Third, DeepIso conceptually could be extended to 314 
+
+laterally anisotropic data, but this would require redesigning the network to recover isotropy from 315 
+
+only one high-resolution lateral direction. We expect substantial additional development and 316 
+
+validation, so we leave this as future work and only note it here. Finally, future extensions of 317 
+
+DeepIso may benefit from integration with multi-view fusion strategies or physics-informed priors, 318 
+
+particularly for complex specimens exhibiting strong light scattering, refractive index 319 
+
+heterogeneity, or severe optical aberrations. Such hybrid designs may further enhance 320 
+
+reconstruction robustness and extend applicability to challenging biological imaging scenarios. 321 
+
+Overall, DeepIso provides a unified and scalable framework for isotropic 3D reconstruction 322 
+
+across a broad range of fluorescence microscopy modalities. Its self-supervised learning scheme, 323 
+
+internal adaptation, and strong cross-domain generalization make it a powerful tool for next-324 
+
+generation volumetric imaging, which can bridge the gap between diffraction-limited acquisitions 325 
+
+and isotropic, artifact-free reconstructions suitable for quantitative biological analysis. DeepIso 326 
+
+thus offers a significant step forward in enabling high-quality, high-fidelity imaging in both static 327 
+
+and dynamic biological studies. 328 
+
+329 
+
+Methods 330 
+
+The DeepIso framework adopts a modular architecture composed of an isotropic restoration 331 
+
+backbone (IsoNet) and a latent feature encoder–decoder module (IsoEnc/IsoDec). The model is 332 
+
+first pretrained on synthetically generated anisotropic–isotropic patch pairs to establish a stable 333 
+
+isotropy-aware mapping. During adapting inference, the latent feature learned by IsoEnc is 334 
+
+combined with experimental observations through IsoDec, enabling unsupervised refinement 335 
+
+under real imaging conditions. This two-stage strategy ensures both reconstruction fidelity and 336 
+
+robustness to system-dependent anisotropy. 337 
+
+Network architecture 338 
+
+IsoNet was implemented as a compact residual channel attention network (RCAN) backbone 26 . A 339 
+
+single channel input was linearly standardized from 0 to 1 into minus 1 to 1, passed through a 3 by 340 
+
+3 feature extraction layer with 32 channels, and processed by five residual groups, each containing 341 12 
+
+five residual channel attention blocks with reduction ratio 8. Each block used two 3 by 3 342 
+
+convolutions with a ReLU after the first, followed by channel attention based on global average 343 
+
+pooling and 1 ×1 bottleneck layers. A long skip connection bridged the residual group stack, and a 344 
+
+final 3 ×3 convolution produced a single channel output that was mapped back to 0 to 1. 345 
+
+IsoEnc and IsoDec were implemented jointly as a two-branch RCAN based architecture. Both 346 
+
+inputs were first linearly standardized from 0 to 1 into minus 1 to 1. IsoEnc encoded the first input 347 
+
+using an RCAN style encoder with 64 feature channels and three residual groups, and produced a 348 
+
+1024 dimensional latent representation via global average pooling followed by a 1 by 1 convolution. 349 
+
+IsoDec conditioned the reconstruction on both the latent code and the second input. The latent code 350 
+
+was expanded by a 1 by 1 convolution and bilinear upsampling to match the spatial patch size, then 351 
+
+concatenated with features extracted from the second input by a symmetric RCAN stem. The fused 352 
+
+features were refined by three residual groups and projected to output, which was mapped back to 353 
+
+0 to 1 by the inverse linear transform. 354 
+
+1) IsoNet fomulation 355 
+
+Let the input patch be  𝒙𝒙  ∈ [𝟎𝟎 , 𝟏𝟏 ]𝑯𝑯 ×𝑾𝑾 , a linear standardization is first applied 356 
+
+𝒙𝒙 � = 𝟐𝟐 𝒙𝒙  − 𝟏𝟏 (𝟏𝟏 )357 
+
+Let  𝑪𝑪𝑪𝑪𝑪𝑪𝑪𝑪 𝒌𝒌 ,𝒄𝒄 𝒊𝒊 𝑪𝑪 →𝒄𝒄 𝑪𝑪 𝒐𝒐𝒐𝒐 (∙) denote as 2D convolution with kernel size  𝒌𝒌  × 𝒌𝒌 , 𝑹𝑹𝑹𝑹𝑹𝑹𝑹𝑹 (∙) denote ReLU, 358 
+
+and  𝝈𝝈 (∙) denote sigmoid. For a feature map  𝒐𝒐  ∈ ℝ 𝑪𝑪 ×𝑯𝑯 ×𝑾𝑾 , global average pooling is 359 
+
+𝑮𝑮𝑮𝑮𝑮𝑮 (𝒐𝒐 )𝒄𝒄 = 𝟏𝟏 𝑯𝑯 𝑾𝑾  � �  𝒐𝒐 𝒄𝒄 𝒊𝒊 𝒄𝒄 𝑾𝑾 
+
+> 𝒄𝒄 =𝟏𝟏 𝑯𝑯 𝒊𝒊=𝟏𝟏
+
+(𝟐𝟐 )360 
+
+361 
+
+Channel attention 362 
+
+With reduction ratio  𝒓𝒓 , the channel attention weights are computed as 363 
+
+𝒂𝒂 (𝒐𝒐 ) = 𝝈𝝈 �𝑪𝑪𝑪𝑪𝑪𝑪𝑪𝑪 𝟏𝟏 ,𝑪𝑪 𝒓𝒓 →𝑪𝑪 �𝑹𝑹𝑹𝑹 𝑹𝑹𝑹𝑹  �𝑪𝑪𝑪𝑪𝑪𝑪𝑪𝑪 𝟏𝟏 ,𝑪𝑪→ 𝑪𝑪 𝒓𝒓 �𝑮𝑮𝑮𝑮𝑮𝑮 (𝒐𝒐 )���� (𝟑𝟑 )364 
+
+and applied by channel wise reweighting 365 
+
+𝑪𝑪 𝑮𝑮 (𝒐𝒐 ) =  𝒐𝒐  ⊙ 𝒂𝒂 (𝒐𝒐 ) (𝟒𝟒 )366 
+
+where ⊙ denotes elementwise multiplication with broadcasting over spatial dimensions. 367 
+
+Residual channel attention block 368 
+
+With residual scaling  𝜶𝜶 , one residual channel attention block is 369 13 
+
+𝑹𝑹 𝑪𝑪𝑮𝑮 𝑹𝑹 (𝒐𝒐 ) =  𝒐𝒐  + 𝜶𝜶 ∙ 𝑪𝑪 𝑮𝑮  �𝑪𝑪𝑪𝑪𝑪𝑪𝑪𝑪 𝟑𝟑 ,𝑪𝑪→𝑪𝑪 �𝑹𝑹𝑹𝑹𝑹𝑹𝑹𝑹 �𝑪𝑪𝑪𝑪𝑪𝑪𝑪𝑪 𝟑𝟑 ,𝑪𝑪→𝑪𝑪 (𝒐𝒐 )��� (𝟓𝟓 )370 
+
+Residual group 371 
+
+A residual group with  𝑹𝑹  blocks is defined as 372 
+
+𝑹𝑹 𝑮𝑮 (𝒐𝒐 ) =  𝒐𝒐  + 𝑪𝑪𝑪𝑪𝑪𝑪𝑪𝑪𝟑𝟑 ,𝑪𝑪→𝑪𝑪 �𝑹𝑹 𝑪𝑪𝑮𝑮 𝑹𝑹 (𝑹𝑹 ) (𝒐𝒐 )� (𝟔𝟔 )373 
+
+where  𝑹𝑹 𝑪𝑪𝑮𝑮 𝑹𝑹 (𝑹𝑹 ) denotes a sequential composition of  𝑹𝑹  RCAB modules. 374 
+
+RCAN mapping 375 
+
+Let the initial feature extraction be 376 
+
+𝒇𝒇 𝟎𝟎 = 𝑪𝑪𝑪𝑪𝑪𝑪𝑪𝑪𝟑𝟑 ,𝟏𝟏→𝑪𝑪 (𝒙𝒙 �) (𝟕𝟕 )377 
+
+After stacking  𝑮𝑮  residual groups, 378 
+
+𝒇𝒇 𝑮𝑮 = 𝑹𝑹 𝑮𝑮 (𝑮𝑮 ) (𝒇𝒇 𝟎𝟎 ) (𝟖𝟖 )379 
+
+the long skip connection and reconstruction head are 380 
+
+𝒇𝒇 = 𝒇𝒇 𝟎𝟎 + 𝑪𝑪𝑪𝑪𝑪𝑪𝑪𝑪 𝟑𝟑 ,𝑪𝑪→𝑪𝑪 (𝒇𝒇 𝑮𝑮 ) (𝟗𝟗 )381 
+
+𝒚𝒚 � = 𝑪𝑪𝑪𝑪𝑪𝑪𝑪𝑪 𝟑𝟑 ,𝑪𝑪→𝟏𝟏 (𝒇𝒇 ) (𝟏𝟏 𝟎𝟎 )382 
+
+followed by inverse scaling to the range [0, 1] 383 
+
+𝒚𝒚 = 𝒚𝒚 � + 𝟏𝟏 𝟐𝟐  (𝟏𝟏𝟏𝟏 )384 
+
+In our IsoNet configuration,  𝑪𝑪 =32,  𝑹𝑹 =5,  𝑮𝑮 =5,  𝒓𝒓 =8, and  𝜶𝜶 =1.0. 385 
+
+2) IsoEnc and IsoDec fomulation 386 
+
+The IsoEnc and IsoDec models take two inputs  𝒙𝒙 , 𝒚𝒚  ∈ [𝟎𝟎 , 𝟏𝟏 ]𝑯𝑯 ×𝑾𝑾  and applies the same linear 387 
+
+standardization 388 
+
+𝒙𝒙 � = 𝟐𝟐 𝒙𝒙  − 𝟏𝟏 (𝟏𝟏 𝟐𝟐 )389 
+
+𝒚𝒚 � = 𝟐𝟐 𝒚𝒚  − 𝟏𝟏 (𝟏𝟏 𝟑𝟑 )390 
+
+IsoEnc 391 
+
+Let  𝚿𝚿 (∙) denote the encoder stem implemented by reflection padding, a 7 ×7 convolution, and a 392 
+
+LeakyReLU.  The encoder feature map is 393 
+
+𝑹𝑹 𝟎𝟎 = 𝚿𝚿 (𝒙𝒙 �) ∈ ℝ 𝑪𝑪 𝑹𝑹 ×𝑯𝑯 ×𝑾𝑾 (𝟏𝟏 𝟒𝟒 )394 
+
+Let  𝑹𝑹 𝑮𝑮 𝑹𝑹 
+
+> (𝑮𝑮 𝑹𝑹 )
+
+(∙) denote the stack of encoder residual groups, each built from residual channel 395 
+
+attention blocks with a local residual connection.  The encoder output before pooling is 396 
+
+𝑹𝑹  = 𝑹𝑹 𝟎𝟎 + 𝑹𝑹 𝑮𝑮 𝑹𝑹  
+
+> (𝑮𝑮 𝑹𝑹 )
+
+(𝑹𝑹 𝟎𝟎 ) (𝟏𝟏 𝟓𝟓 )397 14 
+
+latent features are then produced by global average pooling followed by 1 ×1 projections to latent 398 
+
+dimension  𝑫𝑫 399 
+
+𝒛𝒛 = 𝑪𝑪𝑪𝑪𝑪𝑪𝑪𝑪𝟏𝟏 ,𝑪𝑪 𝑹𝑹 →𝑫𝑫 �𝑮𝑮𝑮𝑮𝑮𝑮 (𝑹𝑹 )� ∈ ℝ 𝑫𝑫 ×𝟏𝟏 ×𝟏𝟏 (𝟏𝟏 𝟔𝟔 )400 
+
+IsoDec 401 
+
+Let  𝑹𝑹 𝑼𝑼 (∙) denote bilinear upsampling to size  𝑯𝑯  × 𝑾𝑾 . The latent features are expanded to a spatial 402 
+
+feature map 403 
+
+𝒛𝒛 𝒔𝒔 = 𝑹𝑹 𝑼𝑼 �𝑪𝑪𝑪𝑪𝑪𝑪𝑪𝑪𝟏𝟏 ,𝑫𝑫→𝑪𝑪 𝒅𝒅 (𝒛𝒛 )� ∈ ℝ 𝑪𝑪 𝒅𝒅 ×𝑯𝑯 ×𝑾𝑾 (𝟏𝟏 𝟕𝟕 )404 
+
+Let  𝚽𝚽 (∙) denote the decoder conditioning stem applied to  𝒚𝒚 �, implemented by reflection padding, a 405 
+
+7×7 convolution, and a LeakyReLU 406 
+
+𝒅𝒅 𝒚𝒚 = 𝚽𝚽 (𝒚𝒚 �) ∈ ℝ 𝑪𝑪 𝒅𝒅 ×𝑯𝑯 ×𝑾𝑾 (𝟏𝟏 𝟖𝟖 )407 
+
+The two feature maps are concatenated along channels are refined by a stack of decoder residual 408 
+
+groups  𝑹𝑹 𝑮𝑮 𝒅𝒅  
+
+> (𝑮𝑮 𝒅𝒅 )
+
+(∙)409 
+
+𝒅𝒅 𝟎𝟎 = �𝒛𝒛 𝒔𝒔 , 𝒅𝒅 𝒚𝒚 � ∈ ℝ 𝟐𝟐𝑪𝑪 𝒅𝒅 ×𝑯𝑯 ×𝑾𝑾 (𝟏𝟏 𝟗𝟗 )410 
+
+𝒅𝒅 = 𝒅𝒅 𝟎𝟎 + 𝑹𝑹 𝑮𝑮 𝒅𝒅   
+
+> (𝑮𝑮 𝒅𝒅 )
+
+(𝒅𝒅 𝟎𝟎 ) (𝟐𝟐 𝟎𝟎 )411 
+
+A final reconstruction head  𝛀𝛀 (∙), implemented by refection padding and a 7 ×7 convolution, 412 
+
+produces the output 413 
+
+𝑪𝑪 � = 𝛀𝛀 (𝒅𝒅 ) ∈ ℝ 𝟏𝟏 ×𝑯𝑯 ×𝑾𝑾 (𝟐𝟐 𝟏𝟏 )414 
+
+𝑪𝑪  = 𝑪𝑪 � + 𝟏𝟏 𝟐𝟐 (𝟐𝟐𝟐𝟐 )415 
+
+Overall mapping 416 
+
+The complete model is 417 
+
+(𝑪𝑪 , 𝒛𝒛 ) = 𝑭𝑭 (𝒙𝒙 , 𝒚𝒚 ) (𝟐𝟐 𝟑𝟑 )418 
+
+𝒛𝒛 = 𝑰𝑰 𝒔𝒔𝑪𝑪 𝑰𝑰 𝑪𝑪𝒄𝒄 (𝒙𝒙 ) (𝟐𝟐 𝟒𝟒 )419 
+
+𝑪𝑪  = 𝑰𝑰 𝒔𝒔𝑪𝑪𝑫𝑫𝑹𝑹𝒄𝒄 (𝒛𝒛 , 𝒚𝒚 ) (𝟐𝟐 𝟓𝟓 )420 
+
+In our configuration,  𝑪𝑪 𝑹𝑹 = 𝑪𝑪 𝒅𝒅 =64,  𝑮𝑮 𝑹𝑹 =𝑮𝑮 𝒅𝒅 =3, and  𝑫𝑫 =1024. 421 
+
+Training losses 422 
+
+During pretraining, pixelwise supervision was imposed using the Charbonnier loss, a differentiable 423 
+
+and robust variant of the L1 norm. For a predicted image  𝑰𝑰 𝑼𝑼𝒓𝒓𝑹𝑹𝒅𝒅  and its reference  𝑰𝑰 𝒓𝒓 𝑹𝑹𝒇𝒇 , the loss was 424 
+
+computed as 425 15 
+
+𝑹𝑹 𝑪𝑪𝒉𝒉𝒂𝒂𝒓𝒓𝒓𝒓 𝑪𝑪𝑪𝑪𝑪𝑪𝒊𝒊𝑹𝑹 𝒓𝒓 = 𝟏𝟏 𝑵𝑵 � ��𝑰𝑰 𝑼𝑼𝒓𝒓𝑹𝑹𝒅𝒅 ,𝒊𝒊 − 𝑰𝑰 𝒓𝒓 𝑹𝑹𝒇𝒇 ,𝒊𝒊 � 𝟐𝟐 + 𝝐𝝐 𝟐𝟐 𝒊𝒊 
+
+(𝟐𝟐 𝟔𝟔 )426 
+
+where  𝒊𝒊  indexes pixels,  𝑵𝑵  denotes the total number of pixels, and  𝝐𝝐  is a small constant for 427 
+
+numerical stability. The loss was averaged over all pixels using mean reduction and applied with a 428 
+
+weight of 1.0. 429 
+
+Pixelwise supervision during adapting inference was implemented with a mean squared error 430 
+
+criterion. Given a network prediction  𝑰𝑰 𝑼𝑼𝒓𝒓𝑹𝑹𝒅𝒅  and the corresponding reference  𝑰𝑰 𝒓𝒓 𝑹𝑹𝒇𝒇 , the objective 431 
+
+was evaluated as 432 
+
+𝑹𝑹 𝑴𝑴𝑴𝑴 𝑰𝑰  = 𝟏𝟏 𝑵𝑵 ��𝑰𝑰 𝑼𝑼𝒓𝒓𝑹𝑹𝒅𝒅 ,𝒊𝒊 − 𝑰𝑰 𝒓𝒓 𝑹𝑹𝒇𝒇 ,𝒊𝒊 � 𝟐𝟐 𝒊𝒊 
+
+(𝟐𝟐 𝟕𝟕 )433 
+
+in which  𝒊𝒊  denotes the pixel index and  𝑵𝑵  is the total number of pixels. Mean reduction was used, 434 
+
+and the resulting loss term was assigned a weight of 1.0. 435 
+
+Training details 436 
+
+The DeepIso framework was implemented in PyTorch and optimized using adaptive moment 437 
+
+estimation (Adam) with  𝜷𝜷 𝟏𝟏 =0.9 and  𝜷𝜷 𝟐𝟐 =0.99. Training was performed for 100,000 iterations in 438 
+
+the pretraining stage and 12,000 iterations in the adapting-inference stage. An exponential moving 439 
+
+average (EMA) of the model parameters with a decay rate of 0.999 was maintained to promote 440 
+
+stable convergence. The initial learning rate started at  𝟏𝟏  × 𝟏𝟏 𝟎𝟎 −𝟒𝟒  and scheduled using cosine 441 
+
+annealing over the full training course, gradually decaying to a near-zero minimum toward the end 442 
+
+of training. All experiments were conducted on a workstation equipped with Nvidia GeForce RTX 443 
+
+4080 SUPER GPU (with 16 GB of RAM). 444 
+
+In the pretraining stage, we set the batch size to 8, initial learning rate to  𝟏𝟏  × 𝟏𝟏 𝟎𝟎 −𝟒𝟒  and the worker 445 
+
+number per GPU to 6. During the adapting inference stage, we set the batch size to 8, initial learning 446 
+
+rate to  𝟓𝟓  × 𝟏𝟏 𝟎𝟎 −𝟕𝟕  and the worker number per GPU to 6. 447 
+
+Inference and block-wise reconstruction strategy 448 
+
+To accommodate large volumetric datasets exceeding GPU memory limits, DeepIso inference was 449 
+
+performed in a block-wise manner with controlled spatial overlap between adjacent tiles. Each 3D 450 
+
+input volume was first divided into overlapping sub-volumes (typically 64³–128³ voxels per block) 451 
+
+with an overlap margin of 16–32 voxels along each axis. The overlapping regions were smoothly 452 
+
+blended using a linear weighting window to avoid boundary discontinuities after reconstruction. 453 16 
+
+Before inference, anisotropic raw data were aligned through the same pixel-alignment procedure 454 
+
+used during training, i.e., one spatial dimension was downsampled to match the axial pixel size and 455 
+
+subsequently upsampled to the lateral sampling interval. The aligned volumes were then processed 456 
+
+by the pretrained IsoNet adapted through Adapting Inference Stage. 457 
+
+All convolutional layers operated on isotropic receptive fields, ensuring that the network preserved 458 
+
+structural consistency across the axial and lateral dimensions. The encoder and decoder 459 
+
+components (IsoEnc/IsoDec) remained frozen during inference, maintaining a stable latent-space 460 
+
+mapping learned during pretraining. The intermediate IsoNet weights, fine-tuned during the 461 
+
+adaptive stage, handled residual anisotropy and dataset-specific characteristics such as refractive 462 
+
+mismatch, optical aberration, and SNR variation. 463 
+
+The restored sub-volumes were finally stitched into the full 3D isotropic reconstruction using 464 
+
+weighted averaging in the overlap regions, producing seamless volumes suitable for quantitative 465 
+
+downstream analyses such as segmentation, tracking, and Fourier-domain isotropy evaluation. 466 
+
+Dataset preparation for pretraining 467 
+
+In Stage-1: Pretraining, a paired pretraining dataset was constructed by extracting 2D patches from 468 
+
+3D TIFF volumes and generating two corresponding representations for each patch: (i) a laterally 469 
+
+well-resolved reference patch, which serves as a proxy for isotropic lateral resolution, and (ii) an 470 
+
+anisotropic patch, synthetically degraded to emulate direction-dependent resolution loss. In 471 
+
+practice, the reference patches were sampled from lateral view and treated as the high-quality target, 472 
+
+whereas the anisotropic counterparts were produced through controlled blurring and optional 473 
+
+resampling so that the paired data explicitly encode an isotropic-to-anisotropic mapping. 474 
+
+All volumes were loaded from the input directory and, unless otherwise stated, intensity-475 
+
+normalized by percentile-based 23 linear rescaling to map values into [0, 1], with optional clipping 476 
+
+to suppress outliers. Patch extraction was performed slice-wise along the axial dimension. For each 477 
+
+𝑧𝑧 -slice, a fixed number of square crops (default 64; 10 patches per slice) were drawn at random. 478 
+
+Because raw microscopy volumes frequently contain extensive low-signal background, patch 479 
+
+selection was constrained by a rejection criterion to enrich informative structures: candidate crops 480 
+
+were repeatedly proposed (up to 1000 attempts) and retained only when their mean intensity 481 
+
+exceeded 70% of the corresponding volume-wide mean. 482 
+
+The anisotropic counterparts were generated from the same reference crops using an orientation-483 
+
+dependent blur model, followed by an optional downsample–upsample step that mimics under-484 
+
+sampling. Gaussian blur kernel collection was assembled in two stages. First, a set of base Gaussian 485 17 
+
+kernels with fixed support (size 31 pixels) was created by varying the standard deviation (sampled 486 
+
+from 3 to 101 in steps of 2, retaining the first K kernels where K= kernel_number ), and each kernel 487 
+
+was normalized to ensure consistent scaling. Second, to reproduce directionally biased degradation, 488 
+
+each base kernel was rotated in-plane to multiple orientations, with angles uniformly distributed 489 
+
+over [−90 ∘, 90 ∘]according to angle_number bins; the complete kernel library was saved to disk to 490 
+
+facilitate reproducibility. For each reference patch, the corresponding anisotropic patch was 491 
+
+synthesized by FFT-based convolution with a selected kernel while preserving the patch size via 492 
+
+padding. When enabled, a pixel size alignment procedure was applied by first resizing the 493 
+
+convolved patch to a lower resolution determined by downsampling_rate and then interpolating it 494 
+
+back to the original patch size, thereby introducing scale-dependent smoothing consistent with 495 
+
+anisotropic sampling. 496 
+
+A deterministic patch-level split was used to obtain stable training, validation, and test partitions. 497 
+
+Within each group of ten sampled patches, one patch was assigned to the validation set and one to 498 
+
+the test set, while the remaining eight were used for training (approximately 8:1:1). All paired 499 
+
+patches were saved as TIFF files into the corresponding train/val/test subdirectories. 500 
+
+Dataset preparation for adapting inference 501 
+
+In the State-2: Adapting Inference, an unaligned patch dataset was derived directly from 502 
+
+experimental 3D volumes so that the model could be internally adapted to real acquisition statistics 503 
+
+without presuming cross-view correspondence. Each TIFF volume was loaded from disk and, 504 
+
+unless stated otherwise, intensity-normalized by percentile-based linear rescaling. Values were 505 
+
+mapped to the range from 0 to 1, and clipping was applied to suppress out-of-range fluctuations. 506 
+
+This normalization was applied consistently across volumes to reduce scale variability while 507 
+
+retaining specimen-specific contrast relationships. 508 
+
+Patch extraction was performed from orthogonal section families, since anisotropic sampling 509 
+
+induces plane-dependent image statistics, particularly for sections that intersect the axial direction. 510 
+
+Two sets of 2D crops were therefore generated. First, xz sections were formed by fixing the y index. 511 
+
+Within each section, square patches of fixed size, by default 64 by 64 pixels, were randomly 512 
+
+cropped in the xz plane, with multiple realizations drawn per section, by default 10 patches. In 513 
+
+parallel, xy sections were formed by fixing the z index, followed by random cropping in the xy 514 
+
+plane using the same patch size and sampling multiplicity. Because crops from the two section 515 
+
+families were sampled independently with different random spatial coordinates, the resulting 516 
+
+dataset was intentionally unpaired and spatially unaligned across views, which matches the 517 18 
+
+adapting-inference setting in which only raw observations are available and explicit registration 518 
+
+between orthogonal planes is not assumed. 519 
+
+To ensure stable data split across runs, patches were assigned to training, validation, and test sets 520 
+
+using a deterministic indexing rule. Within each sampling loop, one out of every ten patches was 521 
+
+routed to validation and one to test, whereas the remaining patches were used for adaptation and 522 
+
+training, yielding an approximate 8 to 1 to 1 partition. All patches were saved as individual TIFF 523 
+
+files into the corresponding train, val, and test directories. When available, CuPy was used to 524 
+
+accelerate array operations; otherwise, the same protocol was executed with NumPy on CPU, 525 
+
+without changing the sampling procedure or the resulting dataset composition. 526 
+
+Evaluation metrics 527 
+
+Reconstruction quality was quantified using complementary error and similarity criteria computed 528 
+
+between the predicted image  𝑰𝑰 𝑼𝑼𝒓𝒓𝑹𝑹𝒅𝒅  and its reference  𝑰𝑰 𝒓𝒓 𝑹𝑹𝒇𝒇 (both evaluated on the same field of view 529 
+
+after identical cropping ande intensity scaling). 530 
+
+Peak signal to noise ratio (PSNR) 531 
+
+PSNR was calculated from the mean squared error as 532 
+
+𝑴𝑴𝑴𝑴 𝑰𝑰  = 𝟏𝟏 𝑵𝑵 ��𝑰𝑰 𝑼𝑼𝒓𝒓𝑹𝑹𝒅𝒅 ,𝒊𝒊 − 𝑰𝑰 𝒓𝒓 𝑹𝑹𝒇𝒇 ,𝒊𝒊 � 𝟐𝟐 𝒊𝒊 
+
+(𝟐𝟐 𝟖𝟖 )533 
+
+𝑮𝑮𝑴𝑴𝑵𝑵𝑹𝑹  = 𝟏𝟏 𝟎𝟎 𝒍𝒍 𝑪𝑪 𝒍𝒍 𝟏𝟏 𝟎𝟎  �𝑰𝑰 𝒎𝒎 𝒂𝒂𝒙𝒙 
+
+> 𝟐𝟐
+
+𝑴𝑴𝑴𝑴 𝑰𝑰 � (𝟐𝟐 𝟗𝟗 )534 
+
+where  𝒊𝒊  indexes pixels,  𝑵𝑵  is the number of pixels, and  𝑰𝑰 𝒎𝒎 𝒂𝒂𝒙𝒙  is the maximum representable 535 
+
+intensity (set to 1 for normalized images) 536 
+
+Structural similarity index (SSIM) 537 
+
+SSIM was used to measure perceived structural fidelity. For two image patches  𝒙𝒙  and  𝒚𝒚 ,538 
+
+𝑴𝑴𝑴𝑴𝑰𝑰𝑴𝑴 (𝒙𝒙 , 𝒚𝒚 ) = �𝟐𝟐𝝁𝝁 𝒙𝒙 𝝁𝝁 𝒚𝒚 + 𝑪𝑪 𝟏𝟏 ��𝟐𝟐𝝈𝝈 𝒙𝒙 𝒚𝒚  + 𝑪𝑪 𝟐𝟐 ��𝝁𝝁 𝒙𝒙 𝟐𝟐 + 𝝁𝝁 𝒚𝒚 𝟐𝟐 + 𝑪𝑪 𝟏𝟏 ��𝝈𝝈𝒙𝒙 𝟐𝟐 + 𝝈𝝈𝒚𝒚 𝟐𝟐 + 𝑪𝑪 𝟐𝟐 � (𝟑𝟑 𝟎𝟎 )539 
+
+where  𝝁𝝁  denotes the local mean,  𝝈𝝈 𝟐𝟐  the local variance, and  𝝈𝝈𝒙𝒙 𝒚𝒚  the local covariance. Constants  𝑪𝑪 𝟏𝟏 540 
+
+and  𝑪𝑪 𝟐𝟐  were set following standard practice using the dynamic range of the images. 541 
+
+Root mean squared error (RMSE) 542 
+
+RMSE was computed as 543 
+
+𝑹𝑹 𝑴𝑴𝑴𝑴𝑰𝑰  = �𝟏𝟏 𝑵𝑵 ��𝑰𝑰 𝑼𝑼𝒓𝒓𝑹𝑹𝒅𝒅 ,𝒊𝒊 − 𝑰𝑰 𝒓𝒓 𝑹𝑹𝒇𝒇 ,𝒊𝒊 � 𝟐𝟐 𝒊𝒊 
+
+= √𝑴𝑴𝑴𝑴 𝑰𝑰  (𝟑𝟑 𝟏𝟏 )544 19 
+
+Normalized cross correlation (NCC) 545 
+
+To assess global similarity up to an affine intensity shift, NCC was computed as 546 
+
+𝑵𝑵 𝑪𝑪𝑪𝑪  = ∑ �𝑰𝑰 𝑼𝑼𝒓𝒓𝑹𝑹𝒅𝒅 ,𝒊𝒊 − 𝑰𝑰 �𝑼𝑼𝒓𝒓𝑹𝑹𝒅𝒅 ��𝑰𝑰 𝒓𝒓 𝑹𝑹𝒇𝒇 ,𝒊𝒊 − 𝑰𝑰 �𝒓𝒓 𝑹𝑹𝒇𝒇 �𝒊𝒊 �∑ �𝑰𝑰 𝑼𝑼𝒓𝒓𝑹𝑹𝒅𝒅 ,𝒊𝒊 − 𝑰𝑰 �𝑼𝑼𝒓𝒓𝑹𝑹𝒅𝒅 � 𝟐𝟐 𝒊𝒊 �∑ �𝑰𝑰 𝒓𝒓 𝑹𝑹𝒇𝒇 ,𝒊𝒊 − 𝑰𝑰 �𝒓𝒓 𝑹𝑹𝒇𝒇 � 𝟐𝟐 𝒊𝒊 
+
+(𝟑𝟑 𝟐𝟐 )
+
+547 
+
+where  𝑰𝑰 �𝑼𝑼𝒓𝒓𝑹𝑹𝒅𝒅  and  𝑰𝑰 �𝒓𝒓 𝑹𝑹𝒇𝒇  are image means. 548 
+
+Fourier spectrum analysis 549 
+
+To examine frequency-content preservation, each image was transformed using a two-dimensional 550 
+
+discrete Fourier transform 551 
+
+𝑭𝑭 (𝒐𝒐 , 𝑪𝑪 ) = 𝓕𝓕 {𝑰𝑰 (𝒙𝒙 , 𝒚𝒚 )} (𝟑𝟑𝟑𝟑 )552 
+
+and the magnitude spectrum  |𝑭𝑭 (𝒐𝒐 , 𝑪𝑪 )| was visualized after shifting the zero frequency to the 553 
+
+spectrum center using fftshift. For display, the logarithmic spectrum  𝐥𝐥𝐥𝐥𝐥𝐥  (𝟏𝟏  + |𝑭𝑭 (𝒐𝒐 , 𝑪𝑪 )|) was 554 
+
+reported to compress the dynamic range. When required for quantitative comparison, radially 555 
+
+averaged power spectra were computed from  |𝑭𝑭 (𝒐𝒐 , 𝑪𝑪 )|𝟐𝟐  by binning frequencies according to their 556 
+
+radial distance from the origin. 557 
+
+Pixel size alignment 558 
+
+Let the anisotropic input volume be  𝑽𝑽  ∈ ℝ 𝑯𝑯 ×𝑾𝑾 ×𝒁𝒁 , with lateral pixel size  𝚫𝚫 𝒙𝒙 𝒚𝒚  and axial pixel size 559 
+
+𝚫𝚫 𝒛𝒛 . A pixel size alignment operator  𝓐𝓐 (∙) was applied prior to training to equalize sampling along 560 
+
+the selected spatial axis. Specifically, one lateral axis was first resampled to the axial spacing and 561 
+
+then resampled back to the original lateral spacing, so that the network always observes inputs that 562 
+
+have undergone the same effective sampling transformation. 563 
+
+Denote the scale factor by 564 
+
+𝒔𝒔 = 𝚫𝚫 𝒙𝒙 𝒚𝒚 
+
+𝚫𝚫 𝒛𝒛 
+
+(𝟑𝟑 𝟒𝟒 )565 
+
+The pixel-aligned volume was obtained by a two-step interpolation 566 
+
+𝑽𝑽 ↓ = 𝓡𝓡 𝒔𝒔 (𝑽𝑽 ) (𝟑𝟑 𝟓𝟓 )567 
+
+𝑽𝑽 𝒂𝒂 𝒍𝒍𝒊𝒊𝒍𝒍𝑪𝑪  = 𝓡𝓡 𝟏𝟏 𝒔𝒔 ⁄ (𝑽𝑽 ↓) (𝟑𝟑 𝟔𝟔 )568 
+
+where  𝓡𝓡 𝒔𝒔  denotes a one-dimensional resampling operator acting along the chosen lateral axis with 569 
+
+scale factor  𝒔𝒔  (downsampling when  𝒔𝒔  < 𝟏𝟏  and upsampling when  𝒔𝒔  > 𝟏𝟏  ), implemented using 570 
+
+bicubic interpolation for 2D slices. The resulting  𝑽𝑽 𝒂𝒂 𝒍𝒍𝒊𝒊𝒍𝒍𝑪𝑪  preserves the original lateral grid while 571 
+
+introducing a controlled resampling that compensates for the pixel size mismatch between axial 572 20 
+
+view and lateral view, thereby enforcing uniform voxel spacing and consistent receptive-field 573 
+
+samping across directions. 574 
+
+Zebrafish segmentation 575 
+
+For cell segmentation in Fig. 6f,g , we used the MorpholibJ plugin (morphological segmentation) 576 
+
+with the same parameter settings for SPIM and DeepIso images. Before segmentation, images were 577 
+
+smoothed in ImageJ with a Gaussian blur (sigma = 1.5). We then applied watershed segmentation 578 
+
+with a tolerance of 15 and a connectivity of 26. 579 
+
+580 
+
+Competing methods 581 
+
+All competing methods and their quantitative results are summarized in Extended Data Tables xxx. 582 
+
+For a fair comparison, official implementations of CARE 23 , CycleGAN 32 , SelfNet 33 , and SSAI3D 34 583 
+
+were obtained from their respective GitHub repositories and retrained on the same datasets used in 584 
+
+our experiments across imaging modalities, following the authors recommended settings whenever 585 
+
+applicable. All evaluations were performed on a single workstation equipped with an Nvidia 586 
+
+GeForce RTX 4080 SUPER GPU with 16 GB of memory. 587 
+
+588 
+
+Data and code availability 589 
+
+The source code of this manuscript is available at  https://github.com/MZ-Wei/DeepIso . The 3D-590 
+
+SIM and 4B-SIM datasets used in this study were obtained from the publicly available dataset 591 
+
+released with the 4B-SIM paper 9 . The confocal microscopy dataset was obtained from the publicly 592 
+
+available dataset reported in Ref 33 . The SPIM and diSPIM datasets were obtained from the dataset 593 
+
+reported in Ref 22 .594 
+
+595 
+
+596 
+
+Author Contributions 597 
+
+H.L., M.G. and Y.L. supervised the research. M.W., P.X. and M.G. conceived the technique. M.W. 598 
+
+and P.X. implemented DeepIso framework. M.G. and M.W. designed simulations. M.W., P.X. and 599 
+
+Y.L. designed the validation experiment. M.W., P.X., J.L, X.F. J.Z., H.R. and R.D. performed 600 
+
+experiments and analysis. X.L. provided 3D-SIM and 4B-SIM data and analysis. Y.H. and W.Z. 601 
+
+provided biological insight and advice. M.W., P.X., Y.L. and M.G. wrote the manuscript with 602 
+
+advice from all authors. All authors had access to the study. 603 
+
+604 21 
+
+Acknowledgements 605 
+
+The work is supported by the National Natural Science Foundation of China (62427807, 62475232), 606 
+
+the Leading Innovative and Entrepreneur Team Introduction Program of Zhejiang (2024R01001), 607 
+
+Zhejiang Provincial Natural Science Foundation of China (LZ25F050008). We thank Hari Shroff 608 
+
+for helpful comments on improving the manuscript. 609 
+
+610 
+
+Competing interests statement 611 
+
+The authors declare no competing interests. 612 
+
+613 
+
+614 22 
+
+615 23 
+
+Fig. 1 | The two-stage DeepIso framework for self‑supervised isotropic resolution 616 
+
+restoration. 617 
+
+DeepIso transfers knowledge from diverse, synthetically generated degradation patterns to the 618 
+
+anisotropic restoration of specific dataset through a pretraining‑then‑adaptation workflow . a,619 
+
+Stage 1 (Pretraining): Supervised pretraining on synthetic data. An IsoNet backbone is trained to 620 
+
+learn isotropic representations from artificially degraded data. Isotropic lateral slices are 621 
+
+synthetically degraded using a collection of coarse axial blur kernels and pixel size alignment to 622 
+
+generate diverse and realistic axial anisotropic candidates (Anisotropic Data). Then these axial 623 
+
+anisotropic slices are fed into the IsoNet to learn the anisotropic-to-isotropic mapping by 624 
+
+supervised pretraining. Meanwhile, an encoder module (IsoEnc) is concatenated to capture 625 
+
+anisotropic structural features from anisotropic slices in the latent space, while a decoder module 626 
+
+(IsoDec) is trained to utilize latent features to degrade the isotropic lateral slices by enforcing 627 
+
+reconstruction consistency. IsoEnc and IsoDec are jointly updated to realize accurate latent 628 
+
+feature representation. b, Stage 2 (Adapting Inference): The raw axial data (Axial Data) is first 629 
+
+axially interpolated to match the axial pixel size to the lateral pixel size (Pixel Alignment) and get 630 
+
+the aligned axial data for network input (Aligned Axial Data). These data are fed into IsoNet 631 
+
+using transfer learning to get initial estimates (Restored Axial Data). Then these initial estimates 632 
+
+together with the aligned axial data are used to generate the intermediate anisotropic outputs 633 
+
+(Latent Anisotropic Output) using locked IsoEnc/IsoDec pair. By optimizing the consistency 634 
+
+between the real axial data (Aligned Axial Data) and intermediate outputs (Latent Anisotropic 635 
+
+Output), the IsoNet is iteratively updated and produces the final restored data (Restored Axial 636 
+
+Data). 637 
+
+638 
+
+639 
+
+640 24 
+
+641 
+
+Fig. 2 | DeepIso achieves superior isotropic restoration on simulated volumetric data. 642 
+
+a, Maximum-intensity projections showing that DeepIso successfully restores isotropic structure 643 
+
+from anisotropic input, producing results that closely match the ground truth (GT). b–e , Magnified 644 
+
+views of the boxed regions in a, comparing DeepIso with state-of-art methods, including CARE, 645 
+
+CycleGAN, SelfNet, and SSAI3D. DeepIso effectively recovers fine structural details (arrows), 646 
+
+preserving axial continuity while avoiding introducing artifacts or hallucinations. f, Quantitative 647 25 
+
+evaluation using peak signal-to-noise ratio (PSNR), structural similarity index (SSIM), and root 648 
+
+mean square error (RMSE) demonstrates that DeepIso consistently outperforms existing methods 649 
+
+in both fidelity and isotropic accuracy. Means and standard deviations are obtained from N =31 650 
+
+images. Scale bars: a 10μm; b-e 1μm. 651 
+
+652 26 
+
+653 
+
+654 
+
+Fig. 3 | DeepIso performance benchmarking with hardware-based isotropic references. 655 
+
+a, Depth-encoded rendering of fixed U2OS cells with immunolabeled microtubules restored by 656 
+
+DeepIso (color encodes axial position, z). The raw volume was acquired by 3D-SIM. The result 657 
+
+displays continuous filament networks with restored axial isotropy. b, Comparison of axial view 658 
+
+(XZ) MIP (through a y depth range of 0.4  μm around the white line in a) among 3D-SIM (raw), 659 
+
+CARE, CycleGAN, SelfNet, SSAI3D, DeepIso, and 4B-SIM (ground truth, GT). DeepIso delivers 660 27 
+
+markedly improved axial resolution closely approaching that of hardware-based near-isotropic 661 
+
+references of 4B-SIM. c, Representative ROI of single slice (indicated by the yellow line in a)662 
+
+illustrates the restoration by different algorithms, demonstrating DeepIso’s outperformance over 663 
+
+other methods. d, Normalized axial intensity profiles (corresponding to the yellow dashed lines in 664 
+
+c) showing that DeepIso best matches the 4B-SIM ground truth. Note the SelfNet and CycleGAN 665 
+
+profiles are not necessarily displayed due to their overextended widths. e, Normalized cross-666 
+
+correlation (NCC) to the 4B-SIM ground truth quantifying axial resolution enhancement across all 667 
+
+compared methods. Means and standard deviations are obtained from N = 26 ROIs. f, DeepIso 668 
+
+restoration of Live U2OS cells transfected with mEmerald-Tomm20 from a single view raw image 669 
+
+acquired with dual-view light sheet microscopy. g, Representative axial view (YZ) slice (indicated 670 
+
+by the yellow line in f) comparing SPIM (single view, raw), CycleGAN, SelfNet, SSAI3D, DeepIso, 671 
+
+and diSPIM (ground truth reference, the fusion of physical dual-view acquisitions). DeepIso 672 
+
+substantially enhances axial resolution under high‑NA illumination, approaching hardware-based 673 
+
+multiview light sheet (diSPIM) performance. h, Fourier spectra of SPIM, SSAI3D, DeepIso, and 674 
+
+diSPIM images, demonstrating the expanded axial-frequency support recovered by DeepIso. The 675 
+
+blue circles indicate 1/330 nm -1 spatial frequency. i, Quantitative comparison of PSNR, SSIM, and 676 
+
+RMSE across all methods, confirming that DeepIso consistently achieves the highest 677 
+
+reconstruction fidelity. Means and standard deviations are obtained from N = 18 ROIs. Scale bars: 678 
+
+a 16 μm; b 0.5 μm; c 0.5 μm; f 8 μm; g 2 μm. 679 
+
+680 28 
+
+681 
+
+Fig. 4 | DeepIso enhances isotropic resolution in dense, highly entangled neuron samples 682 
+
+acquired with confocal microscopy. 683 
+
+a, Depth-encoded rendering of mouse Thy1 neurons acquired by confocal microscopy and restored 684 
+
+by DeepIso, showing dense and continuous neuronal distribution in lateral view (XY). b, Axial 685 
+
+view (YZ) maximum-intensity projections (MIP) from confocal and DeepIso reconstructions, 686 
+
+revealing enhanced axial continuity and finer filament recovery. c, Magnified ROIs from b and 687 
+
+corresponding Fourier spectra, indicating extended axial frequency support after DeepIso 688 
+
+restoration. The white circles indicate 1/640 nm -1 spatial frequency. d, Another axial view (XZ) 689 
+
+MIPs highlighting improved axial resolution across neuronal networks. e, Representative axial 690 29 
+
+slice (XZ at y=147.8  μm) showing local ROI and its corresponding Fourier spectra, further 691 
+
+demonstrating restoration of high-frequency axial information. f, Magnified ROIs from d and their 692 
+
+Fourier spectra confirming isotropic resolution gain. g, Small-area axial view (XZ) MIPs 693 
+
+illustrating consistent recovery of axial resolution. h–i , Normalized intensity profiles along selected 694 
+
+YZ and XZ lines (orange lines) from b and d, respectively, showing sharper peak separation and 695 
+
+reduced axial broadening after DeepIso processing. Scale bars: a 20 μm; b 20 μm; c 10 μm; d 20 696 
+
+μm; e 10 μm; f 10 μm; g 2 μm. 697 
+
+698 30 
+
+699 
+
+Fig. 5 | DeepIso improves isotropy and preserves fine structures in 3D SIM imaging. 700 
+
+a, Lateral view (XY) maximum-intensity projection (MIP) of bacterial membranes restored by 701 
+
+DeepIso, showing improved continuity and isotropic membrane morphology. b, Representative 702 
+
+ROI of axial view (XZ) slice (indicated by the yellow line in a) and corresponding Fourier spectra 703 
+
+illustrating extended axial-frequency support after DeepIso restoration compared with 3D-SIM. c,704 
+
+Another ROI of lateral slice (indicated by the cyan line in a) showing clearer axial separation of 705 
+
+membrane contour by DeepIso. d, Normalized intensity profiles along the dashed line in c,706 
+
+demonstrating enhanced axial contrast and sharper separation of features. e, 3D rendering of U2OS 707 
+
+outer mitochondrial membranes restored by DeepIso showing continuous network morphology. f,708 
+
+Axial view (XZ) MIPs of 3D-SIM raw data and DeepIso restorations demonstrating superior axial 709 
+
+resolution recovery by DeepIso. g, Normalized intensity profiles along the region marked in f,710 31 
+
+confirming axial improvement. h, Magnified ROIs from f showing detailed membrane 711 
+
+substructures. i, Lateral view (XZ) MIP (through y depth between 19.223  μm and 21.268  μm) of 712 
+
+3D-SIM raw and DeepIso restoration, revealing consistent isotropic recovery across the volume. j,713 
+
+Representative ROIs from i and corresponding Fourier spectra showing restoration of high-714 
+
+frequency axial components (arrows) by DeepIso. The white circle indicates the lateral cutoff 715 
+
+frequency (1/330 nm -1 ). Scale bars, a 4 μm; b 0.5 μm; c 0.25 μm; e 4 μm; f 2 μm; h 0.2 μm; i 2716 
+
+μm; j 0.2 μm. 717 
+
+718 32 
+
+719 33 
+
+Fig. 6 | DeepIso enables reliable segmentation and cell tracking for time-lapse data by 720 
+
+improving structure fidelity. 721 
+
+a, Three-dimensional rendering of a 32-h post-fertilization zebrafish embryo expressing Lyn–eGFP 722 
+
+under the claudin B (cldnb) promoter, highlighting cell membranes within and surrounding the 723 
+
+lateral-line primordium. A single view raw volume from light sheet microscopy was restored with 724 
+
+DeepIso. b, Representative axial slices (YZ at x=62.56  μm) from single-view raw (SPIM), single 725 
+
+view deconvolution (Deconv), DeepIso restoration, and the fusion result of two-view acquisitions 726 
+
+(diSPIM, ground truth), showing markedly improved axial resolution and junctional details in 727 
+
+DeepIso. c, Corresponding Fourier spectra for different methods. The yellow circles indicate 1/330 728 
+
+nm -1 spatial frequency. The extended axial-frequency support recovered by DeepIso outperforms 729 
+
+conventional SPIM and deconvolution, approaching the isotropic resolution of diSPIM, which 730 
+
+fuses two-view acquisitions. d, e, Magnified ROIs from b showing isotropic restoration of 731 
+
+epithelial boundaries and enhanced contrast. f, Segmentation of primordium (YZ at x=55.7  μm) 732 
+
+illustrating DeepIso restoration provides more accurate epithelial boundary delineation than SPIM 733 
+
+raw slice. g, Representative ROIs from f highlighting continuous and morphologically preserved 734 
+
+membranes by DeepIso (bottom) over raw (top). h, Time-lapse axial view (YZ) MIP reconstructed 735 
+
+by DeepIso, visualizing apical and basal surfaces of the primordium with high axial fidelity (time 736 
+
+point 30 min is displayed). i, j, Two independent ROIs tracking distinct immune cells (arrows) 737 
+
+migrating between surrounding skin cells from 0 – 375 min by DeepIso. Scale bars, a 20 μm; b 10 738 
+
+μm; d 2 μm; e 2 μm; f 10 μm; g 10 μm; h 20 μm; i 8 μm; j 8 μm. 739 
+
+740 
+
+741 34 
+
+References 742 
+
+1. Stelzer, E. H. K. et al. Light sheet fluorescence microscopy. Nat. Rev. Methods Primer 1,743 
+
+73 (2021). 744 
+
+2. Sahl, S. J., Hell, S. W. & Jakobs, S. Fluorescence nanoscopy in cell biology. Nat. Rev. 745 
+
+Mol. Cell Biol. 18 , 685–701 (2017). 746 
+
+3. Chen, Y., Yang, Y. & Zhang, F. Noninvasive in vivo microscopy of single neutrophils in 747 
+
+the mouse brain via NIR-II fluorescent nanomaterials. Nat. Protoc. 19 , 2386–2407 (2024). 748 
+
+4. Loewa, A., Feng, J. J. & Hedtrich, S. Human disease models in drug development. Nat. 749 
+
+Rev. Bioeng. 1, 545–559 (2023). 750 
+
+5. Wu, Y. & Shroff, H. Faster, sharper, and deeper: structured illumination microscopy for 751 
+
+biological imaging. Nat. Methods 15 , 1011–1019 (2018). 752 
+
+6. Zhang, Y. et al. Super-resolution imaging of fast morphological dynamics of neurons in 753 
+
+behaving animals. Nat. Methods 1–10 (2024) doi:10.1038/s41592-024-02535-9. 754 
+
+7. Fu, Y. et al. Triangle-beam interference structured illumination microscopy. Nat. 755 
+
+Photonics https://doi.org/10.1038/s41566-025-01730-0 (2025) doi:10.1038/s41566-025-01730-0. 756 
+
+8. Wang, J. et al. Implementation of a 4Pi-SMS super-resolution microscope. Nat. Protoc. 757 
+
+16 , 677–727 (2021). 758 
+
+9. Li, X. et al. Three-dimensional structured illumination microscopy with enhanced axial 759 
+
+resolution. Nat. Biotechnol. 41 , 1307–1319 (2023). 760 
+
+10. Yoo, H. et al. Near-isotropic super-resolution microscopy with axial interference speckle 761 
+
+illumination. Nat. Commun. 16 , 9274 (2025). 762 
+
+11. He, E. et al. Boosting High ‐Fidelity Isotropic Super ‐Resolution via Image Interference 763 
+
+Structured Illumination Microscopy with Spatial ‐Spectral Optimization. Laser Photonics Rev. 764 
+
+19 , 2500178 (2025). 765 
+
+12. Wu, Y. et al. Spatially isotropic four-dimensional imaging with dual-view plane 766 
+
+illumination microscopy. Nat. Biotechnol. 31 , 1032–1038 (2013). 767 
+
+13. Kumar, A. et al. Dual-view plane illumination microscopy for rapid and spatially isotropic 768 
+
+imaging. Nat. Protoc. 9, 2555–2573 (2014). 769 
+
+14. Wu, Y. et al. Simultaneous multiview capture and fusion improves spatial resolution in 770 
+
+wide-field and light-sheet microscopy. Optica 3, 897 (2016). 771 
+
+15. Wu, Y. et al. Multiview confocal super-resolution microscopy. Nature 600 , 279–284 772 
+
+(2021). 773 
+
+16. Wilson, T., Botcherby, E., Juškaitis, R. & Booth, M. Aberration-free refocusing in high 774 
+
+numerical aperture microscopy. in Confocal, Multiphoton, and Nonlinear Microscopic Imaging 775 
+
+III (2007), paper 6630_24 (Optica Publishing Group, 2007). doi:10.1364/ECBO.2007.6630_24. 776 
+
+17. Dean, K. M., Roudot, P., Welf, E. S., Danuser, G. & Fiolka, R. Deconvolution-free 777 
+
+Subcellular Imaging with Axially Swept Light Sheet Microscopy. Biophys. J. 108 , 2807–2815 778 
+
+(2015). 779 
+
+18. Dean, K. M. et al. Isotropic imaging across spatial scales with axially swept light-sheet 780 
+
+microscopy. Nat. Protoc. 17 , 2025–2053 (2022). 781 
+
+19. Ouyang, Z. et al. Elucidating subcellular architecture and dynamics at isotropic 100-nm 782 
+
+resolution with 4Pi-SIM. Nat. Methods 1–13 (2024) doi:10.1038/s41592-024-02515-z. 783 
+
+20. Wang, Q. et al. 4Pi-SIMFLUX: 4Pi single-molecule localization microscopy with 784 
+
+structured illumination. Nat. Methods https://doi.org/10.1038/s41592-025-02908-8 (2025) 785 
+
+doi:10.1038/s41592-025-02908-8. 786 35 
+
+21. Aakhte, M. et al. Isotropic, aberration-corrected light sheet microscopy for rapid high-787 
+
+resolution imaging of cleared tissue. Preprint at https://doi.org/10.1101/2025.02.21.639411 788 
+
+(2025). 789 
+
+22. Guo, M. et al. Rapid image deconvolution and multiview fusion for optical microscopy. 790 
+
+Nat. Biotechnol. 38 , 1337–1346 (2020). 791 
+
+23. Weigert, M. et al. Content-aware image restoration: pushing the limits of fluorescence 792 
+
+microscopy. Nat. Methods 15 , 1090–1097 (2018). 793 
+
+24. Qu, L. et al. Self-inspired learning for denoising live-cell super-resolution microscopy. 794 
+
+Nat. Methods 21 , 1895–1908 (2024). 795 
+
+25. Qiao, C. et al. Zero-shot learning enables instant denoising and super-resolution in optical 796 
+
+fluorescence microscopy. Nat. Commun. 15 , 4180 (2024). 797 
+
+26. Chen, J. et al. Three-dimensional residual channel attention networks denoise and sharpen 798 
+
+fluorescence microscopy image volumes. Nat. Methods 18 , 678–687 (2021). 799 
+
+27. Li, Y. et al. Incorporating the image formation process into deep learning improves 800 
+
+network performance. Nat. Methods 19 , 1427–1437 (2022). 801 
+
+28. Qiao, C. et al. Evaluation and development of deep neural networks for image super-802 
+
+resolution in optical microscopy. Nat. Methods 18 , 194–202 (2021). 803 
+
+29. Qiao, C. et al. Rationalized deep learning super-resolution microscopy for sustained live 804 
+
+imaging of rapid subcellular processes. Nat. Biotechnol. 41 , 367–377 (2023). 805 
+
+30. Liu, J. et al. Bio-friendly and high-precision super-resolution imaging through self-806 
+
+supervised reconstruction structured illumination microscopy. Nat. Methods 807 
+
+https://doi.org/10.1038/s41592-025-02966-y (2025) doi:10.1038/s41592-025-02966-y. 808 
+
+31. Guo, M. et al. Deep learning-based aberration compensation improves contrast and 809 
+
+resolution in fluorescence microscopy. Nat. Commun. 16 , 313 (2025). 810 
+
+32. Park, H. et al. Deep learning enables reference-free isotropic super-resolution for 811 
+
+volumetric fluorescence microscopy. Nat. Commun. 13 , 3297 (2022). 812 
+
+33. Ning, K. et al. Deep self-learning enables fast, high-fidelity isotropic resolution 813 
+
+restoration for volumetric fluorescence microscopy. Light Sci. Appl. 12 , 204 (2023). 814 
+
+34. Han, J. et al. System- and sample-agnostic isotropic three-dimensional microscopy by 815 
+
+weakly physics-informed, domain-shift-resistant axial deblurring. Nat. Commun. 16 , 745 (2025). 816 
+
+35. Shocher, A., Cohen, N. & Irani, M. Zero-Shot Super-Resolution Using Deep Internal 817 
+
+Learning. in 2018 IEEE/CVF Conference on Computer Vision and Pattern Recognition 3118– 818 
+
+3126 (IEEE, Salt Lake City, UT, 2018). doi:10.1109/CVPR.2018.00329. 819 
+
+36. Cheng, Z., Xiong, Z., Chen, C., Liu, D. & Zha, Z.-J. Light Field Super-Resolution with 820 
+
+Zero-Shot Learning. in 2021 IEEE/CVF Conference on Computer Vision and Pattern 821 
+
+Recognition (CVPR) 10005–10014 (IEEE, Nashville, TN, USA, 2021). 822 
+
+doi:10.1109/CVPR46437.2021.00988. 823 
+
+37. Soh, J. W., Cho, S. & Cho, N. I. Meta-Transfer Learning for Zero-Shot Super-Resolution. 824 
+
+Preprint at https://doi.org/10.48550/arXiv.2002.12213 (2020). 825 
+
+38. Chen, H. et al. Low-Res Leads the Way: Improving Generalization for Super-Resolution 826 
+
+by Self-Supervised Learning. in 2024 IEEE/CVF Conference on Computer Vision and Pattern 827 
+
+Recognition (CVPR) 25857–25867 (IEEE, Seattle, WA, USA, 2024). 828 
+
+doi:10.1109/CVPR52733.2024.02443. 829 
+
+39. Gustafsson, M. G. L. et al. Three-Dimensional Resolution Doubling in Wide-Field 830 
+
+Fluorescence Microscopy by Structured Illumination. Biophys. J. 94 , 4957–4970 (2008). 831 
+
+40. Ma, C., Tan, W., He, R. & Yan, B. Pretraining a foundation model for generalizable 832 
+
+fluorescence microscopy-based image restoration. Nat. Methods 21 , 1558–1567 (2024). 833 36 
+
+41. Ma, Y. et al. MAGNET: an all-in-one foundation model for cross-modal and cross-834 
+
+dimensional microscopic image restoration. https://doi.org/10.64898/2025.12.23.696141 835 
+
+doi:10.64898/2025.12.23.696141. 836 
+
+42. Qiao, C. et al. Fast-adaptive super-resolution lattice light-sheet microscopy for rapid, 837 
+
+long-term, near-isotropic subcellular imaging.  Nat. Methods 22 , 1059–1069 (2025). 838 
+
+839 
+
+840

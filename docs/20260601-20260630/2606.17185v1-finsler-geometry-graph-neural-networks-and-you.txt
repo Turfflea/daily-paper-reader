@@ -1,0 +1,1214 @@
+Title: Finsler Geometry, Graph Neural Networks, and You
+
+URL Source: https://arxiv.org/pdf/2606.17185v1
+
+Published Time: Wed, 17 Jun 2026 00:06:10 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+# Finsler Geometry, Graph Neural Networks, and You 
+
+T. Mitchell Roddenberry mitch@rice.edu 
+
+Richard G. Baraniuk richb@rice.edu 
+
+Rice University, Houston, TX, USA 
+
+Abstract 
+
+Graph neural network architectures based on the graph Laplacian approximate the Laplace– Beltrami operator, thus limiting their application to isotropic operators. As a nonlinear alternative to the Laplace–Beltrami operator, we consider estimates of the Finsler Laplacian on point clouds sampled from a manifold. We prove that these discrete estimates converge to the true operator on the manifold as the number of point samples grows. Moreover, we show that this operator can be expressed as a graph neural network layer, which we use to define a family of Finslerian graph neural networks constrained to express Finsler geometry. We show that Finslerian graph neural networks recover the geometry underlying nonlinear diffusion equations in practice. 
+
+1. Introduction 
+
+Graph neural networks operate on discrete collections of points with specified pairwise re-lations. These methods incorporate the relations into the network parameterization, often inspired by the “right” operator on a limiting object that the graph approximates. For exam-ple, the graph Laplacian is understood as a discrete approximation of the Laplace–Beltrami operator, so that graph neural networks using the Laplacian implicitly treat the graph as being sampled from a Riemannian manifold. 
+
+Figure 1: Riemannian (dashed) and Finsler (solid) unit balls on the tangent bundle of a man-ifold. The Finsler metric ex-hibits anisotropy, non-ellipticity, and asymmetry. 
+
+Using a basic operator, such as the Laplacian, graph neural networks are constructed by interleaving the op-erator and local nonlinearities, mimicking the composi-tion of affine transforms and nonlinearities in feedfor-ward neural networks. Despite the nonlinearity, these neural networks are essentially isotropic. The natural generalization of Riemannian geometry to allow for anisotropy is Finsler geometry , which equips the tangent spaces of a smooth manifold with a general Minkowski norm, rather than an inner product. This allows for asymmetric, non-elliptical geometry, as pic-tured in Figure 1. Finsler manifolds share many prop-erties with their Riemannian counterparts, including a Laplace operator as the Fréchet derivative of an energy functional. Defining the Laplacian on a Finsler mani-fold in this way yields a nonlinear operator , making it a viable candidate for nonlinear learning techniques that use interpretable geometric structures from the outset. 
+
+> arXiv:2606.17185v1 [cs.LG] 15 Jun 2026 Roddenberry Baraniuk
+
+Extending the approximation of the Laplace–Beltrami operator on submanifolds by the Laplacian of a sampled graph, we consider the problem of discretely approximating nonlinear Laplacians that inherit their structure from Finsler geometries. To wit, we 1. Define the empirical Finsler Laplacian for point clouds (Section 2.1) 2. Prove that the empirical Finsler Laplacian almost surely converges to the continuüm operator (Theorem 2) 3. Express the empirical Finsler Laplacian as a graph neural network layer (Section 3), and define a class of Finslerian graph neural networks (Section 3.2) 4. Demonstrate the application of the Finslerian graph neural network to the inverse problem of recovering a Finsler metric from observed heat diffusion (Section 4). 
+
+Related Work. The convergence of graph Laplacians to the Laplace–Beltrami operator on manifolds has been studied from multiple angles (Belkin and Niyogi, 2004, 2008; Coifman and Lafon, 2006; Trillos et al., 2020) and application settings, particularly in semi-supervised learning (Trillos and Slepčev, 2018; Calder et al., 2023). The convergence of p-Laplacians has also been studied (Slepčev and Thorpe, 2019), yielding a class of methods for semi-supervised learning that are nonlinear, but still isotropic. Additionally, convergence of graph neural networks to manifold neural networks has been considered (Wang et al., 2025) using convolution operators based on the Laplace–Beltrami operator. There have been recent works on applications of Finsler geometry in computer vision and data science, with emphasis on the use of Randers metrics in particular (Weber et al., 2024; Dages et al., 2025; Gahtan et al., 2026). Our discretization of the Finsler Laplacian draws inspiration from methods for solving partial differential equations on point clouds (Liang and Zhao, 2013). Similar to Randers metrics, “magnetic Laplacians” have been used in graph signal processing (Furutani et al., 2019) and subsequently for the construction of graph neural networks (Zhang et al., 2021; He et al., 2022), with the goal of modeling asymmetric systems on graphs. 
+
+2. Finsler Laplacians 
+
+Let F be a Minkowski norm on RD, and let a probability measure μ supported on a closed, compact, smooth, d-dimensional submanifold M ⊂ RD be given. Let p be the density of μ with respect to the Hausdorff measure of the manifold. Under this structure, M is a weighted Finsler manifold (Bao et al., 2000) with metric pulled back from F via the inclusion map, with the co-Finsler metric given by the dual norm F ∗. For technical background, we refer to Appendix A. Define an energy functional for differentiable functions on M:
+
+E[f ] = 
+
+Z 12 [F ∗(∇f (x))] 2 dμ (x).
+
+The Finsler Laplacian (Ge and Shen, 2000; Ohta and Sturm, 2009) is a nonlinear operator defined as the Fréchet derivative of E, or equivalently as the divergence of the gradient of 
+
+> 2Finsler Geometry, Graph Neural Networks, and You
+
+Figure 2: Heat diffusion on a cylinder (identified edges marked by arrows) with two point sources (marked ×) using the isotropic Laplace–Beltrami operator (left) and the Finsler Laplacian derived from an ambient Randers metric (right). Panels show Tissot’s indicatrices for the respective metrics. The Randers heat equation exhibits “drift” in accordance with the off-center geometry. 
+
+the squared (co-)norm: 
+
+∆[ f ] = 1
+
+p D{E[f ]} = 1
+
+p div ( pJ (∇f )) ,
+
+where 
+
+J(ξ) = ∇ξ
+
+12 [F ∗(ξ)] 2 = F ∗(ξ)∇ξF ∗(ξ). (1) Observe that taking F as the Euclidean norm recovers the usual density-weighted Laplace– Beltrami operator. 
+
+Remark 1 For the reader who likes keeping track of indices, J : T ∗M → T M is the Legendre transformation for the cotangent/tangent bundles of the manifold. 
+
+Example 1 Let M ⊂ R3 be a cylindrical surface. We consider the heat equation ˙f (t) = 
+
+−∆[ f (t)] , where f (0) is the sum of two Dirac delta functions on M, and ∆ is either the Laplace–Beltrami operator, or the Finsler Laplacian induced by a Minkowski norm on the ambient space. In particular, for some vector v with norm less than one, let F ∗(ξ) = 
+
+∥ξ∥ + ⟨ξ, v ⟩, so that F ∗ is a Randers metric on the cotangent bundle of the ambient space. As shown in Figure 2, the Randers metric causes the diffusion of heat to “drift” according to the vector v.
+
+2.1. The Finsler Graph Laplacian 
+
+Let X = {xi}ni=1 be sampled i.i.d. from the distribution μ, and suppose we have access to the function values f (xi) for each i. We wish to estimate the gradients ∇f based on these samples, given a translation-invariant nonnegative kernel κ and ϵ > 0. Assume that 
+
+κ : RD → R is smooth, compactly supported, and radially symmetric. Define κϵ(z) := 
+
+ϵ−dκ(z/ϵ ).
+
+> 3Roddenberry Baraniuk
+
+We use a local principal component analysis method for estimating the gradient of f .Namely, we define 
+
+∇ϵ,n f (x) = C†
+
+> ϵ,n
+
+(x)bϵ,n [f ]( x),
+
+where C† 
+
+> ϵ,n
+
+is (almost) a pseudoinverse of the kernel-weighted covariance centered at x, and 
+
+bϵ,n [f ]( x) is the kernel-weighted local variation of f near x.1 Using the empirical gradient, we define the empirical energy functional 
+
+Eϵ,n [f ] = 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+12 [F ∗(∇ϵ,n f (xi))] 2 ,
+
+and the empirical Finsler Laplacian via the Fréchet derivative: ∆ϵ,n [f ] = nD {E[f ]}. For convenience, define the (co)vector ξ(x) = C†
+
+> ϵ,n
+
+(x)J(∇ϵ,n f (x)) . This yields the formula 
+
+∆ϵ,n [f ]( x) = 1
+
+nϵ 2
+
+> n
+
+X
+
+> i=1
+
+κϵ (x − xi) ⟨ξ(x) + ξ(xi), x − xi⟩. (2) We define the Finsler graph Laplacian L as the restriction of the empirical Finsler Laplacian to the point cloud X .Although the Finsler Laplacian and its graph counterpart are derived from similar energy functionals, the capacity of the Finsler graph Laplacian to approximate the underlying operator does not follow immediately. Since n → ∞ , if ϵ → 0 at a suitable rate, the Finsler graph Laplacian converges to the continuüm Finsler Laplacian in the following sense: 
+
+Theorem 2 Let μ be a probability measure supported on a smooth, closed, and compact 
+
+d-dimensional submanifold M ⊂ RD, with density p bounded away from zero on its support. Assume that f is a C3 function on this submanifold. For each n ≥ 1, let {xi}ni=1 be a set of points sampled i.i.d. according to the measure μ. Then, for ϵ = O (log n/n )1/(3 d+4) ,
+
+lim  
+
+> n→∞
+
+max  
+
+> j∈[1 ,n ]
+
+∆[ f ]( xj ) − L [f ]( xj ) = 0 almost surely .
+
+We prove this in Appendix D. 
+
+3. The Finsler Graph Laplacian and Neural Networks 
+
+Cellular sheaves are a powerful tool for organizing operators on graphs that transform data between vector spaces (Curry, 2014; Hansen and Gebhart, 2020; Barbero et al., 2022). We cast the Finsler graph Laplacian in this framework, which motivates a new graph neural network architecture. 
+
+3.1. Cellular Sheaves for the Finsler Laplacian 
+
+Let X = {xi}ni=1 be a point cloud, with an observed function f : X → R. After construct-ing a graph using X , we construct sheaf structures over the graph such that appropriate composition of restriction maps, morphisms, and their adjoints computes the Finsler graph 
+
+> 1. We offer more precise definitions of these objects in Appendix B.
+> 4Finsler Geometry, Graph Neural Networks, and You
+
+Laplacian. Construct a graph G = ( X , E) so that X is the set of nodes and E consists of unordered pairs of nodes (xi, x j ) such that κϵ(xi − xj )̸ = 0 . We define two cellular sheaves 2
+
+on G. The first we denote by F, such that all vector spaces F(x) and F(e) are the real line R. For any incident node-edge pair, the restriction map is defined as Fx→efx = fx for 
+
+fx ∈ F (x) ≃ R. The second sheaf is denoted by T , and assigns a copy of the tangent space 
+
+TxRD to each node x ∈ X , while still assigning the real line to each edge e ∈ E . For each node x ∈ X and any incident edge (x, y ) ∈ E , the restriction map is 
+
+Tx→(x,y )v = 1
+
+nϵ 2 κϵ (x − y) ⟨C†
+
+> ϵ,n
+
+(x)( x − y), v ⟩,
+
+for v ∈ TxRD ≃ RD. We identify the tangent spaces with the cotangent spaces TxRD ≃
+
+T ∗ 
+
+> x
+
+RD using the ambient Euclidean metric. We define the following maps on the spaces of edge/node data: 
+
+• id : C1(F) → C1(T ) and id ∗ : C1(T ) → C1(F) are both identity maps under the obvious identification C1(F) ≃ C1(T ),
+
+• J : C0(T ) → C0(T ) passes (co)vector data on the nodes through the map J as defined in (1). The vector spaces constituting both sheaves are endowed with the usual inner product structure; the restriction maps and their adjoints induce a differential d : C0 → C1 and a codifferential δ : C1 → C0 for both sheaves F, T . We model the function on the nodes as a 
+
+0-cochain f ∈ C0(F). The Finsler graph Laplacian is represented as 
+
+L[f ] = ( δ ◦ id ∗ ◦ d ◦ J ◦ δ ◦ id ◦ d)[ f ],
+
+where d : C0 → C1 generically indicates the differential and δ : C1 → C0 the codifferential. Perhaps more legibly, the Finsler graph Laplacian traverses the following (non-commutative) diagram: 
+
+C0(F) C1(F) C1(T ) C0(T ) 
+
+> d
+> δ
+> id
+> id ∗
+> δ
+> d
+> J
+
+. (3) Considering the map J as an activation function, the Finsler graph Laplacian can be thought of as a layer in a sheaf neural network (Hansen and Gebhart, 2020; Barbero et al., 2022), where the nonlinearity is applied in a “lifted” space (namely, the cotangent space at each point). In contrast, the nonlinearity for a typically defined sheaf neural network is applied in the same domain as the input space, that is, as a map σ : C0(F) → C0(F).
+
+3.2. Finslerian Graph Neural Networks 
+
+We now consider how a graph neural network may be designed to parameterize a Finsler metric. Specifically, we will replace J with a simple neural network. For W, V ∈ RE×D,
+
+> 2. See Appendix C for background information on cellular (co)sheaves.
+> 5Roddenberry Baraniuk
+
+Figure 3: The function f (x, y, z ) = cos( x) + cos( y) + z restricted to the torus (left) and the Finsler Laplacian ∆[ f ] defined so that F ∗(ξ) = ∥ξ∥3 (right). Identified edges of torus marked by arrows. 
+
+and an activation function σ : R → R that is positive homogeneous of degree 1 with σ′ ≥ 0,define the approximation bJ(ξ) = V ⊤σ(W ξ ), (4) where σ is applied elementwise in the standard basis. The following result gives a condition that guarantees bJ to be “Finslerian,” in the sense of being the gradient of a squared-norm: 
+
+Proposition 3 If V = W in (4) , rank( W ) = D, and σ′ > 0, then bJ(ξ) = ∇ξ 12
+
+h bF ∗(ξ)
+
+i2
+
+where 
+
+bF ∗(ξ) = 
+
+q
+
+2⟨ξ, bJ(ξ)⟩ (5) 
+
+is an (almost) Minkowski norm. Under the further assumption that σ(x) = αx for α > 0,the norm bF ∗ is Riemannian. 
+
+We prove Proposition 3 in Appendix A.1. Based on this, for a (potentially constant) learn-able matrix W (t), we define a Finslerian graph neural network under the framework of graph neural diffusion (Chamberlain et al., 2021; Thorpe et al., 2022; Bodnar et al., 2022); that is, an ordinary differential equation of the form 
+
+˙f (t) = − bLW (t)[f (t)] ,
+
+where bLW (t) is the Finsler graph Laplacian defined using bJ(ξ) = W ⊤(t)σ(W (t)ξ).
+
+4. Numerical Experiments 
+
+We demonstrate the Finsler graph Laplacian and Finslerian graph neural networks on a collection of numerical examples, corroborating our convergence result (Theorem 2) and the utility of a symmetric nonlinear network for representing Minkowski norms (Proposition 3). Implementation details can be found in Appendix E, and source code is available [here]. 
+
+4.1. Convergence of the Finsler Graph Laplacian 
+
+We first validate the convergence result stated in Theorem 2. Let M ⊂ R3 be a torus with major radius 2 and minor radius 1 oriented along the xy -plane. We consider the restriction of a function f (x, y, z ) = cos( x) + cos( y) + z on the ambient space to M, and consider the Finsler Laplacian defined by the ℓ3-norm, that is, where F ∗(ξ) =  P  
+
+> i
+
+|ξi|31/3. The function 
+
+> 6Finsler Geometry, Graph Neural Networks, and You
+
+0 0.5 1G.T. 
+
+> ReLU
+> Linear
+
+Figure 4: (Bottom left) Similarity between the Finsler graph Laplacian and the true Finsler Laplacian as a function of n and ϵ. (Top left) Cosine similarity for “best” ϵ(n). (Right) Recovery of a Randers metric by a Finslerian graph neural network. 
+
+f and the application of the Finsler Laplacian ∆[ f ] are pictured in Figure 3. We sample points on the torus uniformly according to the ambient (Hausdorff) measure, and evaluate the Finsler graph Laplacian constructed using varying numbers of sampled points n and bandwidths ϵ. We then measure the cosine similarity between the true Finsler Laplacian evaluated at the sampled points and the Finsler graph Laplacian, to account for scaling. The results of this are shown in Figure 4 (left). As expected, the similarity between the true and graph Laplacian map increases as n grows from 250 to 9500 , with the corresponding “best” value of ϵ decreasing at a modest rate as the point cloud becomes denser. This corroborates the convergence result established by Theorem 2. 
+
+4.2. Learning Geometry using Finslerian Graph Neural Networks 
+
+We consider a semisupervised geometric inverse problem of recovering a Finsler metric from an observed instance of heat diffusion. Namely, we sample a point cloud of n = 600 points uniformly on the unit square, and construct a graph using a gaussian kernel with a bandwidth of ϵ = 0 .2. In the graph construction, we periodize the domain, giving the manifold the topology of a torus. We generate a function f (0) on the domain as a superposition of 5
+
+Fourier modes of varying frequency, phase, and amplitude, then sample it to yield a function on the point cloud. Then, we run the heat equation using a Finsler Laplacian defined using a Randers (co)metric (see Example 1) with a drift vector v = [0 .25 , 0.25] . We observe the state f (T ) for T = 1 , and use 20% of the labeled nodes for training. Given this single input-output sample of the heat equation over one time unit, we apply multiple techniques to model the heat diffusion. The first two are Finslerian graph neural networks (FGNNs), both with hidden dimension E = 64 , where one uses the ReLU activation and the other uses a linear activation. The third and fourth learn maps on the node signal space that more closely resembles a graph neural network (GNN). The initial input f (0) 
+
+is linearly lifted to RE , and heat diffusion is performed for node features in RE where 
+
+˙f (t) = MLP( Lf (t)) with L denoting the standard graph Laplacian, and MLP a single-
+
+> 7Roddenberry Baraniuk
+
+hidden-layer neural network with either ReLU or linear activations, mapping RE to RE on each node. The output of the diffusion is then linearly projected back to R.We train all methods to map the initial input f (0) to predict the labeled 20% of nodes at f (T ). We then measure the relative mean-squared error (MSE) over the re-maining 80% of nodes, recorded under the column “Train Graph” in Table 1. The Fins-lerian graph neural networks strongly outperform the standard graph neural networks. 
+
+Table 1: MSE of learned approximations to Finsler heat flow. 
+
+Method Train Graph Test Graph 
+
+ReLU FGNN 1.6 × 10 −5 1.1 × 10 −5
+
+Linear FGNN 4.6 × 10 −4 1.4 × 10 −4
+
+ReLU GNN 1.9 × 10 −2 1.5 × 10 −1
+
+Linear GNN 2.2 × 10 −2 1.8 × 10 −1
+
+Moreover, the nonlinear (ReLU) Finsle-rian graph neural network performs an or-der of magnitude better than the linear one, because the linear method is only ca-pable of Riemannian diffusion, by Propo-sition 3. To test generalization, we resam-ple the graph and generate a new initial condition f (0) , and compare the trained models to the true Finsler heat equation on the new, unseen graph. As shown in Table 1 under the column “Test Graph,” the Finslerian graph neural networks suffer no performance loss, reflecting the generaliza-tion suggested by Theorem 2. On the other hand, the graph neural networks appear to overfit to the training graph, performing much worse on the test graph. We also examine the qualitative properties of the Finslerian graph neural networks after training. Since both methods amounts to learning bJ(ξ) = ∇ξ 12 [ bF ∗(ξ)] 2, we plot the unit balls of the norms bF ∗ in Figure 4 (right). The only approach that yields a metric close to the ground truth (G.T.) metric is the model with ReLU activation. The model with linear activation learns a metric whose unit ball is an ellipse, again due to its restriction to Riemannian metrics by Proposition 3. 
+
+5. Conclusion 
+
+We have developed the topological and algebraic tools for approximating Finsler geometric Laplacian operators on sampled point clouds. The proposed empirical Finsler Laplacian is shown to converge in a uniform pointwise sense, demonstrating its utility both for computa-tions in PDEs and in semisupervised learning problems arising in data science. Beyond the applications, the empirical Finsler Laplacian demonstrates the limitations of graph signal processing and graph neural network methods that rely too heavily on isotropy. By linking the structure of the Finsler Laplacian to a class of nonlinear graph neural networks, we hope to promote study into how nonlinearities in neural architectures implicitly impose geometric structures on the domain. By tying the neural architecture design to a known geomet-ric structure, such as a Minkowski norm, solutions found by learning algorithms become interpretable via the induced geometry. 
+
+Acknowledgments 
+
+This work was supported by ONR grant N00014-23-1-2714, DOE grant DE-SC0020345, DOI grant 140D0423C0076, and a Google Cloud Computing Award. 
+
+> 8Finsler Geometry, Graph Neural Networks, and You
+
+References 
+
+David Bao, S-S Chern, and Zhongmin Shen. An Introduction to Riemann-Finsler Geometry .Springer Science & Business Media, 2000. Federico Barbero, Cristian Bodnar, Haitz Sáez de Ocáriz Borde, Michael Bronstein, Petar Veličković, and Pietro Liò. Sheaf neural networks with connection Laplacians. In Topo-logical, Algebraic and Geometric Learning Workshops , 2022. Mikhail Belkin and Partha Niyogi. Semi-supervised learning on Riemannian manifolds. 
+
+Machine learning , 56(1), 2004. Mikhail Belkin and Partha Niyogi. Towards a theoretical foundation for Laplacian-based manifold methods. Journal of Computer and System Sciences , 74(8), 2008. Cristian Bodnar, Francesco Di Giovanni, Benjamin Chamberlain, Pietro Liò, and Michael Bronstein. Neural sheaf diffusion: A topological perspective on heterophily and over-smoothing in GNNs. Advances in Neural Information Processing Systems , 35, 2022. James Bradbury et al. JAX: composable transformations of Python+NumPy programs, 2018. URL http://github.com/jax-ml/jax .Dmitri Burago and Sergey Ivanov. Isometric embeddings of Finsler manifolds. Algebra i Analiz , 5(1), 1993. English: St. Petersburg Math Journal 5.1 (1994). Jeff Calder, Dejan Slepčev, and Matthew Thorpe. Rates of convergence for Laplacian semi-supervised learning with low labeling rates. Research in the Mathematical Sciences , 10 (1):10, 2023. Ben Chamberlain, James Rowbottom, Maria I Gorinova, Michael Bronstein, Stefan Webb, and Emanuele Rossi. GRAND: Graph neural diffusion. In International Conference on Machine Learning , 2021. Ronald R Coifman and Stéphane Lafon. Diffusion maps. Applied and Computational Har-monic Analysis , 21(1), 2006. Justin Michael Curry. Sheaves, cosheaves and applications . University of Pennsylvania, 2014. Thomas Dages, Simon Weber, Ya-Wei Eileen Lin, Ronen Talmon, Daniel Cremers, Michael Lindenbaum, Alfred M Bruckstein, and Ron Kimmel. Finsler multi-dimensional scaling: Manifold learning for asymmetric dimensionality reduction and embedding. In IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2025. James F Davis, Benjamin R Edwards, and V Alan Kosteleck` y. Characteristic tensors for almost Finsler manifolds. The Journal of Geometric Analysis , 36(4), 2026. DeepMind et al. The DeepMind JAX Ecosystem, 2020. URL http://github.com/ google-deepmind .
+
+> 9Roddenberry Baraniuk
+
+Satoshi Furutani, Toshiki Shibahara, Mitsuaki Akiyama, Kunio Hato, and Masaki Aida. Graph signal processing for directed graphs based on the Hermitian Laplacian. In Joint European Conference on Machine Learning and Knowledge Discovery in Databases , 2019. Barak Gahtan, Jacob Shpund, and Alex M Bronstein. Wildfire simulation with differentiable Randers-Finsler eikonal solvers. arXiv:2603.00035 , 2026. Yuxin Ge and Zhongmin Shen. Eigenvalues and eigenfunctions of metric measure manifolds. 
+
+Proceedings of the London Mathematical Society , 82(3), 2000. Jakob Hansen and Thomas Gebhart. Sheaf neural networks. In NeurIPS Workshop on Topological Data Analysis and Beyond , 2020. Yixuan He, Michael Perlmutter, Gesine Reinert, and Mihai Cucuringu. MSGNN: A spectral graph neural network based on a novel magnetic signed Laplacian. In Learning on Graphs Conference , 2022. Patrick Kidger. On Neural Differential Equations . PhD thesis, University of Oxford, 2021. Patrick Kidger and Cristian Garcia. Equinox: neural networks in JAX via callable PyTrees and filtered transformations. Differentiable Programming workshop at Neural Information Processing Systems , 2021. Jian Liang and Hongkai Zhao. Solving partial differential equations on point clouds. SIAM Journal on Scientific Computing , 35(3), 2013. Shin-ichi Ohta and Karl-Theodor Sturm. Heat flow on Finsler manifolds. Communications on Pure and Applied Mathematics , 62(10), 2009. Dejan Slepčev and Matthew Thorpe. Analysis of p-Laplacian regularization in semisuper-vised learning. SIAM Journal on Mathematical Analysis , 51(3), 2019. Matthew Thorpe, Tan Minh Nguyen, Hedi Xia, Thomas Strohmer, Andrea Bertozzi, Stanley Osher, and Bao Wang. GRAND++: Graph neural diffusion with a source term. In 
+
+International Conference on Learning Representations , 2022. Nicolás García Trillos and Dejan Slepčev. A variational approach to the consistency of spectral clustering. Applied and Computational Harmonic Analysis , 45(2), 2018. Nicolás García Trillos, Moritz Gerlach, Matthias Hein, and Dejan Slepčev. Error estimates for spectral convergence of the graph Laplacian on random geometric graphs toward the Laplace–Beltrami operator. Foundations of Computational Mathematics , 20(4), 2020. Charalampos T. Tsitouras. Runge–Kutta pairs of order 5 (4) satisfying only the first column simplifying assumption. Computers & Mathematics with Applications , 62(2), 2011. Zhiyang Wang, Juan Cervino, and Alejandro Ribeiro. A manifold perspective on the sta-tistical generalization of graph neural networks. In International Conference on Machine Learning , 2025. 
+
+> 10 Finsler Geometry, Graph Neural Networks, and You
+
+Simon Weber, Thomas Dages, Maolin Gao, and Daniel Cremers. Finsler-Laplace-Beltrami operators with application to shape analysis. In IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024. Xitong Zhang, Yixuan He, Nathan Brugnone, Michael Perlmutter, and Matthew Hirn. Mag-Net: A neural network for directed graphs. In Advances in Neural Information Processing Systems , 2021. 
+
+Appendix A. Finsler Geometry 
+
+We treat the ambient space RD as an affine space, so that the tangent spaces TxM are all isomorphic to RD, and the ambient space has no curvature. A Minkowski norm on RD is a continuous function F : RD → R≥0 with the following properties for all v, w ∈ RD, λ ≥ 0:
+
+Smoothness: F is smooth away from zero. 
+
+Strong convexity: ∇2[F 2(v)] ≻ 0 for v̸ = 0 .
+
+Positive homogeneity: F (λv ) = λF (v).
+
+Positive definiteness: F (v) > 0 unless v = 0 .Unlike a typical norm, we only require homogeneity to hold for λ ≥ 0, rather than for all 
+
+λ ∈ R; this allows for F to be asymmetric. If the conditions for the Minkowski norm F only hold on a subset RD \ S where S is a closed, conic subset of RD, we say that F is an almost Minkowski norm (Davis et al., 2026, Definition 4). For a linear subspace U ⊂ RD, we pullback the Minkowski norm to U via the inclusion map id : U , → RD as F (u) := ( F ◦ id)( u) for u ∈ U . One can check that this defines a Minkowski norm on U . For a smooth submanifold M ⊂ RD, endowing the tangent bundle of M with the pullback of the Minkowski norm on RD defines a Finsler manifold (Bao et al., 2000). Notably, as shown by Burago and Ivanov (1993, Theorem 3.2), if the Minkowski norm 
+
+F is odd and M is compact, then there exists a Minkowski norm F ′ on R2d such that M
+
+can be isometrically embedded in R2d.
+
+A.1. Proof of Proposition 3 
+
+For bJ to be the gradient of a scalar-valued energy functional on the cotangent bundle, the Jacobian of bJ must be a symmetric tensor, since that computes the Hessian of the functional. Specifically, 
+
+∇ bJ(ξ) = W ⊤ diag( σ′(W ξ )) W. 
+
+Observe that enforcing V = W ⊤ guarantees that ∇ bJ(ξ) is symmetric. Moreover, if rank( W ) = 
+
+D and σ′ > 0, it also holds that the Jacobian of bJ is positive definite. Moreover, since σ is positive homogeneous of degree 1, the norm (5) is also positive homogeneous of degree 1. If 
+
+σ is nonsmooth at zero (for instance, if σ is the Leaky ReLU), then we only have smoothness of F at points where none of the entries of W ξ are equal to zero: the set of such ξ is a closed, 
+
+> 11
+
+Roddenberry Baraniuk 
+
+conic subset of RD with measure zero. Hence, we have established the conditions for bF ∗ to be an almost Minkowski norm, as desired. 
+
+Appendix B. Empirical Gradient Estimation 
+
+We develop a suitable estimate of the gradient of a function f given samples over a finite set of points {xi}ni=1 . A first approach is the moving least-squares estimate: 
+
+∇ϵ,n f (x) = arg min 
+
+> ξn
+
+X
+
+> i=1
+
+κϵ (x − xi) ( f (x) − f (xi) − ⟨ ξ, x − xi⟩)2 .
+
+In other words, 
+
+∇ϵ,n f (x) = arg min 
+
+> ξ
+
+Gϵ,n (x, ξ ),
+
+where 
+
+Gϵ,n (x, ξ ) = 1
+
+ϵ2
+
+> n
+
+X
+
+> i=1
+
+κϵ (x − xi) ( f (x) − f (xi) − ⟨ ξ, x − xi⟩)2 .
+
+Setting ∇ξGϵ,n (x, ξ ) = 0 yields the solution 
+
+∇ϵ,n f (x) = ( Cϵ,n (x)) −1 bϵ,n [f ]( x)
+
+Cϵ,n (x) = 1
+
+nϵ 2
+
+> n
+
+X
+
+> i=1
+
+κϵ (x − xi) ( x − xi) ⊗ (x − xi)
+
+bϵ,n [f ]( x) = 1
+
+nϵ 2
+
+> n
+
+X
+
+> i=1
+
+κϵ (x − xi) ( f (x) − f (xi))( x − xi).
+
+We call ∇ϵ,n the empirical gradient, Cϵ,n the empirical covariance, and bϵ,n the empirical cogradient. To account for this, we define 
+
+∇ϵ,n f (x) = hϵ (Cϵ,n (x)) bϵ,n [f ]( x)
+
+where 
+
+hϵ(A) = ( A4 + ϵ4I)−1A3. (6) This choice of hϵ approximates the matrix inverse for parts of the spectrum far from zero, while remaining close to zero for parts of the spectrum close to zero; in other words, it acts as a soft Moore-Penrose pseudoinverse. Hence, we denote C†
+
+> ϵ,n
+
+(x) := hϵ(Cϵ,n (x)) .
+
+Remark 4 We show in Appendix D that the covariance matrices Cϵ, C ϵ,n concentrate near weighted projection matrices onto local tangent planes, yielding a rank-d structure. In prac-tice, one could replace hϵ with a spectral thresholding function, or with a rank-d approxima-tion. 
+
+12 Finsler Geometry, Graph Neural Networks, and You 
+
+Appendix C. Cellular (Co)sheaf Laplacians 
+
+We provide background on cellular (co)sheaves. For deeper coverage, we suggest the thesis of Curry (2014). A cellular sheaf F on the graph G assigns 
+
+• to each node x ∈ X a vector space F(x),
+
+• to each edge e ∈ E a vector space F(e), and 
+
+• to each incident vertex-edge pair (x, e ) a linear restriction map Fx→e : F(x) → F (e).The dual cosheaf F∗ on the graph G assigns 
+
+• to each node x ∈ X the dual vector space F∗(x),
+
+• to each edge e ∈ E the dual vector space F∗(e), and 
+
+• to each incident vertex-edge pair (x, e ) a linear extension map F∗ 
+
+> x→e
+
+: F∗(e) → F ∗(x).For a given cellular (co)sheaf F, the space of 0-cochains C0(F) constitutes the set of all assignments of vectors to each node according to the sheaf structure. That is, a 0-cochain 
+
+f ∈ C0(F) is a map sending each x ∈ X to an element of F(x).The space of 1-cochains is defined similarly, with additional information to account for the orientation of edges. A 1-cochain β ∈ C1(F) is a map sending each oriented edge −→e
+
+to an element of F(e), with the property that reversing the orientation changes the sign: 
+
+β(←−e ) = −β(−→e ).This yields the differential map from C0(F) to C1(F) for a sheaf F as follows. Let 
+
+−→e = [ x, y ] be an oriented edge. Then, for f ∈ C0(F), put 
+
+(df )( −→e ) = Fy→e(f (y)) − F x→e(f (x)) .
+
+Similarly, for the dual cosheaf F∗, we have the codifferential map from C1(F∗) to C0(F∗)
+
+defined for β ∈ C1(F∗) as 
+
+(δβ )( x) = X 
+
+> y∈X :( x,y )∈E
+
+F∗
+
+> x→e
+
+(β([ x, y ])) .
+
+We now repeat the construction of the Finsler Laplacian. Let F and T be the respec-tive cellular sheaves of functions and vectors defined in section 3, with corresponding dual cosheaves F∗ and T ∗ of cofunctions and covectors . Let id : C1(F) → C1(T ∗), id ∗ : C1(T ) →
+
+C1(F∗) be the identity maps under the obvious identification of the spaces. Given that J
+
+maps covectors to vectors, it can be extended to a map J : C0(T ∗) → C0(T ). Then, we have that the Finsler graph Laplacian is a map L : C0(F) → C0(F∗) defined by composition 
+
+L[f ] = ( δ ◦ id ∗ ◦ d ◦ J ◦ δ ◦ id ◦ d)[ f ],
+
+or, as a diagram, 
+
+C0(F) C0(T ∗) C0(T ) C0(F∗)
+
+C1(F) C1(T ∗) C1(T ) C1(F∗) 
+
+> d
+> J
+> d
+> id
+> δ
+> id ∗
+> δ
+
+. (7) Of course, if the vector spaces for the sheaves are inner product spaces, we can identify them with their duals. This allows for the simplification of (7) to the diagram (3). 
+
+> 13 Roddenberry Baraniuk
+
+Appendix D. Proof of Laplacian Convergence 
+
+In this section, we prove a collection of results towards Theorem 2. Throughout, we will assume that ϵ is sufficiently small so that it is less than the reach of the manifold M ⊂ RD.For fixed ϵ > 0, it will be useful to consider the empirical Finsler Laplacian in the limiting régime n → ∞ . Under mild conditions on the kernel κ and density p, and assuming f is appropriately bounded, we have 
+
+∇ϵf (x) = hϵ (Cϵ(x)) ( bϵ[f ]( x)) 
+
+Cϵ(x) = 1
+
+ϵd+2 
+
+Z
+
+κ
+
+ x − yϵ
+
+
+
+(x − y) ⊗ (x − y)dμ (y)
+
+bϵ[f ]( x) = 1
+
+ϵd+2 
+
+Z
+
+κ
+
+ x − yϵ
+
+
+
+(f (x) − f (y))( x − y)dμ (y).
+
+(8) Using this smoothed estimator of the gradient ∇ϵf , we define the smoothed asymptotic energy functional 
+
+Eϵ[f ] = 
+
+Z 12 [F ∗(∇ϵf (x))] 2 dμ (x),
+
+and the smoothed Laplacian by taking the Fréchet derivative 
+
+∆ϵ[f ] = 1
+
+p DE ϵ[f ]. (9) Under the assumption that the kernel κ is radially symmetric (isotropic with respect to the Euclidean norm) about the origin, we evaluate the smoothed Laplacian (9) to 
+
+∆ϵ[f ]( x) = 1
+
+ϵd+2 
+
+Z
+
+κ
+
+ x − yϵ
+
+ 
+
+hϵ(Cϵ(x)) J(∇ϵf (x)) + hϵ(Cϵ(y)) J(∇ϵf (y)) 
+
+
+
+· (x − y)dμ (y).
+
+(10) The strategy will amount to a bound between the difference of ∆ϵ,n [f ] and ∆[ f ], inter-mediated by ∆ϵ[f ] via the triangle inequality. In particular, we will bound the sum 
+
+|∆[ f ] − ∆ϵ,n [f ]| ≤ | ∆[ f ] − ∆ϵ[f ]| + |∆ϵ[f ] − ∆ϵ,n [f ]|.
+
+The first term measures the approximation error due to the smoothing parameter ϵ, and the second measures the error due to discretization. 
+
+D.1. Local Kernel Moments 
+
+Let x ∈ M be given. Through a rigid transformation, we choose coordinates such that 
+
+x = 0 and the tangent plane at x occupies the first d coordinates, with the normal plane occupying the remaining D − d coordinates. Denoting the tangent coordinates by u ∈ TxM,we represent M locally as a graph yx(u) = ( u, g x(u)) ∈ RD. The normal coordinates gx(u)
+
+satisfy 
+
+gx(u) = Π x[u, u ] + Dx[u, u, u ] + O(u4), (11) 
+
+> 14 Finsler Geometry, Graph Neural Networks, and You
+
+where Πx is a symmetric tensor given by the second fundamental form at x, Dx is a third-order tensor, and O(u4) denotes some fourth-order tensor expression of u. Denoting the tensor product of a vector v with itself k times by v⊗k, we consider expressions of the form 
+
+M (x, k, ϵ ) = 1
+
+ϵd+2 
+
+Z
+
+κ
+
+ yx(u)
+
+ϵ
+
+
+
+yx(u)⊗kdu. 
+
+First, we carry out the change of variables v = u/ϵ , yielding 
+
+M (x, k, ϵ ) = 1
+
+ϵ2
+
+Z
+
+κ
+
+ yx(ϵv )
+
+ϵ
+
+
+
+yx(ϵv )⊗kdv. (12) We assume that κ(z) is a smooth, compactly supported function of ∥z∥2, i.e. , κ(z) = κ(∥z∥2).By a Taylor series expansion centered at a given z, for w ⊥ z, we have 
+
+κ(z + w) = κ(∥z∥2 + ∥w∥2)= κ(∥z∥2) + κ′(∥z∥2)2 ∥w∥2 + O(∥w∥4). (13) 
+
+D.1.1. Flattening of the Graph 
+
+With the preliminary definitions handled, we begin by considering the behavior of y(ϵv ϵ as 
+
+ϵ → 0. Observe that y(ϵv ) 
+
+> ϵ
+
+= ( v, g x(ϵv )/ϵ ), so the main quantity of interest is gx(ϵv ). By direct substitution into (11), we have 
+
+gx(ϵv ) = ϵ2Πx[v, v ] + ϵ3Dx[v, v, v ] + ϵ4O(v4). (14) Note that gx(ϵv ) ⊥ v, and the squared-norm satisfies 
+
+∥gx(ϵv )∥2 = ϵ4∥Πx[v, v ]∥2 + 2 ϵ5⟨Πx[v, v ], D x[v, v, v ]⟩ + ϵ6O(v6).
+
+We conclude, by substitution into (13), that 
+
+κ
+
+ y(ϵv )
+
+ϵ
+
+
+
+= κ(∥v∥2) + κ′(∥v∥2)  ϵ2∥Πx[v, v ]∥2 + 2 ϵ3⟨Πx[v, v ], D x[v, v, v ]⟩ + O(ϵ4), (15) recalling that the compact support of κ allows us to assume v6 = O(1) . That is, κ(y(ϵv )/ϵ ) = 
+
+κ(∥v∥2) + O(ϵ2), so that the normal coordinates become negligible as ϵ → 0.
+
+D.1.2. Parity of Local Kernel Moment Integrals 
+
+Let T : ( TxM)k → R be a multilinear form for some odd value of k, and consider the integral of κ(∥v∥2)T [v, . . . , v ]. Since k is odd, T [v, . . . , v ] is odd, so the integral vanishes by radial symmetry, i.e. , Z
+
+κ(∥v∥2)T [v, . . . , v ]dv = 0 .
+
+A similar property holds for κ′, so that 
+
+Z
+
+κ′(∥v∥2)T [v, . . . , v ]dv = 0 .
+
+> 15 Roddenberry Baraniuk
+
+We define a few quantities of interest for integrals of tensor forms with even parity. The first is the second moment of κ(∥v∥2):
+
+mκId =
+
+Z
+
+κ(∥v∥2)v⊗2dv, 
+
+where Id denotes the d × d identity matrix. The second is defined based on the curvature at x:
+
+mκ,x =
+
+Z
+
+κ(∥v∥2)Π x[v, v ]dv. 
+
+Note that mκ is a scalar, but mκ,x is a vector normal to x.
+
+D.1.3. Computation of Local Kernel Moments 
+
+With these tools in place, computing the moments M (x, k, ϵ ) becomes a trivial exercise. When k = 1 , substituting (15) and (14) into (12) and zeroing all terms with odd parity, we have 
+
+M (x, 1, ϵ ) = (0 , m κ,x ) + O(ϵ2).
+
+Similarly, when k = 2 , we have 
+
+M (x, 2, ϵ ) = 
+
+mκId 00 0
+
+
+
++ O(ϵ2).
+
+D.2. Smoothed Gradient 
+
+We consider now the deviation between the smoothed gradient ∇ϵf and the true gradient 
+
+∇f . As before, let x ∈ M be given, and apply a rigid transformation so that x = 0 and the tangent plane occupies the first d coordinates. We pull back the density p and the function 
+
+f to TxM so that the relevant integrals may locally be defined as integrals over the tangent plane. We rewrite (8) as 
+
+∇ϵf (x) = hϵ (Cϵ(x)) bϵ[f ]( x)
+
+Cϵ(x) = 1
+
+ϵd+2 
+
+Z
+
+> TxM
+
+κ
+
+ yx(u)
+
+ϵ
+
+
+
+yx(u)⊗2px(u)du bϵ[f ]( x) = 1
+
+ϵd+2 
+
+Z
+
+> TxM
+
+κ
+
+ yx(u)
+
+ϵ
+
+
+
+yx(u)( fx(u) − fx(0)) px(u)du. 
+
+(16) 
+
+D.2.1. Local Taylor Series 
+
+It will be useful to gather some local approximations of px and fx by their Taylor series representations. Taking a Taylor expansion of px, we have 
+
+px(u) = px(0) + ⟨∇ px(0) , u ⟩ + 12 ∇2px(0)[ u, u ] + 16 ∇3px(0)[ u, u, u ] + O(u4). (17) Similarly, carrying out a Taylor series expansion of fx(u) − fx(0) centered at zero, we have 
+
+fx(u) − fx(0) = ∇fx(0)[ u] + 12 ∇2fx(0)[ u, u ] + 16 ∇3fx(0)[ u, u, u ] + O(u4). (18) 
+
+> 16
+
+Finsler Geometry, Graph Neural Networks, and You 
+
+D.2.2. Smoothed Covariance 
+
+Performing the substitution v = u/ϵ in (16) yields 
+
+Cϵ(x) = 1
+
+ϵ2
+
+Z
+
+> TxM
+
+κ
+
+ yx(ϵv )
+
+ϵ
+
+
+
+yx(ϵv )⊗2px(ϵv )dv. 
+
+Substituting in the Taylor series expansion of the density (17) yields 
+
+Cϵ(x) = 
+
+px(0) mκId 00 0
+
+
+
++ O(ϵ2).
+
+That is, Cϵ(x) is approximately p(x)mκId in the tangent coordinates, apart from an O(ϵ2)
+
+error term. 
+
+D.2.3. Smooth Cogradient 
+
+We carry out the same substitution as before, v = u/ϵ , yielding 
+
+bϵ[f ](0) = 1
+
+ϵ2
+
+Z
+
+κ
+
+ y(ϵv )
+
+ϵ
+
+
+
+y(ϵv )( fx(ϵv ) − fx(0)) px(ϵv )dv. 
+
+Substituting the Taylor series expansions (17) and (18), we have 
+
+bϵ[f ]( x) = Cϵ(x)∇f (x) + O(ϵ2). (19) 
+
+D.2.4. Combined Error 
+
+By (19), and using hϵ from (6), we have 
+
+∇ϵf (x) = hϵ(Cϵ(x)) Cϵ(x)∇f (x) + O(ϵ2)hϵ(Cϵ(x)) = ∇f (x) + O(ϵ),
+
+where ∇f (x) ∈ RD by the obvious embedding of the tangent plane. It follows that 
+
+J(∇ϵf (x)) = J(∇f (x)) + O(ϵ).Since p(x) is bounded away from zero, for sufficiently small ϵ > 0 we have hϵ(p(x)mκId) ≈ 
+
+> 1
+> p(x)mκ
+
+Id and hϵ(O(ϵ2)) = O(ϵ2). In other words, 
+
+hϵ(Cϵ(x)) = 
+
+ 1 
+
+> p(x)mκ
+
+Id 00 0
+
+ 
+
++ O(ϵ2).
+
+Putting the two bounds together, this implies 
+
+hϵ(Cϵ(x)) J(∇ϵf (x)) = m−1 
+
+> κ
+
+p−1(x)∇f (x) + O(ϵ). (20) 
+
+17 Roddenberry Baraniuk 
+
+D.3. Smoothed Finsler Laplacian 
+
+We begin by bounding the difference between ∆[ f ]( x) and ∆ϵ[f ]( x). For fixed x, we apply a rigid transformation as before, so that x = 0 and the manifold is a local graph of the tangent plane yx(u) = ( u, g x(u)) . For convenience, define the vector field on the tangent plane 
+
+Qx[f ]( u) = J(∇f (yx(u))) 
+
+p(x)
+
+so that by (20) we have 
+
+hϵ(Cϵ(yx(u))) J(∇ϵf (yx(u))) = m−1 
+
+> κ
+
+(Qx[f ]( u) + O(ϵ)) . (21) Substituting (21) into (10) and rewriting the integral as one over the tangent plane yields, after a change of variables, 
+
+∆ϵ[f ](0) = 1
+
+mκϵ2
+
+Z
+
+κ
+
+ y(ϵv )
+
+ϵ
+
+
+
+(Qx[f ]( ϵv ) + Qx[f ](0) + O(ϵ)) · y(ϵv )px(ϵv )dv. 
+
+We perform a Taylor expansion on the product (Qx[f ]( ϵv ) + Qx[f ](0) + O(ϵ)) px(ϵv ), and applying the same parity arguments as before, simplify this expression to 
+
+∆ϵ[f ]( x) = Tr ( px(0) ∇Qx[f ](0) + 2 Qx[f ](0) ⊗ ∇ px(0)) + O(ϵ)= 2 ⟨J(∇f (x)) , ∇p(x)⟩
+
+p(x) + p(x)div 
+
+ J(∇f (x)) 
+
+p(x)
+
+
+
++ O(ϵ)= 1
+
+p(x) div ( p(x)J(∇f (x))) + O(ϵ)= ∆[ f ]( x) + O(ϵ).
+
+(22) Thus, for fixed x and f , ∆ϵ[f ]( x) is an O(ϵ)-approximant of ∆[ f ]( x).
+
+D.4. Concentration Inequalities 
+
+We now bound the difference between ∆ϵ[f ]( x) and ∆ϵ,n [f ]( x) where x is assumed to be a sampled point. The expression for the empirical Laplacian (2) closely resembles a Monte Carlo estimate of the smoothed Laplacian (10), with the exception of the smoothed gradi-ents ∇ϵ,n f coupling the terms in the sum. To account for this, we introduce an “oracle” empirical Laplacian that has access to the true (smoothed) gradients ∇ϵf , and then bound the difference in two steps via the triangle inequality. In particular, defining 
+
+e∆ϵ,n [f ]( x) = 1
+
+nϵ d+2 
+
+> n
+
+X
+
+> i=1
+
+κ
+
+ x − xi
+
+ϵ
+
+
+
+hϵ(Cϵ(x)) J(∇ϵf (x)) + hϵ(Cϵ(xi)) J(∇ϵf (xi)) 
+
+
+
+(x − xi)
+
+we consider the bound 
+
+∆ϵ[f ]( x) − ∆ϵ,n [f ]( x) ≤ ∆ϵ[f ]( x) − e∆ϵ,n [f ]( x) + e∆ϵ,n [f ]( x) − ∆ϵ,n [f ]( x) . (23) 
+
+> 18 Finsler Geometry, Graph Neural Networks, and You
+
+D.4.1. Sampling Error 
+
+We consider the first term in the bound (23), which is the error due to discretization without the effects of gradient estimation. Observe that e∆ϵ,n [f ]( xj ) is an average of i.i.d. 
+
+terms bounded by O(ϵ−(d+1) ), with variance O(ϵ−(d+2) ), and whose expectation is equal to 
+
+∆ϵ[f ]( x). Recalling that J is assumed Lipschitz, Bernstein’s inequality for bounded random variables yields the concentration inequality for fixed x:
+
+P
+
+n
+
+|∆ϵ[f ]( x) − e∆ϵ,n [f ]( x)| < tϵ
+
+o
+
+> 1 − 2 exp 
+
+
+
+− t2nϵ d/3
+
+
+
+. (24) 
+
+D.4.2. Covariance Estimation 
+
+Since Cϵ,n (x) is the average of n i.i.d. random matrices with operator norm uniformly bounded by O(ϵ−d) and expectation Cϵ(x), the matrix Hoeffding inequality implies that for 
+
+t ≥ 0,
+
+P
+
+n
+
+∥Cϵ,n (x) − Cϵ(x)∥ < t 
+
+o
+
+> 1 − D · exp 
+
+
+
+−t2nϵ d/2
+
+
+
+.
+
+For t = O(ϵ2), this implies 
+
+P
+
+n
+
+∥hϵ(Cϵ,n (x)) − hϵ(Cϵ(x)) ∥ < t 
+
+o
+
+> 1 − D · exp 
+
+
+
+−t2nϵ d/2
+
+
+
+. (25) 
+
+D.4.3. Cogradient Estimation 
+
+As a consequence of a previous approximation (19), we have 
+
+∥bϵ[f ]( x)∥ ≤ p(x)mκ∥∇ f (x)∥ + O(ϵ2).
+
+For fixed x, the empirical cogradient bϵ,n [f ]( x) is the mean of n i.i.d. random vectors with norm uniformly bounded by O(ϵ−d), expected value bϵ[f ]( x), and variance bounded by 
+
+O(ϵ−d). The vector Bernstein inequality yields 
+
+P
+
+n
+
+∥bϵ,n [f ]( x) − bϵ[f ]( x)∥ < t 
+
+o
+
+> 1 − 2 exp 
+
+
+
+−t2nϵ d
+
+. (26) 
+
+D.4.4. Gradient Approximation Error 
+
+We now consider the second term in the bound (23), which is the error in the empirical Laplacian due to estimation of the gradients at the sampled points. By a union bound over (25) and (26), the empirical gradient satisfies 
+
+P
+
+n
+
+∥∇ ϵ,n f (x) − ∇ ϵf (x)∥ < O (t)
+
+o
+
+> 1 − (2 + D) exp 
+
+
+
+−t2nϵ d/2
+
+
+
+,
+
+where we assume t = O(ϵ2). Since J is assumed Lipschitz, these conditions imply our desired bound. Namely, 
+
+P
+
+n
+
+∥hϵ(Cϵ,n (x)) J(∇ϵ,n f (x)) − hϵ(Cϵ(x)) J(∇ϵf (x)) ∥ < O (t)
+
+o
+
+> 1 − (2 + D) exp 
+
+
+
+−t2nϵ d/2
+
+
+
+.
+
+(27) 
+
+> 19
+
+Roddenberry Baraniuk 
+
+D.5. Proof of Theorem 2 
+
+For convenience, define 
+
+Φϵ(x) = hϵ(Cϵ(x)) J(∇ϵf (x)) Φϵ,n (x) = hϵ(Cϵ,n (x)) J(∇ϵ,n f (x)) .
+
+For fixed index i, (27) coupled with the law of total probability implies 
+
+P
+
+n
+
+|Φϵ(xi) − Φϵ,n (xi)| < O (t)
+
+o
+
+> 1 − (2 + D) exp 
+
+
+
+−t2(n − 1) ϵd/2
+
+
+
+.
+
+By a union bound over the indices i, we have 
+
+P
+
+n
+
+max  
+
+> i
+
+|Φϵ(xi) − Φϵ,n (xi)| < O (t)
+
+o
+
+> 1 − (2 + D)n exp 
+
+
+
+−t2(n − 1) ϵd/2
+
+
+
+.
+
+These bounds taken together imply 
+
+| e∆ϵ,n [f ]( xj ) − ∆ϵ,n [f ]( xj )| = O(tϵ −(d+1) )
+
+for all indices 1 ≤ j ≤ n with probability at least 1 − (2 + D)n exp( −t2(n − 1) ϵd/2) . Taken together with (24), we have 
+
+|∆ϵ[f ]( xj ) − ∆ϵ,n [f ]( xj )| = O(tϵ −(d+1) )
+
+with probability at least 1 − (n(2 + D) + 1) exp( −t2(n − 1) ϵd/2) . We choose t, ϵ varying with 
+
+n according to 
+
+ϵn =
+
+
+
+(4 + 2 α) log nn
+
+ 13d+4 
+
+tn = ϵd+2 
+
+> n
+
+for some α > 0, so that 
+
+P
+
+
+
+max  
+
+> j
+
+|∆ϵ[f ]( xj ) − ∆ϵ,n [f ]( xj )| < O (ϵn)
+
+
+
+> 1 − O
+
+ Dn1+ α
+
+
+
+.
+
+Then, by the bound (22), we have 
+
+P
+
+
+
+max  
+
+> j
+
+|∆[ f ]( xj ) − ∆ϵ,n [f ]( xj )| < O (ϵn)
+
+
+
+> 1 − O
+
+ Dn1+ α
+
+
+
+.
+
+Noting that the empirical estimates are assumed independent, applying the Borel-Cantelli Lemma establishes Theorem 2, as desired. 
+
+Appendix E. Implementation Details 
+
+In this section, we detail the specifics of the experiments in Section 4. All experiments are implemented in Python using the JAX, Equinox, Optax, and Diffrax libraries (Bradbury et al., 2018; DeepMind et al., 2020; Kidger and Garcia, 2021; Kidger, 2021). 
+
+20 Finsler Geometry, Graph Neural Networks, and You 
+
+E.1. Convergence on the Finsler Graph Laplacian 
+
+For a torus with major radius R = 2 .0 and minor radius r = 1 .0, points are sampled via rejection sampling. Azimuthal and poloidal angles (u, v ) are uniformly proposed, and accepted according to the true area (Hausdorff) measure dA = r(R + r cos( v)) dudv . We compute C†
+
+> ϵ,n
+
+(x) by taking the Moore-Penrose pseudoinverse of the best rank-2 approximant of the local covariance matrix Cϵ,n (x).
+
+E.2. Learning Geometry using Finslerian Graph Neural Networks 
+
+The initial conditions f (0) are generated as a superposition of 5 random Fourier modes with frequencies sampled uniformly from [1 .0, 3.0] and phases from [0 , 2π]. The drift vector defining the Randers metric is set to v = [0 .25 , 0.25] . The parameterizations of bJ(ξ) are constructed using a neural network with a single hidden layer of with E = 64 . The graph neural diffusion equations are integrated from t = 0 to t = 1 using the Tsitouras 5/4 solver (Tsitouras, 2011), with a time increment of ∆t = 0 .05 . Models are trained using the Adam optimizer with a learning rate of 3 × 10 −4 for 1000 steps, with weight decay. The loss function is the relative Mean Squared Error (MSE) computed exclusively over 20% of the nodes selected uniformly at random.

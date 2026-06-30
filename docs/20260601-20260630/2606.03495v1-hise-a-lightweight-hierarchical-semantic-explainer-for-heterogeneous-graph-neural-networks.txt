@@ -1,0 +1,1701 @@
+Title: HiSE: A Lightweight Hierarchical Semantic Explainer for Heterogeneous Graph Neural Networks
+
+URL Source: https://arxiv.org/pdf/2606.03495v1
+
+Published Time: Wed, 03 Jun 2026 01:01:49 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+> 1
+
+# HiSE: A Lightweight Hierarchical Semantic Explainer for Heterogeneous Graph Neural Networks 
+
+Zongrui Li 1, Yuhang Zhao 1, Ying Zhao 1,
+
+Yuanzhao Guo 1, Qiang Huang 2, Yuan Tian 11School of Artificial Intelligence, Jilin University 
+
+> 2
+
+Mohamed bin Zayed University of Artificial Intelligence 
+
+Abstract —Heterogeneous graph neural networks (HGNNs) have demonstrated remarkable performance in modeling com-plex relational data, however their interpretability in high-stakes applications remains a critical challenge. Existing explanation methods suffer from two major limitations: on the one hand, the generated explanations fail to reflect the inherent semantic hierarchy of HGNNs, resulting in a lack of fidelity to the model’s internal decision-making mechanism; on the other hand, feature explanations often rely on complex search or perturbation mechanisms, leading to excessive computational complexity and poor efficiency. To address these issues, we propose HiSE, a lightweight feature-oriented interpretable model for HGNNs. HiSE achieves semantically aware feature explanations through hierarchical semantic modeling: at the semantic level , local surrogate models based on the Least Absolute Shrinkage and Selection Operator (LASSO) are employed to learn sparse feature representations under each semantic view; at the cross-semantic level , the contributions of different semantic views are adaptively characterized via KL divergence to produce a unified explanation. Extensive experiments demonstrate that HiSE outperforms exist-ing methods in terms of fidelity, robustness, and cross-semantic explanation capability, while its lightweight framework incurs low computational overhead, enabling efficient application to large-scale, complex real-world heterogeneous graphs. 
+
+Index Terms —Heterogeneous Graph Neural Networks; Hetero-geneous Graphs; Explainable AI; Interpretability; Lightweight Model; Hierarchical Semantic 
+
+I. I NTRODUCTION 
+
+# GRAPH neural networks (GNNs) [37], [47], [55] have emerged as powerful frameworks for learning represen-tations of graph-structured data by propagating and aggre-gating information among nodes via message-passing mech-anisms [14], [2], giving rise to representative models such as GAT [44] and GraphMAE [18]. However, conventional GNNs assume node and edge homogeneity, limiting them to homogeneous scenarios with a single node and edge type [45]. In practice, complex real-world systems typically consist of diverse entity and relation types, necessitating their represen-tation as heterogeneous graphs [40], where nodes and edges of different types carry rich and diverse semantic information that is essential for accurate modeling. For instance, the academic network illustrated in Fig. 1 contains three types of nodes—authors (A), papers (P), and magazines (M)—and multiple edge types. Representing such data as a homogeneous graph would flatten these types of distinctions, making it impossible to distinguish semantically different interactions such as coauthorship and authorship. By preserving node and edge type information, heterogeneous graphs enable the explicit modeling of cross-type semantic structures, thereby capturing complex real-world relationships more faithfully. To effectively learn node representations on such heterogeneous graphs, heterogeneous graph neural networks (HGNNs) [41], [20], [27], [15] have been proposed. The core idea of HGNNs lies in hierarchical semantic modeling: capturing individual semantics arising from diverse relation types at the semantic level and progressively integrating them into richer cross-semantic associations at the cross-semantic level. On the basis of the semantic modeling strategy, existing HGNNs can be broadly categorized into meta-path-based and relation-based approaches [3]. The former explicitly extracts semantic subgraphs via predefined meta-paths and employs attention mechanisms to assign weights to different semantics, with representative works including HAN [46], which adopts a dual-level attention mechanism to integrate multi-path seman-tic information. The latter is employed to directly model type-aware message passing over heterogeneous edges and learn intersemantic hierarchical relationships in an implicit manner, as exemplified by HetSANN [17], which leverages a heterogeneous self-attention network to capture semantic de-pendencies among nodes. Compared with conventional GNNs, HGNNs can hierarchically model semantic heterogeneity and better capture cross-type relations, yielding more accurate and robust representations [53], [3], [28], and have demonstrated significant advantages in domains such as recommender sys-tems [48], [16], [10], knowledge graph completion [22], and drug discovery [31]. In both homogeneous and heterogeneous graphs, GNNs must balance high predictive accuracy with interpretability in real-world applications [1], [51], [26]. For example, in health care, GNNs can integrate multimodal information—such as electronic health records, medical knowledge graphs, and clinical trial data—to support disease prediction, where ex-planations are essential for clinicians to trust model outputs and make informed decisions [13], [6], [35]. Furthermore, in numerous application scenarios such as financial fraud detection [39], [34], [43], interpretability remains a key factor   
+
+> arXiv:2606.03495v1 [cs.LG] 2 Jun 2026 2AuthorA1
+> A2
+> A3
+> P1
+> M1
+> M2
+> P2
+> P3
+> Paper
+> Ma gazine
+> NodeTypeHeterogeneousGraph
+
+Fig. 1: A schematic representation of the heterogeneous graph. The graph consists of three types of nodes: authors, papers, and magazines. Edges connect authors to papers and papers to magazines, illustrating the heterogeneous structure where multiple node types and relation types coexist. in ensuring model trustworthiness, transparency, and prac-tical deployability [9]. Substantial progress has been made in improving the interpretability of GNNs. For instance, GNNExplainer [50] and GraphLIME [21] identify critical subgraphs and features by learning mutual-information-driven masks and constructing local surrogate models, respectively, thereby providing explanations for node predictions. How-ever, despite their powerful semantic modeling capabilities, explaining HGNNs remains difficult because of the intricate interplay of multiple node and edge types in heterogeneous graphs [40]. Moreover, existing methods focus predominantly on structural explanations, while the analysis of node feature contributions remains largely underexplored. For example, xPath [25] identifies important structures by searching for critical paths that significantly influence model predictions, providing structural-level explanations for HGNNs; Tail [49] characterizes the evolution of research interests by model-ing key interaction paths in temporal heterogeneous graphs, thereby offering interpretable analysis; and PaGE-Link [54], which focuses on heterogeneous link prediction tasks, identi-fies the most influential semantic paths on the basis of path-level representation learning. On the other hand, a few methods have begun to address feature explanations. For instance, HG-Explainer [33] extends GNNExplainer [50] to heterogeneous graphs by learning masks to identify the most predictive substructures and the contributing node features; HENCE-X [30] identifies important features by searching for critical feature subsets that preserve model prediction consistency. However, these methods all rely on perturbation-based expla-nation strategies—that is, evaluating importance by masking features and observing changes in model predictions—which share the following common limitations. First, these strate-gies do not capture the semantic hierarchy, making accurate characterization of how HGNNs make decisions across dif-ferent semantic levels difficult. Second, feature perturbations can disrupt the original data distribution, compromising the stability and reliability of explanations in high-dimensional or noisy scenarios. Furthermore, computational efficiency re-mains a shared challenge among these methods, with HENCE-X relying on a greedy search strategy that requires repeated evaluation of candidate feature subsets, incurring particularly high computational overhead. On the basis of the above analysis, our research moti-vation stems from the following observations: mainstream HGNN models rely on semantic modeling and cross-semantic information fusion to capture complex semantics in hetero-geneous graphs, whereas existing explanation methods lack a hierarchical perspective and fail to effectively reflect the decision-making mechanisms of HGNNs. Furthermore, exist-ing explainers often rely on complex search or perturbation strategies, resulting in suboptimal computational efficiency. To address these issues, we propose HiSE (Hi erarchical Semantic 
+
+Explainer), a lightweight hierarchical semantic feature expla-nation framework for HGNNs that mirrors the model’s own hierarchical structure. At the semantic level , HiSE LASSO-based local surrogate models is employed to learn sparse feature representations under each semantic view; at the cross-semantic level , the contributions of different semantics are adaptively measured via KL divergence and fused to produce a unified explanation. HiSE not only aligns with the intrinsic decision-making mechanism of HGNNs to provide intuitive hierarchical explanations but also achieves high computational efficiency without relying on complex search or perturbation procedures. The main contributions of this paper are summarized as follows:  
+
+> •
+
+We propose a new hierarchical semantic explana-tion paradigm for HGNNs. Starting from the intrinsic modeling mechanism of HGNNs, we reformulate the explanation problem as a hierarchical modeling process over multirelational semantic structures, presenting an ex-planation approach that is faithful to the model’s decision-making mechanism. This paradigm simultaneously char-acterizes information contributions at both the semantic and cross-semantic levels, offering a new perspective for interpretability research on HGNNs.  
+
+> •
+
+We design HiSE, a novel hierarchical semantic fea-ture explanation framework. HiSE constructs local surrogate models at the semantic level and compre-hensively evaluates semantic importance at the cross-semantic level, thereby more accurately characterizing the internal decision-making mechanism of HGNNs.  
+
+> •
+
+We conduct systematic experiments to validate the efficiency and effectiveness of the proposed method. 
+
+Extensive experiments on multiple real-world heteroge-neous graph models and datasets evaluate the proposed method from multiple perspectives, including fidelity, robustness, usability, and cross-semantic explanation ca-pability. The experimental results demonstrate that HiSE consistently outperforms existing explanation methods across different experimental scenarios and is capable of stably identifying the most influential features for model predictions in complex feature spaces while incurring low computational overhead. II. R ELATED WORK 
+
+This section provides the necessary background for our work. We first review the development of graph neural 3
+
+networks, from homogeneous architectures to heterogeneous extensions that model complex multityped relational data. We then survey existing interpretability methods for GNNs, covering both techniques designed for homogeneous graphs and recent efforts tailored to the heterogeneous setting. 
+
+A. From Graph Neural Networks to Heterogeneous Architec-tures 
+
+By propagating and aggregating information among nodes via message-passing mechanisms, graph neural networks (GNNs) have become the predominant approach for learning representations of graph-structured data. Representative works include GCN [23], which leverages spectral graph convolu-tions for efficient neighbor feature aggregation; GAT [44], which introduces attention mechanisms to dynamically learn neighbor weights; and GraphMAE [18], which enhances graph representation capability through masked reconstruction tasks in a self-supervised manner. However, these methods all assume node and edge homogeneity, making them inadequate for handling heterogeneous graphs that contain multiple entity and relation types. To address this challenge, researchers have proposed heterogeneous graph neural networks (HGNNs), which can be broadly categorized into meta-path-based and 
+
+relation-based approaches [3]. The former relies on predefined meta-paths to explicitly represent hierarchical semantic rela-tions; for example, HAN [46] fuses multi-path information through node-level and semantic-level hierarchical attention mechanisms; MAGNN [11] further encodes intrameta-path structures to preserve fine-grained semantics; and HetGNN [4] combines heterogeneous neighbor sampling with RNN-based aggregation strategies to learn node representations. The latter implicitly captures hierarchical semantic information in heterogeneous graphs from the perspective of relation types; for example, RGCN [38] introduces relation-specific weight matrices to implicitly model hierarchical differences among relations during message passing; HGT [20] leverages transformer-based type-aware attention mechanisms to adap-tively fuse node and relation information at a fine-grained level, and HetSANN [17] models latent hierarchical seman-tics directly from relational structures through relation-aware self-attention aggregation, without requiring explicit meta-paths. In summary, these two categories of methods approach hierarchical semantic capture in heterogeneous graphs from the perspectives of explicit semantic modeling and implicit relation modeling, respectively, both advancing the capacity of HGNNs to encode hierarchical semantics in heterogeneous structures. 
+
+B. Explainability of Graph Neural Networks 
+
+To improve the interpretability of GNNs, several explanation methods have been proposed. By optimizing masks that max-imize mutual information with model predictions, GNNEx-plainer [50] identifies important subgraphs and node features. PGExplainer [29] adopts a probabilistic approach to learn global explanations across multiple instances. SubgraphX [52] improves interpretability by searching for the most informative subgraphs through a Monte Carlo tree search. GraphLIME [21] extends LIME [36] to graph structured data by learning non-linear interpretable surrogate models. However, these methods are designed for homogeneous graphs and cannot directly handle the semantic heterogeneity and complex relational structures in HGNNs. To address this gap, recent efforts have developed explanation methods tailored to HGNNs. One line of work approaches the problem from a structural perspective, characterizing model decision rationales through paths or sub-graphs. For instance, xPath [25] identifies important structures by searching for critical paths that significantly influence model predictions, providing structural-level explanations for HGNNs; Tail [49] models key interaction paths in temporal heterogeneous graphs to characterize the evolution of research interests; PaGE-Link [54], which focuses on link prediction tasks, identifies the most influential semantic paths through path-level representation learning; and HTGExplainer [24] further extends explanations to temporal heterogeneous graphs by generating explanatory subgraphs that preserve temporal dependencies and heterogeneity to capture dynamic semantics. Another line of work approaches the problem from a feature perspective, characterizing model decision rationales by se-lecting important features upon which model decisions rely. For example, HENCE-X [30] provides a model-agnostic ex-planation framework that uniformly characterizes topological and feature contributions through causality-guided conditional probabilities; HGExplainer [33] combines mutual informa-tion maximization with meta-path-based sampling strategies to generate explanations from both structural and feature perspectives. Although the above methods improve HGNN interpretability from perspectives such as structural complexity and temporal dynamics, they do not explicitly align with the intrinsic semantic modeling mechanisms of HGNNs, making it difficult to characterize hierarchical semantic structures that are composed of multiple relation types and semantic paths. This limitation may lead to explanations that deviate from the model’s true semantic reasoning process. III. B ACKGROUND AND PROBLEM STATEMENT 
+
+A. Background 
+
+Graph-structured data modeling has evolved significantly from homogeneous to heterogeneous representations, whose inherent structural diversity and semantic richness have given rise to heterogeneous graphs along with a range of modeling and analysis methods. This section introduces the fundamental concepts that underpin our work. We first formally define heterogeneous graphs and their structural properties, then introduce meta-paths as a key tool for representing semantic relationships in such graphs, and finally discuss HGNNs as a powerful learning framework for modeling these complex data structures. 
+
+1) Heterogeneous Graph: A graph is considered heteroge-neous if it contains multiple types of nodes or edges; other-wise, it is considered homogeneous . The academic network illustrated in Fig. 1 exemplifies a typical heterogeneous graph featuring three distinct node types: Papers (P), characterized by data features such as publication content and keywords; 
+
+Authors (A), characterized by affiliation and research profile 4
+
+TABLE I: NOMENCLATURE                                                     
+
+> Symbol Description
+> nDimensionality of the feature space.
+> mThe number of meta-paths.
+> MThe HGNN to be explained.
+> ΦkMeta-path k.
+> PSet of all meta-paths.
+> GComplete heterogeneous graph.
+> VNode set of heterogeneous graph.
+> EEdge set of heterogeneous graph.
+> NSet of all nodes belonging to the target node type.
+> vtTarget node to be explained.
+> XiFeature vector of node i.
+> GkSingle-semantic subgraph generated according to Φk.
+> VkNode set of Gk.
+> EkEdge set of Gk.
+> NkSet of sampled neighbors on Gkfrom the target node.
+> KMaximum hop distance for neighborhood sampling.
+> AAdjacency matrix.
+> ηuv Weight assigned to edge (u, v )by the explainer model M.
+> μ(k)
+> iNormalized weight of node viunder meta-path Φk.
+> skSemantic-level explanation vector for meta-path Φk.
+> LNumber of prediction classes.
+> λRegularization strength hyperparameter of LASSO.
+> ˆyiClassification probabilities of node i.
+> DkLocal dataset obtained from model Mover nodes in Nk.
+> wVector of all semantic weights.
+> cCross-semantic-level explanation vector.
+
+attributes; and Magazines (M), representing publication venues with domain and prestige information. These nodes are inter-connected through multiple edge types, including authorship 
+
+edges linking authors to their contributed papers and publica-tion edges linking papers to their published magazines. This complex structure enables the graph to preserve rich academic semantics that would be largely lost in a homogeneous repre-sentation, where all nodes and edges would be forced into a single type, thereby losing critical semantic distinctions. Formally, a heterogeneous graph is defined as follows: 
+
+G = ( V, E)
+
+where V denotes the set of nodes and E denotes the set of edges. The structure also includes the following:  
+
+> •
+
+A node type mapping function: ϕ : V → Y  
+
+> •
+
+An edge type mapping function: ψ : E → R 
+
+subject to the following condition: 
+
+|Y| + |R| > 2
+
+where Y and R denote the sets of node types and edge types, respectively. 
+
+2) Meta-Path: Meta-paths provide a powerful tool for rep-resenting the semantic relations of heterogeneous graphs and are widely employed in heterogeneous graph learning mod-els [41], [7], [46]. While heterogeneous graphs offer powerful models for real-world systems with diverse entity and relation types, they also introduce the challenge of how to effectively model such data for complex reasoning tasks. A prerequisite for achieving this goal is integrating heterogeneous structural information and semantics composed of different nodes and edge types into a unified learning framework. To address this issue, meta-paths were introduced as higher-level abstraction concepts [41]. Formally, given a heterogeneous graph G =(V, E), a meta-path Φ is defined as a path pattern that encodes a specific semantic relation: 
+
+Φ : Y1
+
+> R1
+
+−−→ Y2
+
+> R2
+
+−−→ · · · Rξ
+
+−−→ Yξ+1 ,
+
+where Yi ∈ Y denotes a node type and Ri ∈ R denotes a rela-tion type. Intuitively, a meta-path characterizes the composite relation between a source node of type Y1 and a target node of type Yξ+1 by traversing a sequence of intermediate nodes and relations. Within a meta-path, the same node type may appear multiple times in the sequence, i.e., Yi = Yj for some 
+
+i̸ = j; similarly, relation types may also repeat, i.e., Ri = Rj .For example, taking papers as both the source and target node type, the meta-path Paper–Author–Paper (P-A-P) con-nects two papers that share at least one author, thereby cap-turing the coauthorship semantics between them. Similarly, the meta-path Paper–Magazine–Paper (P-M-P) links papers pub-lished in the same Magazine, reflecting topical or disciplinary similarity. As illustrated in Fig. 2, these semantics-guided paths map the heterogeneous graph into single-semantic sub-graphs consisting solely of source-to-target node connections, where the edges represent the corresponding meta-path seman-tic relations. This transformation reduces noise from irrelevant neighbors and facilitates the learning of task-relevant semantic representations. P-A-P： 
+
+> P-M-P：
+> Ma ta-Pathb asedSingle-sema nticSubgraph
+> Ma ta-Path
+
+Fig. 2: A schematic representation of the Meta-Path. Two examples of meta-paths are illustrated: Paper–Author–Paper (P–A–P) and Paper–Magazine–Paper (P–M–P). Each meta-path induces a single-semantic subgraph consisting solely of paper nodes, where edges represent semantic relations defined by the corresponding meta-path. 
+
+3) Heterogeneous Graph Neural Networks: Building upon the above representation methods, such as meta-paths, re-searchers have increasingly explored modeling paradigms that are capable of effectively capturing the complex structures and semantic information in heterogeneous graphs, thereby driving the emergence of heterogeneous graph neural networks (HGNNs). Existing HGNN models can be broadly categorized into two classes [3] : (1) meta-path-based methods , which explicitly construct single-semantic subgraphs via predefined meta-paths, perform feature aggregation within each subgraph, and then fuse cross-semantic information; (2) relation-based methods , which capture implicit single-semantic weighted subgraphs among node neighbors, perform feature aggrega-5
+
+tion within each subgraph, and then achieve adaptive cross-semantic fusion. Despite differing in their modeling approaches, both cat-egories fundamentally follow a hierarchical semantic model-ing paradigm from the semantic level to the cross-semantic level. For example, in the meta-path-based method HAN [46], semantic-level aggregation under a single meta-path is first performed. Given a target node vt ∈ V and a meta-path 
+
+Φk ∈ P , HAN first constructs the single-semantic subgraph 
+
+Gk = ( Vk, E k) derived from Φk. For node vt, its neighbors under Φk are denoted as Nk(vt). An attention mechanism is employed to aggregate features from these neighbors: 
+
+hvt,Φk = σ
+
+ X 
+
+> u∈Nk(vt)
+
+a(Φ k ) 
+
+> vtu
+
+W (Φ k )Xu
+
+ ,
+
+where Xu is the feature vector of node u, W (Φ k ) is a learnable transformation matrix specific to Φk, a(Φ k ) 
+
+> vtu
+
+is the attention weight that quantifies the importance of neighbor u to vt,and σ(·) is a nonlinear activation function. Next, a cross-semantic-level attention mechanism is applied to combine representations across multiple meta-paths, yielding the final representation for node v
+
+hv = X 
+
+> Φk∈P
+
+bk hv, Φk ,
+
+where bk is the attention weight reflecting the importance of the semantics represented by meta-path Φk. The learned representation hv is subsequently applied to downstream tasks such as node classification, link prediction, and complex reasoning. Similarly, the information aggregation process in the relation-based method HetSANN [17] can be decomposed into two steps: semantic-level aggregation under a single attention head and cross-semantic-level aggregation across multiple attention heads. The former captures an implicit single-semantic subgraph through a single attention head and performs information aggregation. The latter then concatenates the diverse single-semantic information from multiple atten-tion heads to achieve cross-semantic-level aggregation, which can subsequently be fine-tuned for specific tasks. Therefore, whether meta-path-based or relation-based, the core idea of both categories follows the same paradigm: semantic-level aggregation first, followed by cross-semantic-level fusion. 
+
+B. Problem Statement 
+
+Given this hierarchical semantic structure, we formalize the interpretability task for HGNNs as providing explanations at both the semantic level and the cross-semantic level. Formally, given a heterogeneous graph G = ( V, E) with node type mapping ϕ : V → Y , edge type mapping ψ : E → R, a set of meta-paths P = {Φ1, Φ2, . . . , Φm}, a node feature matrix X ∈ R|V|× n, a model M , and a target node vt ∈ V ,we aim to learn an explanation function F :
+
+(G, P, X, M, v t) 7 → (S, c)
+
+where S ∈ Rm×n is a semantic explanation matrix whose 
+
+k-th row sk denotes the feature importance under meta-path 
+
+Φk, and c ∈ Rn is a cross-semantic explanation vector that integrates all the semantics to yield the overall feature importance for the prediction M (G, X, v t).Although our task formulation adopts the concept of meta-paths, for relation-based methods, the single-semantic sub-graphs learned by the model can be expressed in a meta-path-based form to maintain consistency within this framework. IV. M ETHODOLOGY 
+
+To provide more effective hierarchical semantic explana-tions for HGNNs, we propose the HiSE framework , compris-ing two core components: semantic sparse proxy (SSP) and 
+
+cross-semantic aggregative inversion (CAI) . First, the het-erogeneous graph is decomposed into multiple single-semantic subgraphs on the basis of predefined meta-paths, serving as the shared input for both components. On this basis, in the SSP component, sparse surrogate models are constructed at each se-mantic view to reveal feature contributions, thereby obtaining semantic-level feature explanations for each semantic; in the CAI component, the contribution of each semantic context to model decisions is inverted, yielding a unified cross-semantic feature explanation through weighted integration. The overall workflow of the HiSE framework is illustrated in Fig. 3, and its overall procedure is presented in the pseudocode in the Appendix. 
+
+A. Semantic Graph Decomposition 
+
+On the basis of a predefined set of meta-paths P =
+
+{Φ1, Φ2, . . . , Φm}, we perform semantic decomposition on the original heterogeneous graph G = (V, E) to obtain a set of single-semantic subgraphs G = {G1, G 2, . . . , G m}
+
+corresponding to the meta-paths. Given a meta-path Φk: v1
+
+> r1
+
+−→
+
+v2
+
+> r2
+
+−→ · · · rξ
+
+−→ vξ+1 , where vi ∈ V and rj ∈ E , the adjacency matrix of the single-semantic subgraph corresponding to Φk
+
+is computed as follows: 
+
+AΦk = Ar1 × Ar2 × · · · × Arξ , (1) where Ari denotes the adjacency matrix under relation type 
+
+ri, with Ari (u, v ) = 1 if and only if there exists an edge 
+
+(u, v ) of type ri in G, and × denotes the matrix outer product. The single-semantic subgraph corresponding to Φk is then constructed as follows: 
+
+Gk = ( Vk, E k), (2) where Ek = {(u, v ) | AΦk (u, v ) > 0}, and Vk denotes the set of all nodes reachable through Ek.
+
+B. Semantic Sparse Proxy 
+
+In this module, we aim to generate independent feature explanations sk ∈ Rn for the target node vt on each single-semantic subgraph Gk, thereby forming the semantic explana-tion matrix S ∈ Rm×n. The core idea is to construct a sparse surrogate model at each semantic view to fit the prediction behavior of M , thereby yielding explanations specific to that semantic view. 6
+
+Fig. 3: Overview of the HiSE framework. The heterogeneous graph is decomposed into single-semantic subgraphs. Within each subgraph, the SSP component fits a weighted sparse surrogate model via LASSO to obtain per-semantic feature explanations 
+
+sk, which collectively form the semantic-level explanation S. The CAI component then evaluates the contribution of each semantic view by comparing the prediction distributions of these subgraphs against that of the full graph via KL divergence, yielding semantic weights w. With these weights, CAI aggregates sk into the cross-semantic-level explanation c.
+
+1) K-Hop Weighted Neighborhood Sampling: For a given meta-path Φk and its corresponding single-semantic subgraph 
+
+Gk, we construct a local weighted neighborhood dataset Dk
+
+for explanation by extracting the K-hop neighborhood struc-ture of the target node vt in Gk and assigning semantically relevant weights to nodes within the neighborhood. Given a hyperparameter K, the corresponding neighborhood node set is defined as follows: 
+
+Nk = {vi | vi ∈ V k, hop-distance Gk (vt, v i) ≤ K}. (3) Under the semantic constraint of meta-path Φk, for any neighborhood node vi ∈ Nk, we define its unnormalized weight ˜μ(k) 
+
+> i
+
+as the sum of edge weight products across all paths from vt to vi that conform to Φk:
+
+˜μ(k) 
+
+> i
+
+= X 
+
+> p∈P Φk(vt,v i)
+
+Y
+
+> (u,v )∈p
+
+ηuv , (4) where PΦk (vt, v i) denotes the set of all paths from vt to vi
+
+in the single-semantic subgraph Gk that conform to meta-path 
+
+Φk and ηuv denotes the weight assigned to edge (u, v ) by the model to be explained. The weights of all the nodes in the neighborhood are subsequently normalized and further scaled to maintain the numerical stability of the loss function: 
+
+μ(k) 
+
+> i
+
+= ˜μ(k)
+
+> i
+
+P  
+
+> vj∈Nk
+
+˜μ(k)
+
+> j
+
+· | Nk|. (5) For each node vi ∈ Nk, we feed its feature vector Xi ∈ Rn
+
+along with the original heterogeneous graph G as input to obtain the prediction probability distribution of the model M
+
+to be explained: 
+
+ˆyG 
+
+> i
+
+← M (G, X i) (6) where ˆyG 
+
+> i
+
+∈ RL is the predicted probability vector over L
+
+classes and ˆyG 
+
+> i,l
+
+denotes the predicted probability for the l-th class. Finally, the weighted local neighborhood dataset is con-structed as follows: 
+
+Dk = {(Xi, ˆyG 
+
+> i
+
+, μ (k) 
+
+> i
+
+) | vi ∈ Nk}. (7) 
+
+2) Weighted Sparse Proxy Fitting: On the basis of the weighted local neighborhood dataset Dk, we learn a sparse linear surrogate model for each semantic Φk:
+
+gk(X) = s⊤ 
+
+> k
+
+X, (8) thereby obtaining the semantic-level feature explanation sk ∈
+
+Rn for that semantic. To fully account for the differences in importance among sampled nodes under semantic Φk, we introduce sample weights μ(k) 
+
+> i
+
+and employ the weighted Least Absolute Shrinkage and Selection Operator via Least Angle Regression (LassoLARS) method [8], [42] to optimize the sparse linear surrogate model gk(X) to fit Dk.For all (Xi, ˆyG 
+
+> i
+
+, μ (k) 
+
+> i
+
+) ∈ D k, LassoLARS minimizes the following weighted LASSO objective: 
+
+L(sk,l ) = X
+
+> vi∈Nk
+
+μ(k)
+
+> i
+
+
+
+ˆyG 
+
+> i,l
+
+− s⊤
+
+> k,l
+
+Xi
+
+2
+
++ λ∥sk,l ∥1, (9) where sk,l ∈ Rn denotes the semantic-level feature explana-tion for class l under semantic Φk and μ(k) 
+
+> i
+
+represents the importance weight of node vi under the current semantic. This optimization is solved via the LassoLARS algorithm (detailed in Appendix), which is performed independently for each class l.To reflect the overall prediction behavior, we average the explanation results across all classes: 
+
+sk = 1
+
+L
+
+> L
+
+X
+
+> l=1
+
+s(final ) 
+
+> k,l
+
+. (10) 7
+
+Repeating this process for all meta-paths Φk ∈ P yields a set of semantic-level feature explanations 
+
+S = {s1, s2, . . . , sm},
+
+that characterize the key features influencing model predictions from different semantic views. The complete procedure is summarized in the pseudocode in the Appendix. 
+
+C. Cross-Semantic Aggregative Inversion 
+
+In this module, we evaluate the relative contribution wk of each semantic meta-path Φk to the final prediction in a model-agnostic manner and synthesize a cross-semantic explanation 
+
+c ∈ Rn by combining the semantic-level explanations sk from SSP. The core idea is to measure the consistency between the model’s predictions on the single-semantic subgraph Gk and those on the full graph G.Specifically, we first obtain the global prediction distribution 
+
+ˆyG = [ˆ yG 
+
+> 1
+
+, ˆyG 
+
+> 2
+
+, . . . , ˆyG|N | ] by feeding X and G into the model. For each meta-path Φk, we similarly obtain the prediction distribution ˆyGk using the subgraph Gk. The negative KL di-vergence between the two distributions serves as the similarity score γk:
+
+γk = − X
+
+> vi∈N
+
+ˆyG 
+
+> i
+
+log ˆyG
+
+> i
+
+ˆyGk
+
+> i
+
+(11) where a higher γk indicates greater consistency, meaning that Φk contributes more critical semantic information to the model’s decisions. The similarity scores γ = [ γ1, γ 2, . . . , γ m] are then nor-malized into semantic weights w = [w1, w 2, . . . , w m] via softmax: 
+
+wk = exp( γk)
+
+Pmk=1 exp( γk) (12) Finally, the cross-semantic explanation for the target node 
+
+vt is obtained as follows: 
+
+c =
+
+> m
+
+X
+
+> k=1
+
+wk · sk (13) where c ∈ Rn aggregates feature contributions across all meta-paths, providing a comprehensive answer to which features are most influential and through which semantic relationships they operate. The complete procedure is summarized in the pseudocode in the Appendix. V. E XPERIMENTS 
+
+To comprehensively evaluate the performance of HiSE, we design a series of experiments from two perspectives: effec-tiveness and efficiency. The effectiveness evaluation covers four key aspects: explanation accuracy, robustness, usability, and cross-semantic explanation capability; the efficiency eval-uation focuses on computational overhead. 
+
+A. Heterogeneous Graph Neural Networks to be Explained 
+
+We adopt two representative meta-path-based HGNNs and two representative relation-based HGNNs as target models for explanation: 
+
+1) Meta-Path-Based Methods. : The meta-path-based methods rely on manually designed meta-paths to capture high-order semantic structures and perform message passing on the induced single-semantic subgraphs.  
+
+> •
+
+HAN [46] introduces a hierarchical attention mechanism with node-level (per meta-path) and semantic-level (cross meta-path) attention, which correspond to the semantic level and cross-semantic level, respectively, in this work.  
+
+> •
+
+MAGNN [11] extends meta-path-based message pass-ing by incorporating intermediate nodes and aggregating multiple meta-path instances to capture richer contextual semantics, combining both intra- and intermeta-path ag-gregation. 
+
+2) Relation-Based Methods. : The relation-based methods directly use relation types as the basic modeling unit and learn semantic structures via relation-aware message passing, avoiding the need for manual meta-path design.  
+
+> •
+
+HetSANN [17] employs relation-specific attention to ag-gregate neighbor information from different relation types within the same layer, capturing diverse connectivity patterns without predefined meta-paths.  
+
+> •
+
+HGT [20] introduces type-aware projection matrices and attention parameters for different node and relation types, enabling relation-level structured attention within a multihead framework to model high-order interactions in heterogeneous graphs. 
+
+B. Datasets 
+
+We use two widely adopted academic network datasets in our experiments, with detailed statistics provided in the Appendix.  
+
+> •
+
+ACM [46]. Sourced from papers published at KDD, SIGMOD, SIGCOMM, MobiCOMM, and VLDB, the data in the ACM dataset are categorized into three classes ( database , wireless communication , data mining ). Paper features are represented as bag-of-words vectors of keywords, and labels are assigned on the basis of the publishing conference.  
+
+> •
+
+MAG. The MAG dataset was constructed by sampling from ogbn-mag [19] to form a heterogeneous academic network subgraph. We randomly select 5,000 paper nodes belonging to three classes and retain all connected au-thor and field-of-study nodes and their relations. Papers include 128-dimensional word2vec features. 
+
+C. Baseline Methods 
+
+We compare HiSE against baselines from three categories: basic methods, such as performance lower bounds; homoge-neous GNN explanation methods, to examine their applica-bility in heterogeneous scenarios; and heterogeneous GNN explanation methods, which are the key comparative objects. 
+
+(1) Basic Methods.  
+
+> •
+
+Random [36]: Randomly selects features under a given budget, providing a random lower bound.  
+
+> •
+
+Greedy [32]: Sequentially selects features in descending order of absolute values. 8
+
+(2) Homogeneous GNN Explanation Methods. For fair comparison, we construct homogeneous subgraphs on the basis of predefined meta-paths and randomly select one as the input for each method.  
+
+> •
+
+GraphLIME [21]: Extends LIME [36] to graphs by learning nonlinear surrogate models in local neighbor-hoods.  
+
+> •
+
+GNNExplainer [50]: Identifies critical subgraphs and features by optimizing soft masks to maximize mutual information with model predictions.  
+
+> •
+
+ZORRO [12]: Progressively selects features that max-imize fidelity, measured by prediction consistency after the selected features are fixed and the remaining features are replaced with random noise. 
+
+(3) Heterogeneous GNN Explanation Methods.  
+
+> •
+
+HENCE-X [30]: Employs Markov blanket search to iden-tify the most relevant feature subset and then constructs explanations via statistical significance testing.  
+
+> •
+
+HGExplainer [33]: Extends GNNExplainer to heteroge-neous graphs by learning structural and feature masks on meta-path-induced subgraphs and aggregating them. 
+
+D. Experimental Setup 1) Explainer Settings:  
+
+> •
+
+HiSE : For meta-path-based models (HAN and MAGNN), each predefined meta-path is treated as an independent semantic unit. For relation-based models (HetSANN and HGT), each attention head serves as an independent semantic unit.  
+
+> •
+
+HENCE-X [30]: We limit the upper bound of neighbor sampling per type to 50 and the maximum number of perturbed samples to 2,000 to ensure computational feasibility.  
+
+> •
+
+ZORRO [12]: We limit the number of random samplings to 20 to reduce the computational overhead.  
+
+> •
+
+Other baselines [36], [32], [21], [50], [33]: We adopt the original implementations. 
+
+2) Noise-Augmented Settings: We conduct experiments on the ACM and MAG datasets. To evaluate the fidelity, robust-ness, and usability of each explainer under irrelevant feature interference, we append 30% random noise features to the original node features. For the ACM dataset (binary features), we generate i.i.d. random binary noise; for the MAG dataset (continuous features), we generate uniform noise over [−1, 1] .The noise features are concatenated with the original features and are independent of class labels. All the HGNN classifiers are trained on the complete feature space with noise appended. 
+
+E. Experiment 1 Fidelity : How Trustworthy is the Explainer? 
+
+A faithful explanation should accurately identify the features on which the model truly relies. To evaluate this fidelity, we first train an HGNN classifier with accuracy ≥ 85% on the noise-augmented feature space. For a given node vi, the explainer selects the top-K most important features F(K) 
+
+> i
+
+. We then retrain Γ = 10 classifiers using only these features under the same data split and measure prediction consistency with the original model: 
+
+Fid i = 1Γ
+
+> Γ
+
+X 
+
+> τ=1
+
+I
+
+
+
+f (τ )(vi | F (K) 
+
+> i
+
+) = f (vi)
+
+
+
+, (14) where f (·) and f (τ )(·) denote the original and τ -th retrained models, respectively, and I(·) is the indicator function. The overall fidelity is averaged over 200 randomly selected test nodes: 
+
+Fidelity = 1
+
+|V| 
+
+X
+
+> vi∈V
+
+Fid i. (15) The results are presented in Table II. HiSE achieves the highest and most stable fidelity across nearly all the settings. HENCE-X exhibits limited and unstable performance. HGEx-plainer, ZORRO, and GraphLIME achieve reasonable results in some scenarios but remain inconsistent overall. The advantage of HiSE stems from its semantic-level surrogate modeling and cross-semantic aggregation, which accurately reflect the semantic propagation mechanism of HGNNs and stably identify influential features even under noise. In contrast, GraphLIME, GNNExplainer, and ZORRO were designed for homogeneous graphs and cannot explic-itly capture multisemantic propagation structures in HGNNs. Although HGExplainer and HENCE-X target heterogeneous graphs, they cannot faithfully reflect the hierarchical semantic mechanism underlying HGNNs and fail to accurately identify the features that truly drive model predictions. 
+
+F. Experiment 2 Robustness : How Resistant is the Explainer to Noise? 
+
+Following the noise-augmented setting in Section V-D, we evaluate the robustness of each explainer using HGNN classifiers with test accuracy exceeding 85%. For 200 ran-domly selected test nodes, each explainer generates the top-
+
+K (K = 10 , 20 ) feature explanations, and we count the number of noise features N among the selected features, where a smaller N indicates stronger robustness. We repeat the process 10 times and plot the distribution of the N values. Additionally, we compute Cliff’s delta effect size [5] for each method relative to Random as a quantitative measure of noise suppression capability. The results are shown in Fig. 4. HiSE demonstrates the strongest noise suppression capa-bility, with its N distribution significantly lower than that of Random and achieving the best Cliff’s delta across the vast majority of settings. Greedy performs worst across nearly all the scenarios. HENCE-X, HGExplainer, and GNNExplainer exhibit poor robustness, with N distributions notably higher than those of Random in many cases, indicating that they fre-quently misidentify noise features as important. GraphLIME and ZORRO show moderate robustness, slightly outperform-ing Random. This advantage stems from HiSE’s surrogate model-based paradigm, which learns an interpretable linear model to ap-proximate the original model’s decision boundary without perturbing input features, thereby preserving the original fea-ture distribution and effectively suppressing noise. In contrast, 9
+
+TABLE II: Fidelity comparison of eight explainers under different HGNN classifiers, datasets, and explanation budgets K.Higher values indicate better fidelity ( ↑). The best and second-best results in each setting are highlighted in bold and underlined, respectively. 
+
+Classifier Dataset K
+
+Explainer (Fidelity ↑)Basic Homogeneous Heterogeneous Ours 
+
+Random Greedy GraphLIME ZORRO GNNExplainer HGExplainer HENCE-X HiSE HAN ACM 10 0.70 0.71 0.85 0.81 0.68 0.71 0.78 0.82 20 0.74 0.74 0.87 0.84 0.72 0.67 0.81 0.89 
+
+MAG 10 0.74 0.52 0.81 0.81 0.82 0.85 0.57 0.86 
+
+20 0.85 0.52 0.83 0.84 0.89 0.88 0.74 0.91 
+
+MAGNN ACM 10 0.72 0.74 0.77 0.81 0.73 0.73 0.73 0.83 
+
+20 0.74 0.78 0.80 0.82 0.76 0.69 0.77 0.86 
+
+MAG 10 0.72 0.76 0.75 0.78 0.73 0.74 0.74 0.81 
+
+20 0.76 0.83 0.82 0.84 0.74 0.78 0.82 0.82 HetSANN ACM 10 0.52 0.52 0.66 0.54 0.52 0.51 0.50 0.78 
+
+20 0.52 0.51 0.65 0.55 0.51 0.53 0.54 0.72 
+
+MAG 10 0.80 0.54 0.84 0.79 0.80 0.90 0.76 0.94 
+
+20 0.89 0.44 0.91 0.87 0.92 0.97 0.87 0.95 HGT ACM 10 0.72 0.71 0.76 0.71 0.73 0.69 0.78 0.86 
+
+20 0.74 0.73 0.79 0.74 0.73 0.70 0.79 0.89 
+
+MAG 10 0.47 0.34 0.62 0.59 0.49 0.51 0.36 0.64 
+
+20 0.58 0.38 0.66 0.61 0.64 0.59 0.50 0.68 0 2 4 6 8 10 
+
+> Number of Noise
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> 1.2
+> Density
+> Cliff's Delta
+> HiSE: -0.64
+> ZORRO: -0.18
+> GraphLIME: -0.02
+> Random: +0.00
+> GNNExplainer: +0.88
+> HGExplainer: +0.88
+> HENCE-X: +0.98
+> Greedy: +1.00
+> HAN on ACM; K=10
+
+(a) HAN on ACM 0 5 10 15 20  
+
+> Number of Noise
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> 1.2
+> 1.4
+> Density
+> Cliff's Delta
+> HiSE: -0.79
+> ZORRO: -0.20
+> GraphLIME: -0.10
+> Random: +0.00
+> GNNExplainer: +0.93
+> HENCE-X: +0.98
+> HGExplainer: +0.99
+> Greedy: +1.00
+> MAGNN on ACM; K=20
+
+(b) MAGNN on ACM 0 2 4 6 8 10  
+
+> Number of Noise
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> Density
+> Cliff's Delta
+> HiSE: -0.91
+> GraphLIME: -0.53
+> HGExplainer: -0.49
+> GNNExplainer: -0.47
+> ZORRO: -0.36
+> Random: +0.00
+> HENCE-X: +0.01
+> Greedy: +1.00
+> HetSANN on MAG; K=10
+
+(c) HetSANN on MAG 0 5 10 15 20  
+
+> Number of Noise
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 1.25
+> 1.50
+> 1.75
+> 2.00
+> Density
+> Cliff's Delta
+> HiSE: -1.00
+> HGExplainer: -0.88
+> GNNExplainer: -0.85
+> GraphLIME: -0.24
+> ZORRO: -0.11
+> Random: +0.00
+> HENCE-X: +0.89
+> Greedy: +0.99
+> HGT on MAG; K=20
+
+(d) HGT on MAG HiSE HGExplainer HENCE-X GraphLIME GNNExplainer ZORRO Greedy Random 
+
+Fig. 4: Frequency distribution of noise features selected by different explainers, visualized using KDE curves. Each subplot corresponds to a different HGNN model–dataset– K setting. A lower concentration indicates stronger explainer robustness to noise. Complete results across all settings are deferred to Appendix. perturbation-based methods (HENCE-X, HGExplainer, and GNNExplainer) evaluate importance by masking or removing input features, which tends to disrupt the original distribu-tion and amplify the incidental influence of noise in high-dimensional feature spaces, leading to larger N values. 
+
+G. Experiment 3 Usability : Can the Explainer Help Identify Better Models? 
+
+High-performance models should rely less on noise features, and an effective explainer should reveal this difference. To evaluate usability, we construct two categories of HGNN clas-sifiers under the same data split and noise injection settings: “good models” with a test accuracy of 85% ∼ 100% and “bad models” with a test accuracy of 65% ∼ 75% . Each explainer generates top-K (K = 20 , 30 , 40 , 50 ) feature explanations for 
+
+B = 10 key nodes. If the number of noise features for the “good model” is less than that for the “bad model,” the trial is considered successful. This process is repeated 200 times, and the discrimination success rates are plotted in Fig. 5. HiSE exhibits the strongest and most stable usability, con-sistently outperforming all the baselines across most settings. HGExplainer, GNNExplainer, and HENCE-X achieve limited and inconsistent performance. ZORRO achieves success rates only slightly above random, indicating weak discrimination ability. The performance of GraphLIME is the worst, with success rates approaching or falling below random in some scenarios. HiSE’s advantage lies in its hierarchical semantic explana-tion paradigm, which involves the construction of surrogate models within each single-semantic subgraph to approximate the original model’s decision boundary without disrupting the input feature distribution. This design enables effective 10 20 30 40 50 
+
+> K
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Correct identify rate
+> HAN on ACM
+
+(a) HAN on ACM 20 30 40 50  
+
+> K
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Correct identify rate
+> MAGNN on ACM
+
+(b) MAGNN on ACM 20 30 40 50  
+
+> K
+> 0.40
+> 0.45
+> 0.50
+> 0.55
+> 0.60
+> 0.65
+> Correct identify rate
+> HetSANN on MAG
+
+(c) HetSANN on MAG 20 30 40 50  
+
+> K
+> 0.35
+> 0.40
+> 0.45
+> 0.50
+> 0.55
+> 0.60
+> 0.65
+> 0.70
+> Correct identify rate
+> HGT on MAG
+
+(d) HGT on MAG HiSE HGExplainer HENCE-X GraphLIME GNNExplainer ZORRO Greedy Random 
+
+Fig. 5: Discrimination success rates of different explainers in correctly identifying the better-performing HGNN model under varying values of K. Results are reported on HAN, MAGNN, HetSANN, HGT with the ACM and MAG datasets. Higher values indicate stronger reliability of the explainer in distinguishing model quality. The complete results across all model– dataset settings are deferred to Appendix. suppression of noise interference and accurately reveals the true decision-making mechanisms of models under different semantic structures, thereby stably distinguishing the noise dependence differences between “good” and “bad” models. In contrast, perturbation-based methods (HGExplainer, GNNEx-plainer, HENCE-X) tend to disrupt the original feature distri-bution and amplify the incidental influence of irrelevant fea-tures, making importance estimates sensitive to random fluc-tuations. Despite using local surrogate models, GraphLIME is easily misled by a single semantic in heterogeneous graphs and fails to capture the hierarchical semantic decision-making mechanism of HGNNs. 
+
+H. Experiment 4 Cross-Semantic Explanation Capability :Can HiSE Accurately Recover the Cross-Semantic Importance Learned by HGNNs? 
+
+In this section, the cross-semantic explanation capability of HiSE, a key innovation of our method, is evaluated. We inject randomly generated noise subgraphs of varying densities into the original datasets and train HGNN models with accuracy 
+
+≥ 85% . Two metrics are evaluated: (1) Cosine similarity (CS) 
+
+between the cross-semantic weights computed by HiSE and those provided by the original meta-path-based HGNN, where a higher CS indicates a more accurate characterization of se-mantic importance; (2) Noise weight (NW) assigned to noise subgraphs by HiSE, where a lower NW indicates stronger suppression of irrelevant semantics. All the experiments are repeated 200 times, and the average results are reported in Table III. We select HAN and MAGNN as baselines, as they are the only methods that provide explicit meta-path semantic weights for comparison. HiSE achieves high CS across all the settings, consistently exceeding 99% on HAN, indicating strong consistency with the original model’s weight distribution at the cross-semantic level. Moreover, NW remains below 5% in most cases, demon-strating effective suppression of noise subgraphs. This performance arises because HiSE measures the dis-crepancy between the model’s output under each semantic and the overall output via KL divergence, directly recovering a semantic weight distribution that reflects the original model’s cross-semantic fusion mechanism. 
+
+I. Experiment 5 Computational Efficiency : How Efficient is HiSE? 
+
+We also evaluate the computational efficiency of each explanation method. All the experiments are conducted on a server equipped with 4 NVIDIA RTX 4090 GPUs (48 GB each) and 4-way Intel Xeon Gold 5120 CPUs (112 cores), with only 1 GPU utilized. For each method, we randomly select 50 nodes, repeat the process 10 times, and report the average explanation time per node. Owing to GPU memory constraints, GraphLIME is implemented on the CPU. As shown in Table IV, HiSE achieves the shortest running time across all the settings. Compared with HENCE-X, HiSE achieves approximately 2–3 orders of magnitude speedup. HGExplainer and GNNExplainer are approximately one or-der of magnitude slower than HiSE, while GraphLIME and ZORRO incur the highest running times in certain scenarios. HiSE’s efficiency stems from its hierarchical semantic mechanism, which decomposes the explanation into indepen-dent per-semantic surrogate modeling and lightweight cross-semantic aggregation, avoiding complex iterative search or combinatorial optimization. This design enables HiSE to ef-ficiently reflect the decision-making mechanism of the model with minimal computational overhead. In contrast, HENCE-X and ZORRO rely on iterative feature selection with repeated evaluation of candidate subsets. The bottleneck of GraphLIME lies in kernel matrix computation, which imposes high memory demands. VI. C ONCLUSION 
+
+In this paper, the interpretability of HGNNs is investigated. Existing explanation methods fail to adequately characterize the multisemantic interactions and hierarchical structures in-herent in HGNNs and often incur high computational costs. To address these issues, we propose HiSE, a hierarchical 11 
+
+TABLE III: Comparison of HiSE and HGNN Cross-Semantic Weights. Rows correspond to different noise settings (number and density), and columns report results on different HGNNs (HAN, MAGNN) and datasets (ACM, MAG). “CS" denotes the cosine similarity with the original HGNN ( ↑), and “NW" denotes the total weight assigned to noise subgraphs ( ↓). Higher CS reflects stronger consistency with the original model, while lower NW indicates better noise suppression. 
+
+Number of Added Noise Subgraph Noise Subgraph Density HAN MAGNN ACM MAG ACM MAG CS ↑ NW ↓ CS ↑ NW ↓ CS ↑ NW ↓ CS ↑ NW ↓
+
+0 / 99.76% / 99.83% / 91.64% / 99.12% /1 0.5% 99.83% 0.23% 99.37% 0.52% 93.25% 2.51% 89.96% 2.96% 1 5% 99.76% 0.25% 99.37% 0.42% 93.38% 4.32% 95.05% 1.74% 1 50% 99.42% 0.02% 99.31% 0.39% 94.41% 2.74% 90.93% 2.41% 2 5% and 1% 99.85% 0.47% 98.87% 1.41% 92.18% 7.56% 90.65% 4.02% 2 5% and 10% 99.87% 0.47% 98.99% 1.06% 94.01% 12.13% 90.98% 4.76% 2 50% and 10% 99.81% 0.56% 99.35% 2.21% 94.20% 6.33% 93.03% 3.84% 
+
+TABLE IV: Efficiency comparison of different explainers under various HGNN classifiers and datasets. The reported values denote the average runtime (in seconds) of each node. The best results are highlighted in bold, respectively. 
+
+Classifier Dataset Explainer (Time ↓)Homogeneous Heterogeneous Ours 
+
+GraphLIME ZORRO GNNExplainer HGExplainer HENCE-X HiSE HAN ACM 202.94 7.81 1.63 2.74 83.70 0.37 
+
+MAG 159.33 32.07 2.78 6.47 203.62 0.10 
+
+MAGNN ACM 141.16 722.99 3.92 10.99 256.74 2.45 
+
+MAG 54.94 16.33 4.94 10.30 129.72 2.52 
+
+HetSANN ACM 102.49 1352.75 12.01 23.15 416.66 2.76 
+
+MAG 63.40 10.38 5.88 11.82 213.38 0.42 
+
+HGT ACM 92.39 2805.72 4.49 9.14 847.49 3.77 
+
+MAG 69.23 3407.38 4.36 8.95 367.70 0.74 
+
+semantic explanation framework that involves the construction of local surrogate models at the semantic level and the evaluation of feature contributions at the cross-semantic level, thereby faithfully reflecting the decision-making mechanism of HGNNs. Extensive experiments demonstrate that compared with existing methods, the effectiveness and efficiency of HiSE are superior and that it can stably identify influential features even in noisy environments. Future work may explore finer-grained or adaptive semantic partitioning schemes, integration with diverse HGNN architec-tures, and modeling of richer interlayer semantic interactions to enhance the cross-task applicability of this paradigm. REFERENCES [1] Alejandro Barredo Arrieta, Natalia Díaz-Rodríguez, Javier Del Ser, Adrien Bennetot, Siham Tabik, Alberto Barbado, Salvador Garcia, Sergio Gil-Lopez, Daniel Molina, Richard Benjamins, Raja Chatila, and Francisco Herrera. Explainable artificial intelligence (xai): Concepts, taxonomies, opportunities and challenges toward responsible ai. Infor-mation Fusion , 58:82–115, 2020. [2] Peter W. Battaglia, Jessica B. Hamrick, Victor Bapst, Alvaro Sanchez-Gonzalez, Vinícius Flores Zambaldi, Mateusz Malinowski, Andrea Tac-chetti, David Raposo, Adam Santoro, Ryan Faulkner, Çaglar Gülçehre, H. Francis Song, Andrew J. Ballard, Justin Gilmer, George E. Dahl, Ashish Vaswani, Kelsey R. Allen, Charlie Nash, Victoria Langston, Chris Dyer, Nicolas Manfred Otto Heess, Daan Wierstra, Pushmeet Kohli, Matthew M. Botvinick, Oriol Vinyals, Yujia Li, and Razvan Pascanu. Relational inductive biases, deep learning, and graph networks. ArXiv ,abs/1806.01261, 2018. [3] Rui Bing, Guan Yuan, Mu Zhu, Fanrong Meng, Huifang Ma, and Shaojie Qiao. Heterogeneous graph neural networks analysis: a survey of techniques, evaluations and applications. Artificial Intelligence Review ,56:1–40, 12 2022. [4] Jinpeng Chen, Haiyang Li, Xudong Zhang, Fan Zhang, Senzhang Wang, Kaimin Wei, and Jiaqi Ji. Sr-hetgnn:session-based recommendation with heterogeneous graph neural network, 2023. [5] N. Cliff. Dominance statistics: Ordinal analyses to answer ordinal questions. Psychological Bulletin , 114:494–509, 1993. [6] Hejie Cui, Wei Dai, Yanqiao Zhu, Xiaoxiao Li, Lifang He, and Carl Yang. Interpretable graph neural networks for connectome-based brain disorder analysis, 2022. [7] Yuxiao Dong, N. Chawla, and Ananthram Swami. metapath2vec: Scal-able representation learning for heterogeneous networks. Proceedings of the 23rd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining , 2017. [8] Bradley Efron, Trevor Hastie, Iain Johnstone, and Robert Tibshirani. Least angle regression. The Annals of Statistics , 32(2), April 2004. [9] Junfeng Fang, Guibin Zhang, Kun Wang, Wenjie Du, Yifan Duan, Yuankai Wu, Roger Zimmermann, Xiaowen Chu, and Yuxuan Liang. On regularization for explaining graph neural networks: An informa-tion theory perspective. IEEE Transactions on Knowledge and Data Engineering , pages 1–14, 2024. [10] Yueting Fang, Hao Wu, Yiji Zhao, Lei Zhang, Shaowei Qin, and Xin Wang. Diversifying collaborative filtering via graph spreading network and selective sampling. IEEE Transactions on Neural Networks and Learning Systems , 35(10):13860–13873, 2024. [11] Xinyu Fu, Jiani Zhang, Ziqiao Meng, and Irwin King. Magnn: Metapath aggregated graph neural network for heterogeneous graph embedding. In 
+
+Proceedings of The Web Conference 2020 , WWW ’20, page 2331–2341. ACM, April 2020. [12] Thorben Funke, Megha Khosla, and Avishek Anand. Hard masking for explaining graph neural networks, 2021. 12 
+
+[13] Chao Gao, Shu Yin, Haiqiang Wang, Zhen Wang, Zhanwei Du, and Xuelong Li. Medical-knowledge-based graph neural network for medi-cation combination prediction. IEEE Transactions on Neural Networks and Learning Systems , 35(10):13246–13257, 2024. [14] Justin Gilmer, Samuel S. Schoenholz, Patrick F. Riley, Oriol Vinyals, and George E. Dahl. Neural message passing for quantum chemistry, 2017. [15] Mingyu Guan, Jack W. Stokes, Qinlong Luo, Fuchen Liu, Purvanshi Mehta, Elnaz Nouri, and Taesoo Kim. Heterogeneous graph neural network on semantic tree. In AAAI , April 2025. [16] Naicheng Guo, Xiaolei Liu, Shaoshuai Li, Qiongxu Ma, Kaixin Gao, Bing Han, Lin Zheng, Sheng Guo, and Xiaobo Guo. Poincaré hetero-geneous graph neural networks for sequential recommendation. ACM Trans. Inf. Syst. , 41(3), February 2023. [17] Huiting Hong, Hantao Guo, Yucheng Lin, Xiaoqing Yang, Zang Li, and Jieping Ye. An attention-based graph neural network for heterogeneous structural learning, 2019. [18] Zhenyu Hou, Xiao Liu, Yukuo Cen, Yuxiao Dong, Hongxia Yang, Chunjie Wang, and Jie Tang. Graphmae: Self-supervised masked graph autoencoders. In Proceedings of the 28th ACM SIGKDD Conference on Knowledge Discovery and Data Mining , KDD ’22, page 594–604, New York, NY, USA, 2022. Association for Computing Machinery. [19] Weihua Hu, Matthias Fey, Marinka Zitnik, Yuxiao Dong, Hongyu Ren, Bowen Liu, Michele Catasta, and Jure Leskovec. Open graph benchmark: Datasets for machine learning on graphs, 2021. [20] Ziniu Hu, Yuxiao Dong, Kuansan Wang, and Yizhou Sun. Heteroge-neous graph transformer. In Proceedings of The Web Conference 2020 ,WWW ’20, page 2704–2710, New York, NY, USA, 2020. Association for Computing Machinery. [21] Qiang Huang, Makoto Yamada, Yuan Tian, Dinesh Singh, Dawei Yin, and Yi Chang. Graphlime: Local interpretable model explanations for graph neural networks, 2020. [22] Wenchao Jiang, Fangyue Wu, Fanlong Zhang, Quan Chen, Zhiming Zhao, and Song Guo. Crl-mm: Context-aware relational learning and multidimensional matching for few-shot knowledge graph comple-tion. IEEE Transactions on Neural Networks and Learning Systems ,37(3):1405–1419, 2026. [23] Thomas N. Kipf and Max Welling. Semi-supervised classification with graph convolutional networks, 2017. [24] Jiazheng Li, Chunhui Zhang, and Chuxu Zhang. Heterogeneous tempo-ral graph neural network explainer. In Proceedings of the 32nd ACM International Conference on Information and Knowledge Management ,CIKM ’23, page 1298–1307, New York, NY, USA, 2023. Association for Computing Machinery. [25] Tong Li, Jiale Deng, Yanyan Shen, Luyu Qiu, Yongxiang Huang, and Caleb Chen Cao. Towards fine-grained explainability for heterogeneous graph neural network, 2023. [26] Yiqiao Li, Jianlong Zhou, Sunny Verma, and Fang Chen. A survey of explainable graph neural networks: Taxonomy and evaluation metrics, 2023. [27] Qun Liu, Chengxin Peng, Shuyin Xia, and Guoyin Wang. A multi-level semantic-assisted unsupervised heterogeneous network representation learning model. Neurocomputing , 574:127274, 2024. [28] Yanbei Liu, Lianxi Fan, Xiao Wang, Zhitao Xiao, Shuai Ma, Yanwei Pang, and Jerry Chun-Wei Lin. Hgber: Heterogeneous graph neural network with bidirectional encoding representation. IEEE Transactions on Neural Networks and Learning Systems , 35(7):9340–9351, 2024. [29] Dongsheng Luo, Wei Cheng, Dongkuan Xu, Wenchao Yu, Bo Zong, Haifeng Chen, and Xiang Zhang. Parameterized explainer for graph neural network, 2020. [30] Ge Lv, Chen Jason Zhang, and Lei Chen. Hence-x: Toward heterogeneity-agnostic multi-level explainability for deep graph net-works. Proc. VLDB Endow. , 16(11):2990–3003, July 2023. [31] Qiujie Lv, Guanxing Chen, Ziduo Yang, Weihe Zhong, and Calvin Yu-Chian Chen. Meta learning with graph attention networks for low-data drug discovery. IEEE Transactions on Neural Networks and Learning Systems , 35(8):11218–11230, 2024. [32] David Martens and Foster Provost. Explaining data-driven document classifications. MIS Q. , 38(1):73–100, March 2014. [33] Grzegorz P. Mika, Amel Bouzeghoub, Katarzyna W˛ egrzyn-Wolska, and Yessin M. Neggaz. Hgexplainer: Explainable heterogeneous graph neural network. In 2023 IEEE/WIC International Conference on Web Intelligence and Intelligent Agent Technology (WI-IAT) , pages 221–229, 2023. [34] Soroor Motie and Bijan Raahemi. Financial fraud detection using graph neural networks: A systematic review. Expert Systems with Applications ,240:122156, 2024. [35] Heloísa Oss Boll, Ali Amirahmadi, Mirfarid Musavian Ghazani, Wag-ner Ourique de Morais, Edison Pignaton de Freitas, Amira Soliman, Farzaneh Etminani, Stefan Byttner, and Mariana Recamonde-Mendoza. Graph neural networks for clinical risk prediction based on elec-tronic health records: A survey. Journal of Biomedical Informatics ,151:104616, 2024. [36] Marco Tulio Ribeiro, Sameer Singh, and Carlos Guestrin. "why should i trust you?": Explaining the predictions of any classifier, 2016. [37] Franco Scarselli, Marco Gori, Ah Chung Tsoi, Markus Hagenbuchner, and Gabriele Monfardini. The graph neural network model. IEEE Transactions on Neural Networks , 20(1):61–80, 2009. [38] Michael Schlichtkrull, Thomas N. Kipf, Peter Bloem, Rianne van den Berg, Ivan Titov, and Max Welling. Modeling relational data with graph convolutional networks, 2017. [39] Saeedreza Shehnepoor, Roberto Togneri, Wei Liu, and Mohammed Bennamoun. Hin-rnn: A graph representation learning neural network for fraudster group detection with no handcrafted features. IEEE Transactions on Neural Networks and Learning Systems , 34(8):4153– 4166, 2023. [40] Chuan Shi, Yitong Li, Jiawei Zhang, Yizhou Sun, and Philip S. Yu. A survey of heterogeneous information network analysis. IEEE Transac-tions on Knowledge and Data Engineering , 29(1):17–37, 2017. [41] Yizhou Sun, Jiawei Han, Xifeng Yan, Philip S. Yu, and Tianyi Wu. Pathsim: meta path-based top-k similarity search in heterogeneous information networks. Proc. VLDB Endow. , 4(11):992–1003, August 2011. [42] Robert Tibshirani. Regression shrinkage and selection via the lasso. 
+
+Journal of the royal statistical society series b-methodological , 58:267– 288, 1996. [43] Rafaël Van Belle and Jochen De Weerdt. Shine: A scalable hetero-geneous inductive graph neural network for large imbalanced datasets. 
+
+IEEE Transactions on Knowledge and Data Engineering , 36(9):4904– 4915, 2024. [44] Petar Veliˇ ckovi´ c, Guillem Cucurull, Arantxa Casanova, Adriana Romero, Pietro Liò, and Yoshua Bengio. Graph attention networks, 2018. [45] Xiao Wang, Deyu Bo, Chuan Shi, Shaohua Fan, Yanfang Ye, and Philip S. Yu. A survey on heterogeneous graph embedding: Methods, techniques, applications and sources, 2020. [46] Xiao Wang, Houye Ji, Chuan Shi, Bai Wang, Peng Cui, P. Yu, and Yanfang Ye. Heterogeneous graph attention network, 2021. [47] Zonghan Wu, Shirui Pan, Fengwen Chen, Guodong Long, Chengqi Zhang, and Philip S. Yu. A comprehensive survey on graph neural net-works. IEEE Transactions on Neural Networks and Learning Systems ,32(1):4–24, 2021. [48] Lianghao Xia, Chao Huang, Yong Xu, Peng Dai, and Liefeng Bo. Multi-behavior graph neural networks for recommender system. IEEE Transactions on Neural Networks and Learning Systems , 35(4):5473– 5487, 2024. [49] Qiang Yang, Changsheng Ma, Qiannan Zhang, Xin Gao, Chuxu Zhang, and Xiangliang Zhang. Interpretable research interest shift detection with temporal heterogeneous graphs. In Proceedings of the Sixteenth ACM International Conference on Web Search and Data Mining , WSDM ’23, page 321–329, New York, NY, USA, 2023. Association for Computing Machinery. [50] Rex Ying, Dylan Bourgeois, Jiaxuan You, Marinka Zitnik, and Jure Leskovec. Gnnexplainer: Generating explanations for graph neural networks, 2019. [51] Hao Yuan, Haiyang Yu, Shurui Gui, and Shuiwang Ji. Explainability in graph neural networks: A taxonomic survey, 2022. [52] Hao Yuan, Haiyang Yu, Jie Wang, Kang Li, and Shuiwang Ji. On explainability of graph neural networks via subgraph explorations, 2021. [53] Chuxu Zhang, Dongjin Song, Chao Huang, Ananthram Swami, and Nitesh V. Chawla. Heterogeneous graph neural network. In Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining , KDD ’19, page 793–803, New York, NY, USA, 2019. Association for Computing Machinery. [54] Shichang Zhang, Jiani Zhang, Xiang Song, Soji Adeshina, Da Zheng, Christos Faloutsos, and Yizhou Sun. Page-link: Path-based graph neural network explanation for heterogeneous link prediction, 2023. [55] Jie Zhou, Ganqu Cui, Shengding Hu, Zhengyan Zhang, Cheng Yang, Zhiyuan Liu, Lifeng Wang, Changcheng Li, and Maosong Sun. Graph neural networks: A review of methods and applications. AI Open , 1:57– 81, 2020. 13 
+
+APPENDIX 
+
+A. Pseudocode 1) HiSE Framework Overview: Algorithm 1 summarizes the three-stage pipeline of HiSE. The heterogeneous graph is first decomposed into semantic subgraphs via meta-paths, followed by per-semantic sparse feature explanation through SSP, and finally unified across semantic views through CAI. 
+
+Algorithm 1 HiSE: Hierarchical Semantic Explanation for Heterogeneous Graph Neural Networks 
+
+Require: Heterogeneous graph G = ( V, E); HGNN model 
+
+M ; Target node vt to explain; Pre-defined meta-paths 
+
+P = {Φ1, Φ2, . . . , Φm}; Hop distance K; Regularization strength λ
+
+Ensure: Semantic explanation S ∈ Rm×n ; Cross-semantic explanation c ∈ Rn 
+
+> 1:
+
+// Step 1: Semantic Graph Decomposition  
+
+> 2:
+
+G ← Decompose (G, P) 
+
+> 3:
+
+// Step 2: Semantic Sparse Proxy  
+
+> 4:
+
+S ← SSP (G, M, v t, G, K, λ ) ▷ Alg. 2  
+
+> 5:
+
+// Step 3: Cross-Semantic Aggregative Inversion  
+
+> 6:
+
+c ← CAI (G, M, G, S) ▷ Alg. 3  
+
+> 7:
+
+return S, c
+
+2) Semantic Sparse Proxy: Algorithm 2 details the per-semantic explanation procedure. For each semantic subgraph, SSP samples the K-hop neighborhood of the target node, and fits a weighted LASSO surrogate model to produce a semantic-level explanation. 
+
+Algorithm 2 Semantic Sparse Proxy (SSP) 
+
+Require: Semantic subgraphs G = {G1, G 2, . . . , G m};HGNN model M ; Target node vt to explain; Hop distance 
+
+K; Regularization strength λ
+
+Ensure: Semantic explanation matrix S ∈ Rm×n 
+
+> 1:
+
+for k ← 1 to m do  
+
+> 2:
+
+// K-hop Weighted Neighborhood Sampling  
+
+> 3:
+
+Nk ← { vi | vi ∈ Vk, hop-distance Gk (vt, v i) ≤ K} 
+
+> 4:
+
+Extract edge weights ηuv from M ; if unavailable, set 
+
+ηuv ← 1, ∀(u, v ) ∈ E  
+
+> 5:
+
+for each vi ∈ Nk do  
+
+> 6:
+
+˜μ(k) 
+
+> i
+
+← P 
+
+> p∈P Φk(vt,v i)
+
+Q 
+
+> (u,v )∈p
+
+ηuv  
+
+> 7:
+
+μ(k) 
+
+> i
+
+← ˜μ(k)  
+
+> i
+> P
+> vj∈Nk˜μ(k)
+> j
+
+· | Nk| 
+
+> 8:
+
+ˆyG 
+
+> i
+
+← M (G, X i) 
+
+> 9:
+
+end for  
+
+> 10:
+
+Dk ← { (Xi, ˆyG 
+
+> i
+
+, μ (k) 
+
+> i
+
+) | vi ∈ Nk} 
+
+> 11:
+
+// Weighted Sparse Proxy Fitting  
+
+> 12:
+
+sk,l ← arg min s
+
+P 
+
+> vi∈Nk
+
+μ(k) 
+
+> i
+
+(ˆ yG 
+
+> i,l
+
+− s⊤Xi)2 +
+
+λ∥s∥1, ∀l 
+
+> 13:
+
+sk ← 1
+
+> L
+
+PLl=1 sk,l  
+
+> 14:
+
+end for  
+
+> 15:
+
+return S
+
+3) Cross-Semantic Aggregative Inversion: Algorithm 3presents the cross-semantic explanation process, which quanti-fies contribution of each semantic view via KL divergence and aggregates per-semantic explanations into the cross-semantic-level explanation. 
+
+Algorithm 3 Cross-Semantic Aggregative Inversion (CAI) 
+
+Require: Heterogeneous graph G = ( V, E); HGNN model 
+
+M ; Semantic subgraphs G = {G1, G 2, . . . , G m}; Seman-tic explanation matrix S ∈ Rm×n
+
+Ensure: Cross-semantic explanation c ∈ Rn 
+
+> 1:
+
+for k ← 1 to m do  
+
+> 2:
+
+for each vi ∈ N do  
+
+> 3:
+
+ˆyGk 
+
+> i
+
+← M (Gk, X i) ▷ Predict with single-semantic subgraph  
+
+> 4:
+
+ˆyG 
+
+> i
+
+← M (G, X i) ▷ Predict with full graph  
+
+> 5:
+
+end for  
+
+> 6:
+
+γk ← − P 
+
+> vi∈N
+
+ˆyG 
+
+> i
+
+log ˆyG 
+
+> i
+> ˆyGki
+> 7:
+
+end for  
+
+> 8:
+
+wk ← exp( γk )Pmk=1 exp( γk ) , k = 1 , . . . , m  
+
+> 9:
+
+c ← Pmk=1 wk · sk 
+
+> 10:
+
+return c
+
+B. LassoLARS algorithm 
+
+The LassoLARS algorithm initializes the parameters with a zero vector, i.e., s(0)  
+
+> k,l
+
+= 0, and defines the initial residual as: 
+
+r(0)  
+
+> l
+
+= ˆ yG 
+
+> :,l
+
+− 0. (16) At the t-th iteration, the correlations between the weighted residuals and each feature are computed: 
+
+Correlation (t) 
+
+> j,l
+
+= X
+
+> vi∈Nk
+
+μ(k) 
+
+> i
+
+Xij r(t) 
+
+> i,l
+
+, j = 1 , . . . , n, 
+
+(17) and the feature with the largest absolute correlation is selected: 
+
+j⋆l = arg max  
+
+> j
+
+Correlation (t) 
+
+> j,l
+
+, (18) which is then added to the active set Ql.Subsequently, the algorithm updates the model parameters along the equiangular direction θQl within the current active feature subspace: 
+
+θQl = X:,Q l
+
+
+
+X⊤ 
+
+> :,Q l
+
+diag( μ(k))X:,Q l
+
+−1
+
+1, (19) where diag( μ(k)) is the diagonal matrix constructed from the weight vector μ(k) = ( μ(k)1 , . . . , μ (k) 
+
+> |Nk|
+
+).The parameter and residual updates take the form: 
+
+s(t+1)  
+
+> k,l
+
+= s(t) 
+
+> k,l
+
++ αl θQl , (20) 
+
+r(t+1)  
+
+> l
+
+= ˆ yG 
+
+> :,l
+
+− Xs(t+1)  
+
+> k,l
+
+. (21) The step size αl is chosen such that: 
+
+Correlation (t+1)  
+
+> j,l
+
+= Correlation (t+1)   
+
+> j⋆l,l
+
+, (22) i.e., when the weighted correlation of an inactive feature first reaches the absolute correlation of the current active features, it is added to the active set Ql, and joint updating continues within the active subspace. Upon convergence, the final semantic-level feature explana-tion s(final ) 
+
+> k,l
+
+for class l under semantic Φk is obtained. 14 
+
+TABLE V: Statistics of the heterogeneous graph datasets used in our experiments. We report relation types, numbers of nodes and edges, feature dimensionality, data splits, and meta-paths. Density (in parentheses) denotes the edge density of the single-semantic subgraph induced by each meta-path. 
+
+Dataset Relation (A-B) #Nodes(A) #Nodes(B) #Edges Feature Dim Train Val Test Meta-Path (Density) 
+
+ACM Paper–Author 4025 17431 13407 1870 808 401 2816 PAP (0.36%) 
+
+Paper–Subject 4025 73 4025 PSP (26.86%) 
+
+MAG Paper–Author 5000 25267 32683 128 4000 500 500 PAP (0.15%) 
+
+Paper–Field 5000 5449 50658 PFP (99.99%) 20 30 40 50 
+
+> K
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Correct identify rate
+> HAN on MAG
+
+(a) HAN on MAG 20 30 40 50  
+
+> K
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> Correct identify rate
+> MAGNN on MAG
+
+(b) MAGNN on MAG 20 30 40 50  
+
+> K
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> Correct identify rate
+> HetSANN on ACM
+
+(c) HetSANN on ACM 20 30 40 50  
+
+> K
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> Correct identify rate
+> HGT on ACM
+
+(d) HGT on ACM HiSE HGExplainer HENCE-X GraphLIME GNNExplainer ZORRO Greedy Random 
+
+Fig. 6: Usability Results : Discrimination success rates of different explainers in correctly identifying the better-performing HGNN model under varying values of K. Results are reported on HAN, MAGNN, HetSANN, HGT with the ACM and MAG datasets. Higher values indicate stronger reliability of the explainer in distinguishing model quality. 15 0 5 10 15 20 
+
+Number of Noise 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+> Density
+
+Cliff's Delta 
+
+HiSE: -0.62 
+
+ZORRO: -0.10 
+
+Random: +0.00 
+
+GraphLIME: +0.07 
+
+GNNExplainer: +0.89 
+
+HGExplainer: +0.90 
+
+HENCE-X: +0.98 
+
+Greedy: +1.00 
+
+HAN on ACM; K=20 
+
+(a) HAN on ACM ( K = 20 )0 2 4 6 8 10 
+
+Number of Noise 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 
+
+2.5 
+
+3.0 
+
+3.5 
+
+> Density
+
+Cliff's Delta 
+
+GraphLIME: -0.71 
+
+HiSE: -0.67 
+
+ZORRO: -0.32 
+
+GNNExplainer: -0.09 
+
+HGExplainer: -0.09 
+
+Random: +0.00 
+
+HENCE-X: +1.00 
+
+Greedy: +1.00 
+
+HAN on MAG; K=10 (b) HAN on MAG ( K = 10 )0 5 10 15 20 
+
+Number of Noise 
+
+0.0 
+
+0.1 
+
+0.2 
+
+0.3 
+
+0.4 
+
+0.5 
+
+0.6 
+
+> Density
+
+Cliff's Delta 
+
+HiSE: -0.90 
+
+GraphLIME: -0.87 
+
+ZORRO: -0.39 
+
+GNNExplainer: -0.23 
+
+HGExplainer: -0.22 
+
+Random: +0.00 
+
+HENCE-X: +0.97 
+
+Greedy: +1.00 
+
+HAN on MAG; K=20 (c) HAN on MAG ( K = 20 )0 2 4 6 8 10 
+
+Number of Noise 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+1.25 
+
+1.50 
+
+1.75 
+
+2.00 
+
+> Density
+
+Cliff's Delta 
+
+HiSE: -0.80 
+
+GraphLIME: -0.34 
+
+ZORRO: -0.29 
+
+Random: +0.00 
+
+GNNExplainer: +0.88 
+
+HGExplainer: +0.96 
+
+HENCE-X: +0.99 
+
+Greedy: +1.00 
+
+MAGNN on ACM; K=10 
+
+(d) MAGNN on ACM ( K = 10 )0 2 4 6 8 10 
+
+Number of Noise 
+
+0.0 
+
+0.1 
+
+0.2 
+
+0.3 
+
+0.4 
+
+0.5 
+
+0.6 
+
+0.7 
+
+> Density
+
+Cliff's Delta 
+
+ZORRO: -0.35 
+
+HENCE-X: -0.01 
+
+Random: +0.00 
+
+HiSE: +0.01 
+
+GNNExplainer: +0.02 
+
+HGExplainer: +0.13 
+
+GraphLIME: +0.19 
+
+Greedy: +1.00 
+
+MAGNN on MAG; K=10 (e) MAGNN on MAG ( K = 10 )0 5 10 15 20 
+
+Number of Noise 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+0.25 
+
+0.30 
+
+> Density
+
+Cliff's Delta 
+
+HiSE: -0.40 
+
+ZORRO: -0.35 
+
+GNNExplainer: -0.13 
+
+HGExplainer: -0.10 
+
+HENCE-X: -0.06 
+
+GraphLIME: -0.01 
+
+Random: +0.00 
+
+Greedy: +1.00 
+
+MAGNN on MAG; K=20 (f) MAGNN on MAG ( K = 20 )0 2 4 6 8 10 
+
+Number of Noise 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+1.25 
+
+1.50 
+
+1.75 
+
+2.00 
+
+> Density
+
+Cliff's Delta 
+
+HiSE: -0.83 
+
+GraphLIME: -0.35 
+
+ZORRO: -0.07 
+
+Random: +0.00 
+
+HENCE-X: +0.16 
+
+HGExplainer: +0.51 
+
+GNNExplainer: +0.60 
+
+Greedy: +1.00 
+
+HetSANN on ACM; K=10 
+
+(g) HetSANN on ACM ( K = 10 )0 5 10 15 20 
+
+Number of Noise 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+1.2 
+
+1.4 
+
+> Density
+
+Cliff's Delta 
+
+HiSE: -0.84 
+
+GraphLIME: -0.30 
+
+ZORRO: -0.21 
+
+HENCE-X: +0.00 
+
+Random: +0.00 
+
+HGExplainer: +0.63 
+
+GNNExplainer: +0.72 
+
+Greedy: +1.00 
+
+HetSANN on ACM; K=20 (h) HetSANN on ACM ( K = 20 )0 5 10 15 20 
+
+Number of Noise 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 
+
+> Density
+
+Cliff's Delta 
+
+HiSE: -1.00 
+
+HGExplainer: -0.61 
+
+GNNExplainer: -0.61 
+
+GraphLIME: -0.60 
+
+ZORRO: -0.45 
+
+HENCE-X: -0.12 
+
+Random: +0.00 
+
+Greedy: +1.00 
+
+HetSANN on MAG; K=20 (i) HetSANN on MAG ( K = 20 )0 2 4 6 8 10 
+
+Number of Noise 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Density
+
+Cliff's Delta 
+
+HiSE: -0.87 
+
+ZORRO: -0.26 
+
+GraphLIME: -0.26 
+
+Random: +0.00 
+
+HENCE-X: +0.74 
+
+HGExplainer: +0.96 
+
+GNNExplainer: +0.97 
+
+Greedy: +1.00 
+
+HGT on ACM; K=10 
+
+(j) HGT on ACM ( K = 10 )0 5 10 15 20 
+
+Number of Noise 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+0.25 
+
+0.30 
+
+0.35 
+
+0.40 
+
+> Density
+
+Cliff's Delta 
+
+HiSE: -0.84 
+
+ZORRO: -0.35 
+
+GraphLIME: -0.22 
+
+Random: +0.00 
+
+HENCE-X: +0.72 
+
+HGExplainer: +0.98 
+
+GNNExplainer: +0.98 
+
+Greedy: +1.00 
+
+HGT on ACM; K=20 (k) HGT on ACM ( K = 20 )0 2 4 6 8 10 
+
+Number of Noise 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+1.25 
+
+1.50 
+
+1.75 
+
+2.00 
+
+> Density
+
+Cliff's Delta 
+
+HiSE: -0.92 
+
+HGExplainer: -0.73 
+
+GNNExplainer: -0.69 
+
+ZORRO: -0.35 
+
+GraphLIME: -0.32 
+
+Random: +0.00 
+
+HENCE-X: +0.91 
+
+Greedy: +1.00 
+
+HGT on MAG; K=10 (l) HGT on MAG ( K = 10 )HiSE HGExplainer HENCE-X GraphLIME GNNExplainer ZORRO Greedy Random 
+
+Fig. 7: Robustness Results : Complete frequency distribution of noise features selected by different explainers across all HGNN models (HAN, MAGNN, HetSANN, HGT), datasets (ACM, MAG), and K values ( 10 , 20 ). Each row corresponds to a different HGNN model, while the columns represent results on the ACM and MAG datasets with K = 10 and K = 20 , respectively. Each subplot shows the distribution of the number of noise features appearing in the top-K explanations. A lower concentration of noise features indicates stronger robustness of the explainer to noisy features.

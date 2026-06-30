@@ -1,0 +1,821 @@
+Title: TaLK: Text-attributed Graph Dataset Distillation via Coupling Language Model with Graph-Aware Kernel
+
+URL Source: https://arxiv.org/pdf/2606.22975v1
+
+Published Time: Tue, 23 Jun 2026 02:47:35 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# TALK: Text-attributed Graph Dataset Distillation via Coupling Language Model with Graph-Aware Kernel 
+
+Yeongho Kim Yeonje Choi Kijung Shin 
+
+Kim Jaechul Graduate School of AI, KAIST 
+
+{yeongho, yeonjechoi, kijungs}@kaist.ac.kr 
+
+Abstract 
+
+Text-attributed graphs (TAGs) are widely used in many real-world domains, and learning on TAGs requires jointly modeling text se-mantics and graph structure. A standard ap-proach for modeling TAGs is to combine a lan-guage model (LM) and a graph neural network (GNN), but joint training is computationally expensive and difficult to scale. Dataset dis-tillation is a promising way to reduce train-ing costs, but existing methods are not well suited to TAGs because they are typically de-signed for a single modality or still require repeatedly training expensive LM–GNN mod-els on the full dataset during distillation. To address this, we propose T ALK, an effective dataset distillation method for TAGs that cou-ples an LM with a graph-aware neural tangent kernel. This design enables efficient dataset distillation, avoiding repeated joint training on the full dataset while reflecting both tex-tual and structural information for effective TAG learning. Experiments on multiple TAG benchmarks show that T ALK consistently out-performs existing baselines and achieves up to 97% of full-dataset performance with only 1% synthetic data. Our code is available at 
+
+https://github.com/thisis05/TaLK .
+
+1 Introduction 
+
+Text-attributed graphs (TAGs) are widely used in many real-world domains, including academic networks (Hu et al., 2020), social media (Ma et al., 2018; Mernyei and Cangea, 2020), and e-commerce systems (He and McAuley, 2016). In TAGs, each node is associated with rich textual con-tent (e.g., paper abstracts or product descriptions), and edges represent meaningful relationships be-tween nodes (e.g., citations or co-purchases). A widely adopted approach for modeling TAGs is to combine pretrained language models (LMs) with graph neural networks (GNNs) (Bi et al., 2021), thereby integrating text semantics with graph topology (Yan et al., 2023). Specifically, an LM encodes node texts into representations, which are then fed into a GNN for neighborhood aggrega-tion, and the two modules are optimized jointly in an end-to-end manner. However, the joint training of such LM–GNN integrated models does not scale well to many real-world TAGs. A key bottleneck is that updating the LM parameters requires retaining the LM com-putations for neighboring nodes along with the intermediate states for trainable GNN neighbor-hood aggregation. This overhead is particularly severe in many real-world TAGs, where nodes of-ten have many neighbors. Accordingly, this has inspired decoupled training strategies, where the LM is first optimized on node texts, and the re-sulting text representations are subsequently used for GNN training (Duan et al., 2023; Wang et al., 2024b). However, they may not fully match the benefits of joint training and can still be costly at scale, especially when repeated training is required for model selection or hyperparameter tuning. Dataset distillation (Wang et al., 2018) offers a promising approach to alleviating such challenges by reducing the training costs of deep learning mod-els. It learns a compact set of synthetic samples that capture essential training information, enabling models trained on them to achieve performance close to those trained on the full dataset. Training on such synthetic datasets enables efficient hyper-parameter and architecture search (Yu et al., 2023). However, dataset distillation for TAGs remains limited. While dataset distillation has been ex-plored in NLP and graph learning (Sachdeva and McAuley, 2023), existing methods designed for a single modality are not suitable for TAG learning, which requires leveraging both text semantics and graph structure. For TAGs, dataset distillation can benefit from modeling diverse data types jointly rather than treating them separately. Furthermore, directly applying existing dataset distillation meth-1
+
+> arXiv:2606.22975v1 [cs.LG] 22 Jun 2026
+
+ods to TAGs, such as gradient matching, trajec-tory matching, and distribution matching, remains challenging. While their objectives differ, they all repeat joint training on the full dataset to extract matching signals (e.g., gradients, training trajecto-ries, or representation statistics) during distillation. As a result, for the same reasons discussed above, they inherit the same scalability bottleneck. To address these limitations, we propose TALK 
+
+(Text-attributed graph dataset distillation via cou-pling LM with graph-aware Kernel), a novel dataset distillation method for TAGs. T ALK dis-tills the synthetic dataset under the joint LM–GNN training pipeline, so that both text semantics and graph structure are captured during distillation. For efficient dataset distillation under the joint train-ing pipeline, we integrate an LM encoder with the graph-aware neural tangent kernel (Du et al., 2019; Wang et al., 2024a), which incorporates structural information in kernel space without using a train-able GNN to aggregate neighborhood information. Specifically, we parameterize the synthetic dataset as a small set of learnable token embed-dings in a continuous input space and optimize it via a bi-level procedure. In the inner-loop, an LM and a GNN are jointly trained on the small syn-thetic dataset. In the outer-loop, we optimize the synthetic dataset via kernel ridge regression with a graph-aware kernel built on LM representations. In addition, we introduce batch-wise gradient injec-tion , which enables scalable mini-batch training by making mini-batch optimization compatible with the kernel-based objective. This design eliminates the need for repeated joint training of LM–GNN integrated models on the full dataset during distil-lation, thereby improving scalability. Through extensive experiments on multiple TAG benchmarks, we demonstrate the strengths of TALK, which are summarized as follows: • Efficient: To the best of our knowledge, T ALK is the first method that efficiently enables dataset distillation directly under joint LM–GNN train-ing, without decoupling, in practical settings. • Effective: TALK consistently outperforms exist-ing baselines across multiple TAG benchmarks. Notably, it achieves up to 97% of full-dataset performance with only 1% synthetic data. • Practical: We further demonstrate that the syn-thetic datasets from T ALK enable efficient hy-perparameter search and transfer well across dif-ferent architectures. 
+
+2 Related Works 
+
+2.1 Text-attributed Graph (TAG) Learning 
+
+As discussed in Section 1, despite the effective-ness of joint LM–GNN training for TAG learning, many works adopt a decoupled training due to its computational and memory costs. A representative example is a two-stage training, where an LM is first trained to produce informative representations of node texts, and a GNN is subsequently trained separately using these representations as fixed input features (Duan et al., 2023; He et al., 2024). Some works follow this two-stage pipeline but incorpo-rate graph-derived context, such as neighborhood texts, into the LM training before the GNN training stage (Chien et al., 2022; Wang et al., 2024b). Several methods extend the simple two-stage training by enabling interaction between separately trained LM and GNN components through iter-ative optimization or by aligning the representa-tions (Zhao et al., 2023; Li et al., 2023). Another line of research encourages the LM to capture struc-tural information without relying on separate GNN training, for example through pre-training with re-lation prediction or structure-aware text augmenta-tion. (Yasunaga et al., 2022; Zhou et al., 2025). In this work, we focus on a standard LM–GNN architecture for generality and aim to make its joint training feasible through dataset distillation, with-out decoupling the LM and the GNN. 
+
+2.2 Graph and Text Dataset Distillation 
+
+Dataset distillation (Wang et al., 2018) aims to con-dense a large training dataset into a small synthetic dataset such that models trained on the synthetic dataset achieve performance comparable to those trained on the full training dataset. It has been ex-tensively studied for graphs (Gong et al., 2025), and representative approaches include gradient match-ing (Jin et al., 2022; Yang et al., 2023), kernel-based prediction matching (Wang et al., 2024a), tra-jectory matching (Zheng et al., 2023; Zhang et al., 2024), and distribution matching (Liu et al., 2022). In parallel, text dataset distillation methods have been explored, including embedding-level perfor-mance matching (Li and Li, 2021; Maekawa et al., 2023), generator-based approaches (Tao et al., 2024; Maekawa et al., 2024), and LLM-driven ap-proaches (Shen et al., 2025). 2Despite this progress, applying dataset distilla-tion methods for graphs and text separately is sub-optimal for TAGs, which require jointly capturing text semantics and graph structure. We therefore develop a more effective approach for TAGs. 
+
+3 Preliminaries 
+
+3.1 Basic Concepts Text-attributed graph. A text-attributed graph (TAG) with N nodes is defined as T = (X, A),where X = {xi}Ni=1 denotes textual attributes asso-ciated with each node, and A ∈ {0, 1}N ×N is the adjacency matrix with Aij = 1 if nodes i and j are adjacent and Aij = 0 otherwise, representing struc-tural relations between nodes. A citation network where papers are nodes and their abstracts serve as textual attributes is a typical example of a TAG. 
+
+Node classification. Let L denote the set of la-beled nodes. For each node i ∈ L, yi ∈ C de-notes its label, where C is the set of classes. Semi-supervised node classification aims to predict the labels of the remaining unlabeled nodes, and it is a representative downstream task for TAG learning. 
+
+3.2 Text-attributed Graph Learning 
+
+TAG learning learns node representations by lever-aging both textual attributes X and graph structure 
+
+A. A widely adopted architecture for this purpose is an integrated LM–GNN model. The LM encoder 
+
+fϕ first maps node texts X to semantic representa-tions of dimension F :
+
+H = fϕ(X) ∈ RN ×F , (1) where each row of H is a pooled LM output (e.g., the [CLS] token embedding). Then, the GNN gψ
+
+refines these representations through neighborhood aggregation over A, to capture relational structure, and produces node representations of dimension 
+
+F ′
+
+Z = gψ(A, f ϕ(X)) ∈ RN ×F ′
+
+. (2) Such models are typically trained either via joint training or decoupled training , as described below. 
+
+Joint training. In the joint training pipeline, the LM and the GNN are optimized simultaneously in an end-to-end manner: 
+
+min 
+
+> ϕ,ψ
+
+1
+
+∣L∣ ∑
+
+> i∈L
+
+LCE (gψ(A, f ϕ(X)) i, y i) , (3) where LCE (⋅, ⋅) denotes the cross-entropy loss for node classification. 
+
+Decoupled training. As discussed in Section 1, due to the high computational and memory costs of joint training, a decoupled two-stage pipeline has been widely considered as a practical alternative. In the first stage, the LM is optimized with a task head W for node classification: 
+
+min 
+
+> ϕ,W
+
+1
+
+∣L∣ ∑
+
+> i∈L
+
+LCE (( W f ϕ(X)) i, y i) . (4) In the second stage, the trained LM generates node representations H, which are treated as fixed initial node features for training the subsequent GNN: 
+
+min 
+
+> ψ
+
+1
+
+∣L∣ ∑
+
+> i∈L
+
+LCE (gψ(A, H)i, y i) . (5) 
+
+4 Problem: Dataset Distillation for TAGs 
+
+In this section, we first briefly review the standard dataset distillation framework that serves as the basis of our method (Wang et al., 2018). We then describe the key challenges in designing a dataset distillation method for TAGs. 
+
+4.1 Standard Dataset Distillation 
+
+Given a full dataset D with N samples, dataset dis-tillation aims to construct a synthetic dataset S with 
+
+M samples, where M ≪ N . Dataset distillation is formulated as a bi-level optimization problem. First, the inner-loop aims to optimize model param-eters (e.g., ϕ and ψ in Eq. (3) ) using S. Starting from the initial model parameters θ0, the inner-loop typically computes, for t = 0, 1, . . . , T − 1,
+
+θt+1 = θt − η ∇θt L(θt; S), (6) where η is a learning rate, and L(θt; S) denotes the task loss of the model with parameters θt on S.The outer-loop aims to optimize S to minimize the loss on D after the inner-loop optimization: 
+
+min  
+
+> S
+
+L(θT (S); D), (7) where θT (S) denotes the model parameters θT
+
+trained on S. By iterating this bi-level optimiza-tion, S is optimized such that a model trained on S
+
+achieves strong performance on the full dataset D.
+
+4.2 Challenges in TAG Dataset Distillation 
+
+TAG learning can benefit from dataset distillation, as it incurs substantial computational and memory costs. Effective dataset distillation for TAGs should remain computationally feasible while jointly con-sidering text semantics and graph structure, rather 3Batch -wise 
+
+> Gradient Injection
+> LM encoder
+> …
+> …
+> …
+> …
+> Class -balanced sampling
+> …
+> …
+> GNN
+
+𝑳 𝑪𝑬      
+
+> LM encoder Kernel
+> function
+> Kernel matrix 𝑲 𝑻𝑺
+> …
+> …
+> Batch Batch
+> …
+> …
+> …
+> …
+> Initialization Inner -loop Outer -loop
+> Kernel matrix 𝑲 𝑺𝑺
+> Bi -level optimization
+
+𝑳 𝑲𝑹𝑹   
+
+> Nodes
+> …
+> Forward
+> Token embedding
+> Backward
+> …
+> …
+> Text attribute
+> Load
+> Full TAG 𝑻
+> Synthetic TAG 𝑺
+> Batch Batch
+
+Figure 1: Overview of the distillation stage of T ALK from initialization to bi-level optimization. The inner-loop performs joint LM–GNN training on the synthetic dataset, while the outer-loop updates the synthetic dataset using a kernel-based objective through batch-wise gradient injection. 
+
+than treating them separately. However, applying existing approaches does not readily satisfy both requirements. We discuss these challenges below. 
+
+Existing methods can be costly for TAGs. First, existing dataset distillation methods incur high computational and memory costs when applied to TAGs. In the outer-loop optimization of Eq. (7) , the synthetic dataset is optimized by backpropagating the loss evaluated on the full dataset. As discussed in Section 1, this is expensive for TAGs in terms of both time and memory, especially under joint train-ing, as it requires repeatedly training an LM–GNN integrated model. This limitation applies to vari-ous dataset distillation methods, including gradient matching and trajectory matching. 
+
+Decoupled distillation is feasible but subopti-mal. An alternative is to distill text and graph separately under the decoupled training pipeline in Section 3.2. While computationally more fea-sible, this approach is limited as it treats text se-mantics and graph structure independently rather than jointly. Since effective TAG learning requires integrating both modalities, such independent dis-tillation may yield suboptimal synthetic data. 
+
+5 Proposed Method: T ALK 
+
+In this section, we introduce T ALK, a novel dataset distillation method for text-attributed graphs (TAGs). T ALK retains the joint LM–GNN training pipeline to preserve distillation effective-ness, while replacing the expensive outer-loop with a memory-efficient kernel-based objective to re-duce computational and memory overhead. 
+
+Algorithm 1 Distillation stage of T ALK. 
+
+Input: Full TAG dataset T with node labels 
+
+YL; pretrained LM parameters ϕ(0); inner and outer learning rates η and ˜η; epochs K; inner and outer-loop iteration steps T and M . 
+
+> 1:
+
+Initialize synthetic dataset S0 = (X′
+
+> 0
+
+, I) and node labels Y′ 
+
+> 2:
+
+for k = 0 to K − 1 do  
+
+> 3:
+
+Initialize LM parameters ϕ0 to ϕ(0) 
+
+> 4:
+
+Initialize GNN parameters ψ0 
+
+> 5:
+
+Set θ0 ← (ϕ0, ψ 0) 
+
+> 6:
+
+for t = 0 to T − 1 do  
+
+> 7:
+
+θt+1 ← θt − η ∇θt LCE (θt; Sk) (Eq. (8)) 8: end for  
+
+> 9:
+
+for M steps do  
+
+> 10:
+
+X′ 
+
+> k
+
+← X′ 
+
+> k
+
+− ˜η ∇X′ 
+
+> k
+
+LKRR (Eq. (12)–(15)) 11: end for  
+
+> 12:
+
+Sk+1 ← (X′
+
+> k
+
+, I, Y′) 
+
+> 13:
+
+end for Output: SK
+
+5.1 Overview Distillation stage. We distill the original text-attributed graph dataset T into a synthetic dataset 
+
+S using a pretrained LM and the graph-aware neu-ral tangent kernel within a bi-level optimization framework. Specifically, we first initialize S by sampling from T , and train an LM and a GNN on 
+
+S in the inner-loop (Section 5.2). In the outer-loop, we replace explicit GNN training with a graph-aware neural tangent kernel and optimize S via kernel ridge regression objective so that the pre-dictions induced by the synthetic dataset match 4those of the full dataset (Section 5.3). Furthermore, we propose batch-wise gradient injection to apply the graph-aware neural tangent kernel effectively (Section 5.4). The overall distillation process is described in Figure 1 and Algorithm 1. 
+
+Training and inference stage. After dataset dis-tillation, an LM and a GNN are jointly trained on S.The resulting LM–GNN integrated model is then used for inference, typically on the full dataset T .
+
+5.2 Initialization and Inner-loop Initialization. We first initialize the synthetic dataset S = (X′, A′) with associated node labels 
+
+Y′ by sampling M nodes from the full training dataset using class-balanced sampling so that the label distribution of Y′ matches that of the original training labels. We then obtain the initial synthetic features X′ by passing the textual attributes of the sampled nodes through the word embedding layer of a pretrained LM to form token-level embeddings. Following the structure-free graph dataset distilla-tion paradigm (Zheng et al., 2023; Zhang et al., 2024), we fix the synthetic structure as an iden-tity matrix, i.e., A′ = I. The key intuition is that, during distillation, the optimized synthetic features can implicitly capture the structural information of the original graph, thereby alleviating the need to explicitly synthesize an adjacency matrix (see Ap-pendix D for details). Accordingly, S = (X′, A′) is initialized to S0 = (X′
+
+> 0
+
+, I), where X′ 
+
+> 0
+
+∈ RM ×Q×F ,with M denoting the number of sample nodes and 
+
+Q the maximum token sequence length. We treat 
+
+Y′ as fixed hard labels inherited from the sampled nodes, and only optimize X′ during distillation. 
+
+Inner-loop. In the inner-loop, we jointly train the pretrained LM encoder fϕ and a GNN gψ on the synthetic dataset S = (X′, I) with labels Y′:
+
+min  
+
+> ϕ,ψ
+
+LCE (gψ(fϕ(X′), I) , Y′) , (8) where LCE denotes the cross-entropy loss for node classification. The use of GNN gψ in the inner-loop ensures that the LM parameters ϕ are updated by gradients flowing through the GNN, aligning with the joint training pipeline. 
+
+5.3 Outer-loop Optimization Overview of outer-loop. As discussed in Sec-tion 4.2, optimizing S in the outer-loop (Eq. (7) )is challenging due to its substantial computational and memory costs. To mitigate this bottleneck, we extend a prior neural tangent kernel-based ap-proach (Nguyen et al., 2021) to TAG dataset distil-lation. Specifically, in the outer-loop, we replace the GNN with a graph-aware neural tangent ker-nel, which captures structural information via fixed kernel evaluations, without requiring GNN train-ing. This substitution substantially improves ef-ficiency while preserving structural information, and enables label prediction via the closed-form solution of kernel ridge regression. Note that this substitution is restricted to the outer-loop, and joint LM–GNN training is preserved in the inner-loop through the explicit use of a GNN. 
+
+Kernel function. To define the outer-loop ob-jective, we first explain a node-level graph-aware neural tangent kernel K(⋅, ⋅). Given text-derived node representations as inputs, K(⋅, ⋅) computes pairwise kernel values between nodes while reflect-ing graph structure. Specifically, using the LM encoder fϕ trained in the inner-loop, we obtain node representations on the full dataset T and the synthetic dataset S:
+
+HT = fϕ(X) ∈ RN ×F , HS = fϕ(X′) ∈ RM ×F ,
+
+(9) and based on them, obtain kernel matrices 
+
+KSS = K(HS , HS ) ∈ RM ×M , (10) 
+
+KT S = K(HT , HS ) ∈ RN ×M , (11) which denote the kernel matrices over S and the cross-kernel matrix between T and S, respectively. Specifically, we adopt the structure-based neural tangent kernel (SNTK) (Wang et al., 2024a) for 
+
+K(⋅, ⋅), which incorporates local neighborhood ag-gregation into the neural tangent kernel to reflect graph structure, and adapt it efficiently for TAGs, as summarized below (see Appendix B.4 for details). • Efficient neighborhood aggregation. The origi-nal SNTK constructs a large Kronecker-product matrix for aggregation, incurring high memory overhead. We instead compute the same aggre-gation directly using the adjacency and kernel matrices, avoiding explicit construction. • Efficient approximation for normalization. 
+
+The original implementation maintains full self-kernel matrices to obtain normalization terms. We instead use a feature-based approximation of these normalization terms, eliminating the need for retaining full self-kernel matrices and further improving memory efficiency in practice. 5Kernel ridge regression. Using these kernel ma-trices, we formulate the outer-loop objective via kernel ridge regression (KRR), which yields a closed-form label predictor in kernel space. Given the synthetic set S, the KRR prediction of node labels on the full dataset T is obtained by 
+
+ˆY = KT S (KSS + λI)−1 Y′, (12) where λ > 0 is the ridge regularizer. The outer-loop loss is defined on the labeled nodes: 
+
+LKRR = 12 ∥YL − ˆYL∥2 
+
+> F
+
+. (13) That is, we optimize S by minimizing the predic-tion error of the KRR predictor from S over the labeled nodes on T . This enables S to encode both relevant text semantics and structural information. 
+
+5.4 Batch-wise Gradient Injection 
+
+Despite the improved efficiency of the outer-loop, computing the kernel function on top of the LM encoder still incurs a high memory cost, making full-batch training challenging. While adopting standard mini-batch training is feasible, it does not faithfully preserve the original objective. The outer-loop objective in Eq. (12) – (13) depends on the global context of the synthetic dataset through both KT S and KSS . Consequently, naively parti-tioning X′ into mini-batches and optimizing them batch by batch would change the underlying op-timization problem itself. Specifically, instead of learning a single and cohesive synthetic dataset of size M , the outer-loop would essentially optimize multiple smaller synthetic datasets in isolation. To preserve the original outer-loop objective while enabling scalable mini-batch training, we propose batch-wise gradient injection . Let the syn-thetic set be partitioned into B batches, denoted by 
+
+S(b) = (X′(b), I(b)) with associated labels Y′(b),where b = 1, . . . , B . We first encode the synthetic batches through the LM and concatenate them to form the global representation HS . The outer-loop loss LKRR is then calculated using this global rep-resentation. From this objective, the gradient with respect to HS can be computed as: 
+
+G ≜ ∇HS LKRR . (14) We then partition G into batch-specific slices 
+
+{G(b)}Bb=1 and inject each G(b) as the upstream gradient for its corresponding batch. Subsequent backpropagation is then performed through the LM for each batch, yielding gradients with respect to the synthetic features X′(b) as follows: 
+
+∇X′(b) LKRR = ( ∂f ϕ(X′(b))
+
+∂X′(b) )
+
+> ⊺
+
+G(b). (15) Although gradients are propagated through the LM in a batch-wise manner, each G(b) is derived from the outer-loop loss evaluated on the global synthetic dataset, and therefore already reflects the global in-teractions induced by the kernel function and KRR. In this way, we preserve the original outer-loop objective defined on the full synthetic dataset while performing LM backpropagation in mini-batches. 
+
+6 Experimental Results 
+
+6.1 Experiment Settings Dataset. We evaluate T ALK on four representa-tive TAG datasets: two academic network datasets, Cora (Sen et al., 2008) and Arxiv (Hu et al., 2020), and two e-commerce network datasets, Photo and Computers (Shchur et al., 2018). Dataset details are provided in Appendix A. 
+
+Baseline. We consider two competitor groups: 
+
+coreset selection and decoupled distillation . Core-set selection, which includes Random and K-Center (Sener and Savarese, 2018), simply samples representative subsets from the full training dataset. Decoupled distillation combines existing text and graph dataset distillation methods under a decou-pled training pipeline, distilling text and graph sep-arately. For text distillation, we use TD (Li and Li, 2021), TDAL (Maekawa et al., 2023), and Con-denseLM (CLM) (Shen et al., 2025). For graph distillation, we use GCond (Jin et al., 2022), GC-SNTK (Wang et al., 2024a), GEOM (Zhang et al., 2024), and GCDM (Liu et al., 2022). In addition, as references, we report results under 
+
+training on full text and/or full graphs using the decoupled training pipeline. Note that they are not direct competitors of T ALK, as they require access to full text and/or graph data, deviating from the objective of standard dataset distillation. Refer to Appendix B.1 for more baseline details. 
+
+Implementation. We use BERT base (Devlin et al., 2019) with LoRA (Hu et al., 2022) as the pretrained LM and a two-layer GCN (Kipf and Welling, 2017) as the GNN, which are widely adopted backbone choices in prior studies. Im-plementation details and hyperparameter settings are provided in Appendix B.2. 6Dataset Ratio (%) Direct Competitors Reference Results 
+
+Coreset Selection Decoupled Distill. Joint Distill. Training on Full Text and/or Full Graphs 
+
+Random K-Center Distill. Text ( ✓) + Distill. Graph ( ✓) Full Text ( ✗) + Distill. Graph ( ✓) Full Text ( ✗) + Full Graph ( ✗)
+
+TD TDAL CLM TALK (Ours) GCond GCSNTK 1 GEOM GCDM 
+
+Cora (2.7K) 
+
+2.5 62.1 ±3.4 58.2 ±3.7 79.3 ±1.8 81.3 ±0.7 80.0 ±0.7 84.4 ±0.9 84.1 ±0.6 85.2 ±0.7 80.9 ±0.9 78.6 ±1.7 
+
+88.3 ±0.5 5.0 71.7 ±3.9 70.4 ±2.8 80.6 ±1.9 83.8 ±1.1 82.8 ±0.6 85.5 ±1.3 84.6 ±0.8 85.4 ±0.9 83.8 ±1.3 80.5 ±1.2 
+
+7.5 79.6 ±0.9 77.8 ±0.4 81.1 ±2.2 83.9 ±0.6 84.1 ±1.4 86.9 ±1.1 84.9 ±0.9 85.8 ±0.8 84.6 ±1.3 82.5 ±1.0 
+
+Photo (48.4K) 
+
+1.0 73.8 ±3.5 71.5 ±1.8 81.6 ±0.4 82.5 ±0.7 78.3 ±0.9 83.8 ±0.4 82.6 ±0.2 83.5 ±0.6 82.5 ±0.4 80.0 ±0.8 
+
+86.6 ±0.3 3.0 80.4 ±1.4 74.2 ±1.5 82.1 ±0.7 83.6 ±0.4 82.0 ±0.6 85.0 ±0.4 83.4 ±0.6 83.4 ±0.7 83.8 ±0.4 81.4 ±0.6 
+
+5.0 81.4 ±0.4 78.2 ±0.7 82.6 ±1.0 84.0 ±0.3 83.0 ±0.4 85.8 ±0.3 83.6 ±0.4 83.8 ±0.9 84.1 ±0.6 81.5 ±0.8 
+
+Computers (87.2K) 
+
+1.0 78.9 ±1.0 74.7 ±1.4 83.9 ±0.6 84.1 ±0.6 82.1 ±0.5 86.4 ±0.2 84.6 ±1.1 85.6 ±0.3 85.2 ±0.8 82.6 ±0.3 
+
+90.1 ±0.3 2.0 81.0 ±0.6 75.3 ±0.9 85.3 ±0.6 85.3 ±0.3 84.2 ±0.3 87.4 ±0.4 84.8 ±0.3 86.3 ±0.4 86.1 ±0.9 83.8 ±0.3 
+
+3.0 83.3 ±0.4 79.2 ±0.8 85.8 ±0.2 86.0 ±0.4 84.9 ±0.3 87.9 ±0.4 84.9 ±0.4 86.4 ±0.5 86.4 ±0.9 84.2 ±0.5 
+
+Arxiv (169.3K) 
+
+0.5 64.7 ±0.3 59.2 ±0.6 66.9 ±1.2 68.2 ±0.3 68.1 ±0.2 72.3 ±0.1 70.1 ±0.3 69.6 ±0.3 71.7 ±0.5 69.3 ±0.3 
+
+75.7 ±0.2 1.0 66.9 ±0.4 61.0 ±0.3 68.4 ±0.5 69.4 ±0.4 69.7 ±0.3 73.3 ±0.3 70.3 ±0.4 70.2 ±0.5 72.2 ±0.6 69.5 ±0.3 
+
+1.5 68.8 ±0.6 63.3 ±0.8 69.7 ±0.4 70.6 ±0.4 70.3 ±0.3 74.0 ±0.2 70.3 ±0.3 70.9 ±0.2 72.3 ±0.7 69.5 ±0.2 
+
+Table 1: Performance (test accuracy in %) of dataset distillation methods on semi-supervised node classification. Results to the left of the vertical lines correspond to the direct competitors, while those to the right are provided as reference results. The ratio denotes MN , i.e., the relative size of the synthetic dataset. Note that T ALK enables joint distillation of text and graph data due to its efficiency. In contrast, the baselines adopt decoupled distillation , where each text distillation method is paired with the best-performing graph distillation method. The best and second-best results among the direct competitors are highlighted in bold and underlined, respectively. 
+
+6.2 Main Results Performance comparison. Following the com-mon protocol, we evaluate each dataset distilla-tion method by training an LM-GNN integrated model 2 using its output synthetic dataset and test-ing it on the full dataset. Both training and test are conducted on semi-supervised node classification (Section 3.1). The results are presented in Table 1. First, T ALK consistently outperforms all decou-pled distillation baselines, which distill text and graph separately, as well as coreset selection base-lines, across all experimental settings. This high-lights the effectiveness of our key idea, i.e., jointly distilling both modalities in an end-to-end manner. Second, T ALK even outperforms four graph-only distillation methods, which rely on the full text for training, in 11 of 12 cases. This suggests that the performance gains are not simply due to stronger LM representations, but are more likely to come from jointly distilling text and graph infor-mation, which is the strength of our method. Lastly, T ALK often achieves performance close to that of full-dataset (i.e., both full graph and text) training. For example, on Arxiv, it preserves 97% of the full-dataset performance using a synthetic dataset of size 1% of the full dataset. On Photo, it retains 99% of the full-dataset performance using a synthetic dataset of size 5%. 
+
+Dataset Method GCN SGC SAGE APPNP Avg. Computers (2%) GCSNTK 86.3 85.8 85.6 85.1 85.7 GEOM 86.1 84.9 85.3 85.2 85.4 TDAL 85.3 82.7 83.0 82.9 83.5 TALK 87.4 86.1 86.8 85.8 86.5 
+
+Arxiv (1%) GCSNTK 70.2 70.4 71.1 70.4 70.5 GEOM 72.2 71.2 72.5 72.8 72.2 TDAL 69.4 68.2 68.7 69.7 69.0 TALK 73.3 73.0 73.3 72.5 73.0 
+
+Table 2: Cross-architecture generalization of dataset distillation methods, with best results in bold .
+
+Cross-architecture generalization. We further evaluate the output synthetic datasets across dif-ferent GNN architectures. In this experiment, the datasets are distilled using GCN (see Sec-tion 6.1 for details), and the resulting synthetic data are used to train models with multiple GNN architectures, including SGC (Chen et al., 2020), GraphSAGE (Hamilton et al., 2017) and APPNP (Gasteiger et al., 2019). As shown in Table 2, T ALK achieves the best performance for most architectures. These results 
+
+> 1
+
+The original code runs out of memory for several config-urations in our setting. Therefore, we replace it with our own implementation instead (see Appendix B.4). 
+
+> 2
+
+Refer to Section 6.1 for model details. The superiority of our method is robust to model choices. See the cross-architecture results on GNNs and also Appendix C.1 for results with varying LMs. 
+
+7GPU memory (GB)              
+
+> 10
+> 15
+> 20
+> 25
+> 30
+> 35
+> 86
+> 85
+> 84
+> 83 Naive 32B 96B Ours FullB
+> 85
+> 83
+> 81
+> 79 Naive 32B 96B Ours FullB
+> Accuracy (%)
+> O.O.M O.O.M O.O.M
+> Cora (5%) Photo (3%)
+> 30.1 GB
+> 33.9 GB 11.2 GB
+> 11.3 GB
+> 19.2 GB
+> 21 .4GB
+> 36.6 GB
+
+Figure 2: Ablation study. Circle size indicates GPU memory usage. Naive denotes the variant that uses a trainable GNN for the outer-loop optimization instead of our kernel-based formulation. FullB denotes full-batch training without batch-wise gradient injection, and 32B /96B denote naive mini-batch training with batch sizes of 32 and 96, respectively. Ours employs batch-wise gradient injection with a batch size of 64. 
+
+indicate that the resulting synthetic datasets do not overfit to the specific GNN architecture used during distillation and generalize well across architectures. See Appendix C.1–C.3 for additional experi-ments with different LM backbones, under induc-tive settings, and on large-scale datasets. 
+
+6.3 Ablation Study 
+
+We analyze how the efficiency and effectiveness of TALK are affected by its key design components: (1) using a graph-aware neural tangent kernel for outer-loop optimization (see Section 5.3) and (2) batch-wise gradient injection (see Section 5.4). The results are presented in Figure 2. 
+
+Outer-loop optimization. We compare against a naive variant that replaces our kernel-based for-mulation with the same trainable GNN used in the inner-loop. This naive variant already runs out of memory even on the smallest dataset, Cora, whereas T ALK remains feasible across all consid-ered datasets, including Cora and Photo. 
+
+Batch-wise gradient injection. We compare TALK against full-batch training without batch-wise gradient injection, as well as naive mini-batch training with batch sizes of 32 and 96. On Cora, TALK, which employs batch-wise gradient injec-tion with a batch size of 64, matches the full-batch performance while outperforming the mini-batch variants. On Photo, where full-batch training runs out of memory, T ALK remains feasible and out-performs all mini-batch alternatives. Notably, it substantially outperforms the variant with a batch size of 32 while using even less GPU memory. Dataset distillation  Hyperparameter search Time (sec.)        
+
+> FT+FG FT+DG DT+DG Ours
+> 12.63 X 10 5
+> 10 4
+> 10 3
+> (a) Photo Time (sec.)
+> FT+FG FT+DG DT+DG Ours
+> 17.66 X
+> 10 5
+> 10 4
+> 10 3
+> 10 6(b) Arxiv
+
+Figure 3: Hyperparameter search time under four set-tings: full text and full graph ( FT+FG ), full text and dis-tilled graph ( FT+DG ), separately distilled text and graph (DT+DG ), and jointly distilled text and graph (ours). 
+
+These results show that both components are es-sential to T ALK: the graph-aware neural tangent kernel enables efficient outer-loop optimization, while batch-wise gradient injection preserves the dataset distillation objective under mini-batch train-ing and improves both efficiency and performance. See Appendix C.4–C.5 for ablation studies on the graph-aware kernel and the inner-loop GNN. 
+
+6.4 Application: Hyperparameter Search 
+
+We evaluate dataset distillation methods by ap-plying them to hyperparameter search. Synthetic datasets produced by dataset distillation can ac-celerate hyperparameter search by reducing the time required for repeated training. Specifically, we consider LM hyperparameter search over 192 configurations, including batch size, learning rate, rank, scaling factor, and LoRA dropout. We com-pare full text and full graph ( FT+FG ), full text and distilled graph ( FT+DG ), separately distilled text and graph ( DT+DG ), and jointly distilled text and graph (ours); and we use TDAL and GEOM for text and graph dataset distillation, respectively. The results are reported in Figure 3, and reported time includes, where applicable, the time required for dataset distillation, which is a one-time cost (see Appendix B.3 for detailed results). Because LM training dominates the cost in TAG learning, methods that use the full text, namely 
+
+FT+FG and FT+DG , require much longer search time. Even after accounting for dataset distillation time, ours achieves 12.63 × and 17.66 × speed-ups over hyperparameter search on the full dataset ( FT+FG )on Photo and Arxiv. Ours remains competitive with 
+
+DT+DG in terms of overall search time. 87 Conclusion 
+
+In this work, we present T ALK, the first dataset distillation method for TAGs that enables efficient joint distillation of text and graph data under joint LM–GNN training, without decoupling. To achieve this, T ALK integrates an LM with a graph-aware neural tangent kernel and introduces batch-wise gradient injection. Our experiments show that TALK consistently outperforms baselines across various scenarios, suggesting dataset distillation as a viable direction for efficient TAG learning. 
+
+Limitations 
+
+While we propose an effective method for text-attributed graph dataset distillation, several limita-tions remain. First, the current method performs distillation at the token-embedding level and thus does not directly produce human-interpretable syn-thetic data in raw-text form. Extending the frame-work toward more interpretable text-level distil-lation would be a valuable direction for future work. Second, our current formulation is devel-oped for semi-supervised node classification. Al-though this is a primary downstream task in text-attributed graph learning, extending the method to self-supervised settings and broader downstream tasks would be an important direction for future re-search. Third, while our experiments show promis-ing results across multiple benchmarks, further evaluation on million-scale large text-attributed graphs would help better understand the scalability and generality of the proposed framework. 
+
+Ethical Considerations 
+
+We comply with the ACL Ethics Policy 3 in this work. All experiments are conducted on publicly available benchmark datasets that have been widely used in prior research. This work does not involve collecting new personal data and uses the datasets in their publicly released form, without additional preprocessing or annotation. 
+
+Acknowledgements 
+
+This work was supported by Institute of Informa-tion & communications Technology Planning & Evaluation (IITP) grant funded by the Korea gov-ernment (MSIT) (No. RS-2024-00438638, En-tireDB2AI: Foundations and Software for Compre-
+
+> 3https://www.aclweb.org/portal/content/ acl-code-ethics
+
+hensive Deep Representation Learning and Predic-tion on Entire Relational Databases, 40%) (No. RS-2024-00457882, AI Research Hub Project, 50%) (RS-2019-II190075, Artificial Intelligence Gradu-ate School Program (KAIST), 10%). 
+
+References 
+
+Shuxian Bi, Chaozhuo Li, Xiao Han, Zheng Liu, Xing Xie, Haizhen Huang, and Zengxuan Wen. 2021. Leveraging bidding graphs for advertiser-aware rele-vance modeling in sponsored search. In EMNLP .Ming Chen, Zhewei Wei, Zengfeng Huang, Bolin Ding, and Yaliang Li. 2020. Simple and deep graph convo-lutional networks. In ICML .Eli Chien, Wei Cheng Chang, Cho Jui Hsieh, Hsiang Fu Yu, Jiong Zhang, Olgica Milenkovic, and Inderjit S Dhillon. 2022. Node feature extraction by self-supervised multi-scale neighborhood prediction. In 
+
+ICLR .Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2019. Bert: Pre-training of deep bidirectional transformers for language understand-ing. In ACL .Simon S Du, Kangcheng Hou, Russ R Salakhutdinov, Barnabas Poczos, Ruosong Wang, and Keyulu Xu. 2019. Graph neural tangent kernel: Fusing graph neural networks with graph kernels. In NeurIPS .Keyu Duan, Qian Liu, Tat-Seng Chua, Shuicheng Yan, Wei Tsang Ooi, Qizhe Xie, and Junxian He. 2023. Simteg: A frustratingly simple approach improves textual graph learning. arXiv preprint arXiv:2308.02565 .Johannes Gasteiger, Aleksandar Bojchevski, and Stephan Günnemann. 2019. Predict then propagate: Graph neural networks meet personalized pagerank. In ICLR .Shengbo Gong, Juntong Ni, Noveen Sachdeva, Carl Yang, and Wei Jin. 2025. Gc4nc: A benchmark framework for graph condensation on node classi-fication with new insights. In NeurIPS Datasets and Benchmarks Track .Will Hamilton, Zhitao Ying, and Jure Leskovec. 2017. Inductive representation learning on large graphs. In 
+
+NeurIPS .Ruining He and Julian McAuley. 2016. Ups and downs: Modeling the visual evolution of fashion trends with one-class collaborative filtering. In WWW .Xiaoxin He, Xavier Bresson, Thomas Laurent, Adam Perold, Yann LeCun, and Bryan Hooi. 2024. Har-nessing explanations: Llm-to-lm interpreter for en-hanced text-attributed graph representation learning. In ICLR .
+
+9Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Liang Wang, Weizhu Chen, and 1 others. 2022. Lora: Low-rank adaptation of large language models. ICLR .Weihua Hu, Matthias Fey, Marinka Zitnik, Yuxiao Dong, Hongyu Ren, Bowen Liu, Michele Catasta, and Jure Leskovec. 2020. Open graph benchmark: Datasets for machine learning on graphs. In NeurIPS .Wei Jin, Lingxiao Zhao, Shichang Zhang, Yozen Liu, Jiliang Tang, and Neil Shah. 2022. Graph condensa-tion for graph neural networks. In ICLR .Diederik P Kingma and Jimmy Ba. 2015. Adam: A method for stochastic optimization. In ICLR .Thomas N Kipf and Max Welling. 2017. Semi-supervised classification with graph convolutional networks. In ICLR .Yichuan Li, Kaize Ding, and Kyumin Lee. 2023. Grenade: Graph-centric language model for self-supervised representation learning on text-attributed graphs. In EMNLP .Yongqi Li and Wenjie Li. 2021. Data distillation for text classification. arXiv preprint arXiv:2104.08448 .Mengyang Liu, Shanchuan Li, Xinshi Chen, and Le Song. 2022. Graph condensation via recep-tive field distribution matching. arXiv preprint arXiv:2206.13697 .Jing Ma, Wei Gao, and Kam-Fai Wong. 2018. Rumor detection on twitter with tree-structured recursive neural networks. In ACL .Aru Maekawa, Naoki Kobayashi, Kotaro Funakoshi, and Manabu Okumura. 2023. Dataset distillation with attention labels for fine-tuning bert. In ACL .Aru Maekawa, Satoshi Kosugi, Kotaro Funakoshi, and Manabu Okumura. 2024. Dilm: Distilling dataset into language model for text-level dataset distillation. In NAACL .Péter Mernyei and C˘ at˘ alina Cangea. 2020. Wiki-cs: A wikipedia-based benchmark for graph neural net-works. arXiv preprint arXiv:2007.02901 .Timothy Nguyen, Zhourong Chen, and Jaehoon Lee. 2021. Dataset meta-learning from kernel ridge-regression. In ICLR .Noveen Sachdeva and Julian McAuley. 2023. Data distillation: A survey. TMLR .Prithviraj Sen, Galileo Namata, Mustafa Bilgic, Lise Getoor, Brian Galligher, and Tina Eliassi-Rad. 2008. Collective classification in network data. AI maga-zine .Ozan Sener and Silvio Savarese. 2018. Active learn-ing for convolutional neural networks: A core-set approach. In ICLR .Oleksandr Shchur, Maximilian Mumme, Aleksandar Bojchevski, and Stephan Günnemann. 2018. Pitfalls of graph neural network evaluation. arXiv preprint arXiv:1811.05868 .Cheng Shen, Yew-Soon Ong, and Joey Tianyi Zhou. 2025. Condenselm: Llms-driven text dataset conden-sation via reward matching. In EMNLP .Yefan Tao, Luyang Kong, Andrey Kan, and Laurent Callot. 2024. Textual dataset distillation via language model embedding. In EMNLP .Lin Wang, Wenqi Fan, Jiatong Li, Yao Ma, and Qing Li. 2024a. Fast graph condensation with structure-based neural tangent kernel. In WWW .Tongzhou Wang, Jun-Yan Zhu, Antonio Torralba, and Alexei A Efros. 2018. Dataset distillation. arXiv preprint arXiv:1811.10959 .Yaoke Wang, Yun Zhu, Wenqiao Zhang, Yueting Zhuang, Liyunfei Liyunfei, and Siliang Tang. 2024b. Bridging local details and global context in text-attributed graphs. In EMNLP .Hao Yan, Chaozhuo Li, Ruosong Long, Chao Yan, Jianan Zhao, Wenwen Zhuang, Jun Yin, Peiyan Zhang, Weihao Han, Hao Sun, and 1 others. 2023. A comprehensive study on text-attributed graphs: Benchmarking and rethinking. In NeurIPS .Beining Yang, Kai Wang, Qingyun Sun, Cheng Ji, Xingcheng Fu, Hao Tang, Yang You, and Jianxin Li. 2023. Does graph distillation see like vision dataset counterpart? In NeurIPS .Michihiro Yasunaga, Jure Leskovec, and Percy Liang. 2022. Linkbert: Pretraining language models with document links. In ACL .Ruonan Yu, Songhua Liu, and Xinchao Wang. 2023. Dataset distillation: A comprehensive review. 
+
+TPAMI .Yuchen Zhang, Tianle Zhang, Kai Wang, Ziyao Guo, Yuxuan Liang, Xavier Bresson, Wei Jin, and Yang You. 2024. Navigating complexity: Toward lossless graph condensation via expanding window matching. In ICML .Jianan Zhao, Meng Qu, Chaozhuo Li, Hao Yan, Qian Liu, Rui Li, Xing Xie, and Jian Tang. 2023. Learning on large-scale text-attributed graphs via variational inference. In ICLR .Xin Zheng, Miao Zhang, Chunyang Chen, Quoc Viet Hung Nguyen, Xingquan Zhu, and Shirui Pan. 2023. Structure-free graph condensation: From large-scale graphs to condensed graph-free data. In 
+
+NeurIPS .Chuang Zhou, Zhu Wang, Shengyuan Chen, Jiahe Du, Qiyuan Zheng, Zhaozhuo Xu, and Xiao Huang. 2025. Taming language models for text-attributed graph learning with decoupled aggregation. In ACL .
+
+10 Jing Zhu, Yuhang Zhou, Shengyi Qian, Zhongmou He, Tong Zhao, Neil Shah, and Danai Koutra. 2025. Mo-saic of modalities: A comprehensive benchmark for multimodal graph learning. In CVPR .
+
+Appendix A Dataset Details 
+
+Dataset ∣V ∣ ∣E∣ # Class Cora 2,708 5,429 7Photo 48,362 500,928 12 Computers 87,229 721,081 10 Arxiv 169,343 1,166,243 40      
+
+> Table 3: Dataset statistics. ∣V∣and ∣E∣denote the num-bers of nodes and edges, respectively.
+
+In this section, we describe the datasets used in our experiments. We use the raw text for each dataset provided by He et al. (2024) and Yan et al. (2023) and adopt a 60/20/20 split for the training, valida-tion, and test sets. Dataset statistics are summarized in Table 3. 
+
+Cora. Cora (Sen et al., 2008) is a citation network dataset in which nodes represent scientific papers and edges denote citation links between papers. The text attribute of each node consists of the paper title and abstract, and the node label indicates the research topic. 
+
+Photo. Photo (Shchur et al., 2018) is an Amazon co-purchase network dataset in the photo-related product category, where nodes represent products and edges indicate that two products are frequently purchased together. The text attribute of each node consists of product descriptions and reviews, and the node label indicates the product category. 
+
+Computers. Computers (Shchur et al., 2018) is an Amazon co-purchase network dataset in the computer-related product category, where nodes represent products and edges indicate that two prod-ucts are frequently purchased together. The text attribute of each node consists of product descrip-tions and reviews, and the node label indicates the product category. 
+
+Arxiv. Arxiv (Hu et al., 2020) is a citation net-work dataset of arXiv papers, where nodes repre-sent papers and edges denote citation relationships. The text attribute of each node consists of the paper title and abstract, and the node label indicates the subject area of the paper. 
+
+B Experiment Details 
+
+B.1 Baselines 
+
+In this section, we provide additional implemen-tation details for the baseline experiments. For 
+
+Coreset Selection methods, we first select a subset of the original dataset according to each method and then train the model using the joint training pipeline in Eq. (3) . For Decoupled Distill. base-lines, we distill the text and graph components separately according to each baseline method, and then train the final model on the resulting distilled text and distilled graph under the decoupled train-ing pipeline in Eq. (4) – (5) . For Full Text + Distill. Graph baselines, we first train the LM on the full text data, use the resulting text representations as the initial input features for the GNN, and distill only the graph component. The final model is then trained on the full text and the distilled graph under the same decoupled training pipeline. Below, we describe only the baselines whose settings require further clarification. 
+
+GCond/GCDM. Both methods propose two vari-ants for the synthetic graph structure: one that learns the synthetic graph structure and another that uses an identity matrix. We report the latter for the baselines, as it performs better in our setting. 
+
+CondenseLM. Since the official code for this method is not available, we implement the method ourselves based on the description in the paper. For the LLM component, we use GPT-4o-mini. 
+
+B.2 Implementation Details 
+
+For each method, we repeat distillation 5 times, and repeat training and evaluation 5 times for each distilled dataset. All experiments were conducted on two NVIDIA RTX PRO 6000 GPUs, each with 96GB of memory. For hyperparameter settings, we tune the outer-loop learning rate ˜η from {1 × 10 −3, 5 × 10 −4, 1 ×
+
+10 −4, 5 × 10 −5, 1 × 10 −5} and the ridge coefficient 
+
+λ from {1 × 10 −3, 1 × 10 −4, 1 × 10 −5}. We use the same LM and GNN training hyperparameters for both our method and the baselines. For LM training, we use a learning rate η = 1 × 10 −4, a maximum sequence length Q = 256 , and apply LoRA with r = 4, α = 8, and dropout rate 0.05. For GNN training, we use a two-layer model with 11 Dataset K Pinner T Pouter M ˜η λ B
+
+Cora 80 10 90 10 8 5 × 10 −4 1 × 10 −4 32 Photo 50 10 60 10 8 1 × 10 −4 1 × 10 −5 64 Computers 50 8 80 8 8 1 × 10 −4 1 × 10 −5 64 Arxiv 50 6 60 8 5 1 × 10 −4 1 × 10 −5 64 
+
+Table 4: Hyperparameter settings for distillation. Pinner and Pouter denote the early stopping patience for the inner-and the outer-loop, respectively. K denotes the number of training epochs, T and M denote the inner- and outer-loop iteration steps, respectively, λ is the ridge coefficient, and B is the batch size.                       
+
+> Dataset Time
+> Full Text +
+> Distill. Graph Distill. Text +
+> Distill. Graph TALK Photo Distillation 1.9K 2.9K 3.1K Search 285.4K 20.2K 19.6K Total 287.3K 23.1K 22.7K Arxiv Distillation 2.3K 4.8K 6.6K Search 1.09M 55.6K 54.9K Total 1.09M 60.4K 61.5K
+
+Table 5: Running time breakdown of T ALK and base-lines. All values are reported in seconds. Distillation denotes one-time distillation cost, and Search denotes hyperparameter search cost. 
+
+hidden dimension 256 and dropout rate 0.3. We use Adam optimizer (Kingma and Ba, 2015) for all optimization procedures. The selected hyper-parameter values for each dataset are reported in Table 4. 
+
+B.3 Details of Hyperparameter Search 
+
+We provide a detailed running time breakdown in Table 5, separating one-time distillation cost from hyperparameter search cost. Full Text + Distill. Graph requires less distillation time because only the graph is distilled, but its hyperparameter search time is much larger since searching for LM hyper-parameters still requires training on the full text, which becomes the main bottleneck. Compared with Distill. Text + Distill. Graph , T ALK has a slightly higher one-time distillation cost because it jointly distills text and graph, while its total search time remains comparable. 
+
+B.4 Memory-efficient Implementation of SNTK 
+
+Recall from Eq. (9) – (11) that T ALK computes node representations HT = fϕ(X) and HS =
+
+fϕ(X′), and then forms the kernel matrices KT S 
+
+and KSS using SNTK. In our setting, SNTK is applied either between (HT , A) and (HS , I) to construct KT S , or between (HS , I) and (HS , I)
+
+to construct KSS . Below, we describe how KT S is computed in our implementation. The computation of KSS is analogous, with I on both sides. 
+
+Overview of SNTK. We first initialize 
+
+ΣT S = ΘT S = HT H⊺ 
+
+> S
+
+.
+
+Here, ΣT S denotes the intermediate kernel block, while ΘT S denotes the neural tangent kernel (NTK) block. Both matrices are recursively updated through neighborhood aggregation and nonlinear kernel transformation, and the final ΘT S is used as 
+
+KT S .
+
+Efficient neighborhood aggregation. The origi-nal SNTK implementation performs neighborhood aggregation by constructing a sparse Kronecker-product matrix and applying it to the vectorized kernel matrix. This formulation expresses aggrega-tion over all node pairs as a single linear operation on the cross-kernel. However, because the opera-tor is defined on the Cartesian product of the two node sets, its size grows with the product of their numbers of nodes, incurring substantial memory overhead. In our setting, the synthetic graph is fixed as 
+
+A′ = I. Therefore, neighborhood aggregation on the synthetic side becomes the identity operation, and the Kronecker-based update reduces to apply-ing the graph aggregation operator only on the full-graph side. Accordingly, the aggregation update becomes 
+
+ΣT S ← AΣT S , ΘT S ← AΘT S .
+
+Equivalently, with vec (⋅) denoting vectorization and ⊗ the Kronecker product, we have 
+
+vec (AΣT S ) = (I ⊗ A) vec (ΣT S ).
+
+The same identity also holds when A is replaced by degree-normalized form D−1A, where D is the 12 Dataset LM GCSNTK GEOM TDAL T ALK Cora (5%) RoBERTa 84.0 82.4 80.5 85.5                             
+
+> DeBERTa 84.6 82.3 82.4 86.0
+> Photo (3%) RoBERTa 82.9 83.5 82.7 85.2
+> DeBERTa 82.4 83.6 81.2 84.9
+> Computers (2%) RoBERTa 86.6 85.2 86.4 87.8
+> DeBERTa 85.7 86.4 85.6 87.2
+> Arxiv (1%) RoBERTa 70.5 72.5 69.9 72.8
+> DeBERTa 70.5 72.4 70.9 73.4
+
+Table 6: Performance comparison across different LM backbones. We report the performance of TDAL com-bined with the best-performing graph dataset distillation method for each configuration. The best results are high-lighted in bold .      
+
+> Dataset Ratio (%) TDAL+ GCSNTK TDAL+ GEOM TALK Arxiv-ind 0.5 66.1 64.6 71.4
+
+Table 7: Node classification performance under the in-ductive Arxiv setting. The best result is highlighted in 
+
+bold .
+
+degree matrix of A. Thus, our implementation computes exactly the same neighborhood aggrega-tion as the original Kronecker-based formulation, while avoiding explicit construction of the large Kronecker-product matrix. 
+
+Efficient approximation for normalization. In SNTK, each recursive update of the cross-kernel re-quires normalization terms from the corresponding self-kernels, namely 
+
+p(k) 
+
+> T
+
+=
+
+√
+
+diag (Σ(k) 
+
+> T T
+
+), p(k) 
+
+> S
+
+=
+
+√
+
+diag (Σ(k) 
+
+> SS
+
+).
+
+In the original implementation, these quantities are obtained by explicitly maintaining the full self-kernel matrices throughout the recursion and read-ing their diagonals when needed. This is memory-inefficient, since only the diagonal values are used for normalization. To avoid this overhead, we use a feature-based approximation of the normalization vectors. At aggregation round k, we propagate 
+
+H(k) 
+
+> T
+
+= AH (k−1) 
+
+> T
+
+,
+
+or, when A is replaced by degree-normalized form 
+
+D−1A, as 
+
+H(k) 
+
+> T
+
+= D−1AH (k−1) 
+
+> T
+
+,      
+
+> Dataset Ratio (%) TDAL+ GCSNTK TDAL+ GEOM TALK Goodreads-NC 0.1 76.8 75.6 78.7
+
+Table 8: Node classification performance on Goodreads-NC. The best result is highlighted in bold .
+
+and define the approximate normalization vector by the row-wise ℓ2 norms: 
+
+˜p(k) 
+
+> T
+
+= [∥ H(k) 
+
+> T,1
+
+∥2, . . . , ∥H(k)  
+
+> T,N
+
+∥2]⊺.
+
+The same construction is applied to the synthetic side, where the synthetic graph is fixed as I and the propagated representations therefore remain unchanged across aggregation rounds. This con-struction is exact at the first aggregation round. When multiple aggregation rounds are used, later rounds rely on a memory-efficient feature-based approximation of the normalization terms. 
+
+C Additional Experiments 
+
+C.1 Generalization across LM Backbones 
+
+We further evaluate our dataset distillation method with different LM backbones, RoBERTa base and DeBERTa base . As shown in Table 6, T ALK consis-tently outperforms all baselines across all datasets for both backbone choices. 
+
+C.2 Experiment under an Inductive Setting 
+
+To evaluate T ALK in an inductive setting, we convert Arxiv into an inductive graph dataset, de-noted as Arxiv-ind. We construct timestamp-based train/validation/test splits with a 60:20:20 ratio, where validation and test nodes are not observed during the training period. We compare T ALK with strong decoupled distillation baselines, including TDAL+GCSNTK and TDAL+GEOM. As shown in Table 7, T ALK continues to outperform the de-coupled baselines under this inductive setting. 
+
+C.3 Experiment on a Large-scale Dataset 
+
+To further evaluate T ALK on a larger graph, we conduct an additional experiment on Goodreads-NC (Zhu et al., 2025), which is substantially larger than the datasets used in the main experiments, containing 685K nodes and 7.2M edges. Although Goodreads-NC is a multimodal-attributed graph dataset, we use only the text attributes in this ex-periment to match the TAG setting considered in this paper. As shown in Table 8, T ALK continues 13 Dataset Ratio (%) Dot Product NTK Ours Cora 2.5 78.8 82.8 84.4         
+
+> Photo 1.0 76.5 80.5 83.8
+> Computers 1.0 76.6 84.9 86.4
+
+Table 9: Ablation study on the kernel used for the outer-loop optimization, with best results in bold .                         
+
+> Distill. Final Cora (2.5%) Photo (1%) Computers (1%) GCN GCN 84.4 83.8 86.4
+> MLP GCN 83.8 83.5 86.1 SAGE SAGE 82.2 84.0 85.5
+> MLP SAGE 80.0 83.2 84.4 GIN GIN 83.4 83.8 83.6
+> MLP GIN 82.1 82.2 82.8
+
+Table 10: Ablation study on the inner-loop GNN. Distill. 
+
+denotes the model used during distillation, and Final 
+
+denotes the GNN architecture of the final LM–GNN model trained on the distilled dataset. The best results within each group are highlighted in bold .
+
+to outperform the decoupled distillation baselines on this larger dataset. 
+
+C.4 Ablation on the Graph-aware Kernel 
+
+To examine the effect of our graph-aware kernel built on LM representations, we compare it with structure-agnostic alternatives: a dot-product ker-nel and a standard NTK. As shown in Table 9, the graph-aware kernel performs best, suggesting that incorporating graph structure into the outer-loop KRR objective is crucial for effective distillation. 
+
+C.5 Ablation on the Inner-loop GNN 
+
+Although A′ = I limits nontrivial message pass-ing among synthetic nodes, we use a GNN module on top of LM representations in the inner-loop to match the integrated LM–GNN model used in final training. To examine the effectiveness of this de-sign choice, we evaluate replacing the inner-loop GNN with an MLP, while keeping the final GNN architecture unchanged for training on the resulting distilled dataset. As shown in Table 10, replacing the inner-loop GNN with an MLP generally reduces performance. The drop is modest for GCN, whose computation becomes closer to an MLP when A′ = I, but is more noticeable for SAGE and GIN, whose pa-rameterizations remain more different from a stan-dard MLP. These results suggest that the inner-loop GNN serves an alignment role with the final LM– GNN training stage.                   
+
+> Dataset Ratio (%) Full ( =A)50% 100% ( =I)Cora 2.5 84.4 83.5 82.2 Photo 1.0 83.8 82.5 79.6 Computers 1.0 86.4 85.8 85.0
+
+Table 11: Effect of the original graph structure used in the outer-loop graph-aware kernel during distillation. The synthetic graph structure is fixed to A′ = I in all cases, while the original graph used during distillation is varied by edge dropping. 
+
+D Analysis of Structure-free Dataset Distillation 
+
+In this section, we analyze why the synthetic dataset can still reflect the structural information of the full dataset even when the synthetic adjacency matrix is fixed as A′ = I.
+
+D.1 Gradient Flow of Structural Information 
+
+Based on the outer-loop KRR objective in Eq. (12) –(13) , the gradient with respect to the synthetic rep-resentations HS can be decomposed by the chain rule as 
+
+∂LKRR 
+
+∂HS
+
+= ∂LKRR 
+
+∂KT S 
+
+∂KT S 
+
+∂HS
+
++ ∂LKRR 
+
+∂KSS 
+
+∂KSS 
+
+∂HS
+
+.
+
+Here, HS = [h′
+
+> 1
+
+, h′
+
+> 2
+
+, . . . , h′ 
+
+> M
+
+]⊺, where h′ 
+
+> j
+
+de-notes the representation of the j-th synthetic node. Among the two terms, the first term is key to explain how structural information from the full dataset influences the synthetic dataset, since 
+
+KT S = K(HT , HS ) is the cross-kernel matrix be-tween the full dataset T and the synthetic dataset S.Because K(⋅, ⋅) is a graph-aware kernel, each entry of KT S is computed under the structural context of the original graph defined by A, rather than from feature similarity alone. More specifically, for each synthetic node representation h′ 
+
+> j
+
+,
+
+∂LKRR 
+
+∂h′
+
+> j
+
+= ∑
+
+> i
+
+∂LKRR 
+
+∂[KT S ]ij 
+
+∂[KT S ]ij 
+
+∂h′
+
+> j
+
++ ∑
+
+> m
+
+∂LKRR 
+
+∂[KSS ]jm 
+
+∂[KSS ]jm 
+
+∂h′
+
+> j
+
+.
+
+This shows that each h′ 
+
+> j
+
+is updated according to its contribution to the labeled prediction loss through the kernel matrices. Therefore, even with A′ = I,the synthetic representations are optimized through 
+
+KT S to encode structural information from the full dataset that is useful for prediction. 14 D.2 Experiments 
+
+To further directly examine whether structural in-formation is incorporated even when the synthetic graph is fixed to A′ = I, we conduct an additional experiment. During distillation, we keep the syn-thetic graph fixed as A′ = I and change only the original graph used in the outer-loop graph-aware kernel KT S during distillation. Specifically, we compare the full graph A with edge-dropped ver-sions of A using 50% and 100% drop rates, while keeping the final training and inference protocol unchanged on the original full graph. As shown in Table 11, using the full graph con-sistently performs best across all datasets, and per-formance decreases as more edges are removed. This suggests that, although T ALK does not explic-itly synthesize edges, the original graph structure still affects the learned synthetic datasets through the graph-aware kernel and KRR objective. 15

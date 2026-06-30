@@ -1,0 +1,1188 @@
+Title: Constrained Deep Reinforcement Learning for Cognitive Radar Resource Management
+
+URL Source: https://arxiv.org/pdf/2606.05526v1
+
+Published Time: Fri, 05 Jun 2026 00:37:08 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+> 1
+
+# Constrained Deep Reinforcement Learning for Cognitive Radar Resource Management 
+
+Ziyang Lu, M. Cenk Gursoy, Chilukuri K. Mohan, Pramod K. Varshney 
+
+Abstract—In this paper, multi-target tracking and scanning are considered in a radar system operating in the track-while-scan mode. Specifically, time allocation for radar scanning and tracking of multiple maneuvering targets under a time budget constraint is addressed, aiming to jointly optimize the perfor-mance of both tracking and scanning in a cognitive radar. We first present the details of the model for tracking and scanning and formulate the time management task as a constrained optimization problem. Subsequently, we design a constrained deep reinforcement learning (CDRL) framework to find the time allocation strategy for the problem. In the proposed CDRL framework, the parameters of the neural networks and the dual variable are learned simultaneously. The deep deterministic policy gradient (DDPG) algorithm is introduced to tackle continuous action space and its performance is compared with deep Q-learning, heuristic approaches, and an optimization-based approach. Numerical results show that the radar with the proposed CDRL framework can autonomously allocate more time to the tracking task that requires greater attention while providing time for scanning and also constraining the total time budget below the predefined threshold. Index Terms—Constrained optimization, extended Kalman filter, multi-target tracking and scanning, track-while-scan, cognitive radar, reinforcement learning, resource allocation. 
+
+I. Introduction A. Background Cognitive radar is a radar system that leverages ad-vanced signal processing techniques as well as machine learning to optimize its performance in dynamic envi-ronments. Unlike traditional radar systems that operate with fixed parameters, cognitive radar systems continu-ously sense the environment and adapt their operational strategies in real-time. Resource allocation in a cognitive radar is a critical aspect of its functionality. The radar system must effi-ciently allocate its limited resources, such as time, energy, and bandwidth to various tasks including scanning for newly emerging targets and tracking previously detected targets. Effective resource allocation ensures that the radar maintains a balance between these competing tasks, optimizing its performance without exceeding the resource budget constraints. The challenge lies in dynamically adjusting the resource allocation strategy to maximize the radar’s effectiveness in a resource-constrained scenario. 
+
+The authors are with the Department of Electrical Engineering and Computer Science, Syracuse University, Syracuse NY, 13066. Email: {zlu112, mcgursoy, ckmohan, varshney}@syr.edu. The work in this paper is supported in part by the National Science Foundation Grant CNS 2221875. 
+
+B. Prior Work In [1], an overview of cognitive radar concepts is presented, highlighting three hierarchical levels of cog-nitive radar architecture: extracting information, man-aging resources, and refining environmental knowledge. The authors also survey the evolution of radar resource management techniques, demonstrating a progression of increasing adaptivity that culminates in the concept of cognitive radar. Indeed, efficient allocation of radar resources is critical and has been extensively studied in the literature. For instance, radar resource management has been addressed through conventional optimization approaches in previous studies such as [2] and [3]. Another line of research employs game theoretical approaches. For instance, the authors in [4] formulate the power allocation problem in a multi-radar system as a non-cooperative game and perform an analysis of the Nash equilibrium and its convergence. Several prior works have addressed radar resource management for multi-target tracking and scanning. For example, the work in [5] presents a hierarchical frame-work for task and dwell-level allocation, leveraging multi-criteria decision tools and operator-defined priorities to support complex radar scheduling. While effective, this approach relies on structured scheduling policies and does not adapt autonomously to changing environments. More recently, the work in [6] investigates joint power and time allocation in cooperative multi-radar networks using a structured optimization framework. This method demonstrates strong performance under ideal conditions but assumes full knowledge of system parameters and performance models, limiting its flexibility in real-world scenarios. The method proposed in [7] formulates radar scheduling as a convex optimization problem, balancing search and tracking tasks by minimizing a weighted sum of detec-tion and tracking costs. This approach achieves efficient allocation but operates myopically on a per-scan basis and requires known target arrival characteristics and environmental structure. The work in [8] proposes a radar resource manage-ment (RRM) framework for multi-target tracking, where dwell time allocation is optimized using a constrained Lagrangian relaxation approach. With the same RRM framework, a subsequent work in [9] extends this problem to optimization for joint tracking and classification tasks, and an approximately optimal dynamic budget balancing 
+
+> arXiv:2606.05526v1 [eess.SY] 4 Jun 2026
+
+(AODB) policy is derived using policy rollout in combi-nation with Lagrangian relaxation. Different from these prior works, our proposed CDRL framework learns adaptive dwell time allocation policies through deep reinforcement learning, without requiring full observability or pre-defined scheduling rules. It oper-ates in a single-radar system under partial observability of the environment, integrates M -of-N track initiation logic, and provides a scalable and flexible approach to managing the trade-off between scanning and tracking in dynamic scenarios. Recently, deep reinforcement learning (DRL) has been extensively utilized to tackle dynamic decision-making problems, demonstrating high performance levels. Exper-imental results demonstrate that DRL surpasses previous algorithms in game playing and performs comparably to a human professional tester [10]. As DRL algorithms become faster and more stable, they have been extensively researched in various fields, including resource allocation in cognitive radar systems. For instance, in [11], the radar system dynamically selects frequency bands based on the locations and ve-locities of the targets, thereby avoiding collision with the coexisting communication system and sufficiently utilizing the available bandwidth. In [12], DRL is employed to dynamically tune the tracking parameters based on the scene, improving multi-target tracking performance. The work in [13] presents a novel approach to address radar re-source management with an Advanced Actor-Critic (A2C) network, improving the utility and tracking accuracy. Different from the work in [13], our approach explicitly enforces resource constraints using a CDRL framework, which combines the methods of Lagrangian relaxation and DRL. Additionally, the study in [13] restricts the problem in experimental results to tracking tasks while we address joint tracking and scanning. Other learning-based applications for radar can be seen in [14] and [15]. To the best of our knowledge, although there are numerous studies that have explored various aspects of cognitive radar systems and time allocation strategies, no prior research or similar work has utilized DRL for time allocation in the context of a cognitive radar system under a time budget constraint. In this work, we formulate radar scanning and target tracking under budget constraints as a constrained Markov decision process (CMDP). Related learning-based studies on CMDP are presented in [16], [17], [18], [19] and [20]. Specifically in [16], the authors proposed a multi-timescale algorithm to address the constrained optimization prob-lem. In [21], a learning-based decision-making algorithm is proposed for UAVs, optimizing the network utility while taking into account the energy constraints. In [22], the authors proposed a learning-based resource allocation approach in wireless networks under energy constraints. In our previous work [23], we proposed a learning-based time allocation framework for cognitive radars in an integrated sensing and communication (ISAC) scenario. In the radar literature, the application of DRL to the CMDP model has not yet been extensively studied. C. Contributions In this work, we address the time allocation problem in a multi-function cognitive radar system operating in the track-while-scan mode. The key contributions of this work are as follows:  
+
+> •
+
+We define a utility function that addresses the trade-offs between scanning for potential targets and track-ing already detected targets. We propose a flexible framework that can weigh the importance of scanning vs. tracking in a given application scenario and enables the prioritization of tracked targets. To the best of our knowledge, this form of utility function for multi-objective optimization has not been extensively explored in the context of radar resource management using deep reinforcement learning.  
+
+> •
+
+We formulate the considered problem as a constrained optimization problem and propose a CDRL frame-work to address it, where the parameters of the neural networks and the dual variable are updated simultaneously.  
+
+> •
+
+We further improve the proposed CDRL framework, leveraging the DDPG algorithm. The incorporation of DDPG equips our framework with the capabil-ity to manage continuous action spaces efficiently. Moreover, this adoption of DDPG enables centralized control while preventing action space explosion that would occur with deep Q-learning (DQL). For exam-ple, with DQL, the action space grows exponentially with the number of targets when using discretized actions, whereas DDPG requires only linear growth in action dimensions through its continuous action approach.  
+
+> •
+
+We provide numerical results that show that the designed CDRL framework can learn an efficient time allocation strategy compared to the heuristic time allocation approach, complying with the predefined time budget constraint. We further identify key differences from our previous studies in [24] and [25]. Compared to [24], which only addressed target tracking with online-trained deep Q-learning, this work considers both scanning and tracking with pre-trained agents. This work also enhances our prior study [25] by introducing a more realistic cognitive radar environment, incorporating an M -of-N track initiation model, and using the number of missed targets as an ef-fective scanning performance metric. We also evaluate the framework in diverse scenarios, including varying target priorities and beam misalignment effects. In addition to the DQL-based approach in [25], we propose a centralized DDPG-based CDRL framework that handles continuous action spaces and jointly allocates time across all targets, improving scalability and decision efficiency. We further compare our approach against an optimization-inspired baseline to better assess the effectiveness of our proposed method. 2For ease of reference, we provide below a list of acronyms and list of notations used throughout the paper in Tables I and II, respectively. 
+
+> TABLE I List of Acronyms
+
+Acronym Full Form DRL Deep Reinforcement Learning CDRL Constrained Deep Reinforcement Learning MDP Markov Decision Process DQN Deep Q-Network DQL Deep Q-learning DDPG Deep Deterministic Policy Gradient SNR Signal-to-Noise Ratio EKF Extended Kalman Filter UCA Uniform Circular Array GNN Global Nearest Neighbor EA Equal Allocation DA Distance-based Allocation OA Optimization-based Allocation 
+
+II. Radar Tracking Model This section addresses the multi-target tracking prob-lem in a two-dimensional space, employing an extended kalman filter (EKF). We present the details of the tracking model and how to apply EKF to estimate the states of the targets. A. Target Motion Model In time slot t, the current state of a target is described as xt = [ xt, y t, ˙xt, ˙yt]T , where (xt, y t) denotes the current location of the target on the two-dimensional plane and 
+
+˙xt, ˙yt are the current horizontal and vertical velocities of the target. Considering a constant velocity model within the revisit interval, the next state evolves from xt to 
+
+xt+1 = Ftxt + wt, (1) where Ft ∈ R4×4 is the transition matrix defined as 
+
+Ft =
+
+
+
+1 0 Tt 00 1 0 Tt
+
+0 0 1 00 0 0 1
+
+ (2) where Tt refers to the revisit interval at time t, which is determined by the radar system for tracking a specific target [26]. Above, wt denotes the maneuverability (accel-eration) noise, which is a multivariate zero-mean Gaussian noise with the covariance matrix 
+
+Qt =
+
+
+
+T 4 
+
+> t
+
+/4 0 T 3 
+
+> t
+
+/2 00 T 4 
+
+> t
+
+/4 0 T 3 
+
+> t
+
+/2
+
+T 3 
+
+> t
+
+/2 0 T 2 
+
+> t
+
+00 T 3 
+
+> t
+
+/2 0 T 2
+
+> t
+
+ σ2 
+
+> w
+
+(3) where σ2 
+
+> w
+
+is the maneuverability noise variance of the target at time t [26]. 
+
+> TABLE II List of Notations
+
+Symbol Description 
+
+xt Target state vector at time t:
+
+[xt, y t, ˙xt, ˙yt]T
+
+Ft State transition matrix 
+
+T0 Radar revisit interval 
+
+wt Maneuverability noise vector 
+
+σ2 
+
+> w
+
+Maneuverability noise variance 
+
+Qt Maneuverability noise covariance matrix 
+
+zt Measurement vector: [rt, θ t]T
+
+rt Measured range from radar to target 
+
+θt Measured azimuth angle 
+
+vt Measurement noise 
+
+σ2 
+
+> r
+
+, σ 2 
+
+> θ
+
+Measurement noise variances (range, az-imuth angle) 
+
+h(·) Nonlinear measurement function 
+
+Ht Jacobian of measurement function 
+
+Rt Measurement noise covariance matrix 
+
+ˆxt|t−1 Prior state estimate 
+
+ˆPt|t−1 Prior covariance matrix 
+
+xt|t Updated (posterior) state estimate 
+
+Pt|t Updated (posterior) covariance matrix 
+
+Kt Kalman gain 
+
+τ nt Dwell time allocated to target n at time tτs Time allocated for scanning 
+
+ϕ Phase delay between radar beams 
+
+τbeam Time duration per radar beam 
+
+cnt Tracking cost of target n at time tN Maximum number of tracked targets 
+
+N miss  
+
+> t
+
+Number of missed (undetected) targets at time twn Priority of tracking target nβ Trade-off coefficient between scanning and tracking 
+
+Ut Utility function 
+
+λt Dual variable for constraint optimization 
+
+Θmax Maximum fraction of time allowed for tracking 
+
+at Action taken by agent (dwell time deci-sions) 
+
+st State of the DRL agent at time tγ Discount factor in reinforcement learning 
+
+Q(s, a ) Action-value function (Q-function) 
+
+α Learning rate of the dual variable 
+
+dnr,t , d na,t Distance of target n to radar and to asset 
+
+Lbm Beam misalignment loss 
+
+Pt Transmit power of the radar 
+
+Gt, G r Transmit and receive antenna gains 
+
+k Boltzmann’s constant 
+
+Ts System temperature 
+
+B. Measurement Model The radar acquires the noisy measurements of the cur-rent range r and the azimuth angle θ of the target in order to estimate its location. Let us denote the measurement vector by zt and denote the non-linear function that maps 
+
+xt to zt by h(·). We then express the relationship between the state vector and the measurement vector as follows: 
+
+zt = h(xt) + vt =
+
+[√ 
+
+x2 
+
+> t
+
++ y2 
+
+> t
+
+, tan −1
+
+( yt
+
+xt
+
+)] T
+
++ vt (4) 3where vt = [ vr,t , v θ,t ]T denotes the measurement noise vector, which consists of the range measurement noise (vr,t ) and the azimuth measurement noise ( vθ,t ) at time 
+
+t. vr,t and vθ,t are zero-mean Gaussian noise components with variances σ2 
+
+> r,t
+
+and σ2
+
+> θ,t
+
+, respectively. For mathematical convenience, we assume the radar is positioned at the origin. This assumption is valid for a monostatic radar system, where the transmitter and receiver are co-located, and measurements r and θ of the targets are inherently determined by the relative location of the target to the radar. Regardless of the actual placement of the radar, target positions can always be transformed into a radar-centric coordinate system, ensuring the generality of this assumption. The estimated measurement noise variance of the echo radar signal can be calculated based on the signal-to-noise ratio (SNR t) reflected from the target in time slot t. In this work, it is assumed that SNR t only depends on the dwell time τt of the radar system and the distance rt between the target and the radar. SNR t can be formulated as [26], [27] SNR t(τt, r t) = SNR 0
+
+( τt
+
+τ0
+
+) ( rt
+
+r0
+
+)−4
+
+(5) where SNR 0, τ0 and r0 are the reference values of the SNR, dwell time and the distance from the target to the radar. Then, the variance of measurement noise can be obtained from the SNR according to [28] 
+
+σ2 
+
+> •,t
+
+= σ2
+
+> •,0
+
+SNR t(τt, r t) (6) where • ∈ (r, θ ). σ2 
+
+> •,0
+
+denotes the reference value of the cor-responding measurement noise variance. It is worth noting that the variance of the measurement noise decreases when a longer dwell time is allocated to the target or when the target moves closer to the radar according to Equations (5) and (6). Note also that the mapping function h(·) between the measurements and the states is non-linear and hence EKF is employed in this work. When using EKF (as will be detailed further in the next subsection), an observation matrix Ht ∈ R2×4 is introduced to linearize the relation-ship between zt and xt. Ht is defined as the Jacobian of the measurement function h(·):
+
+Ht = ∂h (·)
+
+∂x |xt =
+
+[ xt√x2 
+
+> t+y2
+> t
+> yt
+
+√x2 
+
+> t+y2
+> t
+
+0 0  
+
+> −yt
+> x2
+> t+y2
+> t
+> xt
+> x2
+> t+y2
+> t
+
+0 0
+
+]
+
+. (7) Considering independent measurements, the covariance matrix of the measurements is given by 
+
+Rt =
+
+[σ2 
+
+> r,t
+
+00 σ2
+
+> θ,t
+
+]
+
+. (8) C. Extended Kalman Filter Kalman filter is a well-known algorithm for estimating the state of a process, using a series of measurements over time [29]. Extended Kalman filter is a non-linear version of Kalman filter, which can be employed for target tracking in radar systems with non-linear measurements. The EKF consists of two phases, namely predict and update. For a target-tracking problem, a simplified version of the procedure is as follows: 1) Predict: 
+
+ˆxt|t−1 = Ftxt−1|t−1 (9) 
+
+ˆPt|t−1 = FtPt−1|t−1FTt + Qt (10) 2) Update: 
+
+Kt = ˆPt|t−1HTt (Ht ˆPt|t−1HTt + Rt)−1 (11) 
+
+xt|t = ˆxt|t−1 + Kt(zt − h(ˆxt|t−1)) (12) 
+
+Pt|t = ( I − KtHt) ˆPt|t−1 (13) where ˆxt|t−1 and ˆPt|t−1 are the prior estimate and the cor-responding covariance matrix at time t, respectively. xt|t
+
+and Pt|t are the posterior estimate and the corresponding covariance matrix, respectively. In the prediction phase, we use (9) to compute the prior state estimate ˆxt|t−1 with its covariance matrix defined in (10). In the update phase, the optimal Kalman gain is defined as in (11), which is a weight given to the measurements and the current estimate. Eq. (12) can be utilized to fuse the received measurements with the current estimate and obtain the posterior state estimate xt|t. The posterior covariance matrix Pt|t is computed via (13). In this work, the state vector xt|t is initialized using available measurements from the track initiation process (introduced in Section III-C), while Pt|t is initialized to reflect the uncertainty in these initial estimates. Specifi-cally, when a track is confirmed through the detection of multiple sequential measurements, the initial position es-timate is set to the most recent measurement coordinates. The initial velocity is estimated using the last two valid measurements in the measurement history, which may not be consecutive due to missed detections (e.g., in patterns such as VVXV, where V represents a valid measurement and X represents a missed detection). The initial covariance matrix Pt|t is initialized empir-ically to reflect realistic uncertainty levels. We set the diagonal elements to be 
+
+P0|0 = diag ([10000 , 10000 , 100 , 100]) (14) where the position variance (10,000 m2) accounts for measurement noise and the velocity uncertainties (100 m2/s 2) reflect the additional uncertainty introduced by the finite difference estimation method. This measurement-based initialization provides the EKF with a realistic starting point that leverages available information during the track initiation process. The EKF then continuously updates the covariance matrix as new measurements are obtained, recursively refining xt|t by minimizing the trace of the posterior estimate covari-ance matrix Pt|t. This approach significantly reduces the convergence time, particularly beneficial in multi-target scenarios where rapid track establishment is crucial for 4maintaining situational awareness and resource allocation efficiency. D. Tracking Cost Function We consider a cost function similar to the one defined in [26]. Specifically, the tracking cost function at time t is defined as 
+
+ct(Tt, τ t) = trace (EP t|tET ) (15) where 
+
+E =
+
+[1 0 0 00 1 0 0
+
+]
+
+. (16) According to (15), the tracking cost is a function of both the revisit interval ( Tt) and the dwell time ( τt) and can be interpreted as the sum of the posterior estimate variances of the target’s current estimated x-axis and y-axis positions. Multi-target tracking is considered in this problem, and tracking multiple targets requires extending the single-target model by running independent EKFs for each target. A key challenge in this setting is data association, which ensures that each received measurement is correctly assigned to the corresponding target track. To address this, we use the global nearest neighbor (GNN) approach, where measurements are associated with the predicted target states based on the minimum distances. In the multi-target setting, we denote the tracking cost for target n at time t as cnt (T nt , τ nt ). Due to fixed revisit time T nt = T0, the notation is further simplified to cnt (τ nt ).III. Radar Scanning Model A. Uniform Circular Array (UCA) Radar We consider a uniform circular array (UCA) radar system. It is assumed that the scanning beams are swept around the entire circular array in a phased-array manner, resulting in a 360° coverage of the scanning area. Note that radar scanning is performed in order to detect targets that may have emerged recently and have not been detected yet. A UCA radar can send scanning beams with a specific phase delay in between, which can steer the radar beam and uniformly sweep the entire circular scanning area. We formulate the total scanning time as 
+
+τs = 360 ◦
+
+ϕ τbeam (17) where ϕ is the phase delay between adjacent radar beams, and τbeam is the time duration of each beam. Although the scanning model is considered to be continuous, the radar transmits beams in a finite number of directions separated by an angular increment ϕ in the simulation. Thus, ϕ
+
+directly determines the angular resolution of the scanning process: smaller values of ϕ yield finer angular granularity (narrower beams), while larger ϕ leads to coarser scanning with fewer beams covering the 360 ◦ field of view. B. Measurement Acquisition Model During Scanning In this work, the tracking dwell times {τ nt }Nn=1 (for N
+
+targets) are determined by a DRL agent and the remaining time within the revisit interval is allocated to scanning the environment for detecting newly emerging targets. Then the time duration of each beam can be calculated according to (17). The received SNR at the radar receiver during the scanning phase is denoted by SNR scan and can be derived as SNR scan = Ptτbeam GtGr λ2σ
+
+(4 π)3r4LkT s
+
+(18) where Pt is the transmit power, Gt and Gr are the transmit and receive antenna gains, λ is the radar signal wavelength, σ is the radar cross section of the target, 
+
+r is the radar-target distance, L is a loss factor, k is Boltzmann’s constant, and Ts is the system temperature. It is further assumed that the probability of a false alarm is fixed as Pf . During the simulation, we utilize Shnidman’s equation [30] to efficiently find the probability of detection Pd given the received SNR and the probability of false alarm Pf . Instead of computing Pd in real-time, we precompute a lookup table mapping SNR to Pd over a range of probability of detection values from 0.01 to 0.99 in increments of 0.01. During operation, given an instantaneous value of the received SNR, the corresponding Pd is efficiently de-termined using a nearest-neighbor search in the lookup table. With this characterization, a target present in the environment will be detected with probability Pd that depends on its location. As indicated by (18), SNR scan in the scanning phase is influenced by the duration τbeam of each beam and the distance r between the target and the radar. The variance of the measurement error is inversely proportional to SNR scan , similar to that in (6). Hence, the detection probability Pd will vary depending on τbeam and r.We further note that in each time slot, the radar has a probability Pf of receiving a measurement due to a false alarm. It is assumed that the measurements resulting from false alarms are uniformly distributed across the area of interest. C. M-of-N Track Initiation Model We adopt the standard M -of-N model for initiating target tracks. The 3-of-4 track initiation model is se-lected for demonstration without loss of generality. The proposed framework can accommodate other M -of-N
+
+configurations. Specifically, a track is established if M = 3 
+
+associated detections occur within N = 4 consecutive scans. Detection association is determined using the GNN algorithm based on a distance threshold Td.Each measurement buffer (up to K total) stores the recent detection history using symbols: V indicates that an associated measurement was received at that time slot, and X indicates that no associated measurement was found. A track is initiated when three valid detections 5occur within four scans (e.g., VVV, VVXV, or VXVV). If this condition is not satisfied (e.g., VXX, VVXX), the buffer is reset. A special case arises with the sequence VXVX: the older data is pruned, and the buffer transitions to VX, removing information no longer relevant to initiation. Track initiation requests are handled using a first-come-first-served (FCFS) policy. When K tracks are active, a new track can only be initiated once an existing one is terminated. D. Scanning Metric The metric employed to evaluate scanning performance is defined as the difference between the total number of targets present in the environment and the number of targets currently being tracked. Hence, the goal is to keep this difference (i.e., the number of undetected targets) small and ideally equal to zero to avoid any missed targets. Since the ground truth of the number of targets present in the environment is unknown, this metric is only used as part of the reward function during the training phase and for evaluation purposes. In practice, this scanning metric may also be affected by false tracks arising from clutter or false alarms. In our simulations, we set the false alarm probability to a low value ( Pf = 10 −3) to minimize such occurrences. IV. Problem Formulation A. Objective Function In the previous sections, radar tracking and scanning and their corresponding performance metrics have been presented. Specifically, the tracking cost of target n at time t is cnt (τ nt ) as given in (15), where τ nt denotes the dwell time allocated for tracking target n in time slot t.For the tracking phase, the goal is to minimize the total weighted tracking cost for all the targets. On the other hand, for the scanning phase, the goal is to minimize the number of undetected targets that are currently not being tracked. We propose the following utility function as a measure of the joint performance of the radar system: 
+
+Ut({τ nt }Nn=1 ) = −
+
+> N
+
+∑
+
+> n=1
+
+wncnt (τ nt ) − βN miss t , (19) where N is the number of targets the radar system is tracking, wn is the weight parameter indicating the priority associated with tracking target n, N miss t denotes the number of undetected targets that are not being tracked during time slot t, and β > 0 is the tradeoff coefficient introduced to address the performance tradeoff between tracking and scanning. The value of β can vary depending on specific scenarios and system requirements. Setting β too low may reduce its impact, while excessively high values of β could either cause instability in the learning process or force the agent to focus on the scanning performance. Note that the utility function is always nega-tive or zero since both the tracking costs and the number of missed targets are non-negative. This formulation enables us to frame the radar resource management problem as a maximization problem. We consider a time-slotted system, where the duration of each time slot is T0, which is the radar revisit interval that stays fixed across different time slots. Within each time slot, the strategic allocation of the available time T0
+
+between tracking and scanning tasks and also allocation among multiple tracked targets is critical. For instance, allocating more time to tracking can reduce the tracking cost for currently tracked targets (i.e., improve tracking accuracy), whereas dedicating more time to scanning can reduce the number of missed targets and the target initiation time. Additionally, effective allocation of time among the targets already being tracked is also crucial for minimizing the total tracking cost. Therefore, our goal is to find an efficient time allocation policy to balance the performance of the tracking and scanning phases and optimize the overall performance of the radar system. B. Markov Decision Process (MDP) Formulation The radar resource allocation problem is formulated as a CMDP, which extends the standard MDP by incorpo-rating resource constraints. A standard MDP is defined as a tuple: 
+
+M = ( S, A, P, R, γ ), (20) where  
+
+> •
+
+S is the state space, representing the partial obser-vations of the radar environment, including tracking costs, past time allocations, and the dual variable;  
+
+> •
+
+A is the action space, and actions correspond to the dwell times allocated to targets;  
+
+> •
+
+P (s′|s, a ) represents the state transition probabilities, capturing how the radar environment evolves based on time allocation decisions;  
+
+> •
+
+R(s, a ) is the reward function, balancing tracking accuracy and scanning performance;  
+
+> •
+
+γ ∈ (0 , 1] is the discount factor that weighs future rewards. Unlike a standard MDP, which optimizes only the expected cumulative reward, our problem includes an additional time budget constraint, making it a CMDP. This constraint ensures that the total dwell time allocated for tracking does not exceed a predefined budget. C. Constrained Optimization Problem Following [16] and [31], we can formulate the time allocation problem in the radar system as the following constrained sequential optimization problem: 
+
+max 
+
+> π
+> ∞
+
+∑
+
+> m=0
+
+[
+
+γmUt+m({τ nt+m}Nn=1 )
+
+]
+
+s.t. 
+
+> ∞
+
+∑
+
+> m=0
+
+γm
+
+( N∑
+
+> n=1
+
+τ nt+m
+
+T0
+
+− Θmax 
+
+)
+
+≤ 0
+
+(21) 6where Ut({τ nt }Nn=1 ) is the utility function defined in (19), 
+
+Θmax ∈ (0 , 1] is the time budget limit, and γ ∈ (0 , 1) is the discount factor. Note that the (normalized) time budget allocated to tracking target n is defined as the ratio of dwell time τ n of target n to radar revisit interval T0, i.e.,   
+
+> τn
+> T0
+
+.As shown in the optimization problem (21), the goal is to find a time budget allocation policy π that maximizes the discounted sum utility function while satisfying the discounted sum budget constraint. In this work, we employ DRL to determine such a policy. More specifically, the policy π is a stochastic function that maps a given state 
+
+st to an action at with a probability distribution, denoted as π(at|st), where the state st is the partial observations of the radar environment and the action at = {τ nt }Nn=1 is the time allocation decisions at time t. In deep reinforcement learning, this policy is represented by neural networks. The objective of reinforcement learning is to optimize the neural network parameters to maximize the expected cumulative reward, enabling the policy to make optimal decisions over time. Before we design the DRL agent, we note that by introducing a non-negative dual variable λt (i.e., by utilizing Lagrangian relaxation), the problem in (21) can be relaxed to an unconstrained optimization problem as follows: 
+
+min  
+
+> λt≥0
+
+max 
+
+> π
+> ∞
+
+∑
+
+> m=0
+
+γm
+
+[
+
+Ut+m({τ nt+m}Nn=1 )−λt
+
+( N∑
+
+> n=1
+
+τ nt+m
+
+T0
+
+−Θmax 
+
+)] 
+
+(22) To solve the optimization problem under this CMDP, we employ a CDRL framework, which approximates the optimal policy using neural networks. The dual variable 
+
+λt is learned alongside the policy using a gradient-based update. Details will be presented in the next section. V. Constrained Deep Reinforcement Learning Framework with Deep Q-learning A. Deep Q-Learning Deep Q-learning (DQL) is a reinforcement learning algorithm that combines Q-learning with deep neural networks to handle high-dimensional state spaces. The goal of DQL is to find a policy that maximizes the expected discounted sum of future rewards: 
+
+Rt =
+
+> ∞
+
+∑
+
+> m=0
+
+γmrt+m, (23) where γ ∈ (0 , 1] is the discount factor that determines the relative importance of future rewards, and rt is the instantaneous reward at time t.Let Qπ (s, a ) denote the action-value function (Q-function), which represents the expected discounted sum of rewards when taking action a in state s, following policy 
+
+π:
+
+Qπ (s, a ) = E
+
+[ ∞∑
+
+> m=0
+
+γmrt+m
+
+∣∣∣∣ st = s, a t = a
+
+]
+
+. (24) Here  
+
+> •
+
+s is the state of the radar system at time t; 
+
+> •
+
+a is the action, corresponding to the dwell time allocated for tracking;  
+
+> •
+
+rt is the immediate reward function;  
+
+> •
+
+γ is the discount factor. The goal of the learning agent is to estimate the optimal action-value function 
+
+Q∗(s, a ) = max  
+
+> π
+
+Qπ (s, a ), (25) which corresponds to the highest possible expected return achievable from state s and action a. The agent uses this to derive the optimal policy that maximizes cumulative rewards. The Q-values are updated iteratively using the Bellman equation 
+
+Qk(s, a ) = Qk−1(s, a ) + α
+
+(
+
+r + γ max  
+
+> a′
+
+Qk−1(s′, a ′)
+
+−Qk−1(s, a )
+
+)
+
+,
+
+(26) where  
+
+> •
+
+k represents the iteration index;  
+
+> •
+
+α is the learning rate;  
+
+> •
+
+s′ is the next state after taking action a at state s; 
+
+> •
+
+a′ is the action that maximizes the Q-value in state 
+
+s′.This ensures that Q-values are progressively refined over iterations as the agent learns from interactions with the environment. DQL employs a deep Q-network (DQN) to approximate the Q-values. The DQN is trained using experience replay and backpropagation. The agent stores its experience tuple 
+
+(s, a, r, s ′) in a replay buffer, which is used to update the neural network in a more stable manner. To balance exploration and exploitation, the agent follows the ϵ-greedy strategy. The agent selects the action with the highest Q-value 
+
+at = arg max  
+
+> a
+
+Q(s, a ), (27) with probability 1 − ϵ, and selects a random action with probability ϵ to encourage exploration. Over time, ϵ is gradually reduced to favor exploitation of the learned policy. B. DQL-based CDRL Framework We assume that resource management for the tracking of each target is performed by a DQL agent, and all DQL agents share the same copy of the DQN. 1) State: State of agent n at time t, denoted as 
+
+snt , consists of the partial observations of the current 7environment. More specifically, we define the state as follows: 
+
+snt =
+
+[
+
+wncnt−1, {wncnt−1(τ nt−1)}Nn=1 , {τ nt−1}Nn=1 , λ t−1
+
+]
+
+.
+
+(28) The first entry wncnt−1 is the weighted tracking cost of target n in the previous time slot. The next N entries 
+
+{wncnt−1(τ nt−1)}Nn=1 form the list of the weighted tracking costs of all the targets in time slot (t − 1) . In scenarios in which the actual number of targets is fewer than N , the corresponding entries of this list are populated with zeros. In the above, {τ nt−1}Nn=1 represent the dwell times selected at time (t − 1) , and λt−1 denotes the dual variable again in time slot (t − 1) . Overall, the size of the state space is 
+
+2N + 2 .2) Action: DQL agent n needs to select a dwell time for tracking its corresponding target. The action is defined as 
+
+ant = τ nt , where the dwell time τ nt ∈ [0 , T 0] represents the allocated duration (within the revisit interval of length 
+
+T0) dedicated to tracking target n during time slot t. The available time is quantized into L levels and hence the size of the action space is L. Once all the agents make their own decisions, the remaining time allocated to scanning can be computed as 
+
+τs = T0 −
+
+> N
+
+∑
+
+> n=1
+
+τ nt . (29) C. Reward Function To solve the unconstrained optimization problem in (22), the reward is defined as 
+
+rt = Ut({τ nt }Nn=1 ) − λt
+
+( N∑
+
+> n=1
+
+τ nt
+
+T0
+
+− Θmax 
+
+)
+
+(30) where the first term on the right-hand side is the utility function and the second term is the penalty if the budget constraint is violated. The reward is shared among all N
+
+DQL agents to enable cooperation among the agents. In the proposed CDRL framework, the DQN parameters for maximizing the reward function and the value of the dual variable λt are learned simultaneously. The reward function is applied only during the training phase, where we assume the ground truth of the environ-ment is known. This allows the DRL agent to receive well-defined feedback based on the tracking costs, the number of missed targets, and the budget constraint. The reward function serves as a guiding mechanism to optimize decision-making during training. During the testing phase, the trained DRL agent is deployed as a state-to-action mapping function without requiring knowledge of the reward function. Since the agent has already learned an optimal policy, it can make decisions solely based on the observed state informa-tion. This ensures that the proposed framework remains practical for real-world deployment, where ground truth information is not available. D. Workflow of the DQL-based CDRL Framework Algorithm 1 DQL-based CDRL Algorithm  
+
+> 1:
+
+Initialize the DQN parameters Φπ 
+
+> 0
+
+with random values.  
+
+> 2:
+
+Initialize states {sn 
+
+> 0
+
+}Nn=1 as zero vectors and λt as λ0. 
+
+> 3:
+
+for time slot t = 0 , 1, ..., T max do  
+
+> 4:
+
+for each agent n = 1 , 2, ..., N do  
+
+> 5:
+
+Select an action ant based on the current state snt
+
+with the DQN Φπt and ϵ-greedy method.  
+
+> 6:
+
+end for  
+
+> 7:
+
+Compute reward rt according to (30).  
+
+> 8:
+
+for each agent n = 1 , 2, ..., N do  
+
+> 9:
+
+Store the experience ( snt , ant , rt, snt+1 ) to the DQN experience buffer.  
+
+> 10:
+
+Update Φπt to Φπt+1 with experience replay and back-propagation.  
+
+> 11:
+
+end for  
+
+> 12:
+
+λt+1 = max(0 , λ t − α(∑Nn=1 τ nt − T0)) . 
+
+> 13:
+
+end for The proposed DQL-based CDRL algorithm is given in Algorithm 1 above. We simultaneously update the DQN parameters Φπt and the dual variable λt. The DQN is parameterized by Φπt , which consists of the trainable parameters of the neural network. The objective of the proposed CDRL algorithm is to find a solution to the problem in (22). By defining the reward function as in (30), the DRL agent is trained to optimize the discounted reward rt, i.e. 
+
+max 
+
+> π
+> ∞
+
+∑
+
+> m=0
+
+γm
+
+[
+
+Ut+m({τ nt+m}) − λt
+
+( N∑
+
+> n=1
+
+τ nt+m
+
+T0
+
+− Θmax 
+
+)] 
+
+.
+
+(31) We denote the objective function in (31) as L. Then, the dual variable λt is updated by minimizing L over λt,i.e., 
+
+λt+1 = max(0 , λ t − α ▽λt L)= max 
+
+(
+
+0, λ t + α
+
+> ∞
+
+∑
+
+> m=0
+
+γm
+
+( N∑
+
+> n=1
+
+τ nt+m
+
+T0
+
+− Θmax 
+
+)) 
+
+(32) where α is the learning rate of the dual variable. The gradient ▽λt L can be estimated with an additional neural network but we simplify the update of λt instead as 
+
+λt+1 = max 
+
+(
+
+0, λ t + α
+
+( N∑
+
+> n=1
+
+τ nt
+
+T0
+
+− Θmax 
+
+)) 
+
+. (33) The workflow of the DQL-based CDRL framework is depicted in Fig. 1. Intuitively, the dual variable λt
+
+increases when the total time for tracking exceeds the predefined budget, thus increasing the penalty term in the reward function (30). Conversely, the dual variable decreases if the time constraint is not violated. The proposed CDRL framework dynamically constrains the total budget below the budget constraint. 8Fig. 1. CDRL framework with Deep Q-learning 
+
+VI. Constrained Deep Reinforcement Learning Framework with Deep Deterministic Policy Gradient A. Motivation In Section V, we addressed the problem using the DQL algorithm. In this setting, each time DQN is utilized, a decision is made regarding the dwell time for a single tar-get. Consequently, if a single DQN is used, each tracking task sequentially accesses the shared DQN to determine its respective dwell time. Equivalently, as illustrated in Fig. 1, a parallel configuration of DQNs can be utilized to simultaneously determine the dwell times for all targets. To improve the time efficiency and computational complexity of the proposed framework, a single agent is preferred to make decisions for all tracking tasks simultaneously, adopting a centralized control approach. However, implementing centralized control with the DQL algorithm introduces significant challenges. In the DQL-based framework, each target-tracking task requires access to the DQN. This requires either (i) all agents taking turns to sequentially access the same DQN, which leads to increased decision latency, or (ii) each agent maintaining a separate copy of the DQN, which significantly increasing memory and computational overhead. Both approaches are inefficient for real-time radar resource management. Additionally, if a centralized DQL approach is adopted, the action space grows exponentially with the number of targets and the precision of dwell time quantization. Specifically, for N targets and a dwell time range dis-cretized into L levels, the centralized action space has a size of LN , leading to an exponential increase in complexity as L or N grows. These limitations highlight the importance of using centralized control with DDPG, which inherently supports continuous action spaces and allows a single agent to efficiently determine dwell times for all targets in a single forward pass of the neural networks, thereby reducing computational overhead and improving decision speed. B. Deep Deterministic Policy Gradient (DDPG) To avoid the explosive growth in the action space, we consider continuous action spaces and develop a DDPG algorithm for radar resource management. DDPG is an effective reinforcement learning algorithm specifically designed to address problems involving con-tinuous action spaces [32]. The DDPG algorithm employs the actor-critic algorithm and consists of four neural networks: an actor network, a target actor network, a critic network, and a target critic network. The actor network and the target actor network have the same structure and they both take observations as inputs and output deterministic continuous actions. Similarly, the critic network and target critic network have identical structures and they both take the observations and the action selected by the actor network as inputs, and output Q-values to evaluate the selected action. The presence of target networks improves the stability of the learning process. C. DDPG-based CDRL Framework Below, we describe the state and action spaces as well as the reward function of the proposed DDPG agent. We note that there is one DDPG agent deciding the dwell time for all the targets. 1) State: State st consists of the current partial obser-vation of the environment. In particular, we define the state as follows: 
+
+st =
+
+[
+
+{wncnt−1(τ nt−1)}Nn=1 , {τ nt−1}Nn=1 , λ t−1
+
+]
+
+. (34) The state structure is similar to that of the DQL-based framework as described in Section V, except that the first term in the state is removed. The dimension of the state space is 2N + 1 .2) Action and Reward: In DDPG, the dwell times allocated to tracking all targets are determined simulta-neously. Hence, the action is defined as at = {τ nt }Nn=1 ,where τ nt ∈ [0 , T 0]. Consequently, the dimension of the action vector is N . Similarly as before, the remaining time from the budget is allocated to radar scanning, i.e., 
+
+τs = T0 − ∑Nn=1 τ nt .Reward rt is the same as the setting in the DQL-based CDRL framework, and hence is given by (30). D. Workflow of the DDPG-based CDRL Framework Algorithm 2 DDPG-based CDRL Algorithm  
+
+> 1:
+
+Initialize the parameters of the DDPG networks with random values.  
+
+> 2:
+
+Initialize state s0 as zero vectors and dual variable λt
+
+as λ0. 
+
+> 3:
+
+for time slot t = 0 , 1, ..., T max do  
+
+> 4:
+
+Select action at based on the current state st with the actor network in the DDPG algorithm.  
+
+> 5:
+
+Compute reward function rt according to (30).  
+
+> 6:
+
+Store the experience ( st, at, rt, st+1 ) to the DDPG experience replay buffer.  
+
+> 7:
+
+Update neural networks in DDPG with experience replay and back-propagation.  
+
+> 8:
+
+λt+1 = max(0 , λ t − α(∑Nn=1   
+
+> τnt
+> T0
+
+− Θmax )) . 
+
+> 9:
+
+end for 9The DDPG-based CDRL algorithm is presented in Algorithm 2. The primary difference between the DDPG-based framework and the DQL approach is the centralized control of the dwell time allocation with the single DDPG agent. The workflow of the DDPG-based framework can be seen in Fig. 2.  
+
+> Fig. 2. CDRL framework with DDPG
+
+VII. Numerical Results and Analysis A. Experimental Setup                            
+
+> TABLE III Simulation Parameters
+> Simulation Parameters Value Range measurement noise variance σ2
+> r, 0(m2)16 Angle measurement noise variance σ2
+> θ, 0(rad 2)1e-6 Maneuverability noise variance σ2
+> w((m2/s 4))16 Reference distance r0(m)3000 Reference dwell time τ0(s) 1Revisit interval T0(s) 2.5 Tradeoff coefficient β3e4 Dwell Time budget Θmax 0.9 Initial dual variable λ05000 Step size of dual variable α5000
+> TABLE IV DQN Hyperparameters
+
+Hyperparameter Value Learning rate 0.0001 Discount factor 0.9 Batch size 32 Replay buffer size 1e6 Exploration rate 0.1 
+
+> TABLE V DDPG Hyperparameters
+
+Hyperparameter Value Actor learning rate 0.0002 Critic learning rate 0.0002 Discount factor 0.9 Batch size 128 Replay buffer size 1e6 Soft update rate 0.01 1) Hyperparameters: The parameters of the simulation environment, the hyperparameters of the DQL agent and DDPG agent are provided in Tables III, IV and V, respectively. In the DQL agent, the DQN comprises two feedforward layers, each containing 64 neurons, with ReLU as the activation function between the layers. In the DDPG algorithm, there are four networks. The actor network and its target network have identical structures, each with two layers containing 256 and 128 neurons, respectively, and ReLU activation functions between the layers. Similarly, the critic network and its target network share the same structure, consisting of two layers with 100 neurons each, with ReLU as the activation function. 2) Target Spawning Model: In the experiments, the radar system is placed at the origin and it is assumed that a maximum of N = 5 targets can be tracked simultaneously. To enhance environmental diversity and evaluate the proposed framework’s effectiveness under various conditions, we employ the following general target spawning model:  
+
+> •
+
+Every 100 iterations, a new target can join the envi-ronment with probability 0.03. The initial positions and velocities of the targets are generated randomly.  
+
+> •
+
+To further diversify the operational environment, any target present for more than 3000 time slots is removed from the environment.  
+
+> •
+
+It is assumed that the radar is monitoring an area with a radius of 20 km. Targets that move beyond this range are considered to have exited the environment and are no longer tracked by the radar. After training in the environment with the above target spawning model, the DQN-based and DDPG-based agents are tested in a new, unfamiliar environment. In the following experiments, we first consider the scenario in which equal weights are assigned to different targets, indicating uniform attention to all the targets. Subse-quently, we assign varying weights to the targets based on their properties, such as position and direction of movement, showcasing the flexibility of the proposed CDRL framework. B. Numerical Results 1) Case I - Equal Weights: In Case I, equal weights are assigned to tracking different targets. Fig. 3 depicts the trajectories of the targets and Fig. 4 plots the distances of the targets to the radar in the testing environment. The target spawning times and their initial positions and velocities are randomly generated. The targets are randomly generated at locations within the range of 5000m to 15000m from the radar. The magnitude of the velocity falls within the range of 0.5m/s to 2m/s. To maintain diversity in the target population and prevent tracking scenarios from becoming static, targets are automatically removed from the environment after they have existed for over 3000 time steps, regardless of their tracking status. The objective of this work is to find an efficient time allocation strategy for tracking targets present in the 10 -1 -0.5 0 0.5 1 1.5 2 
+
+> x (m) ×10 4
+> -1.5 -1 -0.5 00.5 11.5
+> y (m)
+> ×10 4
+> Target 1
+> Target 2
+> Target 3
+> Target 4
+> Target 5
+> Tracker 1
+> Tracker 2
+> Tracker 3
+> Tracker 4
+> Tracker 5
+> Radar
+
+Fig. 3. Case I: Trajectories of the targets 0 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 
+
+Time(s) 
+
+> 02000 4000 6000 8000 10000 12000 14000 16000 18000
+> Target Distance to Radar(m)
+> Target 1
+> Target 2
+> Target 3
+> Target 4
+> Target 5
+
+Fig. 4. Case I: Targets’ Distances to the Radar 0 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 
+
+> Time (s)
+> 00.5 11.5
+> Dwell Time Allocations
+> Target1
+> Target2
+> Target3
+> Target4
+> Target5
+> Total Dwell Time
+
+Fig. 5. Case I: Dwell time allocation strategy learned by the CDRL framework with DQL agents 
+
+environment, and to utilize the remaining time to search for and detect newly emerging targets. The strategies learned by the CDRL framework with DQL and DDPG are presented in Fig. 5 and Fig. 6, respectively. Based on these simulation results, we have the following insights regarding the radar resource management strategies learned by the DRL agents: 
+
+• In tracking targets that are farther from the radar, more dwell time is allocated. For instance, Target 1 is the farthest from the radar during the time interval 0 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 
+
+> Time (s)
+> 00.5 11.5
+> Dwell Time Allocations
+> Target1
+> Target2
+> Target3
+> Target4
+> Target5
+> Total Dwell Time
+
+Fig. 6. Case I: Dwell time allocation strategy learned by the CDRL framework with the DDPG agent 
+
+[2000, 5000] and Target 4 is the farthest during [7000, 9000]. During these intevals, radar allocates the most dwell time to tracking the corresponding farthest targets. 
+
+• DRL-based decision making at the radar tends to allocate more time to scanning when the demand for tracking tasks is low. This is evident during time intervals [0, 2000] and [9000, 9500], in which only one target is present in the environment. During these intervals, the total tracking time budget determined by the learning agent is kept low, allowing more time to be allocated to the scanning phase. We have tested the DQL and DDPG based agents in the same environment with a duration of 10000 time steps and evaluated the performance in terms of the utility function (Ut({τ nt }Nn=1 )), tracking costs ( ∑Nn=1 cnt ), and scanning performance (quantified via the number of missed targets 
+
+N miss and average track initiation time Tinit ) as shown in Figs. 7-8 and Table VI. In these results, we consider the following benchmarks: 
+
+• Equal allocation (EA): When there exist tracked targets, ( 1−δ) fraction of the time budget is allocated to the scanning task, while the remaining time δT 0
+
+is evenly distributed among the tracked targets. The range of δ is δ ∈ [0 , 1] . If there is no tracked target, the entire available time will be allocated to the scanning task. 
+
+• Distance-based allocation (DA): The radar allocates (1 − δ) fraction of the time to the scanning task and 
+
+δ fraction of the time to the tracking tasks. When multiple targets are being tracked in the environ-ment, the time allocated to tracking each target is proportional to its estimated distance to the radar (i.e., δT 0 is divided proportionally according to the estimated distances). Hence, targets farther away will be dedicated more dwell time compared to nearby targets. If there is a single target, the entire δT 0 is dedicated to the tracking of this target. If there is no target being tracked, all the available time T0 will be allocated to scanning. 
+
+• Optimization-based allocation (OA): The work in [8] 11 proposed an optimization-based approach for dwell time allocation. Under the assumptions that the targets are known already and Kalman filter is in steady state, an expression is obtained for the time-invariant Kalman filter error covariance matrix in terms of measurement and maneuverability noise statistics. Then, optimal dwell time allocation across multiple tracking tasks is determined in this time-invariant environment using Lagrangian relaxation through an iterative procedure. More specifically, the algorithm minimizes tracking costs while adhering a total budget constraint of δT 0, with the remain-ing budget allocated to scanning. For each target, the approach decomposes the original problem and solves a sub-optimization problem based on measure-ment noise and maneuverability statistics and current tracking state to determine the optimal dwell time. The Lagrange multiplier is iteratively adjusted using the subgradient method until the budget constraint is satisfied. It is important to note that in time-varying scenarios with mobile targets, this optimization pro-cedure needs to be repeated periodically to update dwell time allocation as conditions change. These three benchmarks are selected to provide acomprehensive evaluation of the proposed CDRL frame-work from different perspectives. Equal Allocation (EA) represents a simple baseline that requires no environ-mental knowledge or computation, serving as a lower bound for performance. Distance-based Allocation (DA) incorporates a single heuristic factor (target distance) that is known to influence tracking difficulty, allowing us to assess whether simple heuristics can achieve comparable performance to learning-based approaches. Optimization-based Allocation (OA) represents a principled approach that solves the tracking time allocation problem using an optimization-based approach at each time step, providing an upper bound on what can be achieved with full en-vironmental knowledge and computational resources. To-gether, these benchmarks span the spectrum from simple heuristics to optimization-based methods, enabling us to evaluate both the necessity of learning-based approaches and the efficiency gains achieved by the proposed CDRL framework. It is important to note that the benchmark methods differ in their ability to incorporate environmental knowl-edge. The decision-making of learning-based methods (CDRL-DQL and CDRL-DDPG) and the optimization-based allocation (OA) incorporates the real-time feedback from the environment, and they can adapt to a changing environment without prior knowledge of the changes. In contrast, the heuristic baselines—equal allocation (EA) and distance-based allocation (DA)—do not have access to such information. EA distributes resources uniformly regardless of context, while DA allocates time purely based on target distance from the radar. Neither approach can leverage knowledge about the changes in the environment. We first set δ = Θ max for fair comparisons with the CDRL framework, ensuring equivalent resource allocation 0 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000             
+
+> Time (s)
+> -6 -5 -4 -3 -2 -1 0
+> Utility Function
+> ×10 4
+> CDRL-DDPG
+> CDRL-DQL
+> EA
+> DA
+> OA
+> Fig. 7. Case I: Comparison of utility function values 01000 2000 3000 4000 5000 6000 7000 8000 9000 10000
+> Time (s)
+> 0123456
+> Tracking Costs (m 2)
+> ×10 4
+> CDRL-DDPG
+> CDRL-DQL
+> EA
+> DA
+> OA
+> Fig. 8. Case I: Comparison of tracking costs
+
+constraints across all methods. In Figs. 7 and 8, we observe that the two DRL-based resource management strategies (utilizing DQL and DDPG) achieve significantly higher utility function values and incur much smaller tracking costs compared to the EA scheme. This is expected since EA is highly suboptimal in the considered dynamic environment in which the number of targets and their distances to the radar vary over time. The distance-based time allocation strategy exhibits lower performance compared to the learning-based algorithms, highlighting the necessity of a learning-based approach for effective decision-making in highly dynamic environments. We also notice that optimization, DQL and DDPG based resource management policies attain similar performances. This demonstrates the efficacy of learning-based policies since optimization-based results are obtained by solving an opti-mization problem at each time step. Specifically, within an episode of 10000 time steps, 10000 optimization problems are solved. On the other hand, once the RL agents are well trained, they make decisions by executing the learned policy Here, we further note that DDPG offers significant advantages in neural network efficiency. Different from DQL, the DDPG framework supports continuous action spaces, avoids the potential exponential growth in the number of actions, and makes decisions on all dwell times 12 simultaneously. 
+
+> TABLE VI Case I: Comparison of Track Initiation Time
+
+Frameworks Average Track Initiation Time Tinit 
+
+CDRL-DDPG 6s CDRL-DQL 7.83s EA 10.50s DA 14.67s OA 20.33s Scanning performance comparisons are presented in Table VI. We measure performance via the average track initiation time Tinit , which represents the average time required for the radar to establish a target’s track after it appears in the scene. In our model, track initiation occurs when a target is detected in at least M out of N
+
+consecutive scans, with numerical results using a 3-of-4
+
+track initiation model. Since successful detection requires repeated confirmation, track initiation time Tinit may span several seconds. In the table, we observe that the CDRL-DDPG achieves the lowest average Tinit among all schemes, with CDRL-DQL achieving the second-best scanning performance. The benchmark algorithms (EA, DA, and OA) fail to achieve comparable scanning perfor-mance because they allocate a fixed (1 − δ)T0 amount of time for scanning when tracked targets are present. The comparison in Table VI demonstrates the importance of dynamic time allocation between scanning and tracking tasks. We further evaluate the benchmark algorithms (EA, DA, and OA) under varying scanning time allocation portions, δ, ranging from 0.1 to 0.9. The performance metrics, averaged across multiple episodes, are presented in Fig. 9. The goal is to show how different scanning time allocations affect the overall performance of each benchmark algorithm. From Fig. 9, we have the following conclusions:  
+
+> •
+
+As the fraction of time δ allocated to scanning increases, benchmark algorithms expectedly exhibit improved scanning performance but degraded track-ing performance. The overall utility function tends to decrease with increasing δ as seen in Fig. 9(a).  
+
+> •
+
+As δ approaches 0.1, benchmarks achieve utility function values and tracking costs comparable to those of the CDRL framework, as shown in Fig. 9a and Fig. 9b. However, this comes at the cost of significantly increased track initiation time Tinit ,as evident in Fig. 9c. This observation demonstrates the importance of dynamic time allocation between tracking and scanning tasks, a capability provided by the CDRL framework.  
+
+> •
+
+OA slightly outperforms CDRL when δ = 0 .1 in terms of the utility function and tracking performance as shown in Fig. 9a and Fig. 9b. Another advantage of the OA method is that it does not require prior training, unlike the CDRL framework. This also makes OA appealing in scenarios where training data is scarce or offline learning is impractical. However, OA has the following weaknesses: (1) As mentioned previously, OA fails to efficiently allocate time between tracking and scanning. In particular, OA only addresses tracking time allo-cation. The metric of the number of undetected targets N miss t (that we employ in training in the utility function and reward formulation, assum-ing the knowledge of ground truth) cannot be utilized in an online fashion in the optimization since this information is not available in test time. (2) OA requires full knowledge of the environment parameters for decision-making, while the pro-posed CDRL framework only requires the infor-mation in the agent state given in (28). (3) OA exhibits significantly higher computational complexity compared to the proposed CDRL framework. As also noted before, an optimization problem is solved iteratively at each time step in the OA method. With identical hardware configurations, CDRL requires 1.9 milliseconds for each decision-making process while OA takes almost three times more with 5.4 milliseconds per decision. 2) Case II - Varying Weights: In this section, we assume that the different tracked targets in general have different weights that can vary over time. The weights {wnt }Nn=1 can depend on various properties of the targets, such as their positions or velocities. For instance, if we need to protect certain assets in the area, we should prioritize tracking targets that move closer to these assets. Specifically, we assume that there is an asset located at (2500 m, −10000 m) as shown in Fig. 10. The trajectories of the targets remain the same as in Case I. When targets move too close to either the radar or the asset, it is crucial to pay greater attention to tracking these targets to ensure more accurate estimations. To achieve this objective, we design the weights {wnt }Nn=1 as 
+
+wnt =
+
+{
+
+min {10 , 4 + 10000 /d nt }, if dnt ≤ 10000 ,
+
+1 otherwise (35) where dnt = min {dnr,t , d na,t }. Here, dnr,t and dna,t represent the current estimated distances of target n to the radar and the asset, respectively. We note that these distances are computed based on the current estimated locations of the target. The smaller of these two distances is used to determine the weight assigned to the target. By designing the weights according to (35), we place more emphasis on tracking the targets that move too close to either the radar or the asset. Once a target enters such a high-risk zone as shown in Fig. 10, the weight assigned to this target starts increasing as the target approaches further. The values of the weights are plotted in Fig. 11. We observe that the weights assigned to Target 1 and Target 2 increase since they approach the radar system. The weight assigned to Target 3 does 13 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 
+
+δ
+
+> -14 -12 -10 -8 -6 -4 -2 0
+> Average Utility Function
+> ×10 4
+> CDRL-DDPG
+> CDRL-DQL
+> EA
+> DA
+> OA
+
+(a) Utility Function 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9  
+
+> δ
+> 0246810 12 14
+> Average Tracking Costs (m 2)
+> ×10 4
+> CDRL-DDPG
+> CDRL-DQL
+> EA
+> DA
+> OA
+
+(b) Tracking Costs 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 
+
+δ 
+
+> 0510 15 20 25 30
+> Average Track Initiation Time (s)  CDRL-DDPG
+> CDRL-DQL
+> EA
+> DA
+> OA
+
+(c) Track Initiation Time Fig. 9. Performance comparison between CDRL and benchmark algorithms as δ varies -2 -1.5 -1 -0.5 0 0.5 1 1.5 2 2.5  
+
+> x (m) ×10 4
+> -2 -1.5 -1 -0.5 00.5 11.5 2
+> y (m)
+> ×10 4
+> Target 1
+> Target 2
+> Target 3
+> Target 4
+> Target 5
+> Tracker 1
+> Tracker 2
+> Tracker 3
+> Tracker 4
+> Tracker 5
+> Radar
+> Asset
+
+Fig. 10. Case II: Trajectories of the targets 
+
+not change significantly since its distance to the radar remains relatively constant, but it still maintains a certain weight because it moves within the high-risk zone near the radar. The weight assigned to Target 5 increases because it spawns within the high-risk zone around the asset and continues to approach it over time. 0 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 
+
+Time (s) 
+
+> 012345678910
+> Weights
+> Target 1
+> Target 2
+> Target 3
+> Target 4
+> Target 5
+
+Fig. 11. Case II: Weights assigned in tracking targets 
+
+In Case II, the time allocation strategy learned by the DDPG-based CDRL framework is demonstrated in Fig. 12. Compared to Fig. 6, we have the following observations: 0 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 
+
+Time (s) 
+
+> 00.5 11.5
+> Dwell Time Allocations
+> Target1
+> Target2
+> Target3
+> Target4
+> Target5
+> Total Dwell Time
+
+Fig. 12. Case II: Dwell time allocation strategy learned by the CDRL framework with the DDPG agent 
+
+• The radar system allocates more time to tracking Target 2 during the interval [0, 2000], to tracking Target 3 during the interval [2000, 4000], and to tracking Target 5 during the interval [6000, 9000] because the weights assigned to these targets increase during the corresponding intervals. Hence, the agent effectively learns to allocate more resources to targets that require higher levels of attention. 
+
+• The increase in weights leads to more time being allocated to tracking the targets, thereby reducing the time available for the scanning task, which is evident during the interval [0, 2000] and [6000, 7000]. 3) Case III - Maneuvering Targets and Beam Misalign-ment: In Case II, the importance of tracking a target is addressed by the weight assigned to the target. In this section, we consider other scenarios in which greater attention is required to tracking a specific target, e.g., due to its high maneuverability. Heretofore, we have not accounted for potential beam misalignment between the radar and the targets. In practice, the radar directs a tracking beam toward the estimated location of the target. If the target is highly maneuvering, misalignment can occur between the angular direction of the radar beam and the true azimuth angle of the target, and such beam misalignment leads to a 14 reduction in the received SNR. To address this, we modify the received SNR in (5) to SNR t(τt, r t) = SNR 0
+
+( τt
+
+τ0
+
+) ( rt
+
+r0
+
+)−4
+
+Lbm (36) where the beam misalignment loss Lbm is expressed as 
+
+Lbm =
+
+{
+
+cos i(|Θ − ˆΘ|) if |Θ − ˆΘ| ≤ π
+
+> 2
+
+0 if |Θ − ˆΘ| > π 
+
+> 2
+
+. . (37) Above, the antenna pattern of the radar beam is charac-terized by the exponent term i. In particular, a larger i
+
+corresponds to a narrower beam pattern. In the numerical results, we set i = 2 . Θ and ˆΘ denote the true azimuth angle and estimated azimuth angle of the target, respec-tively. As also noted above, highly maneuverable targets will experience greater beam misalignment losses, resulting in a lower received SNR, and consequently a higher tracking cost. The experiments in this section are designed to test whether the proposed framework learns to allocate more dwell time for tracking highly maneuverable targets. We assume that three targets are present in the envi-ronment. Target 3 enters the environment at t = 2000 s, with an initial location at (8000m, 5000m) and a velocity of (1m/s, -0.2m/s). Target 5 enters the environment at 
+
+t = 7000 s, with the initial location at (-6000m, -4000m) and velocity of (0.8m/s, 0m/s). Target 4 is designed to follow a circular trajectory centered around the radar system, moving along this curved path back and forth at a constant angular velocity. The trajectories of the targets are shown in Fig. 13, and the distances to the radar of the targets are shown in Fig. 14. Due to its circular trajectory, Target 4 maintains a constant distance from the radar. -1 -0.5 0 0.5 1 1.5 2 
+
+> x (m) ×10 4
+> -6000 -4000 -2000 02000 4000 6000
+> y (m)
+> Target 3
+> Target 4
+> Target 5
+> Tracker 1
+> Tracker 2
+> Radar
+
+Fig. 13. Case III: Trajectories of the targets 
+
+We tested the proposed CDRL-DDPG framework in two scenarios: a slower Target 4 with an angular velocity of ω = 0.005 rad/s and a faster Target 4 with an angular velocity of ω = 0 .5 rad/s. The time allocation strategies learned in these two scenarios are depicted in Fig. 15 and Fig. 16, respectively. Fig. 15 displays the time allocation strategy learned in the presence of the faster Target 4. Compared to the strategy with the slower 0 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 
+
+> Time(s)
+> 02000 4000 6000 8000 10000 12000 14000 16000
+> Target Distance to Radar(m)  Target 3
+> Target 4
+> Target 5
+
+Fig. 14. Case III: Targets’ distances to the radar 
+
+Target 4 as shown in Fig. 16, the proposed framework learns to allocate more time for tracking Target 4 with the higher angular velocity. This is evident during the intervals [0, 2000] and [5000, 7000]. Therefore, we conclude that the proposed CDRL framework can recognize the maneuverability of the target and adapt its time allocation strategy accordingly in different scenarios. The oscillating pattern in dwell time allocation for Target 4 in Fig. 16 reflects the periodic variations in tracking difficulty as the target moves along its circular trajectory, resulting in varying angular positions and, consequently, changing beam pointing requirements and associated beam misalignment effects. The faster target in Fig. 15 exhibits a flatter profile due to the stronger moving average smoothing effect on higher-frequency allocation adjustments. 0 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 
+
+> Time (s)
+> 00.5 11.5
+> Dwell Time Allocations
+> Target3
+> Target4
+> Target5
+> Total Dwell Time
+> X: 989 Y: 0.4445
+
+Fig. 15. Case III: Dwell time allocation strategy with faster Target 4 ( ω = 0 .5 rad/s) 
+
+4) Case IV - Unexpected Environmental Changes: In Case IV, it is assumed that multiple high-interference regions are randomly located on the map, where the measurement noise variance for targets can significantly increase due to factors such as poor weather conditions, environmental clutter, or electromagnetic interference. For this case study, we define two high-interference re-gions where the measurement noise significantly increases 15 0 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 
+
+Time (s) 
+
+> 00.5 11.5
+> Dwell Time Allocations
+> Target3
+> Target4
+> Target5
+> Total Dwell Time
+> X: 735 Y: 0.274
+
+Fig. 16. Case III: Dwell Time allocation strategy with slower Target 4 ( ω = 0 .005 rad/s) 
+
+Fig. 17. Case IV: Trajectories of the targets 
+
+due to environmental degradation such as clutter or inter-ference, as shown in Fig. 17. Specifically, the first high-interference region is defined within x ∈ [0 m, 10000 m]
+
+and y ∈ [−10000 m, 0 m], where the measurement noise variance is increased by a factor of 7. The second high-interference region spans x ∈ [−5000 m, 0 m] and y ∈
+
+[0 m, 10000 m], where the noise variance is increased by a factor of 10. The CDRL agent is not directly informed of the exis-tence of these regions but is able to sense environmental changes through rising tracking costs. The adaptive time allocation strategy learned by the CDRL agent in response to this dynamic environment is illustrated in Fig. 18. The red and yellow shaded regions highlight time periods when Target 2 and Target 3 are within high-interference regions 1 and 2, respectively. As the measurement noise variance increases, the radar receives noisier observations, resulting in higher tracking costs as estimated by the EKF. Compared to Fig. 6 in Case I, where no high-interference region is present, the CDRL agent clearly detects the degradation in sensing quality and responds by allocating more tracking time to the affected targets during the highlighted time periods (red shaded region for Target 2, yellow shaded region for Target 3). We summarize the performance of the proposed CDRL Time (s)           
+
+> 01000 2000 3000 4000 5000 6000 7000 8000 9000 10000
+> Dwell Time Allocations
+> 00.5 11.5
+> Target1 Target2 Target3 Target4 Target5 Total Dwell Time
+> Target 2 in High-interference Region 1 Target 3 in High-interference Region 2
+
+Fig. 18. Case IV: Dwell time allocation strategy with high-interference region 
+
+frameworks as well as the EA, DA, and OA approaches in terms of the utility function in Table VII. Our analysis yields the following observations:  
+
+> •
+
+OA consistently achieves near-optimal performance across all three cases. However, as noted in Case I, OA exhibits significant limitations: inability to bal-ance time allocation between scanning and tracking, requirement of complete environmental knowledge, and high computational complexity.  
+
+> •
+
+CDRL-DDPG and CDRL-DQL demonstrate compa-rable performance in all test cases. CDRL-DDPG offers the additional advantage of preventing action space explosion by employing continuous action via the DDPG algorithm.  
+
+> •
+
+EA consistently delivers the poorest performance across all scenarios. While DA performs comparably in Cases I and III, its utility function value is reduced in Cases II and IV. This suggests that although DA can offer reasonable performance in scenarios where distance is a reliable proxy for tracking importance, it lacks the adaptability to handle more complex conditions, such as varying tracking priorities or environmental changes. VIII. Conclusions In this paper, we have proposed a CDRL framework to address the time allocation problem for a cognitive radar system operating in a track-while-scan mode. The radar system performs two tasks: scanning the environment for potential targets and tracking previously detected targets. A utility function was proposed to effectively balance the trade-off between scanning and tracking targets located at different geographic positions relative to the radar. We de-tailed the tracking and scanning model for the considered problem and formulated the time allocation problem as a constrained sequential optimization problem. We then proposed a CDRL framework where the parameters of the neural networks and the dual variable are learned simultaneously. We designed both DQL and DDPG based DRL agents for decision-making. 16 Case I Case II Case III Case IV CDRL-DDPG −1.90 × 10 4 −3.54 × 10 4 −8.14 × 10 3 −5.11 × 10 4
+
+CDRL-DQL −1.96 × 10 4 −3.59 × 10 4 −7.91 × 10 3 −5.06 × 10 4
+
+EA −2.42 × 10 4 −4.10 × 10 4 −13 .7 × 10 3 −5.57 × 10 4
+
+DA −1.94 × 10 4 −3.90 × 10 4 −7.96 × 10 3 −5.59 × 10 4
+
+OA −1.82 × 10 4 −3.59 × 10 4 −6.72 × 10 3 −5.05 × 10 4
+
+TABLE VII Comparison of Achieved Utility Function Values 
+
+Via numerical results, we demonstrated the effective-ness of the proposed framework in jointly optimizing the scanning and tracking performance. In particular, by maximizing the utility function, the DRL agents intelligently allocate more time to tracking targets with higher tracking costs while ensuring sufficient time for the scanning task, all within budget constraints. With uniform tracking weights, the agents learn to allocate more resources to tracking targets that are farther away. Our numerical results show that the proposed CDRL frame-work consistently outperforms fixed-allocation or heuristic strategies such as Equal Allocation (EA) and Distance-based Allocation (DA) in both scanning and tracking performance. Unlike fixed heuristics, the learned policy adapts to real-time factors such as target location, motion, and priority, resulting in improved responsiveness and bet-ter use of limited resources. Although OA (optimization-based allocation) can provide strong performance under ideal conditions, it requires full environment knowledge, incurs higher computational complexity, and addresses only tracking time allocation. CDRL achieves comparable performance with significantly more flexibility and lower overhead. This work can be extended in several promising di-rections. First, the framework can be enhanced to opti-mize multiple radar parameters simultaneously, including waveform selection, beamform design, and transmit power allocation. Second, the system can be evaluated in more realistic environments that incorporate challenging factors like clutter and jamming, or integrated into emerging paradigms such as integrated sensing and communication (ISAC) in next-generation wireless systems. Third, while this work employs a centralized DDPG agent to avoid exponential growth in the action space, transitioning to a distributed multi-agent DRL architecture could offer further advantages. If the action space complexity can be effectively managed, a distributed approach would not only better protect user privacy but also enable more autonomous decision-making by individual agents—a crit-ical capability for operating in challenging environments with larger numbers of targets. Fourth, the current work assumes that data association can reliably separate mea-surements from different targets. Future research should investigate scenarios where targets are in close proximity or their tracks cross, requiring more sophisticated data association methods such as Joint Probabilistic Data Association (JPDA) or Multiple Hypothesis Tracking (MHT) integrated with the CDRL framework to handle measurement ambiguity and prevent track swapping. References 
+
+[1] A. Charlish, F. Hoffmann, C. Degen, and I. Schlangen, “The development from adaptive to cognitive radar resource man-agement,” IEEE Aerospace and Electronic Systems Magazine, vol. 35, no. 6, pp. 8–19, 2020. [2] A. Orman, C. N. Potts, A. Shahani, and A. Moore, “Scheduling for a multifunction phased array radar system,” European Journal of operational research, vol. 90, no. 1, pp. 13–25, 1996. [3] J. Butler, A. Moore, and H. Griffiths, “Resource management for a rotating multi-function radar,” in Radar 97 (Conf. Publ. No. 449). IET, 1997, pp. 568–572. [4] A. Deligiannis, A. Panoui, S. Lambotharan, and J. A. Cham-bers, “Game-theoretic power allocation and the nash equilib-rium analysis for a multistatic mimo radar network,” IEEE Transactions on Signal Processing, vol. 65, no. 24, pp. 6397– 6408, 2017. [5] F. Barbaresco, J. Deltour, G. Desodt, B. Durand, T. Guenais, and C. Labreuche, “Intelligent m3r radar time resources man-agement: Advanced cognition, agility & autonomy capabilities,” in 2009 International Radar Conference ”Surveillance for a Safer World” (RADAR 2009), 2009, pp. 1–6. [6] X. Zhang, C. Shi, and J. Zhou, “Joint power and time allo-cation algorithm in multi-radar system for cooperative target detection,” in 2024 Photonics & Electromagnetics Research Symposium (PIERS), 2024, pp. 1–9. [7] M. Byrne, K. White, and J. Williams, “Scheduling multifunction radar for search and tracking,” in 2015 18th International Conference on Information Fusion (Fusion), 2015, pp. 945–952. [8] M. I. Schöpe, H. Driessen, and A. Yarovoy, “Optimal balancing of multi-function radar budget for multi-target tracking using lagrangian relaxation,” in 2019 22th International Conference on Information Fusion (FUSION). IEEE, 2019, pp. 1–8. [9] M. I. Schöpe, H. Driessen, and A. Yarovoy, “Optimal threat-based radar resource management for multitarget joint tracking and classification,” Journal of Advances in Information Fusion, vol. 17, no. 1, p. 46, 2022. [10] M. G. Bellemare, Y. Naddaf, J. Veness, and M. Bowling, “The arcade learning environment: An evaluation platform for general agents,” CoRR, vol. abs/1207.4708, 2012. [Online]. Available: http://arxiv.org/abs/1207.4708 [11] C. E. Thornton, M. A. Kozy, R. M. Buehrer, A. F. Martone, and K. D. Sherbondy, “Deep reinforcement learning control for radar detection and tracking in congested spectral environ-ments,” IEEE Transactions on Cognitive Communications and Networking, vol. 6, no. 4, pp. 1335–1349, 2020. [12] M. Stephan, L. Servadei, J. Arjona-Medina, A. Santra, R. Wille, and G. Fischer, “Scene-adaptive radar tracking with deep reinforcement learning,” Machine Learning with Applications, vol. 8, p. 100284, 2022. [13] S. Durst and S. Brüggenwirth, “Quality of service based radar resource management using deep reinforcement learning,” in 2021 IEEE Radar Conference (RadarConf21). IEEE, 2021, pp. 1–6. [14] E. Selvi, R. M. Buehrer, A. Martone, and K. Sherbondy, “Re-inforcement learning for adaptable bandwidth tracking radars,” IEEE Transactions on Aerospace Electronic Systems, vol. 56, no. 5, pp. 3904–3921, 2020. [15] F. Meng, K. Tian, and C. Wu, “Deep reinforcement learning-based radar network target assignment,” IEEE Sensors Journal, vol. 21, no. 14, pp. 16 315–16 327, 2021. 
+
+17 [16] C. Tessler, D. J. Mankowitz, and S. Mannor, “Reward con-strained policy optimization,” arXiv preprint arXiv:1805.11074, 2018. [17] J. Schulman, S. Levine, P. Abbeel, M. Jordan, and P. Moritz, “Trust region policy optimization,” in International Conference on Machine Learning. PMLR, 2015, pp. 1889–1897. [18] T.-H. Pham, G. De Magistris, and R. Tachibana, “Optlayer-practical constrained optimization for deep reinforcement learn-ing in the real world,” in 2018 IEEE International Conference on Robotics and Automation (ICRA). IEEE, 2018, pp. 6236– 6243. [19] H. Le, C. Voloshin, and Y. Yue, “Batch policy learning under constraints,” in International Conference on Machine Learning. PMLR, 2019, pp. 3703–3712. [20] F. Fioretto, T. Mak, F. Baldo, M. Lombardi, and P. Van Hen-tenryck, “A Lagrangian dual framework for deep neural net-works with constraints,” arXiv preprint arXiv:2001.09394, 2020. [21] S. Khairy, P. Balaprakash, L. X. Cai, and Y. Cheng, “Con-strained deep reinforcement learning for energy sustainable multi-UAV based random access IoT networks with NOMA,” IEEE Journal on Selected Areas in Communications, vol. 39, no. 4, pp. 1101–1115, 2020. [22] M. Eisen, C. Zhang, L. F. Chamon, D. D. Lee, and A. Ribeiro, “Learning optimal resource allocations in wireless systems,” IEEE Transactions on Signal Processing, vol. 67, no. 10, pp. 2775–2790, 2019. [23] Z. Lu, M. C. Gursoy, C. K. Mohan, and P. K. Varshney, “Learning-based resource management in integrated sensing and communication systems,” in IEEE INFOCOM 2024 -IEEE Conference on Computer Communications Workshops (INFOCOM WKSHPS), 2024, pp. 1–6. [24] Z. Lu and M. C. Gursoy, “Resource allocation for multi-target radar tracking via constrained deep reinforcement learning,” IEEE Transactions on Cognitive Communications and Network-ing, vol. 9, no. 6, pp. 1677–1690, 2023. [25] Z. Lu, M. C. Gursoy, C. K. Mohan, and P. K. Varshney, “Learning-based cognitive radar resource management for scan-ning and multi-target tracking,” in ICC 2024 - IEEE Interna-tional Conference on Communications, 2024, pp. 2785–2790. [26] M. Schöpe, H. Driessen, and A. Yarovoy, “A constrained POMDP formulation and algorithmic solution for radar re-source management in multi-target tracking,” ISIF Journal of Advances in Information Fusion, vol. 16, no. 1, p. 31, 2021. [27] W. Koch, “Adaptive parameter control for phased-array track-ing,” in Signal and Data Processing of Small Targets 1999, vol. 3809. SPIE, 1999, pp. 444–455. [28] H. Meikle, Modern Radar Systems. Artech House, 2008. [29] G. Welch, G. Bishop et al., “An Introduction to the Kalman Filter,” 1995. [30] D. Shnidman, “Determination of required snr values [radar detection],” IEEE Transactions on Aerospace and Electronic Systems, vol. 38, no. 3, pp. 1059–1064, 2002. [31] E. Altman, Constrained Markov Decision Processes. CRC Press, 1999, vol. 7. [32] T. P. Lillicrap, J. J. Hunt, A. Pritzel, N. Heess, T. Erez, Y. Tassa, D. Silver, and D. Wierstra, “Continuous control with deep reinforcement learning,” arXiv preprint arXiv:1509.02971, 2015. 
+
+18

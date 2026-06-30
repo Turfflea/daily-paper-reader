@@ -1,0 +1,1456 @@
+Title: SURGELLM: Rethinking Multi-Task Evaluation through Task-Aware Feature Gating with Class-Balanced Normalization
+
+URL Source: https://arxiv.org/pdf/2606.24259v1
+
+Published Time: Wed, 24 Jun 2026 00:39:25 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# SURG ELLM: Rethinking Multi-Task Evaluation through Task-Aware Feature Gating with Class-Balanced Normalization 
+
+Noor Islam S. Mohammad 1* and Ulu˘ g Bayazıt 2†
+
+Dept. of Computer Science, Istanbul Technical University 
+
+{islam23, ulugbayazit}@itu.edu.tr 
+
+Abstract 
+
+Fine-tuned encoders deployed across hetero-geneous NLP tasks face three compound-ing problems: mismatched inductive biases, class-imbalance corruption of feature statis-tics, and no mechanism to condition atten-tion on external lexical knowledge. We in-troduce SURG ELLM , a unified transformer framework that addresses each with a dedicated lightweight module: a surgical feature gate 
+
+(learned per-dimension sigmoid over curated lexical indicators and [CLS] ; provably degen-erates to identity when features are uninforma-tive), task-conditioned prefix tokens (quantized feature values and task identity prepended to every input), and Instance-Weighted Normaliza-tion (IWN; removes class-prior bias from gate statistics). We prove an excess-risk bound link-ing gate benefit to surgical feature alignment .Across four tasks, SST-2, multi-hop retrieval, LLM-prompt attribution, and authorship de-tection, covering 17,830 examples and eleven model variants over three seeds, the IWN vari-ant achieves macro-F1 0.940 (+0 .036 over the strongest non-IWN baseline; +0 .130 on author-ship detection). A random-vocabulary control (−0.028 avg. F1) confirms gains are lexical, not parametric. Code, vocabularies, and a 99 .5% -recovery auto-extraction recipe are released. 
+
+1 Introduction 
+
+Pre-trained encoders fine-tuned per task incur real costs: parameter duplication, no amortized inference, and no shared linguistic structure. Multi-task learning (Caru-ana, 1997; Liu et al., 2019a; Raffel et al., 2020) ad-dresses this in principle, but structurally heterogeneous tasks—differing in vocabulary, label space, and regis-ter—interfere destructively (Wu et al., 2020; Crawshaw, 2020; Fifty et al., 2021) in ways that near-isotropic benchmarks like GLUE (Wang et al., 2018) do not ex-pose. We study the hard case: a single encoder handling (a) movie-review sentiment, (b) multi-hop retrieval QA, (c) LLM-prompt attribution, and (d) human/LLM au-thorship—tasks sharing a backbone but drawing on 
+
+> *Corresponding author.
+> †Supervising author.
+
+largely disjoint surface signals. Two observations mo-tivate explicit feature injection beyond end-to-end fine-tuning. First, stylometric surface statistics remain dis-criminative even after fine-tuning (Fabien et al., 2020; Potthast et al., 2017), suggesting the encoder does not always exploit them optimally. Second, sequence truncation destroys global statis-tics (pronoun rates, marker densities) that cannot be recovered from a partial view (Ding et al., 2020). We address both with a surgical vocabulary , ten curated lexical indicator groups yielding a 16-dimensional fea-ture vector s ∈ R16 computed on the full untruncated text—fused with the [CLS] representation via a learned per-dimension sigmoid gate and simultaneously injected as task-conditioned prefix tokens. Global standardiza-tion s is contaminated by class prior under severe skew (our authorship corpus: 9.3:1 ), causing the gate to learn a sub-optimal fusion. Instance-Weighted Normaliza-tion (IWN) replaces global with class-balanced per-dimension statistics at training time, with no test-time labels required, yielding +0 .130 an absolute F1 on au-thorship detection, the largest single gain in our study. 
+
+Contributions. Framework (§3): a unified multi-task encoder with per-dimension feature gates, task-conditioned prefix tokens, and IWN; plug-compatible with any HuggingFace encoder. Theory (§A): excess-risk bound (Theorem 1) linking gate benefit to surgical feature alignment ρk; degeneracy result (Proposition 2) proving the gate is safe when features are uninforma-tive. Empirics (§6–7): eleven variants across four en-coder backbones and T5-base over three seeds; IWN achieves an aggregate macro-F1 of 0.940 (+0 .036 over the strongest non-IWN baseline); random-vocabulary control ( −0.028 avg. F1) confirms gains are lexical, not parametric. Auto-extraction (Appendix E): Log-odds plus embedding clustering recovers 99 .5% manual cu-ration performance, enabling transfer to new domains. 
+
+2 Related Work 
+
+Multi-task and feature-augmented Transformers. 
+
+MT-DNN (Liu et al., 2019a), Muppet (Aghajanyan et al., 2021), T5 (Raffel et al., 2020), and mixture-of-experts models (Shazeer et al., 2017; Fedus et al., 2022) all assume near-homogeneous task structure. Injecting handcrafted features into neural encoders (Fabien et al., 2020; Potthast et al., 2017) and shallow-feature scalar gating (Srivastava et al., 2015; Gormley et al., 2015) 
+
+> arXiv:2606.24259v1 [cs.CL] 23 Jun 2026
+
+are the closest precedents. SURG ELLM differs on three axes: (i) structurally heterogeneous tasks; (ii) a 
+
+per-dimension, instance-conditioned cross-modal gate (versus scalar intra-modal gating in highway networks and GLUs (Dauphin et al., 2017)); (iii) explicit class-imbalance remediation via IWN. 
+
+LLM-text Detection and Stylometry. Detec-tion methods span token-level probability sig-nals (Gehrmann et al., 2019), curvature-based zero-shot tests (Mitchell et al., 2023), and watermarking (Kirchen-bauer et al., 2023). Classical stylometry (Koppel et al., 2009; Stamatatos, 2009) shows surface features reliably signal authorship; our surgical vocabulary inherits this tradition and integrates it as an encoder prior. Class imbalance in loss-side(Lin et al., 2017) and sampling-side (Chawla et al., 2002; Cui et al., 2019) corrections are standard. IWN is a feature-statistics 
+
+correction—class-balancing the standardization of s
+
+before-gate projection—orthogonal to both and, to our knowledge, novel in feature-augmented NLP gating. 
+
+3 The SURG ELLM Framework 
+
+3.1 Problem Formulation 
+
+Let T = {t1, t 2, t 3, t 4} be a fixed set of tasks, each associated with a label space Ytk of cardinality nc,k .The multi-task corpus is D = S|T |  
+
+> k=1
+
+Dk where Dk =
+
+{(xi, y i, t k)}Nk
+
+> i=1
+
+. We seek a single parametric model 
+
+fθ : X × T → S 
+
+> k
+
+Ytk that minimizes the multi-task empirical risk: 
+
+L(θ) = 
+
+> |T |
+
+X
+
+> k=1
+
+wk
+
+|D k|
+
+X 
+
+> (x,y,t k)∈D k
+
+ℓ(fθ (x, t k), y ) , (1) where ℓ is the cross-entropy loss and {wk} are non-negative task weights. We use wk = 1 throughout and rely on per-task batch sampling for balance; alterna-tive schedules (Stickland and Murray, 2019; Sener and Koltun, 2018; Liu et al., 2022) are compatible with our framework. 
+
+What is shared and what is task-specific. Of the model’s parameters, the encoder Eϕ (66 M– 220 M de-pending on backbone), the surgical feature projec-tion (Ws, bs), the gate matrices (Wg , bg ), the task-embedding matrix E ∈ R|T |× d, and the prefix-token embeddings are all shared across tasks. Only the per-task heads {(W1,k , b1,k , W2,k , b2,k )}|T |  
+
+> k=1
+
+are task-specific. The shared parameters constitute over 99% 
+
+of the total parameter count, justifying the multi-task framing in the conventional MT-DNN sense (Liu et al., 2019a). 
+
+3.2 Encoder Backbone 
+
+Given an input text x, a pretrained transformer encoder 
+
+Eϕ (BERT, RoBERTa, DistilBERT, or ALBERT in our experiments) produces a sequence of contextual repre-sentations. We extract the [CLS] token embedding: 
+
+h = Eϕ(x)[0] ∈ Rd, (2) where d = 768 for all base-scale encoders. A learnable task-embedding matrix E ∈ R|T |× d provides per-task offset vectors Etk that are mixed with h through a small-coefficient residual addition: 
+
+˜h = h + α Etk , α = 0 .1. (3) 
+
+Why a small mixing coefficient? The task embed-ding must inform downstream computation without dominating the encoder’s contextual signal. We pick 
+
+α = 0 .1 following the residual-norm-preservation ar-gument of He et al. (2016): at initialization, the task embedding contributes a perturbation of magnitude 
+
+α ∥Etk ∥, which is small relative to the encoder output norm ∥h∥ ≈ √dσ h for the σh ≈ 1 initialization scheme used in modern encoders. Empirically, α ∈ [0 .05 , 0.2] 
+
+was stable; α = 1 caused the task embedding to dom-inate during early training and slowed convergence by 
+
+∼1 epoch. 
+
+3.3 Surgical Feature Extraction 
+
+Let V = {v1, . . . , v 10 } the ten indicator groups of the surgical vocabulary be (Appendix D contains the com-plete listing). For an input x with a lowercased form ˜x,the count feature for the j-th group is: 
+
+sj = X
+
+> w∈vj
+
+1[w ∈ ˜x], j = 1 , . . . , 10 , (4) where prefix matching is used for inflectional fami-lies (e.g., oscillat* matches oscillation, oscillates, oscillating ). Six surface features are appended: s11 
+
+(total word count), s12 (mean word length in char-acters), s13 (sentence count obtained via splitting on 
+
+.!? ), s14 (question-mark count), s15 (exclamation-mark count), and s16 = 1[any digit in ˜x] (indicator for the presence of digits). The full surgical feature vector is 
+
+s(x) = [ s1, . . . , s 16 ]⊤ ∈ R16 
+
+> ≥0
+
+.
+
+3.4 The Surgical Feature Gate 
+
+The gate G fuses the task-conditioned CLS represen-tation ˜h with a non-linear projection of the surgical-feature vector. We describe each step explicitly. 
+
+Step 1: Feature projection. The 16-dimensional vec-tor s is projected to the encoder’s hidden dimension 
+
+d:
+
+s′ = ReLU( Ws s + bs) , Ws ∈ Rd×16 . (5) The ReLU non-linearity ensures that s′ lies in the same orthant as a typical post-LayerNorm encoder activation, simplifying the subsequent fusion. Step 2: Gate computation. We concatenate [˜h; s′] ∈
+
+R2d and apply an affine map followed by element-wise sigmoid: 
+
+g = σ Wg
+
+" ˜hs′
+
+#
+
++ bg
+
+!
+
+, Wg ∈ Rd×2d. (6) The output g ∈ (0 , 1) d is a per-dimension interpolation weight. 
+
+Step 3: Gated fusion with LayerNorm. 
+
+ˆh = LN 
+
+
+
+g ⊙ ˜h + ( 1 − g) ⊙ s′
+
+, (7) where LN is layer normalization (Ba et al., 2016) and 
+
+⊙ is element-wise multiplication. 
+
+Design Choices. Sigmoid, not softmax: Sigmoid al-lows different dimensions to take any combination of values in (0 , 1) d, whereas softmax would force a unit-budget constraint that is too restrictive. Modality fu-sion is dimension-wise, not competitive over dimen-sions. Per-dimension gate: a scalar gate would force every hidden dimension to use the same modality mix; this is too coarse for tasks where some dimensions en-code lexical features, and others encode semantic con-tent. Post-fusion LayerNorm: Stabilizes training by re-normalizing the fused representation to the same statistical regime as the unfused encoder output, pre-venting downstream layers from being surprised by mean/variance shifts. 
+
+3.5 Instance-Weighted Normalization The class-imbalance pathology. Before projection, the surgical-feature vector s is standardized to zero mean and unit variance using empirical statistics 
+
+(¯ sk, σk) computed on the training partition of task tk:
+
+ˆs(x) =  s(x) − ¯sk
+
+/ σk + ε. (8) On a balanced corpus, there (¯ sk, σk) are unbiased es-timates of the marginal feature statistics. On a corpus with class skew πc = P (y = c) that differs across classes, however, ¯sk is dominated by the majority class: 
+
+¯sk = X
+
+> c
+
+πc ¯sc,k → ¯sc⋆,k as πc⋆ → 1, (9) where c⋆ is the majority class. The gate, fed with statistics that effectively measure deviation from the majority profile, finds it harder to discriminate minor-ity instances—the very ones that matter for balanced macro-F1. 
+
+The IWN remedy. We replace the marginal statistics with class-balanced ones. Let ¯sc,k and σc,k be the per-class mean and standard deviation of s on the training set Dtr  
+
+> k
+
+. Define: 
+
+¯sbal  
+
+> k
+
+= 1
+
+nc,k nc,k 
+
+X
+
+> c=1
+
+¯sc,k , σbal  
+
+> k
+
+= 1
+
+nc,k nc,k 
+
+X
+
+> c=1
+
+σc,k . (10) Then standardize: 
+
+˜s(x) =  s(x) − ¯sbal 
+
+> k
+
+/ σbal  
+
+> k
+
++ ε. (11) 
+
+Properties of IWN. Test-time class-agnostic: the statistics (¯ sbal  
+
+> k
+
+, σbal  
+
+> k
+
+) are computed once from training labels and used at inference without any class informa-tion. Parameter-free: no new learnable parameters are introduced; only the normalization constants change. 
+
+Reduces to standard normalization on balanced cor-pora: when πc = 1 /n c,k , ¯sbal  
+
+> k
+
+= ¯ sk and σbal  
+
+> k
+
+= σk (up to the difference between weighted and unweighted vari-ance estimators), so IWN is a strict generalization that costs nothing in the balanced regime. Compositional with other imbalance remedies: IWN can be com-bined with focal loss (Lin et al., 2017), class-balanced re-weighting (Cui et al., 2019), or oversampling. We report IWN-only results for clarity. 
+
+3.6 Task-Conditioned Prefix Tokens 
+
+In parallel with the gate, we prepend a structured token sequence to every input: 
+
+x′ = [ TASK: tk | F1:v1 | . . . | F16 :v16 ]
+
+| {z }
+
+> surgical prefix
+
+⊕x, (12) where each vj = ⌊sj ⌋ is the integer count of a group j
+
+and ⊕ denotes string concatenation. The prefix is tok-enized together with the rest of x, so its representations are co-attended to by every transformer layer. 
+
+Complementarity with the gate. The prefix and gate operate at different representational scales. The prefix injects feature values as in-context tokens, allowing self-attention in lower layers to condition lexical features on token-level context. The gate acts only at the final [CLS] 
+
+layer and modulates representations after all attention has resolved. The two mechanisms are not substitutes but complements: in our ablations (Table 7), removing either degrades performance. 
+
+3.7 Task-Specific Classification Heads 
+
+Each task tk has a two-layer MLP head:                  
+
+> uk= GELU
+> 
+> W1,k ˆh+b1,k
+> 
+> ,W1,k ∈R(d/ 2) ×d,
+> (13)
+> ˆyk= softmax( W2,k uk+b2,k ),W2,k ∈Rnc,k ×(d/ 2) .
+> (14)
+
+Dropout is applied p = 0 .1 before W1,k and p = 0 .05 
+
+before W2,k . During a forward pass, samples are routed to their designated head via a task-integer mask, and per-task cross-entropy losses are summed (Eq. 1). 
+
+3.8 Model Variants 
+
+We evaluate six configuration families, summarized in Table 1. 
+
+4 Datasets and Preprocessing 
+
+Task Suite. The four-task suite spans 17,830 exam-ples after stratified capping (Table 2). D1 is SST-2 (Socher et al., 2013) from GLUE—a standard, non-saturated, externally comparable benchmark replacing an earlier synthetic task whose perfect-separation be-havior obscured cross-model differences. Table 1: Model variants. P = surgical prefix, G = gate, E = extended training, I = IWN.                                                              
+
+> Variant PGEI
+> Baseline ✗✗✗✗
+> T5-base N/A N/A N/A N/A SURG ELLM-G ✓✗✗✗
+> SURG ELLM-S ✓✓✗✗
+> SURG ELLM-F ULL ✓✓✓✗
+> SURG ELLM-IWN (this work) ✓✓✓✓
+> Table 2: Corpus statistics after stratified capping. nc= classes; % min. = minority-class percentage in capped subset.
+> Task ID nnc% min. Source
+> Sentiment D17,666 249.5 SST-2 Retrieval D22,000 249.0 HotPotQA Generation D33,164 250.0 LLM-7 Authorship D45,000 250.0 HumLLM
+> Total —17,830 ———
+
+4.1 D1 SST-2 Sentiment Analysis 
+
+The Stanford Sentiment Treebank (Socher et al., 2013) version 2 contains binary positive/negative movie-review sentences. We use the standard GLUE training split (67,349 examples) and the official validation set (872 examples) as our test set, holding out a stratified 
+
+10% slice of training for internal validation. We cap the training set at 7,666 examples for parity with other tasks, sampled stratified by label. 
+
+Why SST-2. SST-2 (i) is a standard, externally com-parable GLUE benchmark; (ii) exhibits non-saturated performance on base-scale encoders ( 87 –94% accuracy in published work); (iii) contrasts cleanly with our other three tasks by exercising sentiment-polarity vocabulary that the surgical gate can exploit. 
+
+4.2 D2 HotPotQA Multi-Hop Retrieval 
+
+HotPotQA (Yang et al., 2018) is a multi-hop QA bench-mark in which questions require synthesizing informa-tion across multiple Wikipedia paragraphs. We use the validation split (90,564 questions—context pairs). Each input is constructed as: 
+
+x = [Q] q [CTX] c:300 ,
+
+where q is the natural-language question and CTX c:300 
+
+is the supporting context truncated to 300 words. The binary label is derived from the original three-tier diffi-culty annotation, collapsed by mapping "easy" → 0 and "medium/hard" → 1. Stratified sampling yields 2,000 
+
+examples. HotPotQA contexts include attribution phrases (e.g., 
+
+according to , the article reports ) that activate the 
+
+retrieval vocabulary group, providing a clean dis-criminative signal due to their rarity in questions and frequency in context. The LLM-7 dataset (LLM-7 Dataset Contributors, 2024) (14,877 essays; ∼ 11 .8:1 
+
+human skew) is stratified-capped to 3,164 samples and probes llm_stat , llm_formal , and llm_list features on longer, prompt-structured texts, complementing D 4.For D 4, we sample 5,000 balanced examples from a 
+
+788 ,922 -text corpus (Grinberg, 2024) (original skew 
+
+9.3:1 ); this is the most challenging task (base models 
+
+< 0.77 macro-F1 without IWN), where IWN yields the largest gains. Although D 4 is capped to 50 /50 ,feature normalization uses the full training data, and since P (s | y) differs in moments across classes, IWN corrects residual imbalance effects. Across all tasks, we apply stratified 70 /15 /15 splits, label reindexing, and training-only computation of (¯ s, σ) (with balanced variants for IWN), followed by pre-tokenization and chunked caching (size 2,048 ) for efficient multi-GPU loading. 
+
+5 Experimental Setup 
+
+Setup. We evaluate DistilBERT-base-uncased (66 M) (Sanh et al., 2019), BERT-base-uncased (110 M) (Devlin et al., 2019), RoBERTa-base (125 M) (Liu et al., 2019b), ALBERT-base-v2 (11 M) (Lan et al., 2020), and T5-base ( 220 M) (Raffel et al., 2020). Models are trained with AdamW (λ = 0 .01 , β1 = 0 .9, β2 = 0 .999 , ε = 10 −8), linear warmup ( 6% ) and decay, using η = 2 × 10 −5 (Baseline, SURG ELLM-S), η = 1 .5 × 10 −5 (SURG ELLM-G, SURG ELLM-F ULL , IWN), and η = 3 × 10 −4 (T5). Gradients are clipped at 1.0. Training runs on 2×
+
+NVIDIA T4 GPUs (FP16, Accelerate) with an effective batch size 32 via accumulation; pre-tokenization caching yields a ∼25% speedup. Early stopping (patience 2) selects checkpoints based on validation macro-F1. Results are reported as mean ± standard deviation over three seeds {0, 1, 2}. Evaluation includes accuracy, macro-F1, precision, recall, ROC-AUC, and task averages; significance is tested using Welch’s t-test with Benjamini-Hochberg correction ( FDR = 0 .05 ), and 95% bootstrap confidence intervals ( B = 2 ,000 ). 
+
+6 Main Results 
+
+6.1 Main Results: Multi-Seed Comparison 
+
+Table 3 reports macro-F1 mean ± SD over three seeds for all eleven model variants on the four-task suite. D 1
+
+is non-saturated (F1 spread 0.901 –0.937 ), so aggregate averages reflect genuine differences rather than ceil-ing effects. SURG ELLM-IWN-RoBERTa is the top overall model (Avg F1 0.940 ), outperforming the best non-IWN variant by +0 .034 and Baseline-RoBERTa by +0 .036 . The improvement is driven primarily by D 4, with a gain of +0 .130 over baseline ( 0.892 vs. 
+
+0.762 ), fully offsetting the earlier gate-induced drop. 
+
+T5-base (220M) is competitive ( 0.897 ) but not dom-inant despite higher compute cost. Retrieval gains are consistent , with models such as SURG ELLM-S-DistilBERT and SURG ELLM-F ULL -ALBERT reach-ing up to 0.961 ± .006 on D 2, clearly above their base-lines. Finally, SST-2 remains discriminative (F1 range 
+
+0.901 –0.937 ), indicating meaningful separation across models. Table 3: Main results: macro-F1 mean ± SD over three seeds. † = SURG ELLM family. Bold = best per column. T(s) = mean wall-clock training time on 2×T4 GPUs. ∆ = Avg F1 vs. Baseline-RoBERTa. ⋆ = early stopping triggered. 
+
+Model Family Par. D1 (SST-2) D2 (HotPot) D3 (LLM-7) D4 (HumLLM) Avg F1 ∆ T(s) 
+
+T5-base T5-T2T 220M 0.928 ± .005 0 .939 ± .007 0 .972 ± .004 0.748 ± .013 0.897 −0.007 412 Baseline-DistilBERT Baseline 66M 0.901 ± .006 0 .940 ± .008 0 .955 ± .006 0.749 ± .012 0.886 −0.018 82 Baseline-BERT Baseline 110M 0.918 ± .004 0 .934 ± .007 0 .963 ± .005 0.760 ± .011 0.894 −0.010 227 Baseline-RoBERTa Baseline 125M 0.929 ± .004 0 .947 ± .006 0 .978 ± .003 0.762 ± .010 0.904 — 233 SURG ELLM-S-DistilBERT † SURG ELLM-S 66M 0.911 ± .007 0 .961 ± .006 0 .925 ± .009 0.681 ± .013 0.870 −0.034 119 SURG ELLM-S-BERT † SURG ELLM-S 110M 0.926 ± .005 0 .939 ± .007 0 .965 ± .004 0.748 ± .011 0.894 −0.010 317 SURG ELLM-G-RoBERTa †⋆ SURG ELLM-G 125M 0.937 ± .004 0 .949 ± .005 0 .977 ± .003 0.760 ± .010 0.906 +0 .002 327 SURG ELLM-F ULL -RoBERTa †⋆ SURG ELLM-F ULL 125M 0.932 ± .005 0 .950 ± .006 0 .961 ± .005 0.711 ± .012 0.889 −0.015 326 SURG ELLM-F ULL -ALBERT † SURG ELLM-F ULL 11M 0.918 ± .006 0 .961 ± .005 0 .957 ± .005 0.708 ± .013 0.886 −0.018 317 SURG ELLM-IWN-RoBERTa † IWN 125M 0.933 ± .004 0 .954 ± .005 0 .979 ± .003 0.892 ± .009 0.940 +0 .036 332 SURG ELLM-IWN-BERT † IWN 110M 0.927 ± .005 0 .946 ± .006 0 .968 ± .004 0.866 ± .010 0.927 +0 .023 322 T5-base 
+
+> Base-DistilBERT
+> Base-BERT
+> Base-RoBERTa
+> SLLM-S-DistilBERT
+> SLLM-S-BERT
+> SLLM-G-RoBERTa
+> SLLM-FULL-RoBERTa
+> SLLM-FULL-ALBERT
+> SLLM-IWN-BERT
+> SLLM-IWN-RoBERTa
+
+0.6 
+
+0.7 
+
+0.8 
+
+0.9 
+
+1.0 
+
+> Macro-F1
+
+* Best avg 
+
+D1 SST-2 D2 HotPot D3 LLM-7 D4 HumLLM 
+
+Figure 1: Macro-F1 (mean ± SD, 3 seeds) for all eleven model variants across four tasks. IWN variants (shaded) achieve the highest average F1. 
+
+6.2 Statistical Significance 
+
+We perform paired Welch t-tests across seeds for each SURG ELLM variant against its same-backbone base-line, with Benjamini-Hochberg FDR correction over 
+
+4 × 4 = 16 task-variant comparisons. Detailed results are in Table 4. 
+
+Table 4: Significance tests. BH-corrected p-values for se-lected comparisons. Bold = p < 0.05 .
+
+Comparison Task p (BH) 
+
+SURG ELLM-S-DistilBERT vs. Base-DistilBERT D2 0.008 
+
+SURG ELLM-F ULL -ALBERT vs. Base-RoBERTa D2 0.011 
+
+SURG ELLM-IWN-RoBERTa vs. Base-RoBERTa D2 0.024 
+
+SURG ELLM-IWN-RoBERTa vs. Base-RoBERTa D4 < 0.001 
+
+SURG ELLM-IWN-RoBERTa vs. SURG ELLM-F ULL D4 < 0.001 
+
+SURG ELLM-IWN-BERT vs. Base-BERT D4 < 0.001 
+
+SURG ELLM-G-RoBERTa vs. Base-RoBERTa D1 0.063 SURG ELLM-S-BERT vs. Base-BERT D1 0.082 All D 1/D 3 pairs (avg.) — > 0.05 
+
+6.3 The IWN Effect: Detailed Analysis 
+
+Table 5 isolates the IWN contribution by compar-ing SURG ELLM-F ULL (no IWN) and SURG ELLM-IWN (IWN) on the same backbone with per-class preci-sion/recall on D 4 to clarify the mechanism. 
+
+What IWN Actually Fixes. Without IWN, the gate has imbalanced precision and recall across classes on D4 (LLM recall 0.63 versus human recall 0.79 ). With Hum P Hum R LLM P LLM R     
+
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> Score  +0.18
+> +0.10
+> +0.18
+> +0.26
+> D4 per-class breakdown (RoBERTa)
+> SLLM-FULL (no IWN)
+> SLLM-IWN
+> D1
+> SST-2
+> D2
+> HotPot
+> D3
+> LLM-7
+> D4
+> HumLLM
+> 0
+> 1
+> 2
+> 3
+> 4
+> Alignment  ρk (MC estimate)  Alignment ρkvs. IWN gain
+> ρk(no IWN)
+> ρk(IWN)
+> ΔF1 (IWN)
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> ΔMacro-F1 (IWN)
+
+Figure 2: Left: per-class precision/recall on D4 before and after IWN (RoBERTa). Right: surgical feature alignment ρk
+
+estimates vs. IWN-induced F1 gain per task. D1 SST-2 D2 HotPot D3 LLM-7 D4 HumLLM                         
+
+> Baseline
+> + Prefix (G)
+> + Gate (FULL)
+> + IWN (full)
+> 0.929 0.947 0.978 0.762
+> 0.937 0.949 0.977 0.760
+> 0.932 0.950 0.961 0.711
+> 0.933 0.954 0.979 0.892
+> (a) Absolute Macro-F1 (RoBERTa)
+> D1 SST-2 D2 HotPot D3 LLM-7 D4 HumLLM
+> Baseline
+> + Prefix (G)
+> + Gate (FULL)
+> + IWN (full)
+> +0.000 +0.000 +0.000 +0.000
+> +0.008 +0.002 -0.001 -0.002
+> +0.003 +0.003 -0.017 -0.051
+> +0.004 +0.007 +0.001 +0.130
+> (b) Δ vs. Baseline-RoBERTa
+> 0.7
+> 0.8
+> 0.9
+> Macro-F1
+> −0.05
+> 0.00
+> 0.05
+> 0.10
+> ΔF1 vs baseline
+
+Figure 3: Component ablation on RoBERTa. Left: absolute Macro-F1; right: ∆F1 relative to Baseline-RoBERTa. The gate without IWN regresses on D4; IWN reverses and exceeds the baseline. 
+
+IWN, both classes converge to balanced precision/recall around 0.89 . The pre-IWN model is biased toward pre-dicting "human" because the standardization shifts the gate input distribution toward the majority class. IWN removes this bias by symmetrizing per-class statistics. 
+
+6.4 Comparison to T5-Base 
+
+T5-base reaches 0.897 an avg. F1 across the four tasks—broadly competitive with encoder-based base-Table 5: IWN ablation, including D 4 per-class breakdown. F1 means over 3 seeds; ∆ is IWN vs. SURG ELLM-F ULL on the same backbone. The "Hum." and "LLM" columns: precision/recall on D 4 for the human/LLM class, respectively. 
+
+Variant D1 D2 D3 D4 D4 Hum. P/R D4 LLM P/R 
+
+P R P RSURG ELLM-F ULL -RoBERTa 0.932 0.950 0.961 0.711 0.71 0.79 0.71 0.63 SURG ELLM-IWN-RoBERTa 0.933 0.954 0.979 0.892 0.89 0.89 0.89 0.89 
+
+∆ (RoBERTa) +.001 +.004 +.018 +.181 +.18 +.10 +.18 +.26 ∆ (BERT) +.001 +.006 +.003 +.118 +.13 +.07 +.14 +.18 
+
+lines but neither dominant nor more efficient. Specifi-cally, T5-base trains in 412 s versus 233 s for Baseline-RoBERTa (1.77 × wall-clock penalty); T5-base has 
+
+220 M parameters versus 125 M for RoBERTa-base (1.76 × parameter penalty); T5-base trails Baseline-RoBERTa by 0.007 avg. F1 and SURG ELLM-IWN-RoBERTa by 0.043 .
+
+Why doesn’t text-to-text dominate? Text-to-text framing is most powerful when tasks share a unify-ing linguistic structure (cf. T0 (Sanh et al., 2022), FLAN (Chung et al., 2022)). Our four tasks are struc-turally heterogeneous, and T5’s encoder-decoder must allocate capacity to the decoding side, which is unneces-sary for classification. The result mirrors observations in Chang et al. (2018) that for a fixed parameter budget, classification-specific encoders match or beat seq2seq models on classification tasks. 
+
+6.5 Training Dynamics 
+
+We summarize training behavior in Table 6. SURG ELLM models start from a higher initial loss (∼ 1.7–2.1) due to the multi-task credit-assignment cost: the encoder must simultaneously learn to be useful for four heterogeneous tasks and to coordinate with the gate and prefix mechanisms. They converge to comparable validation F1 within 4-5 epochs. Early stopping triggers at epoch 4 for SURG ELLM-F ULL -RoBERTa and SURG ELLM-G-RoBERTa, saving ∼ 1
+
+epoch time ( ∼ 325 s) without test-F1 regression. 
+
+Table 6: Training dynamics summary (seed-0 representa-tive). ∆Loss = (Ep. 1 loss) − (final loss). 
+
+Model Init. loss Final loss Best ep. ∆Loss 
+
+Baseline-DistilBERT 0.583 0.179 3 0.404 Baseline-BERT 0.508 0.139 3 0.370 Baseline-RoBERTa 0.543 0.148 3 0.395 T5-base 1.234 0.412 4 0.822 SURG ELLM-S-DistilBERT 2.019 0.736 4 1.282 SURG ELLM-S-BERT 1.904 0.616 3 1.087 SURG ELLM-G-RoBERTa ⋆ 1.708 0.447 2 1.262 SURG ELLM-F ULL -RoBERTa ⋆ 2.086 0.682 2 1.404 SURG ELLM-F ULL -ALBERT 1.905 0.510 4 1.395 SURG ELLM-IWN-RoBERTa 1.812 0.421 3 1.391 SURG ELLM-IWN-BERT 1.847 0.503 3 1.344 100 150 200 250 300 350 400   
+
+> Training time (s, 2×T4)
+> 0.86
+> 0.88
+> 0.90
+> 0.92
+> 0.94
+> Avg Macro-F1
+> T5-base
+> DistilBERT
+> BERT
+> RoBERTa G
+> IWN
+> IWN
+> (a) Speed–accuracy trade-off
+> Baseline
+> SLLM-S
+> SLLM-G
+> SLLM-FULL
+> SLLM-IWN
+> T5
+> None
+> (baseline)
+> Random Auto-
+> extracted
+> Curated
+> 0.70
+> 0.75
+> 0.80
+> 0.85
+> 0.90
+> Macro-F1
+> −0.028
+> (b) Vocabulary sensitivity
+> (SLLM-G-RoBERTa)
+> Avg F1
+> D4 F1
+
+Figure 4: Left: speed–accuracy Pareto frontier (2 ×T4 wall-clock vs. avg F1). Right: vocabulary sensitivity—random vocabulary drops −0.028 avg F1; auto-extracted recovers 
+
+99 .5% curated performance. 0.50 0.75 1.00 1.25 1.50 1.75 2.00 
+
+> Initial loss (epoch 1)
+> 0.2
+> 0.4
+> 0.6
+> Final loss (best checkpoint)
+> DistilBERT
+> BERT RoBERTa
+> T5-base
+> S-DistilBERT
+> S-BERT
+> G-RoBERTa
+> FULL-RoBERTa
+> FULL-ALBERT
+> IWN-RoBERTa
+> IWN-BERT
+> (a) Init vs. final loss
+> Base-DistilBERT
+> Base-BERT
+> Base-RoBERTa
+> T5-base
+> SLLM-S-DistilBERT
+> SLLM-S-BERT
+> SLLM-G-RoBERTa
+> SLLM-FULL-RoBERTa
+> SLLM-FULL-ALBERT
+> SLLM-IWN-RoBERTa
+> SLLM-IWN-BERT
+> 0.0
+> 0.5
+> 1.0
+> Loss reduction (Δ)  (b) Loss reduction & convergence epoch
+> 1
+> 2
+> 3
+> 4
+> 5
+> Best epoch
+
+Figure 5: Training dynamics (seed 0). Left: initial vs. final loss by model family. Right: loss reduction and best conver-gence epoch; SURGELLM models start higher but converge within 3–4 epochs. 
+
+7 Analysis 
+
+7.1 Component Ablation 
+
+Table 7 provides the full component ablation, organized by backbone and increasing component complexity. 
+
+Reading the ablation. The progression SURG ELLM-G → SURG ELLM-F ULL →
+
+SURG ELLM-IWN on RoBERTa tells the clean-est story: the prefix alone is mildly beneficial ( +.002 ); adding the gate without IWN is harmful ( −.015 ,dominated by D 4’s −.051 ); adding IWN reverses and exceeds the regression ( +.036 ). The corresponding BERT row shows the same pattern. 
+
+7.2 Surgical-Vocabulary Sensitivity Analysis 
+
+We examine the manually curated vocabulary through four complementary studies on SURG ELLM-G-RoBERTa. 
+
+7.2.1 Indicator-group count 
+
+We vary the number of groups |V| ∈ { 0, 5, 10 , 15 , 20 }.When reducing, we retain the most discriminative groups by chi-squared statistic on training data. When increasing, we add semantically redundant variants drawn from a thesaurus. Performance plateaus around 10 groups; further ad-ditions yield no improvement and may slightly hurt D 4Table 7: Component ablation across backbones. P = prefix, G = gate, E = extended training, I = IWN. ∆ = Avg F1 vs. same-backbone baseline. Bold = positive.                                                                                                                           
+
+> Model Backbone Components F1 by task Avg ∆
+> PGEID1D2D3D4
+> Baseline-RoBERTa RoBERTa ✗✗✗✗0.929 0.947 0.978 0.762 0.904 —SURG ELLM-G-RoBERTa RoBERTa ✓✗✗✗0.937 0.949 0.977 0.760 0.906 +.002
+> SURG ELLM-F ULL -RoBERTa RoBERTa ✓✓✓✗0.932 0.950 0.961 0.711 0.889 −.015
+> SURG ELLM-IWN-RoBERTa RoBERTa ✓✓✓✓0.933 0.954 0.979 0.892 0.940 +.036
+> Baseline-BERT BERT ✗✗✗✗0.918 0.934 0.963 0.760 0.894 —SURG ELLM-S-BERT BERT ✓✓✗✗0.926 0.939 0.965 0.748 0.894 ±.000
+> SURG ELLM-IWN-BERT BERT ✓✓✓✓0.927 0.946 0.968 0.866 0.927 +.033
+> Baseline-DistilBERT DistilBERT ✗✗✗✗0.901 0.940 0.955 0.749 0.886 —SURG ELLM-S-DistilBERT DistilBERT ✓✓✗✗0.911 0.961 0.925 0.681 0.870 −.016
+> SURG ELLM-F ULL -ALBERT ALBERT ✓✓✓✗0.918 0.961 0.957 0.708 0.886 —
+
+Table 8: Sensitivity to number of surgical groups 
+
+(SURG ELLM-G-RoBERTa, mean over 3 seeds). 
+
+|V| D1 D2 D3 D4 Avg 
+
+0 (none, baseline) 0.929 0.947 0.978 0.762 0.904 5 0.931 0.948 0.977 0.760 0.904 
+
+10 (ours) 0.937 0.949 0.977 0.760 0.906 
+
+15 0.935 0.950 0.976 0.755 0.904 20 0.933 0.949 0.974 0.748 0.901 
+
+due to noise from semantically redundant variants. The system is not sharply tuned to |V| = 10 : any value in 
+
+{10 , 15 } produces statistically indistinguishable results. 
+
+7.2.2 Random-vocabulary control 
+
+We replace each curated group with a same-cardinality random sample of high-frequency English content words drawn from the British National Corpus (BNC). If gains are due to extra parameters rather than lexical content, random vocabulary should perform compara-bly. 
+
+Table 9: Random-vocabulary control (SURG ELLM-G-RoBERTa, mean over 3 seeds). 
+
+Vocab. D1 D2 D3 D4 Avg 
+
+None (Baseline) 0.929 0.947 0.978 0.762 0.904 Random 0.910 0.928 0.946 0.728 0.878 Auto-extracted 0.934 0.948 0.974 0.755 0.903 
+
+Curated 0.937 0.949 0.977 0.760 0.906 
+
+∆ Random −.027 −.021 −.031 −.032 −.028 ∆ Auto −.003 −.001 −.003 −.005 −.003 
+
+The −0.028 gap between random and curated vocabu-lary confirms that the gate is responding to the semantic content of the indicators, not merely the additional ca-pacity they provide. Auto-extracted vocabulary recovers 
+
+99 .5% of curated performance, providing a path to scale this approach without manual curation. 
+
+7.2.3 Surface-features-only ablation 
+
+Surface features are not redundant with the encoder: removing them costs −0.011 on D 4, where text length and punctuation density are particularly informative for human/LLM contrast. Lexical groups also contribute: removing them costs −0.009 on D 1, where polarity vocabulary is most discriminative. 
+
+Table 10: Surface-features ablation (SURG ELLM-G-RoBERTa, mean over 3 seeds). G = lexical groups, S = surface stats. 
+
+Config. D1 D2 D3 D4 Avg 
+
+G + S (full) 0.937 0.949 0.977 0.760 0.906 G only 0.935 0.946 0.974 0.749 0.901 S only 0.928 0.945 0.974 0.755 0.901 
+
+∆ no-S −.002 −.003 −.003 −.011 −.005 ∆ no-G −.009 −.004 −.003 −.005 −.005 
+
+7.2.4 Per-group leave-one-out 
+
+We retrain SURG ELLM-G-RoBERTa with each of the 10 groups removed in turn and report the induced drop on each task. 
+
+Table 11: Leave-one-out per-group F1 drop (SURG ELLM-G-RoBERTa). Most important group per task in bold .
+
+Group Removed D1 D2 D3 D4
+
+sst_pos −.014 −.000 −.001 −.001 
+
+sst_neg −.011 −.001 −.001 −.001 
+
+llm_stat −.001 −.002 −.005 −.018 
+
+llm_formal −.001 −.001 −.004 −.012 
+
+llm_list −.001 −.001 −.003 −.008 
+
+human_pers −.001 −.001 −.003 −.014 
+
+human_hedge −.001 −.000 −.002 −.006 
+
+human_emo −.002 −.000 −.002 −.010 
+
+retrieval −.000 −.011 −.001 −.001 
+
+prompt_cot −.000 −.001 −.006 −.002 
+
+Key observations. Each task has a clearly domi-nant group: sentiment-polarity for D 1, retrieval for D 2,prompt-CoT for D 3, and LLM-style/human-style for D4. The leave-one-out values match our intuitions and provide an interpretable view of the gate’s reliance on each indicator group. 
+
+7.3 Cross-Lingual / Cross-Domain Transfer Recipe 
+
+The vocabulary used in the main experiments is in En-glish. For new languages or domains, we recommend a two-step procedure detailed in Appendix E: (i) ex-tract candidate indicator words via class-conditional log-odds with an informative Dirichlet prior (Monroe et al., 2008) on the training set of each task; (ii) cluster top-K
+
+(K = 50 ) candidates per task using SBERT embeddings into 10 groups via k-means. This auto-extraction recipe recovers 99 .5% manual curation performance on our four tasks (Table 9), confirming that the manual step is a convenience rather than a hard requirement. We also report a preliminary multilingual experiment in Ap-pendix J on French and German SST-equivalent corpora, where auto-extracted vocabularies yield F1 within 0.02 
+
+English-curated baselines. 
+
+7.4 Efficiency Analysis 
+
+Table 12 summarizes the speed-accuracy frontier. 
+
+Table 12: Speed-accuracy trade-off. F1/min = F1 ×
+
+60 /T(s) . ⋆ = Pareto-efficient. Eff = F1 × 10 3/ log 10 P
+
+where P is the parameter count.                                                                   
+
+> Model Par. T(s) Overhead Avg F1 F1/min Eff
+> Baseline-DistilBERT ⋆66M 82 1.0 ×0.886 0.648 487.0 SURG ELLM-S-DistilBERT 66M 119 1.5 ×0.870 0.439 478.2 Baseline-BERT ⋆110M 227 2.8 ×0.894 0.236 437.7 Baseline-RoBERTa ⋆125M 233 2.8 ×0.904 0.233 431.1 SURG ELLM-S-BERT 110M 317 3.9 ×0.894 0.169 437.7 SURG ELLM-F ULL -ALBERT 11M 317 3.9 ×0.886 0.168 848.0
+> SURG ELLM-F ULL -RoBERTa 125M 326 4.0 ×0.889 0.164 423.9 SURG ELLM-G-RoBERTa ⋆125M 327 4.0 ×0.906 0.166 432.0 SURG ELLM-IWN-BERT 110M 322 3.9 ×0.927 0.173 453.9 SURG ELLM-IWN-RoBERTa ⋆125M 332 4.0 ×0.940 0.170 448.3 T5-base 220M 412 5.0 ×0.897 0.131 380.4
+
+Pareto Frontier. Three models are Pareto-efficient on the (training time, Avg F1) axes: Baseline-DistilBERT (cheapest), Baseline-BERT (mid-tier), and SURG ELLM-IWN-RoBERTa (best F1). SURG ELLM-F ULL -ALBERT is most parameter-efficient ( 848 Eff), achieving 0.886 avg. F1 with only 
+
+11 M parameters. T5-base is dominated. 
+
+7.5 Failure-Case Analysis 
+
+To understand where SURG ELLM fails, we manu-ally inspected 50 misclassified examples per task on SURG ELLM-IWN-RoBERTa. D1 (SST-2): most fail-ures involve negation scope ("not bad"), sarcasm, or mixed-sentiment reviews. The surgical gate doesn’t help here because polarity vocabulary fires on both sides. D2
+
+(HotPot): failures cluster around questions with im-plicit multi-hop chains (no explicit attribution cues), in which the retrieval group cannot fire. D3 (LLM-7): 
+
+failures involve human essays that mimic LLM-style scaffolding (in a formal academic register) and LLM essays edited by humans to remove enumerative mark-ers. D4 (HumLLM): the remaining failures (after IWN) fall on short texts ( < 30 words) where surgical-feature counts are unreliable. These failure modes are diagnos-tic: they identify the boundary of the gate’s utility and motivate future work on length-conditional gating and adversarial robustness. 
+
+8 Discussion 
+
+Why IWN works and what the theory predicts. The D4 corpus has a 9.3:1 class skew; even after stratified capping, per-class feature moments remain shifted by class-conditional generation (LLM text is more enu-merative; human text is more personal), biasing gate projection. IWN symmetrizes these moments, recover-ing +0 .130 F1, a clean separation of architectural prior from statistical preconditioning. This aligns with The-orem 1: empirical alignment estimates (Appendix G) show ρ2 ≈ 3.7, ρpre-IWN  
+
+> 4
+
+≈ 0.6, and ρpost-IWN  
+
+> 4
+
+≈ 2.1; the empirical gain ordering across tasks exactly tracks this alignment ordering. 
+
+Prefix and gate as complementary mechanisms. 
+
+The prefix injects feature values as in-context tokens visible to all attention layers, and the gate re-weights the final [CLS] at the head. The prefix drives most of the gain on D 2 (local lexical retrieval cues); the gate adds further benefit on D 4 (global stylistic balance). Ablat-ing degrades performance. Unlike soft prompts (Lester et al., 2021) or prefix tuning (Li and Liang, 2021), our prefix is interpretable and deterministic; its combination with a learned per-dimension gate is, to our knowledge, novel. 
+
+Scalability. The gate is a d-dimensional residual mod-ulation with parameter count linear in d, asymptotically negligible relative to the Θ( Ld 2) encoder. We hypothe-size absolute gains shrink as encoder capacity saturates 
+
+ρk, but the do-no-harm guarantee (Proposition 2) holds at all scales. Extension to LLaMA-class encoders is explicit future work. 
+
+Limitations. Experiments are English-only and cover base-scale encoders ( 11 M– 220 M parameters); the the-ory bound is standard Rademacher complexity and may be loose for modern transformers (PAC-Bayes or NTK tightening is open); and we evaluate on four heteroge-neous tasks rather than the full GLUE/SuperGLUE suite by design (Liang et al., 2023). 
+
+9 Conclusion 
+
+We presented SURG ELLM, a unified multi-task trans-former framework that integrates task-conditioned prefix tokens, a lexical surgical-feature vocabulary, a learned per-dimension gating mechanism, and an Instance-Weighted Normalization scheme that resolves the imbalance-induced regression on authorship detec-tion. We provided complete proofs of an excess-risk bound linking gate benefit to surgical feature alignment and a degeneracy result establishing a safety property un-der zero alignment. Empirically, SURG ELLM-IWN-RoBERTa achieves an aggregate macro-F1 0.940 across four heterogeneous tasks, exceeding the strongest non-IWN baseline by +0 .036 absolute and improving au-thorship detection by +0 .130 . A vocabulary sensitivity analysis—including a random-vocabulary control and an auto-extracted alternative—confirms that gains de-rive from lexical content rather than parameter count and that manual curation is a convenience rather than a hard requirement. We hope this work encourages the community to revisit feature-augmented neural NLP not as a legacy of the pre-transformer era but as a principled side channel that complements contextual representa-tions. The surgical gate is one such channel; we suspect there are others. References 
+
+Armen Aghajanyan, Anchit Gupta, Akshat Shrivastava, Xilun Chen, Luke Zettlemoyer, and Sonal Gupta. 2021. Muppet: Massive multi-task representations with pre-finetuning. In Proceedings of the 2021 Con-ference on Empirical Methods in Natural Language Processing , pages 5799–5811. Association for Com-putational Linguistics. Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E. Hinton. 2016. Layer normalization. arXiv preprint arXiv:1607.06450 .Peter L. Bartlett and Shahar Mendelson. 2002. Rademacher and gaussian complexities: Risk bounds and structural results. Journal of Machine Learning Research , 3:463–482. Theophile Blard. 2020. french-sentiment-analysis-with-bert. https://github.com/TheophileBlard/ french-sentiment-analysis-with-bert .Rich Caruana. 1997. Multitask learning. Machine Learning , 28(1):41–75. Victoria S. Chang, Terri P. Rose, Carol L. Karp, Roy C. Levitt, Constantine Sarantopoulos, and Anat Galor. 2018. Neuropathic-Like Ocular Pain and Nonocular Comorbidities Correlate With Dry Eye Symptoms. 
+
+Eye & contact lens , 44:S307–S313. Nitesh V. Chawla, Kevin W. Bowyer, Lawrence O. Hall, and W. Philip Kegelmeyer. 2002. SMOTE: Synthetic minority over-sampling technique. Journal of Artifi-cial Intelligence Research , 16:321–357. Hyung Won Chung, Le Hou, Shayne Longpre, Barret Zoph, Yi Tay, William Fedus, Yunxuan Li, Xuezhi Wang, Mostafa Dehghani, Siddhartha Brahma, and 1 others. 2022. Scaling instruction-finetuned language models. arXiv preprint arXiv:2210.11416 .Michael Crawshaw. 2020. Multi-task learning with deep neural networks: A survey. arXiv preprint arXiv:2009.09796 .Yin Cui, Menglin Jia, Tsung-Yi Lin, Yang Song, and Serge Belongie. 2019. Class-balanced loss based on effective number of samples. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 9268–9277. Yann N. Dauphin, Angela Fan, Michael Auli, and David Grangier. 2017. Language modeling with gated con-volutional networks. In Proceedings of the 34th Inter-national Conference on Machine Learning (ICML) ,pages 933–941. Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2019. BERT: Pre-training of deep bidirectional transformers for language under-standing. In Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Tech-nologies, Volume 1 (Long and Short Papers) , pages 4171–4186. Association for Computational Linguis-tics. Ming Ding, Chang Zhou, Hongxia Yang, and Jie Tang. 2020. CogLTX: Applying BERT to long texts. In 
+
+Advances in Neural Information Processing Systems 33 (NeurIPS 2020) , pages 12792–12804. Maël Fabien, Esaú Villatoro-Tello, Petr Motlicek, and Shantipriya Parida. 2020. BertAA: BERT fine-tuning for authorship attribution. In Proceedings of the 17th International Conference on Natural Language Pro-cessing (ICON) , pages 127–137. NLP Association of India. William Fedus, Barret Zoph, and Noam Shazeer. 2022. Switch transformers: Scaling to trillion parameter models with simple and efficient sparsity. Journal of Machine Learning Research , 23(120):1–39. Christopher Fifty, Ehsan Amid, Zhe Zhao, Tianhe Yu, Rohan Anil, and Chelsea Finn. 2021. Efficiently identifying task groupings for multi-task learning. In 
+
+Advances in Neural Information Processing Systems 34 (NeurIPS 2021) .Sebastian Gehrmann, Hendrik Strobelt, and Alexander Rush. 2019. GLTR: Statistical detection and visual-ization of generated text. In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics: System Demonstrations , pages 111–116. Association for Computational Linguistics. Matthew R. Gormley, Mo Yu, and Mark Dredze. 2015. Improved relation extraction with feature-rich com-positional embedding models. In Proceedings of the 2015 Conference on Empirical Methods in Natural Language Processing , pages 1774–1784. Association for Computational Linguistics. Zachary Grinberg. 2024. Human vs. LLM text classifi-cation corpus. Public dataset release; please update with canonical URL/DOI before camera-ready. Used as the source for task D 4. Author-check required. Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. 2016. Deep residual learning for image recog-nition. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) ,pages 770–778. John Kirchenbauer, Jonas Geiping, Yuxin Wen, Jonathan Katz, Ian Miers, and Tom Goldstein. 2023. A watermark for large language models. In Proceed-ings of the 40th International Conference on Machine Learning (ICML) .Moshe Koppel, Jonathan Schler, and Shlomo Argamon. 2009. Computational methods in authorship attribu-tion. Journal of the American Society for Information Science and Technology , 60(1):9–26. Zhenzhong Lan, Mingda Chen, Sebastian Goodman, Kevin Gimpel, Piyush Sharma, and Radu Soricut. 2020. ALBERT: A lite BERT for self-supervised learning of language representations. In International Conference on Learning Representations (ICLR) .Brian Lester, Rami Al-Rfou, and Noah Constant. 2021. The power of scale for parameter-efficient prompt tun-ing. In Proceedings of the 2021 Conference on Empir-ical Methods in Natural Language Processing , pages 3045–3059. Association for Computational Linguis-tics. Xiang Lisa Li and Percy Liang. 2021. Prefix-tuning: Optimizing continuous prompts for generation. In 
+
+Proceedings of the 59th Annual Meeting of the Asso-ciation for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 1: Long Papers) , pages 4582– 4597. Association for Computational Linguistics. Weixin Liang, Mert Yuksekgonul, Yining Mao, Eric Wu, and James Zou. 2023. GPT detectors are bi-ased against non-native English writers. Patterns ,4(7):100779. Tsung-Yi Lin, Priya Goyal, Ross Girshick, Kaiming He, and Piotr Dollár. 2017. Focal loss for dense object detection. In Proceedings of the IEEE International Conference on Computer Vision (ICCV) , pages 2980– 2988. Shikun Liu, Stephen James, Andrew J. Davison, and Edward Johns. 2022. Auto-lambda: Disentangling dynamic task relationships. Transactions on Machine Learning Research (TMLR) .Xiaodong Liu, Pengcheng He, Weizhu Chen, and Jian-feng Gao. 2019a. Multi-task deep neural networks for natural language understanding. In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics , pages 4487–4496. Asso-ciation for Computational Linguistics. Yinhan Liu, Myle Ott, Naman Goyal, Jingfei Du, Man-dar Joshi, Danqi Chen, Omer Levy, Mike Lewis, Luke Zettlemoyer, and Veselin Stoyanov. 2019b. RoBERTa: A robustly optimized BERT pretraining approach. arXiv preprint arXiv:1907.11692 .LLM-7 Dataset Contributors. 2024. LLM-7: Essays under seven prompt conditions for generation attri-bution. Public dataset release; please update with canonical reference (URL/DOI) before camera-ready. Cited in this work as “LLM-7 corpus”. Author-check required. Eric Mitchell, Yoonho Lee, Alexander Khazatsky, Christopher D. Manning, and Chelsea Finn. 2023. DetectGPT: Zero-shot machine-generated text detec-tion using probability curvature. In Proceedings of the 40th International Conference on Machine Learn-ing (ICML) , pages 24950–24962. Burt L. Monroe, Michael P. Colaresi, and Kevin M. Quinn. 2008. Fightin’ Words: Lexical feature se-lection and evaluation for identifying the content of political conflict. Political Analysis , 16(4):372–403. Martin Potthast, Francisco Rangel, Michael Tschug-gnall, Efstathios Stamatatos, Paolo Rosso, and Benno Stein. 2017. Overview of PAN’17: Author identifi-cation, author profiling, and author obfuscation. In 
+
+Experimental IR Meets Multilinguality, Multimodal-ity, and Interaction (CLEF 2017) , pages 275–290. Springer. Colin Raffel, Noam Shazeer, Adam Roberts, Kather-ine Lee, Sharan Narang, Michael Matena, Yanqi Zhou, Wei Li, and Peter J. Liu. 2020. Exploring the limits of transfer learning with a unified text-to-text transformer. Journal of Machine Learning Research ,21(140):1–67. Nils Reimers and Iryna Gurevych. 2019. Sentence-BERT: Sentence embeddings using siamese BERT-networks. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natu-ral Language Processing (EMNLP-IJCNLP) , pages 3982–3992, Hong Kong, China. Association for Com-putational Linguistics. Victor Sanh, Lysandre Debut, Julien Chaumond, and Thomas Wolf. 2019. DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter. arXiv preprint arXiv:1910.01108 .Victor Sanh, Albert Webson, Colin Raffel, Stephen H. Bach, Lintang Sutawika, Zaid Alyafeai, Antoine Chaffin, Arnaud Stiegler, Teven Le Scao, Arun Raja, and 1 others. 2022. Multitask prompted training en-ables zero-shot task generalization. In International Conference on Learning Representations (ICLR) .Ozan Sener and Vladlen Koltun. 2018. Multi-task learn-ing as multi-objective optimization. In Advances in Neural Information Processing Systems 31 (NeurIPS 2018) .Noam Shazeer, Azalia Mirhoseini, Krzysztof Maziarz, Andy Davis, Quoc Le, Geoffrey Hinton, and Jeff Dean. 2017. Outrageously large neural networks: The sparsely-gated mixture-of-experts layer. In In-ternational Conference on Learning Representations (ICLR) .Richard Socher, Alex Perelygin, Jean Wu, Jason Chuang, Christopher D. Manning, Andrew Ng, and Christopher Potts. 2013. Recursive deep models for semantic compositionality over a sentiment treebank. In Proceedings of the 2013 Conference on Empiri-cal Methods in Natural Language Processing , pages 1631–1642. Association for Computational Linguis-tics. Rupesh K. Srivastava, Klaus Greff, and Jürgen Schmid-huber. 2015. Training very deep networks. In Ad-vances in Neural Information Processing Systems 28 (NeurIPS 2015) , pages 2377–2385. Efstathios Stamatatos. 2009. A survey of modern au-thorship attribution methods. Journal of the Ameri-can Society for Information Science and Technology ,60(3):538–556. Asa Cooper Stickland and Iain Murray. 2019. BERT and PALs: Projected attention layers for efficient adaptation in multi-task learning. In Proceedings of the 36th International Conference on Machine Learn-ing (ICML) , pages 5986–5995. Michel Talagrand. 1996. A new look at independence. 
+
+The Annals of Probability , 24(1):1–34. Alex Wang, Amanpreet Singh, Julian Michael, Felix Hill, Omer Levy, and Samuel Bowman. 2018. GLUE: A multi-task benchmark and analysis platform for natural language understanding. In Proceedings of the 2018 EMNLP Workshop BlackboxNLP: Analyzing and Interpreting Neural Networks for NLP , pages 353–355. Association for Computational Linguistics. Sen Wu, Hongyang R. Zhang, and Christopher Ré. 2020. Understanding and improving information transfer in multi-task learning. arXiv preprint arXiv:2005.00944 .Zhilin Yang, Peng Qi, Saizheng Zhang, Yoshua Bengio, William Cohen, Ruslan Salakhutdinov, and Christo-pher D. Manning. 2018. HotpotQA: A dataset for diverse, explainable multi-hop question answering. In Proceedings of the 2018 Conference on Empiri-cal Methods in Natural Language Processing , pages 2369–2380. Association for Computational Linguis-tics. 
+
+Appendix A Theoretical Analysis 
+
+We establish three formal properties of the surgical gate. All proofs are deferred to Appendix C. 
+
+A.1 Surgical Feature Alignment Definition 1 (Surgical feature alignment) . For task tk
+
+and input distribution Ptk , the surgical feature align-ment ρk is the expected absolute inner product between the projected feature vector and the gradient of the con-ditional log-likelihood evaluated at the fused representa-tion: 
+
+ρk = E(x,y )∼Ptk
+
+h
+
+⟨s′(x), ∇ˆh log p(y | ˆh)⟩
+
+i
+
+. (15) 
+
+Interpretation. ρk measures the extent to which the lexical-feature direction s′ provides useful gradient sig-nal for the classification objective. When ρk is high, per-turbing ˆh in the direction of s′ produces a large change in the log-likelihood, so s′ encodes information about 
+
+y. When ρk = 0 , s′ is orthogonal in expectation to the score function, so it carries no task-relevant signal. 
+
+Empirical estimation. ρk can be estimated by Monte Carlo on a held-out set, computing the average ab-solute inner product between s′(x) and the gradient 
+
+∇ˆh log p(y | ˆh) obtained by backpropagation. We pro-vide such estimates in Appendix G, where we observe 
+
+ρ2 ≈ 3.7 (retrieval, high alignment) versus ρ1 ≈ 1.4
+
+(sentiment, moderate) and ρpre-IWN  
+
+> 4
+
+≈ 0.6 (detection, low alignment due to prior contamination), rising to 
+
+ρpost-IWN  
+
+> 4
+
+≈ 2.1 after IWN—a clean explanation for the IWN gain. 
+
+A.2 Excess-Risk Bound Theorem 1 (Gate approximation bound) . Let f ⋆ be the Bayes-optimal classifier for task tk and fθ a
+
+SURG ELLM classifier obtained by empirical risk min-imization on Dtr  
+
+> k
+
+with Nk examples. Suppose: 1. the encoder Eϕ is Lϕ-Lipschitz; 2. the head map is Lhead -Lipschitz; 3. the loss ℓ is ρ-Lipschitz with respect to its first argu-ment. Then with probability at least 1 − δ over the draw of 
+
+Dtr  
+
+> k
+
+, the excess risk satisfies:               
+
+> R(fθ)−R (f⋆)≤C
+> √Nk
+> | {z }
+> generalization
+> +λmax (W⊤
+> gWg)2s′−s⋆2
+> |{z }
+> approximation
+> ,(16)
+
+where C = O Lϕ Lhead ρ plog(1 /δ ) depends on the Lipschitz constants and the Rademacher complexity of the hypothesis class, λmax (·) denotes the spectral norm of the gate weight matrix, and s⋆ is the oracle surgical feature vector that minimizes the gate approximation error. Proof outline. We decompose the excess risk into gen-eralization, ERM, and approximation terms. The gener-alization term is bounded by Rademacher complexity, which—via Talagrand’s contraction lemma (Talagrand, 1996; Bartlett and Mendelson, 2002)—reduces to the product of Lipschitz constants of the composed map. The approximation term is obtained by propagating 
+
+∥s′ − s⋆∥ through the bilinear gate using sup z σ′(z) = 1/4. The full proof is in Appendix C. 
+
+Interpretation. The first term is standard: more train-ing data shrinks the generalization gap. The second term is the novel piece: it is small when the projected feature vector is close to its optimum s⋆ (i.e., when Ws
+
+is well-trained) and large when the gate matrix has a high spectral norm. This bound is consistent with the empirical observation that highly aligned tasks (high 
+
+ρk) benefit more from the gate, because s′ then carries a useful signal that is well-approximated by even modest 
+
+Ws.
+
+A.3 Safety under Zero Alignment Proposition 2 (Gate degeneracy under zero alignment) .
+
+Suppose the surgical feature alignment ρk = 0 for task 
+
+tk. Then at any local minimum of the regularized train-ing loss with weight decay λ > 0:1. ∥Ws∥ → 0 as training proceeds; 2. s′(x) → 0 for all x;3. g⋆i → 1 for all i ∈ { 1, . . . , d };4. the gated fusion satisfies ˆh → LN( ˜h).Proof outline. When ρk = 0 , the expected gradient 
+
+E[∇Ws L] = 0. Under SGD with weight decay, the update rule reduces to pure exponential decay Ws ←sst_pos 
+
+> sst_neg
+> llm_stat
+> llm_formal
+> llm_list
+> human_pers
+> human_hedge
+> human_emo
+> retrieval
+> prompt_cot
+
+D1 SST-2 
+
+D2 HotPot 
+
+D3 LLM-7 
+
+D4 HumLLM 
+
+> -0.014
+> -0.000
+> -0.001
+> -0.001
+> -0.011
+> -0.001
+> -0.001
+> -0.001
+> -0.001
+> -0.002
+> -0.005
+> -0.018
+> -0.001
+> -0.001
+> -0.004
+> -0.012
+> -0.001
+> -0.001
+> -0.003
+> -0.008
+> -0.001
+> -0.001
+> -0.003
+> -0.014
+> -0.001
+> -0.000
+> -0.002
+> -0.006
+> -0.002
+> -0.000
+> -0.002
+> -0.010
+> -0.000
+> -0.011
+> -0.001
+> -0.001
+> -0.000
+> -0.001
+> -0.006
+> -0.002
+
+−0.015 
+
+−0.010 
+
+−0.005 
+
+0.000 
+
+> ΔMacro-F1 (drop)
+
+Figure 6: Leave-one-out F1 drop per surgical indicator group (SURGELLM-G-RoBERTa). Each task has a clearly dominant group: sst_pos/neg for D1, retrieval for D2, prompt_cot for D3, and llm_stat /human_pers for D4. 
+
+(1 − λη )Ws, driving Ws → 0. Consequently s′ → 0,and the gate output is determined entirely by ˜h. To min-imize loss, the gate routes all signals through ˜h, forcing 
+
+gi → 1. Full proof in Appendix C. 
+
+Corollary 3 (Safety of adding the surgical gate) . For any task tk with ρk = 0 , adding the surgical gate to a baseline encoder cannot increase the minimum achiev-able empirical risk. The gate either provides a strict improvement (if ρk > 0) or degenerates to identity (if 
+
+ρk = 0 ). 
+
+Empirical caveat: the imbalance loophole. Corol-lary 3 assumes that ρk accurately captures the gradient-feature alignment under the data distribution seen by the gate . Under severe class skew, the standardization in Eq. 8 feeds the gate with prior-contaminated features, and the effective ρk measure on this contaminated dis-tribution can be misleadingly low even when the under-lying feature signal is informative. This is precisely the failure mode we observed on D 4 without IWN. IWN re-stores the conditions of Proposition 2 on imbalanced data. We document this in §6.3, where the empirical 
+
+ρ4 rises from ≈ 0.6 to ≈ 2.1 after IWN, and the safety property holds. 
+
+A.4 Research Questions 
+
+RQ1—Does the gate help beyond the prefix alone? 
+
+Without IWN : on D 2, SURG ELLM-S outper-forms SURG ELLM-G by +.005 –+.009 across backbones; on D 3, gain is +.003 . On D 4, the gate hurts by −.049 .
+
+With IWN : the gate becomes uniformly ben-eficial. SURG ELLM-IWN-RoBERTa exceeds SURG ELLM-G-RoBERTa by +.005 avg. F1, with 
+
+the largest gain on D 4 (+.132 ). 
+
+Conclusion : The gate is architecturally sound but requires class-balanced statistics to realize its bene-fit on imbalanced tasks. 
+
+RQ2—Do surgical features help without the gate? 
+
+SURG ELLM-G-RoBERTa vs. Baseline-RoBERTa: 
+
++.008 on D 1, +.002 on D 2, −.001 on D 3, −.002 on D4. The prefix alone provides modest, task-specific benefit and respects Corollary 3: it does not hurt tasks where lexical priors are weak. 
+
+RQ3—Does extended training help? 
+
+SURG ELLM-F ULL -ALBERT achieves the joint-best D2 F1 (0.961 ), tying SURG ELLM-S-DistilBERT. Extended training without IWN am-plifies prior bias on D 4 (−0.054 vs. Baseline). With IWN, this is fully reversed: SURG ELLM-IWN-RoBERTa exceeds Baseline-RoBERTa by +0 .130 
+
+on D 4. The interaction Extended × IWN is positive. 
+
+RQ4—Is the surgical vocabulary essential? 
+
+A random-vocabulary control (Table 9) drops 
+
+−0.028 avg. F1 versus curated, confirming gains derive from lexical content rather than parameter count. An auto-extracted vocabulary (Appendix E) recovers 99 .5% of the curated performance, sug-gesting that manual curation is a convenience rather than a hard requirement. RQ5—Does SURG ELLM scale to the T5 paradigm? 
+
+T5-base ( 220 M) scores 0.897 avg. F1, dominated by SURG ELLM-IWN-RoBERTa ( 125 M, 0.940 ). For classification on heterogeneous tasks, an encoder-only model with surgical augmentation is more parameter-efficient than an encoder-decoder. 
+
+Why surface features are not redundant with the encoder. Two arguments suggest that surface features are not implicit in the encoder’s contextual representa-tion: truncation and loss. The encoder receives the most L tokens (typically L ∈ { 96 , 128 } in our experi-ments). Statistics such as "total word count" and "total exclamation count" are computed on the full document and therefore carry information that is unavailable to the encoder when the input is truncated. We verify em-pirically (§7.2, Table 10) that removing surface features costs −0.011 F1 on D 4 and −0.005 on average. Distri-butional shift. Even when the input is not truncated, the encoder’s representation is optimized for next-token pre-diction during pretraining and may not preserve precise count statistics in its CLS dimension. Surface features provide a deterministic, lossless channel for these statis-tics. 
+
+B Hyperparameters 
+
+Table 13: Full hyperparameter configuration. LR = learning rate; EP = max epochs; BS = per-GPU batch size; GA = gradient accumulation; MaxL = max sequence length; WU = warmup fraction.                                                                         
+
+> Model LR EP BS GA MaxL WU
+> Baseline-DistilBERT 2×10 −5332 196 0.06 Baseline-BERT 2×10 −5316 2128 0.06 Baseline-RoBERTa 2×10 −5316 2128 0.06 T5-base 3×10 −4584128 0.06 SURG ELLM-S-DistilBERT 2×10 −5432 196 0.06 SURG ELLM-S-BERT 2×10 −5416 2128 0.06 SURG ELLM-G-RoBERTa 1.5×10 −5416 2128 0.06 SURG ELLM-F ULL -RoBERTa 1.5×10 −5516 2128 0.06 SURG ELLM-F ULL -ALBERT 2×10 −5532 196 0.06 SURG ELLM-IWN-RoBERTa 1.5×10 −5516 2128 0.06 SURG ELLM-IWN-BERT 2×10 −5516 2128 0.06
+
+C Proofs 
+
+C.1 Lipschitz Composition Lemma Lemma 4 (Lipschitz composition) . The composed map 
+
+hθ : x 7 → ˆy = fθ (x, t k) is Lipschitz with constant 
+
+Lθ ≤ Lϕ ·LG ·Lhead , where LG is the Lipschitz constant of the gate (Eq. 6–7) and Lhead that of the classification head. Proof. For any x, x ′:
+
+∥ˆy − ˆy′∥ ≤ Lhead ˆh − ˆh′ (head Lipschitz) 
+
+≤ Lhead · LG ˜h − ˜h′ (gate Lipschitz) 
+
+≤ Lhead · LG · Lϕ ∥x − x′∥ .
+
+(encoder Lipschitz) 
+
+C.2 Proof of Theorem 1 
+
+Proof. Let F be the hypothesis class of all SURG ELLM classifiers parameterized by θ. By Talagrand’s contraction lemma (Talagrand, 1996) and Lemma 4, the Rademacher complexity of F is bounded: 
+
+ˆRN (F) ≤ Lθ · rad( X )
+
+√Nk
+
+, (17) where rad( X ) is the radius of the input space. Stan-dard Rademacher generalization bounds (Bartlett and Mendelson, 2002) give, with probability ≥ 1 − δ:
+
+R(fθ )− ˆR(fθ ) ≤ 2 ˆRN (F)+ O
+
+q log(1 /δ )
+
+> Nk
+
+
+
+≤ C
+
+√Nk
+
+.
+
+(18) For the approximation term, the feature projection s′ =ReLU( Wss + bs) introduces an error relative to the oracle s⋆ that minimizes prediction loss. Propagating through the bilinear gate (Eq. 6): 
+
+∥g − g⋆∥ ≤ ∥ σ′∥∞ · ∥ Wg [: , d :] ∥ · ∥ s′ − s⋆∥≤ 14 λmax (W⊤ 
+
+> g
+
+Wg )1/2 ∥s′ − s⋆∥ ,
+
+using sup z σ′(z) = 1 /4. Propagating through the fu-sion (Eq. 7) and cross-entropy yields the quadratic term in Eq. 16. Combining with the generalization term com-pletes the proof. 
+
+C.3 Proof of Proposition 2 
+
+Proof. When ρk = 0 , by Definition 1, the expected gradient with respect to Ws satisfies: 
+
+E[∇Ws L] = E[∇s′ L] · s⊤ = 0. (19) Under SGD with weight decay λ > 0, the update re-duces to Ws ← (1 − λη )Ws, driving Ws → 0. Con-sequently, s′ = ReLU( Wss + bs) → ReLU( bs) → 0
+
+assuming small initial biases. The gate input degener-ates to [˜h; 0], and to minimize loss the model routes all signal through ˜h, forcing gi → 1 for all i.
+
+D Surgical Vocabulary 
+
+The surgical vocabulary contains ten case-insensitive indicator groups. Prefix matching (marked ∗) allows the matching of inflectional families: • sst_pos : great, excellent, brilliant, terrific, wonder-ful, masterpiece, captivat ∗, impressive, delightful, superb • sst_neg : terrible, awful, dreadful, unwatchable, boring, dull, mediocre, disappoint ∗, worst, painful 
+
+• llm_stat : empirically, statistically, demonstrated, observed, evidenced, indicate ∗, suggest ∗, results show, data show 
+
+• llm_formal : moreover, furthermore, additionally, consequently, therefore, in conclusion, in summary, to summarize 
+
+• llm_list : firstly, secondly, thirdly, finally, in addi-tion, on the other hand, (1), (2), (3) 
+
+• human_pers : i, my, we, our, personally, i think, i believe, i feel 
+
+• human_hedge : maybe, perhaps, possibly, kind of, sort of, i guess, probably, somewhat, arguably 
+
+• human_emo : love, hate, amazing, awesome, terrible, awful, fantastic, horrible, sad, happy 
+
+• retrieval : according to, as stated in, the article re-ports, the text states, multi-hop, supporting context, in the passage 
+
+• prompt_cot : step by step, let us think, first, then, next, reasoning, the chain of thought, walk through 
+
+Six surface features are appended: word count, mean word length, sentence count, question-mark count, exclamation-mark count, and binary digit presence indi-cator (§3.3). 
+
+E Auto-Extracted Vocabulary (Transfer Recipe) 
+
+We extract candidate indicator words via class-conditional log-odds with an informative Dirichlet prior (Monroe et al., 2008) on the training set of each task, then cluster top-K (K = 50 ) candidates per task using SBERT (Reimers and Gurevych, 2019) embed-dings into 10 groups via k-means. 
+
+Procedure. 
+
+1. For each task tk and class c, compute the log-odds ratio with an informative Dirichlet prior on word frequencies. 2. Rank words by absolute log-odds; retain the top 
+
+K = 50 per class. 3. Embed the union of retained words using SBERT. 4. Run k-means with k = 10 on the embedding matrix to obtain ten clusters. 5. Use cluster membership as automatically derived indicator groups; surface features are unchanged. 
+
+Result. SURG ELLM-G-RoBERTa with the auto-extracted vocabulary attains 0.903 avg. F1 versus 0.906 
+
+manual curation—a 0.3% relative gap (Table 9, “Auto-extracted” row), confirming the manual curation step is a convenience rather than a hard requirement. 
+
+F Per-Seed Results 
+
+Table 14: Per-seed Avg F1. Three seeds {0, 1, 2} for selected models. Mean ± SD computed from these values.                             
+
+> Model Seed 0 Seed 1 Seed 2 Mean
+> Baseline-RoBERTa 0.906 0.901 0.905 0.904 SURG ELLM-G-RoBERTa 0.908 0.902 0.908 0.906 SURG ELLM-F ULL -RoBERTa 0.892 0.886 0.889 0.889 SURG ELLM-IWN-RoBERTa 0.943 0.937 0.940 0.940 SURG ELLM-IWN-BERT 0.929 0.924 0.928 0.927 T5-base 0.900 0.893 0.898 0.897
+
+G Empirical Estimates of ρk
+
+We estimate the surgical feature alignment ρk (Defini-tion 1) by Monte Carlo on the validation split using 
+
+1,000 examples per task. For each example, we back-propagate to obtain ∇ˆh log p(y | ˆh) and compute the absolute inner product with s′(x).
+
+Table 15: Empirical ρk estimates on SURG ELLM-G-RoBERTa (without IWN) and SURG ELLM-IWN-RoBERTa (with IWN). 
+
+Task ρk (no IWN) ρk (IWN) 
+
+D1 SST-2 1.42 1.39 D2 HotPot 3.71 3.68 D3 LLM-7 1.83 1.85 D4 HumLLM 0.61 2.13 
+
+The empirical ordering supports the theory: D 2 (high-est ρ, largest gain); D 4 after IWN (recovered ρ, IWN gain); D 1 and D 3 (moderate ρ, small gains). 
+
+H Computational Complexity 
+
+Per-example forward cost. The encoder dominates with Θ( L · d2) for an L-layer transformer of hidden di-mension d. The surgical components add: (i) Θ( d ·
+
+16) for feature projection; (ii) Θ( d · 2d) = Θ( d2)
+
+for the gate; (iii) Θ( d2/2) per task head. The total SURG ELLM overhead is Θ( d2), asymptotically negli-gible compared to the encoder’s Θ( L · d2) for L ≫ 1.
+
+Memory. The gate adds 2d2 + d = 2 · 768 2 + 768 ≈
+
+1.18 M parameters; the feature projection adds 16 d+d ≈
+
+12 .5K parameters; the task embedding |T | · d ≈ 3K. Total SURG ELLM overhead is ∼ 1.2M parameters per backbone—about 1% of RoBERTa-base. 
+
+Wall-clock. On 2×T4 GPUs, SURG ELLM-RoBERTa adds ∼ 100 s versus Baseline-RoBERTa (233 → 332 s for the same five-epoch budget), a 43% 
+
+overhead driven primarily by extended training and prefix-token tokenization. 
+
+I Reproducibility Checklist 
+
+• Code: released at https://surgellm-iwn. github.io (Project Webpage). • Data: all four corpora are publicly available; we pro-vide preprocessing scripts that reproduce our strati-fied splits. • Random seeds: all results from seeds {0, 1, 2};data splits, weight initialization, dropout masks, and CUDA determinism are seeded. • Software versions: PyTorch 2.1, Hugging Face Transformers 4.35, Accelerate 0.24, scikit-learn 1.3, sentence-transformers 2.2. • Hardware: 2× NVIDIA T4 (16 GB) with FP16 mixed precision via Accelerate. • Hyperparameters: listed in Table 13. • Statistical tests: bootstrap ( B = 2,000 , seed 
+
+0); paired Welch t-tests with Benjamini-Hochberg FDR=0.05. • Estimated total compute: ∼ 38 GPU-hours on T4 to reproduce all main and ablation results. 
+
+J Preliminary Multilingual Experiment 
+
+To probe cross-lingual transfer of the auto-extraction recipe, we evaluate SURG ELLM-G-XLM-R-base on French (A LLOCINE (Blard, 2020)) and German (G ERMAN SENTIMENT ) sentiment corpora using auto-extracted vocabularies built per language. Capping at 
+
+5,000 training examples and evaluating on official test splits with three seeds: 
+
+Table 16: Preliminary multilingual results. SURG ELLM-G-XLM-R-base with auto-extracted per-language vocabular-ies vs. baseline. 
+
+Configuration French German 
+
+XLM-R-base baseline 0.917 0.872 SURG ELLM-G-XLM-R-base (auto) 0.926 0.881 
+
+∆ +.009 +.009 
+
+The auto-extracted French and German vocabular-ies yield gains within 0.01 F1 of the English-curated baseline gain ( +0 .008 on D 1), suggesting the recipe transfers without per-language manual curation. A full-scale multilingual study is left to future work. 
+
+Interpretation. The IWN gains on D 4 are highly sig-nificant ( p < 0.001 for both backbones). The retrieval improvements on D 2 are significant for three configu-rations. Differences on D 1 and D 3 are mostly within seed noise, consistent with the gate-degeneracy result of Proposition 2: when surgical alignment is moderate, the gate degenerates harmlessly to a near-identity map, and observed differences are dominated by SGD noise. 
+
+K Training Algorithm 
+
+Algorithm 1 presents the full SURG ELLM training procedure with multi-GPU execution, pre-tokenization caching, optional IWN normalization, and early stop-ping. 
+
+Algorithm 1 SURG ELLM Multi-GPU Training (with optional IWN) 
+
+Require: Corpus D; model config cfg ; accelerator A; flag 
+
+IWN ∈ { 0, 1}
+
+Ensure: Trained model fθ
+
+1: Split: for each task tk , stratify Dk into Dtr  
+
+> k
+
+, Dv 
+
+> k
+
+, Dte 
+
+> k
+
+(70/15/15%) 2: if IWN then 
+
+3: Compute per-class (¯ sc,k , σc,k ) on Dtr 
+
+> k
+
+4: Form class-balanced (¯ sbal  
+
+> k
+
+, σbal  
+
+> k
+
+) via Eq. 10 5: else 
+
+6: Compute marginal (¯ sk , σk ) on Dtr 
+
+> k
+
+7: end if 
+
+8: Pre-tokenize: cache training/val texts as tensors (chunk 
+
+C=2 ,048 )9: Construct fθ (§3.4–3.7); optimizer AdamW; scheduler γ
+
+10: fθ , Adam , γ, DL tr , DL v ← A .prepare (. . . ) ▷ DDP + FP16 11: F ⋆ 
+
+> 1
+
+← −∞ ; p ← 0; θ⋆ ← θ
+
+12: for e = 1 , . . . , E max do 
+
+13: fθ .train () 
+
+14: for each mini-batch B = {(xi, y i, t i)} do 
+
+15: Compute s(xi) (Eq. 4); standardize via Eq. 8 or Eq. 11 16: Build prefix x′ 
+
+> i
+
+(Eq. 12) 17: ˆyi, ℓ i ← fθ (x′
+
+> i
+
+, t i, s(xi), y i) ▷ Eq. 1 18: A.backward (ℓi/τ ) ▷ τ = grad. accum. steps 19: if step ≡ 0 (mod τ ) then 
+
+20: A.clip_grad_norm (1 .0) 
+
+21: Adam .step () ; γ. step () ;
+
+Adam .zero_grad () 
+
+22: end if 
+
+23: end for 
+
+24: F e 
+
+> 1
+
+← QuickVal (fθ , DL v, A)
+
+25: if F e 
+
+> 1
+
+> F ⋆ 
+
+> 1
+
+then 
+
+26: F ⋆ 
+
+> 1
+
+← F e 
+
+> 1
+
+; θ⋆ ← A .unwrap (fθ ).θ ; p ← 0
+
+27: else 
+
+28: p ← p + 1 
+
+29: if p ≥ P then break 
+
+30: end if ▷ patience P =2 
+
+31: end if 
+
+32: end for 
+
+33: fθ ← θ⋆; evaluate on Dte 
+
+> k
+
+34: return fθ
+
+L Meta Review and Paper Updates 
+
+This appendix documents the three principal changes made in response to the meta-review and the four reviewer reports (Qs1u, 4Pvq, idHo, EVkC) for the KnowFM 2026 Workshop and ARR. For each concern, we state (i) the exact reviewer criticism, (ii) what was changed in the paper, and (iii) where to find the updated material. 
+
+Crosswalk Table 
+
+Table 17 provides a compact mapping from the re-viewer’s comment on the manuscript change. 
+
+L.1 R1 — Class Imbalance on D 4:Instance-Weighted Normalization Reviewer concern. Reviewers Qs1u and EVkC, and the meta-reviewer, identified the 9.3:1 raw class skew in the authorship corpus as the root cause of Table 17: Reviewer-to-revision crosswalk. R = revision implemented in this camera-ready version. ✓ = fully addressed; ∼ =partially addressed with future work note. 
+
+Reviewer Concern (verbatim summary) Change in paper Status 
+
+Qs1u, EVkC, Meta Class imbalance on D 4 corrupts gate statis-tics; IWN deferred to future work IWN fully implemented (§3.5, §6.3, Ap-pendix L.1) 
+
+✓
+
+Qs1u, idHo No sensitivity analysis of the surgical vo-cabulary; unclear why exactly 10 groups; surface features may be redundant Four-part sensitivity analysis added (§7.2, Appendix L.2) 
+
+✓
+
+4Pvq, idHo, Meta D1 (physics oscillation) saturates at F1 =1.000 ; inflates reported averages; should be replaced with a GLUE task D1 replaced with SST-2; all aggregates recomputed over {SST-2, D 2, D 3, D 4 }(Appendix L.3) 
+
+✓
+
+idHo No comparison to T5 / text-to-text unified models T5-base added as 11th model variant; see Table 3 and §6.4 
+
+✓
+
+Qs1u, 4Pvq Single-seed results weaken confidence in small F1 differences All results re-run over three seeds 
+
+{0, 1, 2}; mean ± SD reported through-out; per-seed breakdown in Appendix F 
+
+✓
+
+Qs1u Abstract overclaims “state-of-the-art per-formance” Abstract revised to “competitive parameter-efficient multi-task perfor-mance” with exact CI overlap stated 
+
+✓
+
+idHo No multilingual or cross-domain evalua-tion Preliminary French/German experiment added (Appendix J); full-scale study left to future work 
+
+∼
+
+SURGELLM’s underperformance on D 4. In the orig-inal submission, Table 8 showed the gate degrading D4 by ∆ = −0.046 on average across backbone pairs (worst case: SURG ELLM-F ULL -RoBERTa vs. Baseline-RoBERTa, ∆ = −0.052 ). The proposed fix—class-conditional or instance-weighted normaliza-tion—was deferred to future work despite being the most practically relevant task in the suite. 
+
+What changed. We implement Instance-Weighted Normalization (IWN) , a parameter-free correction ap-plied to the surgical-feature standardization step (Eq. 8 in the main paper). Instead of computing global per-dimension statistics over the entire training partition of task tk:
+
+¯sk = 1
+
+NkNkX
+
+> i=1
+
+s(xi), σk =
+
+vuut 1
+
+NkNkX
+
+> i=1
+
+ s(xi) − ¯sk
+
+2,
+
+(Eq. 8, original) we replace these with class-balanced statistics: 
+
+¯sbal  
+
+> k
+
+= 1
+
+nc,k nc,k 
+
+X
+
+> c=1
+
+¯sc,k , σbal  
+
+> k
+
+= 1
+
+nc,k nc,k 
+
+X
+
+> c=1
+
+σc,k ,
+
+(Eq. 10) where ¯sc,k and σc,k are the per-class mean and standard deviation of s on the training set, and nc,k is the number of classes in task tk. At inference, these statistics are used directly without any class label (test-time class-agnostic). 
+
+Key properties of IWN. 
+
+1. Parameter-free : no new learnable parameters; only the normalization constants change. 2. Test-time agnostic : (¯ sbal  
+
+> k
+
+, σbal  
+
+> k
+
+) are computed once from training labels and applied at inference without requiring class information. 3. Reduces to standard normalization on balanced corpora : when πc = 1 /n c,k , the two estimators coincide (up to the difference between weighted and unweighted variance), so IWN is a strict generaliza-tion at zero cost in the balanced regime. 4. Compositional : IWN can be combined with fo-cal loss (Lin et al., 2017) or class-balanced re-weighting (Cui et al., 2019) without conflict. 
+
+Empirical outcome. SURG ELLM-IWN-RoBERTa achieves D 4 macro-F1 = 0.892 versus Baseline-RoBERTa 0.762 (∆ = +0 .130 , p < 0.001 , BH-corrected Welch t-test; Table 4), fully reversing the original gate-induced regression and exceeding the base-line by the largest single margin in our study. Per-class breakdown in Table 5 shows that IWN symmetrizes human and LLM precision/recall around 0.89 (from the unbalanced 0.63 LLM recall vs. 0.79 human recall without IWN). 
+
+Connection to theory. Empirical estimates of surgi-cal feature alignment ρk (Appendix G, Table 15) show 
+
+ρpre-IWN  
+
+> 4
+
+≈ 0.61 rising to ρpost-IWN  
+
+> 4
+
+≈ 2.13 after IWN. This rise in alignment directly reduces the approxi-mation term in Theorem 1 (Eq. 16), explaining why IWN converts a harmful gate into a beneficial one: the gate was architecturally sound but was being fed prior-contaminated features. 
+
+L.2 R2 — Surgical Vocabulary Sensitivity Analysis Reviewer concern. Reviewer Qs1u raised the absence of any analysis of sensitivity to the manually curated 10-group surgical vocabulary. Reviewer idHo asked specifically: (a) why exactly 10 indicator groups were selected; (b) whether an ablation over group count ex-ists; and (c) why surface features (word count, mean word length, question-mark count) are provided explic-itly when they might be implicit in the raw text. 
+
+What changed. We added a four-part sensitivity study in §7.2 of the main paper, using SURG ELLM-G-RoBERTa across three seeds as the reference config-uration. 
+
+R2a — Group-Count Sweep 
+
+We vary |V| ∈ { 0, 5, 10 , 15 , 20 }. When reducing, we retain the most discriminative groups by chi-squared statistic on training data; when increasing, we add se-mantically redundant thesaurus-derived variants. Ta-ble 8 in the main paper shows that performance plateaus at |V| = 10 : any value in {10 , 15 } produces statistically indistinguishable results (paired Welch p > 0.05 , three seeds). Larger vocabularies ( |V| = 20 ) incur a small D4 drop ( −0.012 ) from noise introduced by redundant variants. The system is therefore not sharply tuned to the exact group count, but 10 groups achieve the best precision-to-effort trade-off. 
+
+R2b — Random-Vocabulary Control 
+
+To determine whether gains are lexical or merely para-metric, we replace each curated group with a same-cardinality random sample of high-frequency English content words from the British National Corpus (BNC). Table 9 shows a −0.028 average F1 drop versus curated vocabulary ( p = 0 .003 , three seeds), confirming that the gate responds to semantic content , not extra parame-ters. An auto-extracted vocabulary (log-odds ranking + 
+
+k-means on SBERT embeddings; Appendix E) recov-ers 99 .5% of curated performance ( ∆ = −0.003 avg. F1), providing a path to new domains without manual curation. 
+
+R2c — Per-Group Leave-One-Out 
+
+We retrain SURG ELLM-G-RoBERTa with each of the 10 groups removed in turn. Table 11 shows that each task has a clearly dominant group: sst_pos/neg for D 1
+
+(−0.014 ), retrieval for D 2 (−0.011 ), prompt_cot 
+
+for D 3 (−0.006 ), and llm_stat for D 4 (−0.018 ). Cross-task leakage is minimal: removing a task-specific group rarely affects other tasks by more than 0.002 .
+
+R2d — Surface-Features-Only Ablation 
+
+To address reviewer idHo’s concern that surface statis-tics may be implicit in the encoder, Table 10 shows that removing them costs −0.011 F1 on D 4 and −0.005 on average. Two arguments confirm they are not redundant with the encoder: • Truncation loss. The encoder receives at most L ∈{96 , 128 } tokens; global statistics (total word count, exclamation-mark count) are computed on the full 
+
+untruncated document and carry information the encoder cannot recover from a partial view (Ding et al., 2020). • Distributional shift. Even without truncation, the 
+
+[CLS] representation is optimized for masked-token prediction and may not preserve count statistics; the surgical channel provides a deterministic, lossless path for these. 
+
+L.3 R3 — Replacement of D1 with SST-2 Reviewer concern. Reviewers 4Pvq and idHo, and the meta-reviewer, noted that D1 (synthetic physics oscillation classification) attains F1 = 1 .000 for every 
+
+model variant in both the single-seed and multi-seed set-tings. This saturated task contributes zero discriminative signal to any model comparison while inflating reported average scores. The meta-reviewer recommended re-placing D1 with a standard GLUE benchmark task to improve comparability with MT-DNN (Liu et al., 2019a) and Muppet (Aghajanyan et al., 2021). 
+
+What changed. D1 is removed from the main evalu-ation suite. In its place we incorporate SST-2 (Socher et al., 2013) (binary movie-review sentiment; 7,666 capped training examples; standard GLUE test split of 872 examples), referred to as D 1 throughout the revised paper. 
+
+Rationale for SST-2 specifically. 
+
+1. Non-saturated: published base-encoder accuracy on SST-2 spans 87 –94% ; in our multi-seed evalua-tion, F1 ranges 0.901 –0.937 across model variants (Table 3), providing genuine discriminative signal. 2. Standard benchmark: SST-2 is part of GLUE, enabling direct comparison with MT-DNN, Muppet, and related multi-task work. 3. Surgical vocabulary coverage: the sst_pos and 
+
+sst_neg indicator groups (Appendix D) fire reliably on sentiment-polarity vocabulary, making SST-2 the task most sensitive to the gate’s lexical prior—the complementary role D1 failed to provide. 
+
+Impact on aggregate metrics. Removing the uni-formly saturated D1 task narrows bootstrap CI widths from ≈ 0.17 (original paper, §8.4) to ≈ 0.12 in the revised four-task suite, sharpening statistical compar-isons. All aggregate F1 values in Tables 3–7 are recom-puted over {SST-2, D 2, D 3, D 4 }. The revised leader-board (Table 3) shows SURG ELLM-IWN-RoBERTa at 0.940 avg. F1 versus Baseline-RoBERTa at 0.904 
+
+(∆ = +0 .036 , p < 0.001 )—a substantially clearer sep-aration than the original ∆ = 0 .001 within-CI gap. 
+
+L.4 Additional Changes: Multi-Seed Evaluation and Abstract Revision Three-seed evaluation (Reviewers 4Pvq, Qs1u). 
+
+The original submission used a single random seed, which reviewers correctly identified as insufficient for interpreting small F1 differences. All experiments are re-run with seeds {0, 1, 2}; results are reported as mean 
+
+± SD throughout. Per-seed breakdowns for selected models are in Appendix F (Table 14). Key compar-isons remain significant: IWN gains on D 4 hold across all three seeds ( p < 0.001 ); retrieval gains on D 2 are significant for three configurations (Table 4). 
+
+T5-base comparison (Reviewer idHo). Reviewer idHo asked for a comparison against unified text-to-text models (T5, FLAN-style). We add T5-base ( 220 Mparameters) as an 11th model variant. T5-base achieves 
+
+0.897 avg. F1—competitive with encoder baselines but dominated by SURG ELLM-IWN-RoBERTa ( 0.940 ) at lower parameter count ( 125 M) and 1.24 × faster training (§6.4). 
+
+Abstract revision (Reviewer Qs1u). The phrase “state-of-the-art multi-task performance” is replaced with “competitive parameter-efficient multi-task per-formance,” and the headline comparison now explicitly states the bootstrap CI overlap: SURG ELLM-IWN-RoBERTa 0.940 ± .003 (95% CI [0 .934 , 0.946] ) versus Baseline-RoBERTa 0.904 ± .003 .
+
+Multilingual preliminary (Reviewer idHo). A pre-liminary experiment on French and German sentiment corpora using auto-extracted per-language vocabularies is reported in Appendix J (Table 16). SURG ELLM-G-XLM-R-base with auto-extracted vocabulary gains 
+
++0 .009 F1 in both languages, within 0.001 of the English-curated gain on D 1, suggesting the recipe trans-fers without per-language manual curation. A full-scale multilingual study is left to future work.

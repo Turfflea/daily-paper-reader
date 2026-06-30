@@ -1,0 +1,1067 @@
+Title: Text-attributed Graph Condensation via Text Selection and Attribute Matching
+
+URL Source: https://arxiv.org/pdf/2606.03839v1
+
+Published Time: Wed, 03 Jun 2026 01:26:09 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# Text-attributed Graph Condensation via Text Selection and Attribute Matching 
+
+# Haowei Han ∗
+
+School of Computer Science Wuhan University Wuhan, China haowei.han@whu.edu.cn 
+
+# Yuxiang Wang ∗
+
+School of Computer Science Wuhan University Wuhan, China nai.yxwang@whu.edu.cn 
+
+# Guojia Wan 
+
+School of Computer Science Wuhan University Wuhan, China guojiawan@whu.edu.cn 
+
+# Hao Wang 
+
+School of Computer Science Wuhan University Wuhan, China wanghao.cs@whu.edu.cn 
+
+# Shanshan Feng 
+
+School of Computer Science Wuhan University Wuhan, China victor_fengss@whu.edu.cn 
+
+# Hao Huang 
+
+School of Computer Science Wuhan University Wuhan, China haohuang@whu.edu.cn 
+
+# Jiawei Jiang †
+
+School of Computer Science Wuhan University Wuhan, China jiawei.jiang@whu.edu.cn 
+
+# Xiao Yan †
+
+Institute for Math & AI Wuhan University Wuhan, China yanxiaosunny@whu.edu.cn 
+
+## Abstract 
+
+Text-Attributed Graph (TAG) is an important type of graph struc-tured data, where each node has a text description. TAG models usually train a Graph Neural Network (GNN) and language model jointly, which leads to high space and time consumption, especially on large datasets. To mitigate this, we propose TAGSAM, a con-densation method that compresses TAGs while preserving training accuracy. TAGSAM comes with two key designs, i.e., subgraph text Selection and Attribute similarity Matching , which compress the text description and graph topology of TAG, respectively. For the texts, subgraph text selection selects and merges representative text chunks from multiple related text descriptions by maximizing mutual information. For the graph topology, popular condensation methods based on Matching Training Trajectories (MTT) suffer from high variance, which hinders accuracy. Our attribute similar-ity matching mitigates this issue by aligning stable similarity ma-trices. We evaluate TAGSAM against six state-of-the-art baselines, where it showcases superior performance. For the same compressed size, TAGSAM improves upon the best-performing baseline by an average of 4.9% in accuracy. Furthermore, it maintains competitive training accuracy even when the TAG is condensed to just 1% size. Our code is available at https://github.com/SundayVHan/TAGSAM 
+
+## CCS Concepts 
+
+• Information systems → Data mining . 
+
+> ∗Both authors contributed equally to this research.
+> †Corresponding authors.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> WWW ’26, Dubai, United Arab Emirates.
+> ©2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2307-0/2026/04 https://doi.org/10.1145/3774904.3792205
+
+## Keywords 
+
+Text-attributed Graph, Dataset Condensation, Graph Learning 
+
+ACM Reference Format: 
+
+Haowei Han, Yuxiang Wang, Guojia Wan, Hao Wang, Shanshan Feng, Hao Huang, Jiawei Jiang, and Xiao Yan. 2026. Text-attributed Graph Condensa-tion via Text Selection and Attribute Matching. In Proceedings of the ACM Web Conference 2026 (WWW ’26), April 13–17, 2026, Dubai, United Arab Emi-rates. ACM, New York, NY, USA, 11 pages. https://doi.org/10.1145/3774904. 3792205 
+
+## 1 Introduction 
+
+Text-Attributed Graphs (TAGs) [ 3 , 22 ] integrate graph topology with textual node descriptions. Current methods jointly train a Graph Neural Network (GNN) and a language model; for exam-ple, G2P2 [ 40 ] aligns graph and text encoder representations via contrastive learning, while GraphCLIP [ 48 ] utilizes an LLM to sum-marize local neighborhoods for richer context. Applied to tasks like article classification and social network analysis [ 1, 12 , 18 , 35 , 38 ], TAG models leverage text as an extra supervisory signal to lower label dependency and boost zero-shot capabilities compared to tra-ditional graph models. However, this dual-modal training remains highly memory- and time-intensive on large datasets. Dataset condensation [ 34 , 46 ] reduces training costs by compress-ing a large dataset into a smaller, highly representative one. Current approaches fall into two categories. Selective methods [ 2, 7 , 10 , 39 ]curate a representative subset from the original data; for instance, Herding [ 39 ] minimizes the feature discrepancy between the subset and the full dataset. Generative methods [ 34 , 46 , 47 ] synthesize compressed data via bi-level optimization, aligning student mod-els (trained on compressed data) with teacher models (trained on original data). This paradigm has recently been extended to graph by methods like GCond [ 14 ], which matches gradients between student and teacher models to generate synthetic graphs.              
+
+> arXiv:2606.03839v1 [cs.LG] 2 Jun 2026 WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates. Haowei Han et al. Downstream Model Condensation
+> node graph encoder text encoder label
+> supervised Traditional Graph
+> Condensation
+> (GCond) compress graph only
+> label dependent
+> training classification
+> Multi-modal
+> Condensation
+> (MTT-VL )
+> label free
+> compress graph and
+> text into embedding
+> self-supervised
+> training classification
+> zero-shot
+> (modified model )
+> text embedding
+> TAG
+> Condensation
+> (TAGSAM)
+> label free
+> compress graph and
+> discrete text jointly
+> self-supervised
+> training classification
+> zero-shot
+> text description
+
+Figure 1: Comparison of different dataset condensation paradigms. Unlike existing methods, TAGSAM ensures label independence and preserves the discrete nature of text data. Comparison to traditional graph condensation. While effec-tive for standard graphs, traditional graph condensation methods like GCond is ill-suited for TAGs. As Figure 1 demonstrates, such paradigm face two key limitations in this context: First, they con-dense only the graph modality, ignoring the rich, high-dimensional text. Second, their reliance on label supervision is incompatible with common TAG scenarios, where ground-truth labels are often scarce or entirely unavailable due to high annotation costs [ 40 ]. Consequently, these traditional methods, not being designed to preserve joint information, fail to meet the needs of TAG models for tasks like contrastive learning and zero-shot classification. 
+
+Challenges for current condensation methods. Among recent advances, the work most relevant to TAG condensation is the line of multi-modal dataset condensation methods that employ Match-ing Training Trajectories (MTT) to compress image-text datasets [ 41 , 43 ], which involves aligning the model parameter update tra-jectories produced between training on original dataset and com-pressed one. Yet, despite their success elsewhere, we find they perform poorly on TAGs due to the following two reasons: 
+
+• Unreadable text. MTT employs gradient descent for condensa-tion, which excels continuous features but struggles with discrete text, resulting in text being compressed into unreadable embed-ding vectors. Consequently, these embeddings are incompatible with downstream models like tokenizers. While retrieving near-est neighbor original texts in embedding space as substitutes is attempted, it incurs long runtime and lower model performance. 
+
+• Unstable training. As shown in Figure 2(a), MTT exhibits signif-icantly volatile training loss and accuracy when condensing a TAG, consequently resulting in sub-optimal convergence. This instability arises because the teacher model’s contrastive loss, computed on randomly sampled mini-batches, yields high trajec-tory variance, and hinders the student model’s matching process. These analysis shows that existing condensation methods cannot work well on TAGs. Thus, we ask the following research question: 
+
+Is it possible to design a TAG condensation method in no-label scenarios, which can generate discrete compressed text and achieves stable convergence? 0 1000 2000 3000 4000 5000 
+
+Epoch      
+
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 01000 2000 3000 4000 5000
+
+Epoch 
+
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 0.40
+> 0.45
+> 0.50
+> 0.55
+> 0.60
+> 0.65
+> 0.40
+> 0.45
+> 0.50
+> 0.55
+> 0.60
+> 0.65
+
+(a) Matching Training Trajectories (b) Attribute Similarity Matching 
+
+Loss Accuracy 
+
+Figure 2: Matching training trajectories vs. Attribute similar-ity matching. The left and right y-axes denote the model loss and accuracy, respectively. 
+
+To answer this question, we propose TAGSAM, which tackles the two critical challenges of MTT through two key components: 
+
+subgraph text selection and attribute similarity matching . Instead of updating compressed text embeddings via SGD, subgraph text selection directly selects representative text from the original space. Besides, compared to condensing TAGs via matching training tra-jectories, which suffers from high variance due to random batching, we propose to match attribute similarity, which is inherently more stable. This approach yields greater training stability and improves model accuracy, as shown in Figure 2(b). Furthermore, we theo-retically analyze our proposed method. First, for subgraph text selection, we introduce a practical greedy method and theoretically demonstrate that it effectively approximates the optimal solution. Second, we prove that attribute similarity serves as an effective estimate for point-wise mutual information between attributes, and is thereby inherently stable, leading to more robust training. To evaluate TAGSAM, we conduct extensive experiments and compare it with 6 state-of-the-art dataset condensation methods. The results show that TAGSAM consistently yields higher model training accuracy than all baselines. Compared with the best per-forming baseline, the average accuracy improvement of TAGSAM is 4.9%. Moreover, TAGSAM achieves competitive training accuracy with only a 1% condensation ratio of original TAGs. Besides, abla-tion studies indicate our model designs are effective. Furthermore efficiency studies suggest that TAGSAM is efficient in running time. To summarize, we make the following contributions: 
+
+• We identify that traditional graph condensation methods are unsuitable for TAG condensation scenarios, and existing multi-modal dataset condensation methods perform poorly due to is-sues such as unreadable text and high variance. 
+
+• We propose subgraph text selection to select representative texts in the discrete text space, and introduce attribute similarity matching to reinforce robustness via matching stable attribute correlations instead of training trajectories. 
+
+• We conduct extensive experiments on 5 datasets and compare TAGSAM with 6 state-of-the-art baselines. On average, TAGSAM raises downstream models’ accuracy by 4.9% over the strongest baseline, and matches or even improves the running time. Text-attributed Graph Condensation via Text Selection and Attribute Matching WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates. score-based select & merge 
+
+Subgraph Text Selection 
+
+> text chunk
+
+0.9  
+
+> representative score
+> ①subgr aph sampling
+> node
+
+Attribute Similarity Matching                
+
+> forward attribute similarity graph & text encoder
+> Synthetic TAG
+> α
+> βθ
+> ②text chunking and scor ing
+> train
+> a... g
+> g...
+> a
+> a... g
+> g...
+> a
+> teacher
+> student ①inner loop
+> ②outer loop
+> sBCE
+> update node attributes
+> embedding backward
+> tc1:0.9
+> tb2 :0.8
+> ta2 :0.7
+
+c
+
+gd f
+
+e
+
+ba
+
+i
+
+h        
+
+> α
+> ③chunk selection and mer ging
+> Original TAG
+> ta1 :0.6 ta2 :0.7 ta3 :0.1
+
+a   
+
+> tb1 :0.5 tb2 :0.8
+
+b   
+
+> tc1 :0.9 tc2 :0.2
+
+c  
+
+> α
+> α
+> β
+> θ
+> text description
+> ta1 :0.6
+> a2/4
+> b1/4
+> c1/4
+> weighted aggregate
+
+Figure 3: The overview of TAGSAM framework. Subgraph text selection (left) selects the representative chunks and merge them as a compressed text. Attribute similarity matching (right) compresses graph by minimizing the discrepancy between the attribute similarity matrices of the teacher and student models. 
+
+## 2 Preliminaries 
+
+Contrastive learning for TAG. Recent TAG models leverage contrastive learning to jointly learn graph and text embeddings. The goal is to maximize the similarity of positive pairs while min-imizing that of negative pairs. For example, G2P2 [ 40 ] employs a GCN [ 16 ] and a transformer [ 31 ]-based text encoder to align repre-sentations of graph topology and node text. A common objective is InfoNCE [ 26 ], where the loss for a batch 𝐵 of 𝑏 nodes is defined as: 
+
+ℓ𝑐𝑜𝑛 (𝐵 ) = − 1
+
+𝑏 
+
+> 𝑏
+
+∑︁ 
+
+> 𝑖 =1
+
+ exp (𝑠 𝑖𝑖 /𝜏 )
+
+Í𝑗 exp (𝑠 𝑖 𝑗 /𝜏 ) + exp (𝑠 𝑖𝑖 /𝜏 )
+
+Í𝑗 exp (𝑠 𝑗𝑖 /𝜏 )
+
+
+
+, (1) where 𝑠 𝑖 𝑗 is the cosine similarity between node 𝑖 ’s graph embedding and node 𝑗 ’s text embedding, and 𝜏 is the temperature coefficient. 
+
+Zero-shot classification for TAG. The contrastive learning lever-ages text as additional supervisory signal, which enables zero-shot classification. This allows the model to predict a node’s class with-out requiring labeled examples during training [ 24 ]. This capa-bility is highly valuable in TAGs because labels are expensive to obtain [ 40 ]. Detailed implementation can be found in Appendix C. 
+
+TAG Condensation Task. We introduce TAG condensation to reduce the high computational training cost. The goal is to compress a TAG T = (𝑋, 𝐴,𝑇 )—with node features 𝑋 ∈ R𝑁 ×𝑑 , adjacency 
+
+𝐴 ∈ R𝑁 ×𝑁 , and node texts 𝑇 —into a synthetic TAG S = ( ˆ𝑋, ˆ𝐴, ˆ𝑇 )
+
+containing only 𝑀 ≪ 𝑁 nodes. The condensed representation, defined by ˆ𝑋 ∈ R𝑀 ×𝑑 , ˆ𝐴 ∈ R𝑀 ×𝑀 , and readable texts ˆ𝑇 , is optimized to retain the information necessary for effective model training. 
+
+## 3 The TAGSAM Method 
+
+Overview. We propose a dataset condensation method dubbed as TAGSAM to compress the text-attributed graph dataset. The frame-work overview of TAGSAM is illustrated in Figure 3. Our method consists of two key condensation techniques: subgraph text selec-tion and attribute similarity matching, which are used to compress text and graph, respectively. In particular, we start by introducing the subgraph text selection, which compresses multiple text de-scriptions into a concise one by selecting representative chunks. Subsequently, we compress graph by stable attribute similarity matching, which avoids the high variance caused by MTT. 
+
+## 3.1 Subgraph Text Selection 
+
+Problem: unreadable text. Existing multi-modal dataset conden-sation methods optimize text directly in the embedding space via gradient descent. However, this approach has two critical limi-tations. First, the optimized embeddings are unreadable. Second, these embeddings are cannot be used as input for the tokenizer, ren-dering them incompatible with downstream language models and thus limiting their application. Therefore, we ask: can we compress large-scale text descriptions into concise and readable texts? 
+
+Solution: discrete text selection. To answer the research ques-tion, we propose subgraph text selection to compress several text descriptions into a concise one ˆ𝑇 𝑖 . The insight behind subgraph text selection is to select and merge representative text chunks from the original text descriptions, thereby eliminating the need to optimize continuous text embeddings. As depicted in Figure 3 (left), the subgraph text selection process involves three key steps: 
+
+• Step ➀: subgraph sampling. We sample 𝑀 subgraphs by ran-domly selecting a central node and performing a Breadth-First Search (BFS) until each subgraph reaches a size of 𝑔 .
+
+• Step ➁: text chunking and scoring. We divide the texts within each subgraph 𝐺 sub,i into a set of chunks, where each chunk con-sists of a series of consecutive sentences. We denote the collection of all such chunks as 𝐷 𝑖 . Then, we compute a representative score for each text chunk within each 𝐷 𝑖 .
+
+• Step ➂: chunk selection and merging. From the set 𝐷 𝑖 , we select top 𝑘 representative chunks and merge them to form a concise, compressed text ˆ𝑇 𝑖 . This process is repeated for each subgraph, resulting in 𝑀 compressed text descriptions. Subgraph text selection helps avoid the risk of blending unrelated texts by merging adjacent texts. Furthermore, compared to using WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates. Haowei Han et al. 
+
+the original texts directly as new text descriptions, our method provides the model with substantially better accuracy through enriched, non-redundant semantic information. 
+
+Selection criterion. After completing the aforementioned three condensation steps, we can preliminarily compress the text de-scriptions into a concise one. However, one issue remains unre-solved: what is the criterion for selecting text chunks? To address this problem, we introduce Chunk-wise Mutual Information (CMI) to evaluate the representativeness of text chunks and select the chunk with the highest representative score for merging at each condensation step. The essence of the CMI is to measure the amount of shared information between different text chunks. Specifically, given two text chunks 𝑐 𝑖 and 𝑐 𝑗 within a subgraph 𝐺 sub,o , their mutual information is calculated as follows: 
+
+CMI (𝑐 𝑖 ; 𝑐 𝑗 ) = log 𝑝 (𝑐 𝑖 , 𝑐 𝑗 )
+
+𝑝 (𝑐 𝑖 ) · 𝑝 (𝑐 𝑗 ) = log 𝑝 (𝑐 𝑖 |𝑐 𝑗 )
+
+𝑝 (𝑐 𝑖 ) . (2) After calculating the CMI between each pair of chunks, the next step is to select chunks to form a representative ˆ𝑇 𝑜 . Our design principle is to maximize the information coverage of 𝐷 𝑜 while minimizing 
+
+redundancy . We define the representativeness score (RS) as follows: 
+
+RS ( ˆ𝑇 𝑜 ) =∑︁   
+
+> ˆ𝑐 ∈ˆ𝑇 𝑜
+
+∑︁ 𝑐 ∈𝐷 𝑜 
+
+CMI ( ˆ𝑐 ; 𝑐 )
+
+| {z }
+
+> Information Coverage
+
+−∑︁      
+
+> ˆ𝑐 𝑖 ,ˆ𝑐 𝑗 ∈ˆ𝑇 𝑜
+
+CMI ( ˆ𝑐 𝑖 ; ˆ 𝑐 𝑗 )
+
+| {z }
+
+> Redundancy Penalty
+
+. (3) The first term maximizes the information correlation between ˆ𝑇 𝑜 
+
+and 𝐷 𝑜 , while the second term penalizes redundancy in ˆ𝑇 𝑜 .However, it is impractical to calculate the real probability distri-bution of chunks as shown in Equation 2. Therefore, we estimate the probability 𝑝 (𝑐 𝑖 ) of chunk 𝑐 𝑖 using a pre-trained causal lan-guage model 𝜙 . For conditional probabilities 𝑝 (𝑐 𝑖 |𝑐 𝑗 ), we estimate it by calculating the probability of 𝑐 𝑖 when 𝑐 𝑗 is used as a prefix with 𝜙 . Finally, we can estimate the chunk-wise mutual information between 𝑐 𝑖 and 𝑐 𝑗 as follow: 
+
+dCMI (𝑐 𝑖 ; 𝑐 𝑗 ) = 12 max 
+
+
+
+log 𝜙 (𝑐 𝑖 |𝑐 𝑗 )
+
+𝜙 (𝑐 𝑖 ) + log 𝜙 (𝑐 𝑗 |𝑐 𝑖 )
+
+𝜙 (𝑐 𝑗 ) , 0
+
+
+
+. (4) We take the average because language model can not guarantee 
+
+log 𝜙 (𝑐 𝑖 |𝑐 𝑗 )   
+
+> 𝜙 (𝑐 𝑖 )
+
+= log 𝜙 (𝑐 𝑗 |𝑐 𝑖 )    
+
+> 𝜙 (𝑐 𝑗 )
+
+. Zero truncation is applied to focus on chunk correlation and prevent misleading results from language model instability when taking logarithms. Since the objective in Equation 3 is a combinatorial problem, solving it becomes increasingly costly as |𝐷 𝑜 | grows larger. To address this problem, we employ an approximate solution by se-lecting chunks sequentially using a greedy algorithm. In particular, we choose the next chunk from the 𝐷 𝑜 that provides the greatest improvement to the Equation 3, until we have selected 𝑘 chunks at each condensation step. 
+
+Theoretical analysis. We also present a detailed theorem demon-strating that our greedy algorithm, which selects text chunks based on representative score, can approximate the theoretically optimal solution in complex combinatorial optimization. 
+
+Theorem 1. Given a cardinality constraint 𝑘 and the natural logarithm base 𝑒 , the greedy algorithm yields a solution ˆ𝑇 𝑜 that ap-proximates the optimal text selection 𝑇 ∗ 
+
+> 𝑜
+
+:
+
+RS ( ˆ𝑇 𝑜 ) ≥ 
+
+
+
+1 − 1
+
+𝑒 
+
+
+
+RS (𝑇 ∗ 
+
+> 𝑜
+
+).
+
+The proof is deferred to Appendix A. It confirms that greedy selection yields at least a constant fraction of the optimum. 
+
+## 3.2 Attribute Similarity Matching 
+
+After condensing texts, the next step is to condense the graph, including graph structure and node features. 
+
+Graph topology initialization. Through subgraph text selection, we derive 𝑀 compressed text descriptions. First, to align each com-pressed description with a graph structure, we follow GCond [14] and employ an MLP trained on the original graph to predict links based on text embeddings between node pairs. This avoids nested optimization and is highly efficient, as the texts remain fixed. Next, to assign a corresponding node feature to each compressed text description, we perform a weighted aggregation of the original node features within each raw subgraph, as shown in step ➂ of Figure 3. The weight for each node’s features is determined by the proportion of text chunks selected from it. 
+
+Bi-level optimization for node feature. While generating node features through aforementioned weighted aggregation is a fea-sible approach, this simple operation struggles to achieve robust alignment with the compressed texts and the generated graph struc-ture. To overcome this limitation, we adopt the well-established paradigm of bi-level optimization. This allows us to dynamically generate node features. We can detail this approach as follows: 
+
+• Inner loop. As shown in Figure 3, we optimize a model 𝑓 called student model with randomly initialized parameter 𝜃 0 
+
+> 𝑠
+
+by contin-uously reducing ℓ𝑐𝑜𝑛 on the synthetic graph S with learning rate 
+
+𝜂 as shown in Equation 5. 
+
+𝜃 𝑡 +1 
+
+> 𝑠
+
+← 𝜃 𝑡 𝑠 − 𝜂 ∇𝜃 ℓ𝑐𝑜𝑛 
+
+
+
+𝑓 𝜃 𝑡 𝑠 (S) 
+
+
+
+(5) 
+
+• Outer loop. Let Θ = {𝜃 0, 𝜃 1, ..., 𝜃 ∗ } denote the set of parameters updated at each step. We aim to find a suitable ˆ𝑋 , such that the set of student parameters Θ𝑠 obtained from inner loop, aligns with the set of teacher parameters Θ𝑡 obtained from training on the original graph T . The alignment is measured by a matching loss function ℓ𝑚𝑎𝑡𝑐ℎ in a certain aspect. We denote it as follow: 
+
+min 
+
+> ˆ𝑋
+
+E𝜃 0  
+
+> 𝑠 ∼𝑃 𝜃 0
+> 𝑠
+
+ℓ𝑚𝑎𝑡𝑐ℎ (Θ𝑠 , Θ𝑡 ) (6) 
+
+Problem: high variance in training trajectories. Current multi-modal dataset condensation methods often utilize the above bi-level optimization framework and employ Matching Training Trajecto-ries (MTT) as their matching loss function ℓ𝑚𝑎𝑡𝑐ℎ . This approach operates by aligning the parameter update trajectories of teacher and student models across their respective training stages. How-ever, when applying this strategy to TAG condensation, we observe that the compressed graph often fails to accurately represent the original. The core issue lies in the nature of the teacher models in the TAG scenario, which are pre-trained via contrastive learn-ing. As demonstrated by [ 15 ], contrastive learning loss inherently Text-attributed Graph Condensation via Text Selection and Attribute Matching WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates. 
+
+Table 1: Complexity analysis of matching trajectory training (MTT) and our attribute similarity matching (ASM). Method Teacher Model Training Condensation 
+
+Forward ℓ𝑐𝑜𝑛 Update 𝑓 𝑠 Loss ℓ𝑚𝑎𝑡𝑐ℎ Update S
+
+MTT O( 𝑍 (𝐿 𝑔 𝐸ℎ 𝑔 + 𝐿 𝑔 𝐵ℎ 2 
+
+> 𝑔
+
++ 𝐿 𝑡 𝐵ℎ 2 
+
+> 𝑡
+
++ 𝐵 2)) O( 𝑞 (𝐿 𝑔 𝑀ℎ 2 
+
+> 𝑔
+
++ 𝐿 𝑡 𝑀ℎ 2 
+
+> 𝑡
+
+)) O( 𝑞 (𝐿 𝑔 ℎ2 
+
+> 𝑔
+
++ 𝐿 𝑡 ℎ2 
+
+> 𝑡
+
+)) O( 𝐿 𝑔 ℎ2 
+
+> 𝑔
+
++ 𝐿 𝑡 ℎ2 
+
+> 𝑡
+
+) O( 𝑀 )
+
+ASM O( 𝐿 𝑔 𝐸ℎ 𝑔 + 𝐿 𝑔 𝐵ℎ 2 
+
+> 𝑔
+
++ 𝐿 𝑡 𝐵ℎ 2 
+
+> 𝑡
+
++ 𝐵 2) O( 𝑞 (𝐿 𝑔 𝑀ℎ 2 
+
+> 𝑔
+
++ 𝐿 𝑡 𝑀ℎ 2 
+
+> 𝑡
+
+)) O( 𝑞 (𝐿 𝑔 ℎ2 
+
+> 𝑔
+
++ 𝐿 𝑡 ℎ2 
+
+> 𝑡
+
+)) O( 𝐿 𝑔 𝑚ℎ 2 
+
+> 𝑔
+
++ 𝐿 𝑡 𝑚ℎ 2 
+
+> 𝑡
+
++ 𝑚 2) O( 𝑀 )
+
+produces gradients with high variance. This is because the loss for any given sample is highly dependent on the other samples within the same batch, unlike in supervised learning where each exam-ple’s contribution is independent. The high variance in gradients causes unpredictable and unstable teacher trajectories. As a result, the trajectory matching task becomes a very difficult optimization problem. This instability, as shown by our observations in Figure 2, ultimately reduces the effectiveness of MTT for TAG condensation. 
+
+Solution: attribute similarity matching. To avoid the unstable optimization process associated with MTT, we design a condensa-tion technique dubbed as attribute similarity matching . In particu-lar, the product of graph embeddings 𝑓 𝐺 (𝑋 ) and text embeddings 
+
+𝑓 𝑇 (𝑇 ) between each pair of samples forms the attribute similarity matrices 𝑆𝑀 . We aim to minimize the discrepancy between the similarity matrices computed by the student model (i.e., 𝑆𝑀 𝑠 ) and the teacher model (i.e., 𝑆𝑀 𝑡 ) on the original samples, ensuring stu-dent model can capture the inter-modal relationships. Formally, we denote our matching loss function ℓ𝑚𝑎𝑡𝑐ℎ as follows: 
+
+𝑆𝑀 𝑠 = 𝑓 𝐺 𝜃 ∗ 
+
+> 𝑠
+
+(𝑋 )𝑓 𝑇 𝜃 ∗ 
+
+> 𝑠
+
+(𝑇 )⊤, 𝑆𝑀 𝑡 = 𝑓 𝐺 𝜃 ∗ 
+
+> 𝑡
+
+(𝑋 )𝑓 𝑇 𝜃 ∗ 
+
+> 𝑡
+
+(𝑇 )⊤. (7) 
+
+ℓ𝑚𝑎𝑡𝑐ℎ = 12 (ℓ𝑠𝐵𝐶𝐸 (𝑆𝑀 𝑠 , 𝑆𝑀 𝑡 ) + ℓ𝑠𝐵𝐶𝐸 (𝑆𝑀 ⊤ 
+
+> 𝑠
+
+, 𝑆𝑀 ⊤ 
+
+> 𝑡
+
+)) , (8) where 𝑠𝐵𝐶𝐸 means that applying a row-wise softmax to each similarity matrix before computing Binary Cross Entropy, giving smoother gradients and steadier alignment. 
+
+Theoretical analysis. Following, we provide a detailed explana-tion of why attribute similarity matching is more robust than match-ing training trajectories. 
+
+Theorem 2. In TAG contrastive learning, the optimal embeddings 
+
+𝑓 ∗ 
+
+> 𝐺
+
+(𝑋 𝑖 ) and 𝑓 ∗ 
+
+> 𝑇
+
+(𝑇 𝑖 ) are unique only up to a rotation matrix 𝑅 followed by a scaling matrix 𝑆 :
+
+𝑓 ∗ 
+
+> 𝐺
+
+(𝑋 𝑖 ) = 1√︁ 
+
+𝑝 𝑋 (𝑖 )
+
+ 𝑈 𝑘 𝑖 𝑆𝑅 ⊤, (9) 
+
+𝑓 ∗ 
+
+> 𝑇
+
+(𝑇 𝑖 ) = 1√︁ 
+
+𝑝 𝑇 (𝑖 )
+
+ 𝑉 𝑘 𝑖 Σ𝑘 𝑆 −1𝑅 ⊤, (10) 
+
+where 𝑈 𝑘 , Σ𝑘 , 𝑉 𝑘 are the rank-𝑘 factors of the normalized attribute joint distribution ˜𝑃 .Consequently, the logarithm of the optimal similarity 𝑠 ∗ 
+
+> 𝑖 𝑗
+
+between any node attribute 𝑋 𝑖 and text attribute 𝑇 𝑗 equals their pointwise mutual information: 
+
+log 𝑠 ∗ 
+
+> 𝑖 𝑗
+
+= log  𝑓 ∗ 
+
+> 𝐺
+
+(𝑋 𝑖 )𝑓 ∗ 
+
+> 𝑇
+
+(𝑇 𝑗 )⊤  = PMI (𝑋 𝑖 ,𝑇 𝑗 ). (11) The proof can be found in Appendix B. We observe two insights from Theorem 2 as follows: Test Accuracy: 72.2 
+
+> Similarity Error: 0.00
+> Teacher 1
+> Test Accuracy: 71.9
+> Similarity Error: 0.65
+> Teacher 2
+> Test Accuracy: 56.7
+> Similarity Error: 2.33
+> Student(MTT-TAG)
+> Test Accuracy: 64.4
+> Similarity Error: 1.46
+> Student(ours)
+
+Figure 4: Visualization of attribute similarity matrices for teacher and student models. Similarity Error is the element-wise relative error with respect to Teacher 1. 
+
+• Unstable training trajectory of MTT. Equations 9 and 10 show that teacher embeddings are defined up to arbitrary rotation 𝑅 and scaling 𝑆 . Because MTT forces the student to follow the teacher’s full training trajectories, the search space becomes very large and optimization turns unstable. Meanwhile, random sampling in contrastive learning keeps these trajectories more fluctuated. As 
+
+Student (MTT-TAG) in Figure 4 illustrates, the unstable training leads to lower accuracy. 
+
+• Robust similarity matrix. Equation 11 shows that the optimal element 𝑠 ∗ 
+
+> 𝑖 𝑗
+
+of this matrix is equal to the PMI between 𝑋 𝑖 and 
+
+𝑇 𝑗 , making them independent of the arbitrary matrices 𝑅 and 𝑆 
+
+in the graph and text encoders. Attribute similarity matching aligns the similarity matrices of the teacher and student models, thereby avoiding directly matching the graph and text encoders. Figure 4 shows that our student model achieves lower error and higher accuracy than the student model in MTT-TAG. 
+
+Complexity analysis. For an intuitive comparison, we present the detailed time complexity of matching training trajectory (MTT) and attribute similarity matching (ASM) in Table 1. Let 𝐸 be the nodes and edges in the T , and 𝑀 the nodes in the S. 𝑍 appears only in the teacher training process of MTT, representing the number of teachers. In the inner loop, the student model undergoes 𝑞 epoch updates. Additionally, The model’s graph encoder has 𝐿 𝑔 layers with 
+
+ℎ𝑔 hidden dimension, and the text encoder comprises 𝐿 𝑡 layers with 
+
+ℎ𝑡 hidden dimension. 𝐵 and 𝑚 denote the batch sizes for teacher training and similarity matching, respectively. According to Table 1, the overall time complexity of both meth-ods is largely similar, except for the “Teacher Model Training” phase. MTT’s approach requires training Z (typically 15) separate teacher models for collecting varied training trajectories, making its cost prohibitive for large-scale graphs. In contrast, by matching stable similarity matrices, our ASM method needs only one teacher. This fundamental difference makes ASM a significantly more efficient and scalable solution for TAG condensation. WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates. Haowei Han et al. 
+
+Table 2: Classification accuracy in percentage (%) for models trained on the condensed datasets (mean ±std). Best results are in bold. Whole refers to training on the original graph. Numbers below datasets indicate the original node count, while Size 
+
+denotes the compressed node count. We calculate the accuracy increment by comparing against the best baseline in each setting. Dataset Size Random Herding K-Center GCond* MTT-TAG MTT-KNN TAGSAM (Ours) Whole 
+
+50 50 .0 ± 2.5 33 .4 ± 2.7 47 .3 ± 2.6 40 .1 ± 3.9 64 .4 ± 3.4 62 .8 ± 1.6 73 .8 ± 1.8(↑ 9.4)
+
+100 68 .1 ± 1.4 34 .4 ± 2.1 61 .9 ± 1.1 49 .7 ± 3.6 73 .8 ± 0.9 71 .1 ± 1.7 75 .2 ± 1.1(↑ 1.4)
+
+Cora (2,708) 200 71 .8 ± 1.2 43 .8 ± 0.9 68 .3 ± 1.1 55 .2 ± 2.9 76 .1 ± 0.5 72 .4 ± 1.2 76 .6 ± 0.8(↑ 0.5)
+
+78 .7 ± 0.5
+
+100 41 .4 ± 2.1 20 .8 ± 1.1 40 .8 ± 3.1 38 .5 ± 4.3 51 .7 ± 3.4 49 .8 ± 2.7 56 .4 ± 2.3(↑ 4.7)
+
+200 50 .4 ± 2.3 29 .2 ± 2.1 45 .3 ± 3.4 43 .3 ± 3.9 56 .2 ± 0.9 52 .8 ± 0.8 60 .8 ± 1.9(↑ 4.6)
+
+Photo (48,362) 500 59 .1 ± 1.9 33 .5 ± 0.6 53 .6 ± 2.1 45 .4 ± 4.2 59 .1 ± 0.6 56 .9 ± 0.9 63 .3 ± 0.9(↑ 4.2)
+
+63 .3 ± 0.2
+
+100 32 .4 ± 3.3 21 .5 ± 3.8 42 .4 ± 3.8 43 .8 ± 4.9 48 .0 ± 1.7 37 .3 ± 3.1 62 .1 ± 0.6(↑ 14 .1)
+
+200 46 .4 ± 3.0 30 .4 ± 1.7 45 .4 ± 2.1 48 .4 ± 2.2 56 .7 ± 1.6 56 .7 ± 2.9 64 .4 ± 0.3(↑ 7.7)
+
+Computer (87,229) 500 49 .8 ± 2.5 35 .3 ± 2.5 49 .0 ± 3.1 50 .1 ± 2.0 61 .6 ± 0.9 59 .8 ± 1.2 70 .6 ± 0.4(↑ 9.0)
+
+72 .2 ± 0.3
+
+100 46 .3 ± 1.1 28 .3 ± 1.4 45 .2 ± 1.1 27 .7 ± 3.1 22 .7 ± 0.9 20 .3 ± 3.3 49 .6 ± 1.1(↑ 3.3)
+
+200 47 .5 ± 1.2 29 .7 ± 0.6 47 .0 ± 0.7 35 .8 ± 3.4 30 .5 ± 1.6 28 .8 ± 3.4 51 .9 ± 1.5(↑ 4.4)
+
+Arxiv (169,343) 500 52 .7 ± 0.5 32 .7 ± 0.4 52 .8 ± 0.5 42 .3 ± 1.9 49 .5 ± 0.5 48 .1 ± 2.3 55 .4 ± 0.6(↑ 2.6)
+
+55 .3 ± 0.3
+
+500 52 .7 ± 2.3 17 .8 ± 1.4 26 .3 ± 2.4 39 .0 ± 1.8 48 .4 ± 1.6 46 .2 ± 3.2 55 .4 ± 1.0(↑ 2.7)
+
+1000 53 .8 ± 1.8 25 .8 ± 0.7 29 .9 ± 2.3 45 .8 ± 2.0 50 .0 ± 2.4 47 .6 ± 2.1 55 .8 ± 0.6(↑ 2.0)
+
+Products (2,449,029) 2000 54 .8 ± 2.0 33 .7 ± 0.7 38 .5 ± 2.4 47 .5 ± 1.5 53 .3 ± 1.7 49 .5 ± 2.3 57 .3 ± 0.2(↑ 2.5)
+
+57 .6 ± 0.1
+
+## 4 Experimental Evaluations 4.1 Experiment Settings 
+
+Datasets. We benchmark TAGSAM on 5 text-attributed graphs. 
+
+Cora [29 ] and ArXiv [ 32 ] are citation networks whose nodes are papers described by titles and abstracts, with edges representing citations. Photo , Computers [30 ], and Products [11 ] are Amazon co-purchase graphs; each node is a product whose text attribute is its most-voted user review, and edges indicate co-purchase inter-actions. These datasets vary widely in scale, from 2.7 K to 2.4 M nodes. More details about datasets are provided in Appendix D. 
+
+Baselines. We compare TAGSAM with 6 representative baselines. 
+
+• Selective methods. (a) Random selects samples randomly. (b) 
+
+Herding [ 39 ] greedily selects samples in order to minimize the distance between the center of the coreset and the center of the full dataset in feature space. (c) K-Center [ 7 ] aims to select coreset samples that maximize their dispersion in the feature space. 
+
+• Generative methods. (a) GCond* adapts GCond [ 14 ] for text-attributed graphs by extending its original graph-only gradient matching to a joint graph-text objective. (b) MTT-TAG adapts MTT-VL [ 41 ], an image-text multi-modal condensation method, by replacing its image encoder with a graph encoder. (c) MTT-KNN further compresses text into optimized embeddings, then employs a K-Nearest Neighbors (KNN) mapping, a variant ap-proach proposed by MTT-VL, to retrieve the closest original text. 
+
+Evaluation protocol. Models are then trained on condensed graph and evaluated on the original test split. Following the five-way zero-shot classification setting of G2P2 [ 40 ], we report the classi-fication accuracy over 5 independent runs. By default, GCN [ 16 ]and BERT [ 5 ] with a projector serve as the graph and text encoders. More hyperparameter settings can be found in Appendix E. 
+
+Table 3: Cross-architecture classification accuracy for models trained on the condensed Computer which is compressed using a combination of GCN and Bert. Method Text Encoder Graph Encoder GCN MLP SAGE Cheby 
+
+Random BERT 43.6 39.0 35.2 33.4 MTT-TAG 62.1 38.0 34.8 35.0 TAGSAM 64.4 46.9 45.5 46.2 
+
+Random RoBERTa 28.5 25.2 25.0 23.6 MTT-TAG 39.3 27.5 29.7 28.3 TAGSAM 47.7 35.4 35.7 36.3 
+
+## 4.2 Main Results 
+
+Classification performance. To assess the quality of the com-pressed TAGs, Table 2 reports the classification accuracy of all baselines and our TAGSAM. We make the following observations: Selective methods like Herding, and K-Center perform relatively poorly, confirming that simple heuristic sampling without learn-ing cannot effectively preserve information from original TAG. Random sampling sometimes outperforms most other methods, especially on datasets with many classes (e.g. ArXiv and Products). This phenomenon has also been observed in image-text dataset condensation [ 41 ]. We hypothesize this is because without class guidance, their selection heuristics can introduce significant sam-pling bias by high-density features that may not correlate with class diversity. Random sampling, in contrast, is less affected as it is agnostic to these potentially misleading data structures. GCond* performs poorly because its gradient-based matching strategy is designed to match the gradients of samples with the same class label. However, in TAG condensation, where no class Text-attributed Graph Condensation via Text Selection and Attribute Matching WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates. 
+
+Table 4: Link prediction AUC for models trained on the con-densed datasets (mean+std). Best results are in bold. 
+
+Dataset Random MTT-TAG TAGSAM Cora 75 .85 ± 1.32 78 .26 ± 1.34 82 .15 ± 0.97 
+
+Photo 84 .34 ± 1.43 86 .44 ± 1.41 87 .69 ± 1.20 
+
+Computer 87 .62 ± 2.15 88 .33 ± 1.74 91 .38 ± 1.83 
+
+Arxiv 81 .93 ± 2.04 86 .35 ± 1.22 87 .37 ± 1.57 
+
+Products 84 .21 ± 2.20 84 .62 ± 2.39 86 .06 ± 2.05 
+
+label can be used, this approach is ineffective because matching gradients between different class samples will lead to instability. Furthermore, such conventional graph condensation methods are designed to compress graph modality only, which means they are limited by their inability to compress text modality. Existing multi-modal condensation methods like MTT-KNN and MTT-TAG generally perform best on average. Notably, the accuracy of MTT-KNN is lower than MTT-TAG. This is because MTT-KNN compresses texts into embedding vectors, for which it has to find the nearest neighbor original text descriptions. Such an operation disrupts the alignment between the compressed node features and texts produced by the learning process. Despite their higher perfor-mance, they are also limited by their inability to compress discrete text descriptions and suffer from unstable matching objectives. Our proposed TAGSAM overcomes these limitations, achieving superior performance across all datasets and condensation sizes. It boosts accuracy by up to 14.1% over the strongest baseline MTT-TAG. For larger condensation sizes, TAGSAM’s accuracy, although demon-strating more variability compared to training on the Whole dataset, reaches an average value highly comparable to it. 
+
+Cross-architecture generalization. Table 3 evaluates cross ar-chitecture generalization by condensing the Computer dataset to 200 nodes. We compare our method, TAGSAM, with top baselines: Random for selective condensation and MTT-TAG for generative condensation. Specifically, we use a GCN+BERT architecture to con-dense the dataset for TAGSAM and MTT-TAG. Subsequently, these small, condensed graphs are used to train various other model combinations, including graph encoders (GCN, MLP, SAGE [ 9], Cheby [4]) and text encoders (BERT [5], Roberta [21]). The results in Table 3 suggest that all methods experience accu-racy degradation. The degradation also occurs in Random, demon-strating that there is significant accuracy loss caused by the en-coder’s lower compatibility. For the MTT-TAG and TAGSAM, the degradation is additionally caused by the use of different archi-tectures during the condensation and testing phases. However, TAGSAM consistently achieves the highest accuracy due to our effective and stable condensation. Compared to random sampling, TAGSAM shows a substantial average improvement of 13.1%. 
+
+Link prediction performance. We evaluate link prediction by training an MLP on features extracted from the graph encoder. As shown in Table 4, our TAGSAM outperforms the top selective (Ran-dom) and generative (MTT-TAG) baselines, achieving significant AUC improvements of 4.1% and 2.1% respectively. This performance suggests our method more effectively retains structural information 10 0 10 1 10 2 10 3 10 4 10 5 10 6 10 7  
+
+> Time(s)
+> Products  Arxiv  Computer
+> 709560
+> 85860
+> 29160
+> 70538
+> 12780
+> 7531
+> 5254
+> 5073
+> 5195
+> Teacher Training Condensation HyperParam Search
+> TAGSAM
+> MTT-TAG
+> G2P2
+
+Figure 5: Running time (in log scale) for hyperparameter search of downstream model. G2P2 trains directly on the original graph, while TAGSAM and MTT-TAG first compress the graph and then train models on the condensed graph. 2 4 9 16 25         
+
+> value of g
+> 48
+> 52
+> 56
+> 60
+> 64
+> Accuracy(%)
+> 24916 25
+> value of g
+> 58
+> 60
+> 62
+> 64
+> 66
+> Accuracy(%)
+> (a) Photo (b) Computer
+> M = 100 M = 200
+
+Figure 6: The impact of subgraph size for subgraph text se-lection. M denotes the number of compressed texts/nodes. 
+
+from the original graph, thereby enhancing the models trained on the resulting condensed graph. 
+
+Efficiency study. We study the impact of TAG condensation on accelerating hyperparameter searches for downstream TAG mod-els, and compare running time of TAGSAM, MTT-TAG and G2P2 (direct training). Specifically, we use 108 hyperparameter settings: optimizers {SGD , Adam , AdamW }; graph encoder depths {2, 3, 4};projector depths {1, 2, 3}; and embedding sizes {64 , 128 , 192 , 256 }.We also decompose the running time of MTT-TAG and TAGSAM into teacher training , condensation , and hyperparameter search .The results in Figure 5 show that the larger the dataset, the greater the time savings from condensation. Although condensa-tion incurs a one-time cost, it significantly reduces the time for each subsequent hyperparameter trial, meaning its advantage grows with the number of searches. For larger datasets, teacher model training dominates total runtime. TAGSAM requires training only a single teacher due to its attribute similarity consistency (Figure 4), elim-inating the need for additional teachers, unlike MTT-TAG which must train multiple teachers to reflect diverse training trajectories. 
+
+Hyperparameter sensitivity. We study the hyperparameter sen-sitivity experiments with respect to the subgraph size 𝑔 in subgraph WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates. Haowei Han et al. Select-Only     
+
+> Rand+MTT
+> Rand+ASM
+> Concat+ASM
+> Select+MTT
+> TAGSAM
+> 52
+> 54
+> 56
+> 58
+> 60
+> 62
+> Accuracy
+> 53.6
+> 56.2
+> 58.8
+> 60.3 60.4 60.8
+> Select-Only
+> Rand+MTT
+> Rand+ASM
+> Concat+ASM
+> Select+MTT
+> TAGSAM
+> 48
+> 52
+> 56
+> 60
+> 64
+> 68
+> Accuracy
+> 51.4
+> 56.7
+> 60.9
+> 63.3 62.2
+> 64.4
+> (a) Photo (b) Computer
+
+Figure 7: The ablation study for different variants. The 𝑦 -axis is anchored at the accuracy of the baseline Random .
+
+text selection on the Photo and Computer datasets. The results are shown in Figure 6. A larger 𝑔 means more information is integrated, but it can also lead to more information confusion. We validate the impact of 𝑔 on compression performance through experiments on the Photo and Computer datasets. We find that set-ting 𝑔 = 4 and 𝑔 = 9 yields the best performance for the downstream models. Additionally, we observe a sharp performance drop when 
+
+𝑔 ≥ 16 . We attribute this decline to the fact that such a large 𝑔 
+
+involves selecting many 2-hop neighbors, which introduces seman-tically disparate texts, making it difficult to optimize the alignment of the corresponding node features for the newly compressed text. 
+
+## 4.3 Ablation Study 
+
+As reported in Figure 7, we experiment under the setting of syn-thetic dataset size 𝑀 = 200 , with 5 variants as follows: 
+
+• Select-Only conducts subgraph text selection to compress TAG. 
+
+• Rand+MTT randomly selects texts and compresses graph via matching training trajectories. 
+
+• Rand+ASM randomly selects texts and compresses graph via our attribute similarity matching. 
+
+• Concat+ASM samples subgraphs and directly concatenates all the texts within each subgraph to form a new text, then compresses graph via attribute similarity matching. 
+
+• Select+MTT compresses the text and graph by our subgraph text selection and matching training trajectories respectively. 
+
+The efficacy of text selection. Comparing “Select-Only” to the “Random” baseline confirms that text selection enriches the text modality for improved training. The comparison between “Rand+ASM” and “Concat+ASM” also reveals that text concatenation can en-hance performance. However, this naive strategy is outperformed by “TAGSAM” as it introduces significant redundancy and noise, limiting its performance. In contrast, our method’s precise selection mechanism yields superior performance, improving the ASM frame-work by 2.8%. This improvement is more pronounced for the MTT strategy, reaching 4.9%. These results demonstrate the significance and robustness of our subgraph text selection approach. 
+
+Attribute vs. Trajectory Matching. As illustrated in Figure 7, a clear performance advantage of our proposed Attribute Simi-larity Matching (ASM) is evident. A direct comparison between “Rand+MTT” and “Rand+ASM”, as well as between “Select+MTT” and our “TAGSAM” model, consistently demonstrates that ASM significantly and reliably outperforms the Matching Training Tra-jectories (MTT) baseline across different text compression. 
+
+## 5 Related Work 
+
+Selection-based condensation. Coreset selection is a critical tech-nique that compresses large datasets into smaller subsets by select-ing important samples. There are various pioneer literature reduces the computational burden of training on large datasets while main-taining model performance [ 2, 7 , 39 ]. Main approaches are random sampling, Herding, which aligns subset and dataset means [ 39 ], and K-center, which minimizes the worst-case point-to-center dis-tance [ 7 ]. All simply select existing data rather than synthesizing new samples; consequently, their performance is often sub-optimal. 
+
+Graph dataset condensation. Graph condensation aims at effi-cient GNN training [ 13 , 19 , 23 ] by condensing a large graph into a small synthetic one without significant performance loss. Recently, numerous dataset condensation methods are developed for com-pressing graph datasets [ 6, 8, 33 , 37 , 42 , 44 ]. GCond [ 14 ] matches training gradients between the original and condensed graphs. GCDM [ 20 ] forces the spatial distribution of receptive fields in the condensed graph to mirrors that of the original dataset, i.e., distribution matching. However, these existing methods cannot handle the multi-modal setting of TAG condensation and rely on class-wise matching, making them heavily label-dependent. 
+
+Multi-modal dataset condensation. Unlike uni-modal methods, multi-modal apporaches compress multiple modalities simultane-ously. MTT-VL [ 41 ] first condense large-scale image-text datasets by matching training trajectories (MTT) into smaller dataset while maintaining effective training. LoRS [ 43 ] introduces a plug-and-play method that compresses image-text datasets by providing ground truth similarity between synthetic samples and reducing complexity with low-rank approximations. AVDD [ 17 ] condenses audio-visual data by aligning modalities through implicit cross-matching. However, these methods cannot compress discrete text modalities. and such MTT-based methods often prove unstable in contrastive learning settings, resulting in sub-optimal performance. 
+
+## 6 Conclusion 
+
+In this work, we introduce TAGSAM, a novel dataset condensation method for Text-Attributed Graphs (TAGs) that addresses the is-sue that existing methods cannot effectively compress TAGs. Our method utilizes subgraph text selection to compress multiple texts into a representative and discrete one and attribute similarity match-ing to assign robust synthetic attributes. Experiments show that models trained on graphs condensed by TAGSAM to just 1% of their original size still maintain competitive performance, thus making efficient pre-training on large-scale TAGs feasible. 
+
+## Acknowledgments 
+
+This work was supported by the National Natural Science Founda-tion of China (No. 62472327, 62441229), the Fundamental Research Funds for the Central Universities (No. 2042025kf0040), and the Key R&D Program of Hubei Province (No. 2023BAB077). Text-attributed Graph Condensation via Text Selection and Attribute Matching WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates. 
+
+## References 
+
+[1] William Brannon, Wonjune Kang, Suyash Fulay, Hang Jiang, Brandon Roy, Deb Roy, and Jad Kabbara. 2024. ConGraT: Self-Supervised Contrastive Pretraining for Joint Graph and Text Embeddings. In Proceedings of the Workshop on Graph-based Methods for Natural Language Processing (TextGraphs) .[2] Vladimir Braverman, Vincent Cohen-Addad, H-C Shaofeng Jiang, Robert Krauthgamer, Chris Schwiegelshohn, Mads Bech Toftrup, and Xuan Wu. 2022. The power of uniform sampling for coresets. In Proceedings of the Annual IEEE Symposium on Foundations of Computer Science (FOCS) .[3] Jonathan Chang and David Blei. 2009. Relational Topic Models for Document Networks. In Proceedings of the International Conference on Artificial Intelligence and Statistics (AISTATS) .[4] Michaël Defferrard, Xavier Bresson, and Pierre Vandergheynst. 2016. Convolu-tional neural networks on graphs with fast localized spectral filtering. In Proceed-ings of the Conference on Neural Information Processing Systems (NeurIPS) .[5] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2019. BERT: pre-training of deep bidirectional transformers for language understanding. In 
+
+Proceedings of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (NAACL-HLT) .[6] Junfeng Fang, Xinglin Li, Yongduo Sui, Yuan Gao, Guibin Zhang, Kun Wang, Xi-ang Wang, and Xiangnan He. 2024. EXGC: Bridging Efficiency and Explainability in Graph Condensation. In Proceedings of the Web Conference (WWW) .[7] Reza Zanjirani Farahani and Masoud Hekmatfar. 2009. Facility location: concepts, models, algorithms and case studies . Springer Science & Business Media. [8] Xinyi Gao, Guanhua Ye, Tong Chen, Wentao Zhang, Junliang Yu, and Hongzhi Yin. 2025. Rethinking and Accelerating Graph Condensation: A Training-Free Approach with Class Partition. In Proceedings of the Web Conference (WWW) .[9] Will Hamilton, Zhitao Ying, and Jure Leskovec. 2017. Inductive representation learning on large graphs. In Proceedings of the Conference on Neural Information Processing Systems (NeurIPS) .[10] Sariel Har-Peled, Dan Roth, and Dav A Zimak. 2006. Maximum margin coresets for active and noise tolerant learning. In Proceedings of the International Joint Conference on Artificial Intelligence (IJCAI) .[11] Weihua Hu, Matthias Fey, Marinka Zitnik, Yuxiao Dong, Hongyu Ren, Bowen Liu, Michele Catasta, and Jure Leskovec. 2020. Open graph benchmark: datasets for machine learning on graphs. In Proceedings of the Conference on Neural Information Processing Systems (NeurIPS) .[12] Qiang Huang, Xiao Yan, Xin Wang, Susie Xi Rao, Zhichao Han, Fangcheng Fu, Wentao Zhang, and Jiawei Jiang. 2024. Retrofitting temporal graph neural networks with transformer. arXiv preprint arXiv:2409.05477 (2024). [13] Song Jin, Xiantao Cai, and Jiawei Jiang. 2025. EDGaE: Efficient Distributed Graph Neural Network Training System at the Edge. In Proceedings of the International Conference on Intelligent Computing (ICIC) .[14] Wei Jin, Lingxiao Zhao, Shichang Zhang, Yozen Liu, Jiliang Tang, and Neil Shah. 2021. Graph condensation for graph neural networks. In Proceedings of the International Conference on Learning Representations (ICLR) .[15] Siddharth Joshi, Jiayi Ni, and Baharan Mirzasoleiman. 2024. Dataset distilla-tion via knowledge distillation: towards efficient self-supervised pre-training of deep networks. In Proceedings of the International Conference on Learning Representations (ICLR) .[16] Thomas N Kipf and Max Welling. 2016. Semi-supervised classification with graph convolutional networks. In Proceedings of the International Conference on Learning Representations (ICLR) .[17] Saksham Singh Kushwaha, Siva Sai Nagender Vasireddy, Kai Wang, and Yapeng Tian. 2024. Audio-visual dataset distillation. Transactions on Machine Learning Research (TMLR) (2024). [18] Yichuan Li, Kaize Ding, and Kyumin Lee. 2023. GRENADE: graph-centric lan-guage model for self-supervised representation learning on text-attributed graphs. In Findings of the Association for Computational Linguistics: EMNLP .[19] Yuxuan Liang, Wentao Zhang, Zeang Sheng, Ling Yang, Quanqing Xu, Jiawei Jiang, Yunhai Tong, and Bin Cui. 2025. Towards Scalable and Deep Graph Neural Networks via Noise Masking. In Proceedings of the AAAI Conference on Artificial Intelligence (AAAI) .[20] Mengyang Liu, Shanchuan Li, Xinshi Chen, and Le Song. 2022. Graph conden-sation via receptive field distribution matching. arXiv preprint arXiv:2206.13697 
+
+(2022). [21] Yinhan Liu, Myle Ott, Naman Goyal, Jingfei Du, Mandar Joshi, Danqi Chen, Omer Levy, Mike Lewis, Luke Zettlemoyer, and Veselin Stoyanov. 2019. RoBERTa: a robustly optimized bert pretraining approach. arXiv preprint arXiv:1907.11692 
+
+(2019). [22] Yunhui Liu, Qizhuo Xie, Jinwei Shi, Jiaxu Shen, and Tieke He. 2025. Multi-Scale Heterogeneous Text-Attributed Graph Datasets From Diverse Domains. In 
+
+Proceedings of the Web Conference (WWW) .[23] Lu Ma, Zeang Sheng, Xunkai Li, Xinyi Gao, Zhezheng Hao, Ling Yang, Xiaonan Nie, Jiawei Jiang, Wentao Zhang, and Bin Cui. 2025. Acceleration Algorithms in GNNs: A Survey. Transactions on Knowledge and Data Engineering (TKDE) 
+
+(2025). [24] Bishwas Mandal, Sarthak Khanal, and Doina Caragea. 2024. Contrastive Learning for Multimodal Classification of Crisis related Tweets. In Proceedings of the Web Conference (WWW) .[25] G. L. Nemhauser, L. A. Wolsey, and M. L. Fisher. 1978. An analysis of approxima-tions for maximizing submodular set functions–I. Math. Program. (1978). [26] Aaron van den Oord, Yazhe Li, and Oriol Vinyals. 2018. Representation learning with contrastive predictive coding. arXiv preprint arXiv:1807.03748 (2018). [27] Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario Amodei, Ilya Sutskever, et al. 2019. Language models are unsupervised multitask learners. OpenAI Blog 
+
+(2019). https://api.semanticscholar.org/CorpusID:160025533 [28] Sebastian Ruder. 2016. An overview of gradient descent optimization algorithms. 
+
+arXiv preprint arXiv:1609.04747 (2016). [29] Prithviraj Sen, Galileo Namata, Mustafa Bilgic, Lise Getoor, Brian Galligher, and Tina Eliassi-Rad. 2008. Collective classification in network data. AI Magazine 
+
+(2008). [30] Oleksandr Shchur, Maximilian Mumme, Aleksandar Bojchevski, and Stephan Günnemann. 2018. Pitfalls of graph neural network evaluation. arXiv preprint arXiv:1811.05868 (2018). [31] A Vaswani. 2017. Attention is all you need. In Proceedings of the Conference on Neural Information Processing Systems (NeurIPS) .[32] Kuansan Wang, Zhihong Shen, Chiyuan Huang, Chieh-Han Wu, Yuxiao Dong, and Anshul Kanakia. 2020. Microsoft academic graph: When experts are not enough. Quantitative Science Studies (2020). [33] Lin Wang, Wenqi Fan, Jiatong Li, Yao Ma, and Qing Li. 2024. Fast Graph Conden-sation with Structure-based Neural Tangent Kernel. In Proceedings of the Web Conference (WWW) .[34] Tongzhou Wang, Jun-Yan Zhu, Antonio Torralba, and Alexei A Efros. 2018. Dataset distillation. arXiv preprint arXiv:1811.10959 (2018). [35] Xin Wang, Jiawei Jiang, Xiao Yan, and Qiang Huang. 2025. TESA: A Trajectory and Semantic-aware Dynamic Heterogeneous Graph Neural Network. In Proceedings of the Web Conference (WWW) .[36] Yuxiang Wang, Xiao Yan, Chuang Hu, Quanqing Xu, Chuanhui Yang, Fangcheng Fu, Wentao Zhang, Hao Wang, Bo Du, and Jiawei Jiang. 2024. Generative and Contrastive Paradigms Are Complementary for Graph Self-Supervised Learning. In International Conference on Data Engineering (ICDE) .[37] Yuxiang Wang, Xiao Yan, Shiyu Jin, Hao Huang, Quanqing Xu, Qingchen Zhang, Bo Du, and Jiawei Jiang. 2024. Self-Supervised Learning for Graph Dataset Condensation. In Proceedings of the Conference on Knowledge Discovery and Data Mining (KDD) .[38] Yuxiang Wang, Xiao Yan, Shiyu Jin, Quanqing Xu, Chuang Hu, Yuanyuan Zhu, Bo Du, Jia Wu, and Jiawei Jiang. 2025. Exploiting Text Semantics for Few and Zero Shot Node Classification on Text-attributed Graph. In Proceedings of the International Joint Conference on Artificial Intelligence (IJCAI) .[39] Max Welling. 2009. Herding dynamical weights to learn. In Proceedings of the International Conference on Machine Learning (ICML) .[40] Zhihao Wen and Yuan Fang. 2023. Augmenting low-resource text classifica-tion with graph-grounded pre-training and prompting. In Proceedings of the International Conference on Research and Development in Information Retrieval (SIGIR) .[41] Xindi Wu, Zhiwei Deng, and Olga Russakovsky. 2023. Vision-Language Dataset Distillation. Transactions on Machine Learning Research (TMLR) (2023). [42] Zhenbang Xiao, Yu Wang, Shunyu Liu, Bingde Hu, Huiqiong Wang, Mingli Song, and Tongya Zheng. 2025. Disentangled Condensation for Large-scale Graphs. In 
+
+Proceedings of the Web Conference (WWW) .[43] Yue Xu, Zhilin Lin, Yusong Qiu, Cewu Lu, and Yong-Lu Li. 2024. Low-rank similar-ity mining for multimodal dataset distillation. In Proceedings of the International Conference on Machine Learning (ICML) .[44] Hongzhi Yin, Xinyi Gao, Junliang Yu, Ruihong Qiu, Tong Chen, Quoc Viet Hung Nguyen, and Zi Huang. 2025. Graph Condensation: Foundations, Methods and Prospects. In Proceedings of the Web Conference (WWW) .[45] Qi Zhang, Yifei Wang, and Yisen Wang. 2023. On the generalization of multi-modal contrastive learning. In Proceedings of the International Conference on Machine Learning (ICML) .[46] Bo Zhao and Hakan Bilen. 2023. Dataset condensation with distribution match-ing. In Proceedings of the Winter Conference on Applications of Computer Vision (WACV) .[47] Bo Zhao, Konda Reddy Mopuri, and Hakan Bilen. 2020. Dataset condensation with gradient matching. In Proceedings of the International Conference on Learning Representations (ICLR) .[48] Yun Zhu, Haizhou Shi, Xiaotang Wang, Yongchao Liu, Yaoke Wang, Boci Peng, Chuntao Hong, and Siliang Tang. 2024. Graphclip: enhancing transferability in graph foundation models for text-attributed graphs. In Proceedings of the Web Conference (WWW) .WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates. Haowei Han et al. 
+
+## A Proof of Theorem 1 
+
+Proof. Firstly, consider the impact of including 𝑐 𝑖 in ˆ𝑇 𝑜 , where 
+
+ˆ𝑇 𝑜 ⊆ 𝐷 𝑜 and 𝑐 𝑖 ∈ 𝐷 𝑜 \ ˆ𝑇 𝑜 . The contribution of 𝑐 𝑖 is calculated as: ∑︁   
+
+> 𝑐 𝑗 ∈𝐷 𝑜
+
+CMI (𝑐 𝑖 , 𝑐 𝑗 ) − ∑︁    
+
+> 𝑐 𝑗 ∈ˆ𝑇 𝑜
+
+CMI (𝑐 𝑖 , 𝑐 𝑗 ) =∑︁     
+
+> 𝑐 𝑗 ∈𝐷 𝑜 \ˆ𝑇 𝑜
+
+CMI (𝑐 𝑖 , 𝑐 𝑗 ).
+
+As the estimated CMI values are non-negative, this term is clearly positive. This demonstrates that RS is monotonic, implying that 
+
+RS ( ˆ𝑇 𝑜 ∪ { 𝑐 𝑖 }) ≥ RS ( ˆ𝑇 𝑜 ).
+
+Secondly, let 𝐴 ⊆ 𝐵 ⊆ 𝐷 𝑜 and 𝑐 𝑖 ∈ 𝐷 𝑜 \( 𝐴 ∪𝐵 ). The improvement of adding 𝑐 𝑖 to both 𝐴 and 𝐵 is characterized by the same informa-tion coverage gain Í𝑐 𝑗 ∈𝐷 𝑜 CMI (𝑐 𝑖 , 𝑐 𝑗 ). However, the redundancy penalty is larger for 𝐵 because the difference ∑︁   
+
+> 𝑐 𝑗 ∈𝐵 \𝐴
+
+CMI (𝑐 𝑖 , 𝑐 𝑗 ) =∑︁   
+
+> 𝑐 𝑗 ∈𝐵
+
+CMI (𝑐 𝑖 , 𝑐 𝑗 ) − ∑︁   
+
+> 𝑐 𝑗 ∈𝐴
+
+CMI (𝑐 𝑖 , 𝑐 𝑗 )
+
+is positive. Therefore, submodularity is satisfied: 
+
+RS (𝐴 ∪ { 𝑐 𝑖 }) − RS (𝐴 ) ≥ RS (𝐵 ∪ { 𝑐 𝑖 }) − RS (𝐵 ).
+
+Finally, according to Nemhauser’s theorem [ 25 ], as RS ( ˆ𝑇 𝑜 ) is mono-tonic and submodular, applying a greedy algorithm to maximize 
+
+RS ( ˆ𝑇 𝑜 ) under a cardinality constraint 𝑘 guarantees that 
+
+RS ( ˆ𝑇 𝑜 ) ≥ 
+
+
+
+1 − 1
+
+𝑒 
+
+
+
+RS (𝑇 ∗ 
+
+> 𝑜
+
+).
+
+□
+
+## B Proof of Theorem 2 
+
+Proof. Following Zhang et al. [ 45 ], we adopt the TAG con-trastive loss for ease of analysis: 
+
+Lcon = − 2 E𝑋 𝑖 ,𝑇 𝑖 
+
+ 𝑓 𝐺 (𝑋 𝑖 )⊤ 𝑓 𝑇 (𝑇 𝑖 )
+
++ E𝑋 𝑖 ,𝑇 𝑗 
+
+ (𝑓 𝐺 (𝑋 𝑖 )⊤ 𝑓 𝑇 (𝑇 𝑗 )) 2 , (12) where (𝑋 𝑖 ,𝑇 𝑖 ) denotes a positive graph-text pair and (𝑋 𝑖 ,𝑇 𝑗 ) with 
+
+𝑗 ≠ 𝑖 denotes an independently sampled negative pair. Let 𝑃 ∈ R𝑁 ×𝑁 be the joint-probability matrix whose (𝑖, 𝑗 )-entry is: 
+
+𝑃 𝑖 𝑗 = 𝑝 𝐺,𝑇 (𝑖, 𝑗 ).
+
+Define the marginal probabilities: 
+
+𝑝 𝐺 (𝑖 ) =∑︁ 
+
+> 𝑗
+
+𝑝 𝐺,𝑇 (𝑖, 𝑗 ), 𝑝 𝑇 ( 𝑗 ) =∑︁ 
+
+> 𝑖
+
+𝑝 𝐺,𝑇 (𝑖, 𝑗 ),
+
+and form the normalized co-occurrence matrix: 
+
+˜𝑃 𝑖 𝑗 = 𝑝 𝐺,𝑇 (𝑖, 𝑗 )√︁ 
+
+𝑝 𝐺 (𝑖 ) 𝑝 𝑇 ( 𝑗 ) .
+
+Consider the asymmetric low-rank factorization loss: 
+
+LAMF (𝐹 𝐺 , 𝐹 𝑇 ) = ˜𝑃 − 𝐹 𝐺 𝐹 ⊤ 
+
+> 𝑇
+> 2
+> 𝐹
+
+, (13) where 𝐹 𝐺 ∈ R𝑁 ×𝑘 and 𝐹 𝑇 ∈ R𝑁 ×𝑘 with 𝑘 ≪ 𝑁 .Let the 𝑖 -th row of 𝐹 𝐺 and the 𝑗 -th row of 𝐹 𝑇 represent the encoded features of samples 𝑋 𝑖 and 𝑇 𝑗 , respectively, in the following form: 
+
+𝐹 𝐺 (𝑖 ) =√︁ 𝑝 𝐺 (𝑖 ) 𝑓 𝐺 (𝑋 𝑖 )⊤, (14a) 
+
+𝐹 𝑇 ( 𝑗 ) =√︁ 𝑝 𝑇 ( 𝑗 ) 𝑓 𝑇 (𝑇 𝑗 )⊤. (14b) Substituting Equation 14 into Equation 13 and expanding the Frobenius norm yields: 
+
+LAMF =∑︁ 
+
+> 𝑖,𝑗
+
+ ˜𝑃 𝑖 𝑗 −√︁ 𝑝 𝐺 (𝑖 ) 𝑓 𝐺 (𝑋 𝑖 )⊤√︁ 𝑝 𝑇 ( 𝑗 ) 𝑓 𝑇 (𝑇 𝑗 )
+
+2
+
+=∑︁ 
+
+> 𝑖,𝑗
+
+𝑝 𝐺,𝑇 (𝑖, 𝑗 )2
+
+𝑝 𝐺 (𝑖 )𝑝 𝑇 ( 𝑗 ) − 2 E𝑋 𝑖 ,𝑇 𝑗 
+
+𝑓 𝐺 (𝑋 𝑖 )⊤ 𝑓 𝑇 (𝑇 𝑗 )
+
++ E𝑋 𝑖 ,𝑇 𝑗 
+
+  𝑓 𝐺 (𝑋 𝑖 )⊤ 𝑓 𝑇 (𝑇 𝑗 )2  .
+
+The first summation depends only on the data distribution, so denote it by the constant 𝐶 . Recognizing the remaining two terms as the contrastive loss Lcon in Eq. (12), we obtain: 
+
+LAMF (𝐹 𝐺 , 𝐹 𝑇 ) = Lcon (𝑓 𝐺 , 𝑓 𝑇 ) + 𝐶. 
+
+Because the additive constant 𝐶 is independent of the embed-dings, minimizing the matrix factorization loss is equivalent to minimizing the contrastive loss. By the classical Eckart–Young theorem, the best rank-𝑘 approxi-mation of the normalized co-occurrence matrix ˜𝑃 is its truncated SVD 𝑈 𝑘 Σ𝑘 𝑉 𝑘 ⊤. Every pair of factor matrices that attains this opti-mum can therefore be written as: 
+
+𝐹 ★ 
+
+> 𝐺
+
+= 𝑈 𝑘 𝐷𝑅, 𝐹 ★ 
+
+> 𝑇
+
+= 𝑉 𝑘 Σ𝑘 𝐷 −1𝑅, 
+
+where 𝑅 ∈ R𝑘 ×𝑘 is an arbitrary unitary matrix and 𝐷 is an arbitrary invertible diagonal matrix. Mapping the rows of 𝐹 ★ 
+
+> 𝐺
+
+and 𝐹 ★ 
+
+> 𝑇
+
+back to the encoder outputs yields: 
+
+𝑓 ★ 
+
+> 𝐺
+
+(𝑋 𝑖 ) = 1√︁ 
+
+𝑝 𝐺 (𝑖 )
+
+ 𝑈 𝑘 𝑖 : 𝐷𝑅 ⊤,𝑓 ★ 
+
+> 𝑇
+
+(𝑇 𝑗 ) = 1√︁ 
+
+𝑝 𝑇 ( 𝑗 )
+
+ 𝑉 𝑘 𝑗 : Σ𝑘 𝐷 −1𝑅 ⊤.
+
+Hence the optimal graph and text embeddings are uniquely de-termined up to a rotation 𝑅 and scaling 𝐷 , as claimed in Theorem 2. Finally, taking the inner product of the optimal embeddings and applying the logarithm gives: 
+
+log 𝑠 ∗ 
+
+> 𝑖 𝑗
+
+= log  𝑓 ∗ 
+
+> 𝐺
+
+(𝑋 𝑖 )⊤ 𝑓 ∗ 
+
+> 𝑇
+
+(𝑇 𝑗 )
+
+= log 𝑝 𝐺,𝑇 (𝑖, 𝑗 )
+
+𝑝 𝐺 (𝑖 ) 𝑝 𝑇 ( 𝑗 ) = log 𝑃 (𝑋 𝑖 ,𝑇 𝑗 )
+
+𝑃 (𝑋 𝑖 )𝑃 (𝑇 𝑗 )
+
+= PMI (𝑋 𝑖 ,𝑇 𝑗 ).
+
+Thus the optimal similarity is exactly the point-wise mutual information between 𝑋 𝑖 and 𝑇 𝑗 , which completes the proof of The-orem 2. 
+
+□Text-attributed Graph Condensation via Text Selection and Attribute Matching WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates. 
+
+Table 5: Statistics of Text-Attributed Graph datasets. Dataset # Node # Edge # Avg. Deg # Class 
+
+Cora 2,708 5,429 4.01 7Photo 48,362 500,928 20.72 12 Computers 87,229 721,081 16.53 10 ArXiv 169,343 1,166,243 13.77 40 Products 2,449,029 61,859,140 50.52 47 
+
+## C Zero-shot Classification 
+
+Following the G2P2 [ 36 , 40 ], in this paper, zero-shot classification aligns graph and text representations within a unified semantic space using contrastive learning. The architecture employs a graph encoder to generate an embedding for each node and a text encoder to transform text prompts describing potential classes—including those unseen during training—into corresponding class embed-dings. For inference, the model classifies a node by calculating the cosine similarity between its embedding and all candidate class embeddings. The node is then assigned to the class with the highest similarity score, enabling effective classification into novel cate-gories without any specific training examples for them. 
+
+## D Dataset Details 
+
+Table 5 brings together five widely adopted TAG benchmarks that span orders of magnitude in scale and density while covering both academic and e-commerce domains, ensuring that our evaluation stresses every component of the condensation pipeline. Cora [ 29 ]. This classic citation network contains 2,708 papers linked by 5,429 citation edges. Each node is accompanied by the raw abstract—typically 60 – 140 words—that spells out the problem statement, core methodology, and main results. Amazon Photo and Amazon Computers [ 30 ]. Both graphs are extracted from the Amazon co-purchase network but focus on dif-ferent product verticals. Amazon Photo (48 k nodes, 500 k edges) centers on cameras, lenses, lighting and accessories, whereas Ama-zon Computers (87 k nodes, 721 k edges) covers laptops, compo-nents and peripherals. For every product node we concatenate the seller’s catalogue title, the marketing blurb, and the first three customer-review snippets, yielding on average 35 – 50 tokens of plain-language description that mention brand names, use-cases, and distinguishing features. ArXiv (OGB-arXiv) [ 32 ]. Drawn from the Open Graph Bench-mark, this citation graph contains 169,343 preprints connected by 1.17 M directed edges. Every node stores the full paper title plus abstract (roughly 140 – 300 tokens), resulting in the longest and most technical text fields in our study. Amazon Products [ 11 ]. At 2.5 M nodes and 61 M edges, Amazon Products is the largest graph in our suite. Each node aggregates the product title, description, curated keyword tags, and representative review quotes. After basic cleaning this yields a median of 28 tokens and a long-tail distribution up to several hundred. 
+
+## E Additional Settings 
+
+For completeness, we report the exact hyper-parameter values used in all experiments. 
+
+Subgraph text selection. The subgraph size 𝑔 = 4, compression ratio 𝑘 /| 𝐷 | = 0.6. And GPT-2 [ 27 ] is used as the language model 𝜙 .
+
+Attribute similarity matching. The learnable step-size parameter 
+
+𝛼 is initialized to 5𝑒 − 3. Optimization is carried out for 5,000 epochs with a mini-batch size of 𝑚 = 2000 using stochastic gradient descent (SGD) with momentum 0.9 [ 28 ]. The learning rates for 𝛼 and for the synthetic node attributes are 2𝑒 − 6 and 100, respectively. To facilitate training, we utilize a pre-trained BERT model and keep it frozen and train the teacher model for 15 epochs. 
+
+Experiment environment. All experiments were conducted on a workstation running Ubuntu 22.04.3 LTS. The system was equipped with an Intel Core i9-13900K CPU, 64 GB of DDR5 RAM, and two NVIDIA GeForce RTX 4090 GPUs, each with 24 GB of VRAM. Our models were implemented in Python 3.11 using the PyTorch 2.5 framework, with CUDA 12.1 utilized for GPU acceleration. 
+
+## F Limitation 
+
+While subgraph text selection is effective for compression, the resulting merged texts may sometimes lack human-interpretable semantic coherence. Additionally, the process of aligning attribute similarity matrices, which involves complex structural relationships, highlights the need for further research into more computationally efficient matching loss functions.

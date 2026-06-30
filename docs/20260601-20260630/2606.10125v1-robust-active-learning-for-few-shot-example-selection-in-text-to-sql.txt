@@ -1,0 +1,1201 @@
+Title: Robust Active Learning for Few-Shot Example Selection in Text-to-SQL
+
+URL Source: https://arxiv.org/pdf/2606.10125v1
+
+Published Time: Wed, 10 Jun 2026 00:13:25 GMT
+
+Number of Pages: 31
+
+Markdown Content:
+# Robust Active Learning for Few-Shot Example Selection in Text-to-SQL 
+
+Arash Pourhabib NVIDIA 
+
+apourhabib@nvidia.com 
+
+June 10, 2026 
+
+Abstract 
+
+Few-shot example retrieval is the dominant paradigm for grounding large language models (LLMs) in domain-specific text-to-SQL systems. However, the quality of the annotated example bank directly governs system accuracy, and expert annotation is prohibitively expensive. We formalize the active selection of these examples as a constrained experimental design problem over the intrinsic, low-dimensional manifold of semantic query embeddings. Unlike standard active learning frameworks, our setting introduces three critical challenges: varying, query-dependent annotation reliability (heteroscedasticity), strict requirements for spatial diversity across semantic topics (partition matroid constraints), and the inherent reality that the true co-variance structure of the embedding space is unknown (misspecification). To address these, we propose a stratified greedy algorithm that maximizes a heteroscedastic mutual information ob-jective. We prove that this objective remains submodular and approximately monotonic on the intrinsic manifold, yielding a theoretical constant-factor approximation guarantee. We establish a spectral bound demonstrating that this approximation guarantee degrades gracefully, rather than catastrophically, when the assumed surrogate kernel diverges from the true underlying data-generating process. Empirical results demonstrate that the proposed strategy significantly reduces labeling effort while maintaining high text-to-SQL retrieval accuracy. 
+
+Keywords: active learning; few-shot example selection; text-to-SQL; Gaussian processes; sub-modular optimization; partition matroid; experimental design 
+
+# 1 Introduction 
+
+Text-to-SQL systems translate natural language questions into executable SQL, letting non-technical users query relational databases without writing code (Li et al., 2023). Most recent text-to-SQL systems use Large Language Models (LLMs) with in-context learning. In this paradigm, a retrieval module fetches K annotated, domain-specific examples ( qi, s i) to guide the model’s generation at inference time (Gao et al., 2024). This is a setting first systematically studied in cross-domain benchmarks such as Spider (Yu et al., 2018). The quality of retrieved exemplars directly deter-mines whether the LLM generates correct SQL (Gao et al., 2024). A weak example bank cripples even the most capable base LLM. Yet annotating SQL for large, complex enterprise schemas is expensive: expert time costs money, and schemas can contain hundreds of tables. Given a pool of unannotated historical queries, which subset should be sent to human experts to maximize the retrieval system’s generalization accuracy? We treat this as a Gaussian process (GP) experimental design problem (Rasmussen and Williams, 2006; Srinivas et al., 2010). Rather than selecting examples heuristically, we model uncertainty over 1
+
+> arXiv:2606.10125v1 [stat.ML] 8 Jun 2026
+
+the LLM’s performance and choose queries that maximally reduce it. GPs have been used to model uncertainty in LLM embedding spaces (Rankovi´ c and Schwaller, 2025). We extend this idea: we formalize the active selection of few-shot examples as a sequential experimental design problem over the semantic embedding space of natural language questions. We model the LLM’s expected SQL correctness as a stochastic process over the embedding space. This lets us identify which query regions, once annotated, will most reduce prediction error. Applying active learning to prompt selection is not straightforward. Three challenges arise: 
+
+• Heteroscedasticity: Not all natural language queries are the same level of difficulty for SQL generation. The inherent ambiguity of human language and the varying reliability of the base LLM introduce localized, query-dependent noise σ2(x). Standard homoscedastic experimental design frameworks fail here, as they risk wasting the annotation budget on unresolvable queries or those with exceptionally high annotator disagreement. 
+
+• Structural Diversity via Matroids: To prevent the acquisition algorithm from redun-dantly over-sampling questions within a single dense semantic topic, we must enforce strict spatial diversity. We require that the selected examples span K distinct semantic clusters, formally transforming the selection into a constrained optimization problem subject to a 
+
+partition matroid .
+
+• Manifold Inputs and Misspecification: LLM embeddings reside in high-dimensional am-bient spaces (e.g., R2048 ). However, valid, meaningful queries lie on a much lower-dimensional intrinsic manifold M. We do not know the true covariance structure of the correctness sur-face. Our acquisition strategy must therefore tolerate kernel misspecification: if we choose the wrong kernel family, performance should degrade gracefully. To solve this, we propose a stratified greedy algorithm that maximizes a heteroscedastic mutual information objective (Krause et al., 2008). We theoretically prove that this information-theoretic objective retains its submodularity under query-dependent noise and is approximately monotonic on the intrinsic manifold. Using submodular maximization bounds, we establish a theoretical constant-factor approximation guarantee for the matroid-constrained selection. Motivated by the prediction properties of Kriging (Wang et al., 2020), we introduce a spectral mismatch bound demonstrating that our greedy strategy degrades gracefully, rather than failing catastrophically, when the assumed surrogate kernel diverges from the true underlying data-generating process. Ultimately, our framework provides a mathematically rigorous, sample-efficient pathway to boot-strapping enterprise text-to-SQL systems. 
+
+# 2 Problem Formulation 
+
+Domain-specific text-to-SQL parsing with LLMs depends on retrieving high-quality, diverse few-shot examples. But building a representative set of annotated ( q, s ) pairs, where q is a natural language question and s is its SQL query, is expensive because expert annotation doesn’t scale. We formalize the selection of these examples not as a standard retrieval task, but as a sequential experimental design problem. We want to identify the smallest subset of questions worth labeling, which are the ones that will cut the model’s uncertainty across the domain most effectively. 
+
+2.1 Data Generating Process and Heteroscedastic Noise 
+
+Let Q be the discrete space of all possible natural language questions within a specific database domain, and let ϕ : Q → Rd be a fixed, pre-trained text embedding map (e.g., d = 2048 for standard 2LLM embeddings). We assume the semantic representations of valid queries do not fill this ambient space uniformly, but rather lie on a low-dimensional intrinsic manifold M ⊂ Rd.For any embedded query x = ϕ(q) ∈ M , we define the expected SQL accuracy as an unknown, fixed deterministic function f : M → [0 , 1]. This function acts as a latent response surface, capturing how well the base LLM can correctly generate executable SQL for a query located at 
+
+x in the semantic space. SQL correctness is a graded quantity rather than a binary indicator: a generated query may match the target on some clauses (e.g., the correct table set and column projection) while diverging on others (e.g., missing a join predicate or using the wrong filter), so 
+
+f (x) varies continuously over [0 , 1]. Section 5 makes this concrete via a component-match score that awards partial credit per SQL clause. When an expert annotates a query and it is evaluated through the LLM, the observed SQL accuracy yi ∈ [0 , 1] is subjected to noise. In text-to-SQL, this noise is far from uniform. Simple aggregations like “count the active users” produce consistent annotations. Complex queries (those requiring implicit joins across tables, nested subqueries, or ambiguous references) show much higher variance, both in human annotation and in LLM output. We therefore use a heteroscedastic noise model: 
+
+yi = f (xi) + ϵ(xi), ϵ(xi) ∼ N (0 , σ 2(xi)) (1) where σ2(xi) represents the localized uncertainty (irreducible, inherent noise) at query xi.
+
+2.2 Gaussian Process Prior 
+
+The true correctness surface f is deterministic but unknown. We place a Gaussian Process (GP) prior over it: f ∼ GP (μ(·), K(·, ·)), with prior mean μ and covariance kernel K.At any step n, let Dn = {(x1, y 1), . . . , (xn, y n)} denote the current dataset of annotated ex-amples. At any unobserved query x ∈ M , the GP yields a posterior predictive distribution. The posterior belief over the true function value is normally distributed: 
+
+f (x) | Dn ∼ N ( ˆfn(x; Dn), ˆσ2
+
+> n
+
+(x)) (2) where ˆfn(x; Dn) is the posterior mean and ˆ σ2
+
+> n
+
+(x) is the posterior epistemic variance. This variance captures uncertainty about SQL accuracy at x, which shrinks as we label more examples. 
+
+Remark 1 (GP support and bounded objectives) . The GP prior places mass on R-valued functions, while f takes values in [0 , 1] . Adopting a Gaussian-likelihood GP as a tractable surrogate for a bounded objective is standard practice in Bayesian optimization and sequential design (Srinivas et al., 2010; Snoek et al., 2012; Bergstra et al., 2011), where classifier accuracy and similar bounded metrics are routinely modeled with a real-valued GP. The support mismatch is structurally inert for our purposes because the acquisition function in Algorithm 1 depends only on the posterior covariance and the noise diagonal Λ, not on observed values y. A formally bounded variant such as a warped GP with monotonic transform onto [0 , 1] (Snelson et al., 2004) could be substituted without affecting the matroid-constrained greedy selection. 
+
+2.3 Heteroscedastic Experimental Design via Mutual Information 
+
+Our objective in active learning is to select an optimal subset of embedded queries S from a larger candidate pool C to be annotated, such that we minimize the predictive uncertainty of our retrieval system across the real-world query distribution. A natural formulation for this design problem is to minimize the conditional entropy of the unobserved locations given the selected queries, denoted as H(YC\S | YS ). Here, Y represents the response variables. This conditional entropy formally 3quantifies the expected remaining uncertainty in the responses for the unannotated queries, defined as: 
+
+H(YC\S | YS ) = −
+
+Z
+
+p(yC\S , yS ) log p(yC\S | yS )dyC\S dyS (3) However, following Krause et al. (2008), relying solely on the conditional entropy criterion suffers from the “boundary problem:” minimizing remaining uncertainty pushes selected points to the extreme edges of the space, wasting their predictive coverage. We instead maximize the mutual information (MI) between the selected queries and the unobserved queries. The MI objective trades off individual uncertainty against central relevance, maximizing the expected reduction in global uncertainty: 
+
+S∗ = arg max  
+
+> S⊂C
+
+I(YS ; YC\S ) = arg max 
+
+> S⊂C
+
+
+
+H(YC\S ) − H(YC\S | YS )
+
+
+
+(4) Our problem setting departs from standard experimental design in four ways: 1. Heteroscedasticity: Unlike standard active learning models that assume uniform obser-vation noise, our base LLM and annotators exhibit varying levels of reliability. Modeling this localized noise as σ2(x) ensures that the acquisition function penalizes regions with high irreducible ambiguity, avoiding wasted annotation budget on queries with high disagreement. 2. Matroid Constraints via Clustering: To guarantee spatial diversity across different se-mantic topics, we stratify the candidate pool C into K disjoint clusters {C1, . . . , C K }. Rather than a simple cardinality constraint ( |S| ≤ K), we restrict our selection to at most one query per cluster. Formally, we define a partition matroid M = ( C, I), where the family of independent sets I is defined as: 
+
+I = {S ⊆ C : |S ∩ Ci| ≤ 1 for all i = 1 , . . . , K } (5) By restricting our selection to valid sets S ∈ I , we transform the acquisition into a matroid-constrained optimization problem. Casting the clustering constraint as a partition matroid gives us access to approximation guarantees for greedy submodular maximization. 3. Manifold Inputs: Query embeddings live in Rd, and we define the GP over this ambient space. The candidate points x = ϕ(q) are constrained to an intrinsic manifold M ⊂ Rd, which determines where we can sample. Working on the manifold avoids the curse of dimensionality because our sample complexity scales with the intrinsic dimension of M, not the ambient dimension d.4. Misspecified Covariance Function: In practical settings involving latent semantic spaces, we do not have access to the true underlying covariance function K∗ governing the response surface. We are forced to rely on a user-specified, and therefore misspecified, assumed kernel 
+
+K. Following Wang et al. (2020) on Kriging prediction properties, our framework requires an acquisition strategy with guarantees that hold under spectral mismatches between the assumed and true covariance structures. The algorithm works as follows: we project the candidate query embeddings onto the intrinsic manifold M and group them into K disjoint semantic clusters. We then find a subset S that maximizes the heteroscedastic mutual information, selecting at most one embedded query x from each of the K clusters, relying on an assumed surrogate kernel K. This stratified selection ensures broad semantic coverage across the manifold while steering the model away from regions of high irreducible noise. 4While this stratified, heteroscedastic MI objective successfully captures our complex design requirements, finding the exact optimal subset S∗ is computationally intractable. We formalize this hardness in the following theorem: 
+
+Theorem 1 (NP-Completeness of Heteroscedastic MI with Matroid Constraints) . Let Y be a Gaus-sian Process defined on Rd with a heteroscedastic noise function σ2(x) and an assumed covariance function K. Given a candidate pool C partitioned into disjoint subsets {C1, . . . , C K }, the problem of deciding whether there exists a subset S ⊆ C satisfying the partition matroid constraint |S ∩ Ci| ≤ 1
+
+for all i ∈ { 1, . . . , K } such that the mutual information I(YS ; YC\S ) ≥ M for some target value M
+
+is NP-complete. 
+
+For the technical proofs of all theoretical results, see Appendix B 
+
+# 3 The SHARP Algorithm 
+
+Theorem 1 shows that optimizing the mutual information objective under a partition matroid constraint is NP-complete, so finding the exact optimal subset S∗ is intractable. Worse, in practice we never know the true covariance function K∗ of the response surface. Our algorithm instead works with a user-specified covariance surrogate K (with corresponding matrix Σ). We use a constrained greedy approximation. The algorithm builds the annotation set one query at a time. At each step, we select the candidate x from an unselected cluster that gives the largest marginal gain in mutual information under K, subject to the partition matroid constraint. 
+
+3.1 Geometric and Structural Design Choices 
+
+We combine an ambient Gaussian Process with an intrinsic manifold partition constraint. Com-bining an ambient GP with an intrinsic manifold partition requires justification, and the key lies in how in-context learning (ICL) fails under redundancy. In classical experimental design for physical sensor placement (Krause et al., 2008), redundant sensors waste resources but still provide information. In ICL, redundancy causes failure. LLM embeddings trained via contrastive learning exhibit a “hubness” phenomenon, where queries sharing lexical semantics (e.g., questions about “sales”) cluster into massive, high-variance regions of the ambient space. Unconstrained greedy maximization of Mutual Information over-samples these dense semantic hubs to reduce ambient volume variance, ignoring the sparse tails where complex, rare SQL syntax structures (e.g., correlated subqueries) appear. Over-sampling a single semantic template actively biases the LLM’s attention mechanism, leading to in-context overfitting. The partition matroid constraint enforces stratified optimal design by requiring exactly one sample per semantic stratum. By forcing the algorithm to select exactly one example per semantic stratum, we guarantee that the final prompt covers the entire topological spanning tree of the SQL syntax space. Stratified sampling on a manifold creates a problem: GPs need ambient coordinates, but our semantic clusters live on intrinsic geometry. We handle this mismatch by splitting responsibilities between local smoothness (the GP) and global topology (the matroid): 
+
+• Manifold Distance for Global Topology (The Matroid): To define the semantic clus-ters C1, . . . , C K , we rely on the intrinsic manifold distance (approximated via a k-NN graph) rather than ambient Euclidean distance. High-dimensional ambient Euclidean distance suf-fers from the curse of dimensionality and fails to capture the continuous structural evolution of queries. Euclidean clustering risks short-circuiting across the sparse gaps of the manifold, 5incorrectly grouping structurally distinct queries. By clustering on the intrinsic manifold, the matroid constraint explicitly maps the true topological skeleton of the data. 
+
+• Isotropic Ambient GP for Local Smoothness: Conversely, our surrogate covariance ker-nel K evaluates points over the entire ambient Rd space. While fitting a complex, manifold-specific or anisotropic kernel (e.g., Automatic Relevance Determination) might seem theoret-ically appealing, it requires estimating thousands of length-scale parameters. In our few-shot regime ( n < 500), this guarantees catastrophic over-parameterization. Instead, we exploit the fact that LLM embeddings are pre-trained. By L2-normalizing the embeddings ϕ(q) to reside on a unit hypersphere, ambient Euclidean distance reduces to a monotonic function of cosine similarity. A standard, isotropic stationary kernel (Mat´ ern) then provides compu-tationally tractable structural regularization. It evaluates local semantic alignment without magnitude-based anisotropy and preserves the positive-definiteness of the covariance matrix. The ambient GP handles local variance estimation, whereas the manifold matroid enforces global coverage. Together, they keep the covariance matrix well-conditioned while spanning the SQL syntax space. 
+
+3.2 Greedy Marginal Information Gain 
+
+In practice, the candidate pool C is a finite, discrete set of queries, typically represented as dense embedding vectors residing on an intrinsic semantic manifold M. To formalize the acquisition step over this discrete pool, we define the mutual information set function F (S) = I(YS ; YC\S ), which quantifies the information a selected subset S provides about the remaining unselected candidates. We can directly compute the marginal benefit of adding a new query to our selection using the predictive variance of the assumed surrogate model. 
+
+Lemma 1 (Marginal Information Gain via Posterior Variance) . Let F (S) = I(YS ; YC\S ) denote the mutual information set function computed under the assumed base covariance Σ with heteroscedastic noise σ2(x). For any subset S ⊂ C and candidate x ∈ C \ S , let ¯S = C \ (S ∪ { x}). The marginal information gain of adding x to S is exactly: 
+
+F (S ∪ { x}) − F (S) = 12 log( δx) (6) 
+
+where the posterior variance ratio δx is 
+
+δx = Σxx + σ2(x) − ΣxS (Σ SS + Λ S )−1ΣSx
+
+Σxx + σ2(x) − Σx ¯S (Σ ¯S ¯S + Λ ¯S )−1Σ ¯Sx
+
+, (7) 
+
+where Λ is a diagonal matrix with Λii = σ2(xi)As established in the proof of Lemma 1, this marginal gain originates from the entropy de-composition ∆ F (x | S ) = H(Yx | YS ) − H(Yx | Y ¯S ). This decomposition reveals the exploration-exploitation tradeoff in our acquisition strategy. The first term, H(Yx | YS ), measures model uncertainty at location x given the selected queries S; maximizing it pushes the algorithm to-ward unexplored regions of the manifold M. The second term, −H(Yx | Y ¯S ), penalizes selections that are uninformative about the remaining pool, biasing the algorithm toward queries that are representative or highly correlated with unannotated candidates. In the heteroscedastic setting, the intrinsic noise σ2(x) directly affects these variances. When a query x has large irreducible noise σ2(x), both the numerator and denominator are dominated 6by this noise term, driving the variance ratio toward 1 and the marginal MI gain toward 0. The algorithm therefore avoids selecting queries with high intrinsic noise. Algorithm 1 outlines this greedy active learning procedure. We denote the score to be maximized as δx, computed entirely using the assumed covariance matrix Σ. We maintain a set of available clusters to enforce the partition matroid constraint, ensuring exactly one representative query is selected per semantic stratum. 
+
+Algorithm 1 SHARP: Stratified Heteroscedastic Active Retrieval on a Partitioned manifold 
+
+Require: Assumed base covariance matrix Σ CC , Heteroscedastic noise function σ2(x), Candidate pool C partitioned into K semantic clusters {C1, . . . , C K }.
+
+Ensure: Selected query set S ⊂ C  
+
+> 1:
+
+S ← ∅  
+
+> 2:
+
+Jvalid ← { 1, . . . , K } ▷ Keep track of available cluster indices  
+
+> 3:
+
+for j = 1 to K do  
+
+> 4:
+
+Cvalid ← S 
+
+> i∈J valid
+
+Ci ▷ Pool of valid candidates  
+
+> 5:
+
+for x ∈ C valid do  
+
+> 6:
+
+¯S ← C \ (S ∪ { x}) 
+
+> 7:
+
+δx ← Σxx +σ2(x)−ΣxS (Σ SS +Λ S )−1ΣSx        
+
+> Σxx +σ2(x)−Σx¯S(Σ ¯S¯S+Λ ¯S)−1Σ¯Sx
+
+▷ Computes marginal F 
+
+> 8:
+
+end for  
+
+> 9:
+
+x∗ ← arg max x∈C valid δx 
+
+> 10:
+
+S ← S ∪ { x∗} 
+
+> 11:
+
+Let k∗ be the index of the cluster containing x∗ 
+
+> 12:
+
+Jvalid ← J valid \ { k∗} ▷ Enforce Matroid Constraint  
+
+> 13:
+
+end for  
+
+> 14:
+
+return S
+
+Note on Algorithm 1: ΛS represents the diagonal matrix of heteroscedastic noise variances σ2(x)for the currently selected subset S.
+
+# 4 Theoretical Results 
+
+We now analyze Algorithm 1’s convergence guarantees and sensitivity to kernel misspecification. Theorem 1 showed that finding the exact solution is NP-hard, and Lemma 1 bounded the greedy search signal. Here we prove that our selection procedure achieves a constant-factor approximation and quantify how far it degrades under a misspecified kernel. 
+
+4.1 Theoretical Guarantees: The Ideal Covariance Setting 
+
+We start under the ideal assumption that our kernel matches the true data-generating process (K = K∗). The proof addresses three complications in sequence: heteroscedastic noise, intrinsic manifold inputs, and partition matroid constraints. The proof proceeds in three steps. First, we verify that query-dependent noise σ2(x) does not destroy the submodularity of the mutual information objective. Without submodularity, greedy approximations have no guarantee. 
+
+Lemma 2 (Submodularity under Heteroscedasticity) . Let C be a finite candidate pool of embedded queries, and let Yx be the observations modeled by a Gaussian Process with covariance K and inde-
+
+7pendent heteroscedastic noise σ2(x) > 0. The mutual information set function F (S) = I(YS ; YC\S )
+
+is strictly submodular for any S ⊆ C .
+
+Second, to apply standard submodular maximization bounds, the objective function must be monotonic (i.e., information strictly increases as we add more queries). However, mutual informa-tion is not strictly monotonic over a finite set; as the selected set approaches the entire pool C, the remaining uncertainty drops to zero, and the mutual information subsequently crashes. To resolve this, we rely on the concept of ϵ-approximate monotonicity. Because our queries are embedded in a massive ambient space Rd (e.g., d = 2048), discretizing the entire ambient space to bound this non-monotonicity would result in mathematically useless bounds due to the curse of dimensionality. Instead, we exploit the assumption that our candidate queries reside on a lower-dimensional intrinsic manifold M.
+
+Lemma 3 (Approximate Monotonicity on Intrinsic Manifolds) . Assume the candidate queries reside on a compact intrinsic manifold M ⊂ Rd with intrinsic dimension dI ≪ d. Let the true underlying covariance function K be L-Lipschitz-continuous with respect to the geodesic distance on M, and assume the heteroscedastic noise function σ2(x) is Lσ-Lipschitz-continuous on M and strictly bounded below such that σ2(x) ≥ σ2 
+
+> min
+
+> 0 for all x ∈ M . Let I be the family of independent sets of a partition matroid over the candidate pool C with a total maximum capacity K. For any 
+
+ϵ > 0, there exists a discretization of M with mesh width δ depending on dI such that for any valid selected subset S ∈ I where |S| < K , adding an unselected query x ∈ C \ S satisfies: 
+
+F (S ∪ { x}) ≥ F (S) − ϵ (8) Finally, with submodularity and approximate monotonicity secured, we can evaluate the per-formance of our greedy selection under the structural requirement of spatial diversity. By framing our clustering requirement as a partition matroid, we can bound the worst-case performance of Algorithm 1 compared to the intractable, globally optimal selection. 
+
+Theorem 2 (Approximation Guarantee under Matroid Constraints) . Let Sgreedy be the set of queries selected by Algorithm 1, and let S∗ be the optimal set of size K that maximizes the het-eroscedastic mutual information objective F (S), subject to the partition matroid constraint (at most one query per semantic cluster). Under the assumptions of Lemma 2 and Lemma 3, the greedy ac-quisition satisfies: 
+
+F (Sgreedy ) ≥ 12 (F (S∗) − Kϵ ) (9) Theorem 2 provides a powerful safety net. It guarantees that, assuming the kernel is specified correctly, forcing the algorithm to select a diverse, stratified dataset will capture at least half of the maximum possible information, minus a vanishingly small discretization penalty. 
+
+Remark 2 (Comparison to Cardinality-Constrained Bounds) . The approximation factor of 12 in Theorem 2 is weaker than the classic (1 − 1/e ) bound reported in the foundational GP experimental design work by Krause et al. (2008). This reduction is a direct theoretical consequence of our struc-tural diversity requirements. The classic (1 − 1/e )( OP T − Kϵ ) bound, derived from Nemhauser et al. (1978), applies exclusively when the greedy optimization is subject to a simple cardinality constraint ( |S| ≤ K), which mathematically corresponds to a uniform matroid. However, enforc-ing strict spatial diversity across semantic clusters requires a partition matroid constraint. Under partition matroid constraints, the greedy maximization of a submodular function is only guaran-teed to achieve a 12 approximation, as established by Fisher et al. (1978). Thus, the theoretical price of guaranteeing semantic diversity and preventing in-context overfitting is a reduction in the worst-case approximation factor from approximately 0.632 to 0.5.
+
+84.2 Theoretical Guarantees: Robustness to Covariance Misspecification 
+
+Section 4.1 assumes access to the true covariance function K∗, which is never available in practice. Algorithm 1 operates on a user-specified surrogate kernel Φ (such as an RBF or Mat´ ern kernel). The question is whether the approximation guarantees of Theorem 2 survive when Φ ̸ = K∗. We show that our acquisition strategy degrades gracefully rather than catastrophically under spectral misspecification. To formalize this robustness, we first require two standard regularity assumptions regarding the smoothness of the true response surface and the degree to which our assumed kernel Φ misjudges it. 
+
+Assumption 1 (Ambient Sobolev Smoothness) . The true regression function f (expected SQL correctness) belongs to the Sobolev space Hm(Rd), meaning its Fourier transform ˆf satisfies: 
+
+Z
+
+> Rd
+
+| ˆf (ω)|2(1 + ∥ω∥2)mdω < ∞ (10) 
+
+Remark 3 (Manifold to Ambient Extension) . While the true expected SQL correctness function 
+
+f is physically meaningful only on the intrinsic query manifold M, bounding its complexity within the ambient Sobolev space Hm(Rd) is mathematically well-posed. By standard Sobolev extension theorems (e.g., the Whitney Extension Theorem), any sufficiently smooth function defined strictly on a compact submanifold M ⊂ Rd can be extended to a valid Sobolev function over the entire ambient space Rd. This extension allows us to use global Fourier domain bounds in our spectral assumptions without violating the intrinsic geometric constraints of the query embeddings. 
+
+Remark 4 (Kernel Smoothness) . Assumption 1 inherently justifies our requirement that the true covariance K is Lipschitz-continuous. If the GP prior employs a Mat´ ern-class kernel with smooth-ness parameter ν, its RKHS is norm-equivalent to the Sobolev space Hν+d/ 2(Rd). It is a standard result that such a kernel is C1-differentiable provided ν > 1. Because our candidate queries reside on a compact manifold M, this global C1 smoothness guarantees that the kernel is Lipschitz-continuous on the domain of interest. Thus, the condition required for ϵ-approximate monotonicity in Lemma 3 is safely satisfied without requiring an unrealistically high order of differentiability m relative to the ambient dimension d.
+
+Assumption 2 (Spectral Misspecification) . Let ˆΦ( ω) be the spectral density of our assumed sur-rogate kernel and ˆK∗(ω) be that of the true underlying process. We assume the spectral ratio 
+
+β(ω) = ˆΦ( ω)/ ˆK∗(ω) is bounded by polynomials: 
+
+c1 ≤ β(ω) ≤ c2(1 + ∥ω∥2)s (11) 
+
+for some constants c1, c 2 > 0 with c1 ≤ 1 ≤ c2, and s ≥ 0. The condition c1 ≤ 1 ≤ c2 is the natural Kriging misspecification regime: the assumed kernel Φ neither universally dominates nor is universally dominated by K∗.
+
+Assumption 2 bounds how far the assumed kernel Φ can deviate from the truth: it acknowledges that Φ will miscalculate the variance, but requires that this miscalculation stays proportional to the true underlying structure. Because Algorithm 1 greedily selects queries based on the marginal variance reduction computed by the assumed kernel, we must establish a mathematical bridge between the assumed information gain and the true information gain. We capture this relationship in the following lemma, which uses the intrinsic fill distance hS,M = sup x∈M min xi∈S dM(x, x i) (the geodesic radius of the largest empty sphere strictly on the manifold M given the selected set S). 9Lemma 4 (Information Gain Mismatch Bound) . Let ∆FΦ(x | S ) denote the marginal mutual information gain of adding query x to set S, computed under the assumed kernel Φ, and let ∆FK∗ (x |S) denote the gain under the true kernel K∗. Under Assumptions 1 and 2, the true marginal gain is bounded relative to the assumed marginal gain by: 
+
+∆FK∗ (x | S ) ≥ ∆FΦ(x | S ) − 12 log( c2/c 1) − E ′(hS,M) (12) 
+
+where 12 log( c2/c 1) is an additive penalty encoding the spectral ratio gap, and E′(hS,M) is a residual error term that vanishes as the selected queries densely cover the intrinsic manifold M.
+
+Lemma 4 connects assumed and true information gain. A query deemed highly informative by the surrogate model Φ is guaranteed to also be highly informative in reality, scaled down by the spectral ratio c2/c 1 and a spatial residual. Injecting this bound back into the submodular maximization framework yields the main result: our greedy algorithm retains a constant-factor approximation guarantee even without access to the true covariance structure. 
+
+Theorem 3 (Robust Approximation Guarantee under Matroid Constraints) . Let Sgreedy be the set of K queries selected by Algorithm 1 using the misspecified surrogate kernel Φ, and let OP T K∗ =
+
+FK∗ (S∗K∗ ) be the maximum possible mutual information achievable under the true kernel K∗ subject to the partition matroid constraint. Under Assumptions 1 and 2, the true information captured by the greedy selection is bounded by: 
+
+FK∗ (Sgreedy ) ≥ 12 (OP T K∗ − Kϵ ) − Γ − R (hS,M) (13) 
+
+where Kϵ is the penalty incurred by the discretization of the candidate manifold, Γ = 3K 
+
+> 4
+
+log( c2/c 1)
+
+is the fixed additive penalty encoding the spectral ratio gap between the assumed and true kernels, and R(hS,M) is the accumulated spatial residual error that strictly vanishes as the selected queries densely cover the intrinsic manifold M.
+
+Theorem 3 formally validates our active learning framework for real-world application. It guar-antees that our algorithm successfully navigates heteroscedastic noise, enforces semantic diversity via matroid constraints, and remains mathematically robust to the inevitable misspecification of the LLM’s semantic embedding space. 
+
+# 5 Empirical Validation 
+
+We validate our framework on a production enterprise text-to-SQL system for supply-chain analytics at NVIDIA, covering seven query domains related to different aspects of supply chain data. Natural language questions are embedded using nvidia/llama-3.2-nv-embedqa-1b-v2 (d = 2048) via a NVIDIA NIM endpoint and stored in a Milvus vector database. 
+
+5.1 Mapping Paper Notation to the Experiment 
+
+Before reporting results, we make the connection between the abstract notation in Sections 2–4 and the concrete experimental objects explicit. 10 Input space x = ϕ(q). Each natural language query q (e.g., “Which suppliers have the highest open PO value?”) is mapped to a point x = ϕ(q) ∈ R2048 by the NIM embedding model. This 
+
+x is the embedded query that all GP operations act on. Because d = 2048 is too large for a numerically well-conditioned GP covariance matrix, we project onto a 30-dimensional UMAP em-bedding (UMAP-30; McInnes et al. 2018) before GP fitting, yielding ˜ x ∈ R30 . UMAP constructs a weighted k-nearest-neighbor graph over the ambient embeddings and finds a low-dimensional layout that minimizes cross-entropy between the fuzzy topological representations in ambient and reduced space, explicitly targeting geodesic structure rather than global variance. In contrast to PCA, which finds a linear subspace of maximal variance and is indifferent to the nonlinear manifold geometry, UMAP produces coordinates that are a low-dimensional chart of M. The Levina–Bickel estimate ˆdI ≈ 18 .4 (Section 5.4) confirms that 30 dimensions comfortably spans the intrinsic manifold. 
+
+Latent function f (x) and observations y. The unknown function f : M → [0 , 1] from Sec-tion 2 represents the expected SQL correctness of the annotated bank at embedding location x. To isolate and simulate retrieval quality independent of LLM generative capabilities, we proxy f (xi) by the maximum SQL Semantic Match Score between example i’s SQL and any query in the held-out test set T :˜yi = max  
+
+> t∈T
+
+SemanticScore(sql i, sql t) (14) Because our active learning acquisition function (Algorithm 1) relies exclusively on the GP posterior variance, the selection of queries depends only on the input locations X and the heteroscedastic noise σ2(x). The active learning selection is entirely independent of the labels y. Therefore, using the test set to define the oracle ˜ yi introduces no data leakage into the selection process; ˜yi is used strictly as an offline evaluation metric for the Retrieval Simulation to measure the theoretical upper-bound of the selected bank. (Using max rather than mean removes a domain-frequency bias, preventing the metric from artificially inflating the value of overrepresented domains). In the end-to-end LLM evaluation, y is instead the actual SemanticScore of the SQL generated by the LLM given the retrieved few-shot bank, which is the real downstream quantity of interest. 
+
+Heteroscedastic noise σ2(x). In Section 2 we modeled each observation as yi = f (xi) + ϵ(xi)with ϵ(xi) ∼ N (0 , σ 2(xi)), where σ2(xi) captures the irreducible aleatoric uncertainty at xi. Since 
+
+σ2(x) is unobservable before labeling, we estimate it in a pre-experiment pass using LLM self-consistency: the pool is spectral-clustered into C = 30 semantic groups, five points are sampled uniformly from each cluster, and the LLM is prompted M = 5 times at temperature T = 0 .7 with zero few-shot examples (schema only) for each sampled point. Rather than scoring generated SQL against ground truth (which gives near-zero variance when the model confidently produces the same wrong SQL), we measure the syntactic diversity of the M outputs via mean pairwise normalized edit distance: 
+
+d(x) = 2
+
+M (M − 1) 
+
+X
+
+> i<j
+
+ 1 − sim(ˆ si, ˆsj ), (15) ˆσ2 
+
+> c
+
+= 1
+
+|R c|
+
+X
+
+> x∈R c
+
+d(x), ˆσ2(x) = max  σ2min , λ · ˆσ2
+
+> c
+
+, (16) where sim( ·, ·) is the longest-common-subsequence similarity ratio, Rc is the random sample from cluster c, σ2min = 0 .03, and λ = 0 .5. Syntactic diversity is ground-truth-free and correctly identifies structurally uncertain queries: if the LLM writes the same SQL every time the query is unambiguous (low ˆ σ2); if it produces five structurally different queries the annotation outcome is likely volatile 11 (high ˆ σ2). Per-point diversities are averaged before pooling so that between-query variation in f (x)does not inflate the cluster estimate. Total cost: C × 5 × M = 750 LLM calls, run once before the active learning loop. 
+
+Assumed covariance ΣCC . Algorithm 1 requires the assumed posterior covariance matrix Σ CC 
+
+over the candidate pool, defined in Section 3 as K(C, C )−K(C, D n)K(Dn, D n)+noise ·I−1K(Dn, C ). We use an isotropic Mat´ ern-1 /2 kernel (also known as the Exponential kernel, k(r) = σ2 
+
+> f
+
+exp( −r/ℓ )) with length scale set by the median heuristic: ℓ = pmedian( ∥xi − xj ∥2)/2 over the UMAP-30 rep-resentations of labeled and pool examples, recomputed each round. This avoids the degenerate solutions that arise from marginal-likelihood optimization with as few as 5–20 training points in 30 dimensions. The choice of a rough kernel is principled, not arbitrary, and follows the principle of safe over-parametrization in function space. The Mat´ ern-1 /2 kernel induces a large, highly permissive Reproducing Kernel Hilbert Space (RKHS) that places prior mass on non-smooth, highly irreg-ular functions. Critically, the RKHS of any smoother kernel, including Mat´ ern-3 /2, Mat´ ern-5 /2, and especially the squared-exponential (SE), is a proper subset of the Mat´ ern-1 /2 RKHS. This containment relationship guarantees that the true SQL-correctness surface, whatever its actual smoothness, is captured within our assumed RKHS. The converse choice of an infinitely smooth kernel such as the SE would define a drastically smaller RKHS that can only represent perfectly smooth functions. If the true surface has any finite-order irregularities, it lies entirely outside this space, causing the spectral ratio c2/c 1 in Theorem 3 to become unbounded and invalidating the graceful-degradation guarantee. By contrast, the Mat´ ern-1 /2 kernel is the conservative choice: we deliberately assume the worst-case (roughest) regime so that we are safely misspecified rather than dangerously misspecified. 
+
+Partition matroid. The K = 10 semantic clusters used in the partition matroid are produced by spectral clustering on a k-nearest-neighbor ( k = 10) affinity graph built from the UMAP-30 representations of the pool. Clustering is performed in the space of graph-Laplacian eigenvectors, so that geodesic (manifold) distances, rather than Euclidean centroid proximity, govern cluster membership. This directly implements the design principle of Section 3.1: Euclidean K-means risks short-circuiting across the sparse gaps of the embedding manifold, incorrectly grouping structurally distinct query types; spectral clustering respects the intrinsic topology of the data. 3 K = 30 clusters are generated per round to give Algorithm 1 more granular choice within each domain, and the algorithm then selects the best K = 10 candidates (one per chosen cluster) according to the variance ratio δx.
+
+5.2 Experimental Setup 
+
+Dataset. The unlabeled pool comprises N = 337 domain-specific queries, each paired with a ground-truth SQL written by database engineers. A stratified test set of 40 queries (in seven domains) is held out and never added to the labeled bank. Annotation begins from a biased seed of n0 = 5 examples drawn exclusively from one domain, mirroring the real-world corpus imbalance and leaving all test queries outside of that domain with essentially zero retrieval score at round zero. 12 SQL Component Match Score. Following the Component Match evaluation framework of Yu et al. (2018), our primary metric evaluates each SQL clause independently: SemanticScore(ˆ s, s ∗) = 1
+
+|C| 
+
+X
+
+> c∈C
+
+Mc(ˆ s, s ∗) (17) where C = {Select , From , Where , Group By , Order By , Having } and each Mc ∈ { 0, 1} is a binary match indicator. From uses exact table-set match (CTE-aware); Group By and Order By use exact column-set match (direction ignored); Where and Having use string-normalized exact match; Select requires complete column coverage (CM(ˆ s, s ∗) = 1, taking the better of expression-based and alias-based strategies). This yields a score in {0, 16 , 13 , 12 , 23 , 56 , 1}. WHERE and HAVING use conservative string match following the Spider evaluation protocol. Logically equivalent but structurally different predicates will not match, so reported scores represent a lower bound on true semantic correctness. 
+
+Evaluation protocols. We conduct two complementary evaluations of increasing realism: 1. Retrieval Simulation : We measure two domain-discovery metrics at each annotation bud-get. (i) Domains Covered : the number of distinct test domains (out of 7) for which at least one test query achieves SemanticScore ≥ 0.5 (majority of clauses match) against the labeled bank (Algorithm 1’s partition matroid should cover all domains fastest). (ii) Non-Seed Do-main Score : mean SemanticScore restricted to the non-supply-gap test domains, measuring generalization beyond the cold-start seed bias. All metrics are oracle computations that isolate annotation selection from LLM generation quality. 2. End-to-End LLM Evaluation : We use meta/llama-3.1-70b-instruct (NVIDIA NIM) to generate SQL from the nearest labeled example as the few-shot context and score with SemanticScore. This is the gold-standard downstream metric. 
+
+5.3 Baselines 
+
+We compare Algorithm 1 against three baselines, each chosen to isolate a distinct design axis: a no-information control, a classical label-driven active-learning strategy, and a purely geometric space-filling rule. Together they probe whether the combination of manifold-aware diversity, het-eroscedastic uncertainty, and the partition matroid contributes gains beyond any single component on its own. 
+
+• Random : Uniform random selection from the unlabeled pool. 
+
+• Uncertainty Sampling (Lewis and Gale, 1994): Logistic regression trained on binarized oracle labels; selects queries with maximum classification uncertainty. 
+
+• Distance-to-Threshold : Selects the K pool queries with the largest minimum L2 distance to any currently labeled example. This is the greedy max-min-distance (space-filling) strategy, which is provably near-optimal for maximizing spatial coverage of the embedding manifold. 
+
+5.4 Intrinsic Dimension Estimation 
+
+A central assumption of Lemma 3 is that queries lie on a low-dimensional intrinsic manifold M ⊂ 
+
+Rd. We estimate dI using the Levina–Bickel MLE (Levina and Bickel, 2004) with k = 10 neighbors 13 on 200 training embeddings: ˆdI =
+
+ 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+1
+
+k − 1
+
+> k−1
+
+X
+
+> j=1
+
+log rk(xi)
+
+rj (xi)
+
+
+
+> −1
+
+(18) where rj (xi) is the distance from xi to its j-th nearest neighbor. We find ˆdI ≈ 18 .4 ≪ d = 2048, confirming the manifold structure. This validates Lemma 3: the ϵ-approximate monotonicity bound scales as O(δ−dI ) rather than O(δ−d), keeping the theoretical guarantees non-vacuous. It also justifies the UMAP-30 projection: with ˆdI ≈ 18 .4, a 30-dimensional UMAP embedding comfortably spans the intrinsic manifold while reducing the GP problem from 2048 to a tractable dimension. 
+
+5.5 Results: Retrieval Simulation 
+
+The retrieval simulation evaluates how quickly each method discovers the full breadth of query domains. We report Domains Covered (out of 7) and the Non-Seed Domain Score (mean Semantic-Score on the six test domains outside of the seed domain). All numbers are means over 5 random seeds. Table 1: Domain discovery on the retrieval oracle simulation. Domains Covered cells show mean over 5 seeds; subscript ±σ is the s.d. across seeds (omitted where zero). Domains Covered : number of test domains (out of 7) with ≥1 query at SemanticScore ≥ 0.5. To 6 dom. : annotation budget at which 6-domain coverage is first achieved (no method reaches all 7). CovAUC = area under Domains-Covered curve / total budget. Best per column in bold .
+
+Method n=10 n=20 n=30 n=40 Final To 6 dom. CovAUC 
+
+Uncertainty Sampling 5.2±0.4 5.4±0.5 5.6±0.5 5.8±0.4 6.0 45 4.97 Random 5.4±0.5 5.8±0.4 5.8±0.4 5.8±0.4 5.8±0.4 N/A 5.12 Dist-to-Threshold 5.8±0.4 6.0 6.0 6.0 6.0 15 5.33 
+
+SHARP 6.0 6.0 6.0 6.0 6.0 10 5.35 
+
+Table 1 summarizes the headline numbers, and Figures 1 and 2 plot the corresponding learning curves and annotation-efficiency comparison. Algorithm 1 achieves the earliest and broadest domain coverage. It is the only method to reach 6/7 domains at n = 10 (zero variance across seeds), while Dist-to-Threshold does not reach 6 domains until n = 15 and Random never does within the budget. Algorithm 1 also achieves the highest Coverage AUC (5 .35 vs. 5 .33 for Dist-to-Threshold and 5 .12 for Random). The partition matroid constraint front-loads domain discovery. At n = 10, Algorithm 1 has already covered 6 .0 domains (all seeds) vs. 5 .8 for Dist-to-Threshold and 5 .4 for Random. This early advantage arises because Algorithm 1 is forced to place at least one example per semantic cluster in each batch, even with only 5 seed examples, the matroid constraint ensures the next batch spans multiple query types. On the Non-Seed Domain Score, Algorithm 1 leads at every budget level (Non-Seed = 0 .620 at n = 10 vs. 0 .535 for Dist-to-Threshold and 0 .483 for Random), confirming that the discovered domains receive genuinely informative coverage. Algorithm 1 maintains its lead to the final budget (Non-Seed = 0 .691 vs. 0 .643 for Dist-to-Threshold), reflecting Algorithm 1’s simultaneous quality and diversity optimization. 14 Figure 1: Domain discovery learning curves (mean ±1 s.d. over 5 seeds). Left : Domains Covered vs. annotation budget (7 total). All methods start from an identical supply-gap-only seed ( n0 = 5). Algorithm 1 is the only method to reach 6-domain coverage at n = 10 (zero variance across seeds); Dist-to-Threshold reaches 6 domains at n = 15; Random never reaches 6 within the budget. The horizontal dotted line marks the 6-domain level. Right : Non-Seed Domain Score (mean Semantic-Score on non-supply-gap domains). Algorithm 1 leads at every budget level, finishing at 0 .691 vs. 0.643 for Dist-to-Threshold. 
+
+5.6 Results: End-to-End LLM Evaluation 
+
+The LLM evaluation is the gold-standard test: it measures whether the selected few-shot examples actually improve SQL generation quality. For each test query, the LLM ( meta/llama-3.1-70b-instruct )generates SQL from the retrieved few-shot context and the output is scored with SemanticScore. Note that we exclude the Uncertainty Sampling baseline from this end-to-end evaluation. As demonstrated in the retrieval simulation (Table 1), Uncertainty Sampling exhibited the weakest domain discovery performance, requiring 45 steps to reach 6 domains and achieving the lowest Coverage AUC (4.97, trailing even the Random baseline). Therefore, to concentrate our computa-tional budget on the most competitive approaches, we restrict the full LLM evaluation to the na¨ ıve baseline (Random), the strongest geometric baseline (Distance-to-Threshold), and Algorithm 1. Table 2 reports SemanticScore and Non-Seed Domain Score at each labeled-set size, and Figure 3 plots the corresponding learning curves. The LLM evaluation shows a budget-dependent trajectory for Algorithm 1. At small budgets (n ≤ 10), baselines match or slightly exceed Algorithm 1 on overall SemanticScore: with only 5 seed examples the few-shot context is less focused. The Non-Seed Domain Score tells a different story from the outset: at n = 15, Algorithm 1 achieves 0 .535 on non seed domain queries vs. 0 .528 for Dist-to-Threshold and 0 .478 for Random, and the gap widens rapidly, at n = 35, Algorithm 1 peaks at 0 .633 vs. 0 .558 for Dist-to-Threshold, a 1 .1× advantage driven by the partition matroid’s cross-domain annotation selection. Algorithm 1 leads on overall SemanticScore from n = 20 onward, finishing at 0 .583 vs. 0 .548 for Dist-to-Threshold and 0 .524 for Random. The breakdown at n = 50 (Table 3) shows Algorithm 1 leading on all structural metrics: Table Match Rate (0 .505 vs. 0 .355 for Dist-to-Threshold, a 42% advantage), Column Coverage (0 .569 vs. 0 .425), and SemanticScore (0 .583 vs. 0 .548). The Table Match advantage is the clearest signal: the labeled bank selected by Algorithm 1 is structurally more relevant, enabling the LLM to identify the correct tables in 51% of cases vs. 36% for Dist-15 Figure 2: Annotation efficiency: Domains Covered vs. annotation budget (7 total). Algorithm 1 reaches 6-domain coverage at n = 10 (the earliest of any method); Dist-to-Threshold reaches 6 domains at n = 15; Random peaks at 5.8 and never reaches 6. No method achieves full 7-domain coverage within the n = 50 budget. 
+
+Figure 3: End-to-end LLM SemanticScore and Non-Seed Domain Score vs. annotation budget (shaded bands: ±1 bootstrap SE over 10 seeds). Algorithm 1 trails at n ≤ 10 on overall Semantic-Score but leads from n = 20 onward, finishing at 0 .583 vs. 0 .548 for Dist-to-Threshold and 0 .524 for Random. The Non-Seed Domain Score (right) shows Algorithm 1’s cross-domain advantage emerg-ing from n = 15, peaking at 0 .633 at n = 35, and finishing at 0 .647 vs. 0 .578 for Dist-to-Threshold. to-Threshold. The Non-Seed Domain Score at n = 50 is 0 .647 for Algorithm 1 vs. 0 .578 for Dist-to-Threshold and 0 .507 for Random, confirming that Algorithm 1’s partition matroid produces a few-shot bank with genuinely broader semantic coverage. 
+
+5.7 Results: Realistic GP Training with LLM-Scored Labels 
+
+The previous two evaluations use oracle GP labels derived from structural SQL similarity to the test set. This section closes the loop by replacing the oracle with the same labeling procedure used in production: for each annotated example, the LLM is called to generate SQL, and the output is scored against the ground-truth SQL using the production formula 
+
+f (x) = 
+
+(
+
+0.3 + 0 .7 · ColCov( x) if TableMatch( x) = 1 ,
+
+0.2 · ColCov( x) otherwise, (19) 16 Table 2: End-to-end LLM SemanticScore and Non-Seed Domain Score at each labeled-set size. Best per row in bold . Algorithm 1 trails at n ≤ 10 on overall SemanticScore because with only 5 seed examples it yields less focused context. The advantage emerges from n = 20 as the labeled bank gains cross-domain coverage.                                                                    
+
+> SemanticScore (all domains) Non-Seed Domain Score
+> nRandom DtT SHARP Random DtT SHARP
+> 50.449 0.449 0.443 0.462 0.462 0.450 10 0.466 0.467 0.451 0.472 0.487 0.462 15 0.475 0.492 0.486 0.478 0.528 0.535
+> 20 0.484 0.495 0.518 0.477 0.532 0.582
+> 25 0.493 0.508 0.533 0.485 0.550 0.623
+> 30 0.508 0.515 0.545 0.497 0.555 0.623
+> 35 0.523 0.526 0.563 0.502 0.558 0.633
+> 40 0.524 0.534 0.555 0.505 0.572 0.620
+> 45 0.526 0.545 0.563 0.513 0.575 0.622
+> 50 0.524 0.548 0.583 0.507 0.578 0.647
+
+Table 3: Table Match Rate and Column Coverage at n = 50 labeled examples. Values are mean ±
+
+1 bootstrap SE over 10 seeds (200 test queries each). 
+
+Metric Random Dist-to-Threshold SHARP 
+
+Table Match Rate 0.310 ±0.033 0.355 ±0.034 0.505 ±0.035 
+
+Column Coverage 0.337 ±0.028 0.425 ±0.029 0.569 ±0.028 
+
+SemanticScore 0.524 ±0.015 0.548 ±0.016 0.583 ±0.018 
+
+where TableMatch( x) ∈ { 0, 1} indicates whether the generated SQL references the correct tables and ColCov( x) ∈ [0 , 1] measures the fraction of ground-truth columns recovered. This formula gives partial credit for correct-table, partial-column matches, producing richer variance for GP training than the binary Spider component score. The production formula in Equation 19 is used only to compute GP training labels. The reported SemanticScore in Tables 4 and 5 remains the Component Match Score from Section 5 (mean over the six SQL clauses), to keep the metric comparable to the oracle LLM evaluation in Section 5.6. 
+
+Setup. The experiment follows the same train/test split as the LLM evaluation (Section 5.6), restricting to only two domains. The annotation loop proceeds as follows: 1. Round 0 (cold start). The n0 = 5 seed examples are labeled with empty few-shot context: the LLM receives only the DDL (Data Definition Language) schema and the question. The resulting scores {f (xi)}n0 
+
+> i=1
+
+initialize the GP. 2. Subsequent rounds. At each round, the acquisition strategy selects a batch of B = 5 candidates from the remaining pool. Each selected example is scored by calling the LLM with the k = 5 nearest neighbors from the current labeled set as few-shot context. The DDL schema is prepended to every prompt, matching the production prompt template. The GP is refitted on the updated label set before the next acquisition step. The GP uses the same Mat´ ern-1 /2 kernel and median-heuristic length scale as in Section 5.6. Embeddings are PCA-reduced to 30 dimensions. Two methods are compared: Random (uniform 17 pool sampling; LLM labels are collected but do not influence selection) and SHARP (Algorithm 1 with GP posterior covariance built from real LLM scores). Dist-to-Threshold is excluded because it is a label-free geometric heuristic: its acquisition criterion depends only on distances in embedding space, not on any quality scores. Including it here would be redundant with Section 5.6, which already establishes its position relative to Algorithm 1 under oracle labels. The experiment is specifically designed to answer whether real LLM labels can substitute for oracle labels in driving GP-guided acquisition. The relevant comparison is therefore between a score-informed method (Algorithm 1) and an uninformed baseline (Random). 
+
+Distinction from the oracle experiment. In the oracle LLM experiment (Section 5.6), the GP labels are computed once upfront as max t∈T SemanticScore( si, t ), where T is the held-out test SQL set. This oracle requires knowledge of the test set and serves as an upper bound. In the realistic setting, labels are computed online from LLM generation, which means no test SQL is observed during selection. The GP therefore operates on noisier, sequentially accumulated observations, directly mirroring the production deployment in which the annotation budget is spent without access to a held-out evaluation set. 
+
+Figure 4: Realistic GP experiment: SemanticScore (left) and Non-Seed Domain Score (right) vs. annotation budget. Labels are computed by calling the LLM on each annotated example and scoring with the production formula (Equation 19). Algorithm 1 uses these real GP labels to drive acquisition; Random selects uniformly. The DDL schema is included in all prompts. Table 4 and Figure 4 report the realistic-GP results. Algorithm 1 leads on SemanticScore from n = 5 onward, finishing at 0 .658 vs. 0 .550 for Random, which is a 20% relative improvement. The Non-Seed Domain Score gap is even larger: 0 .767 vs. 0.517 at n = 50, a 48% advantage, confirming that the partition matroid drives genuine cross-domain coverage even when labels are noisy. The peak SemanticScore for Algorithm 1 is 0 .708 at 
+
+n = 40, compared to a Random peak of 0 .575. The structural breakdown at n = 50 (Table 5) shows Algorithm 1 leading on all metrics: Table Match Rate (0 .600 vs. 0 .400, a 50% relative gain), Column Coverage (0 .708 vs. 0 .360), and SemanticScore (0 .658 vs. 0 .550). Unlike the oracle LLM experiment (Section 5.6), where GP labels are computed once upfront from the full test set, here Algorithm 1 leads from the very first round. When acquisition is guided by GP labels that the algorithm itself generated, the partition matroid’s diversity guarantee is still 18 Table 4: Realistic GP experiment: SemanticScore and Non-Seed Domain Score at each labeled-set size. GP labels come from LLM scoring (Equation 19); DDL included in all prompts. Best per row in bold .                                             
+
+> SemanticScore Non-Seed Domain Score
+> nRandom SHARP Random SHARP
+> 50.500 0.525 0.500 0.467 10 0.483 0.508 0.500 0.500
+> 15 0.442 0.583 0.450 0.567
+> 20 0.483 0.650 0.567 0.650
+> 25 0.558 0.592 0.550 0.650
+> 30 0.575 0.642 0.583 0.700
+> 35 0.575 0.650 0.583 0.683
+> 40 0.567 0.708 0.550 0.733
+> 45 0.550 0.658 0.517 0.767
+> 50 0.550 0.658 0.517 0.767
+
+Table 5: Structural breakdown at n = 50 for the realistic GP experiment. 
+
+Metric Random SHARP 
+
+Table Match Rate 0.400 0.600 
+
+Column Coverage 0.360 0.708 
+
+SemanticScore 0.550 0.658 
+
+effective: the GP correctly identifies which regions of the embedding manifold have high epistemic uncertainty, and Algorithm 1 allocates budget there rather than redundantly sampling the same semantic cluster. The Non-Seed Domain Score trend, monotonically increasing for Algorithm 1 from n = 35 to n = 50 while Random plateaus, is the clearest signal that this cross-domain coverage advantage accumulates with budget. The learning curves are noisier than in the oracle evaluation, particularly for Algorithm 1 at 
+
+n = 25 and n = 45. This is expected: real LLM scores carry measurement noise (ambiguous queries produce variable SQL), so each GP update shifts the posterior covariance matrix, occasionally steering the next acquisition toward a semantically dense cluster that proves easier to cover. The oscillations do not prevent overall improvement. The trend is positive and the Random baseline shows no such recovery pattern. 
+
+5.8 Discussion 
+
+All three evaluations agree on where Algorithm 1 wins and where it does not. 
+
+• Annotation efficiency and cross-domain coverage (Theorem 2). In the retrieval simu-lation, Algorithm 1 is the only method to reach 6/7 domain coverage at n = 10 (zero variance across seeds), while Dist-to-Threshold does not reach 6 domains until n = 15. The highest Coverage AUC (5 .35 vs. 5 .33 for Dist-to-Threshold) confirms this advantage is sustained. In the oracle LLM evaluation, Algorithm 1’s advantage is concentrated in cross-domain gener-alization: the Non-Seed Domain Score surpasses baselines from n = 15 onward, peaking at 0.633 at n = 35 (vs. 0 .558 for Dist-to-Threshold). The realistic GP experiment amplifies this finding. The Non-Seed Domain Score reaches 0 .767 at n = 50 vs. 0 .517 for Random, a 19 48% relative advantage, and grows monotonically from n = 20, confirming that the partition matroid’s cross-domain coverage benefit does not depend on oracle labels and persists under realistic labeling noise. 
+
+• Submodularity and diminishing returns (Lemma 2). Algorithm 1’s LLM Semantic-Score and domain coverage both improve rapidly in early rounds then plateau as the budget grows. This concave improvement profile is consistent with the submodular MI objective. Each additional example provides less marginal information than the previous one, as pre-dicted by Lemma 2. In the realistic GP experiment the curves are noisier, reflecting mea-surement noise in LLM-scored labels. However, the general concave trend remains visible for both metrics. 
+
+• Manifold structure justifies the UMAP projection and spectral clustering (Lemma 3). 
+
+With ˆdI = 18 .4 ≪ d = 2048, the ϵ-approximate monotonicity bound scales as O(δ−18 .4) rather than O(δ−2048 ), keeping the theoretical guarantees non-vacuous. The spectral clustering on the k-NN graph (Section 3.1) respects the intrinsic manifold topology, ensuring partition matroid clusters correspond to structurally distinct semantic strata rather than Euclidean regions that short-circuit across manifold gaps. 
+
+• Misspecification robustness (Theorem 3). The Mat´ ern-1 /2 kernel is chosen as the conservative surrogate for the true SQL-correctness surface. This follows the principle of safe over-parametrization, which implies that its RKHS contains the RKHS of every smoother kernel, so the true surface is guaranteed to lie within the assumed space regardless of its actual regularity. This is the correct direction of misspecification. An overly rough kernel leaves us safely over-parametrized, while an overly smooth kernel (e.g., SE) would exclude the true surface entirely and cause the spectral ratio c2/c 1 in Theorem 3 to diverge. Theorem 3 formalizes the graceful-degradation guarantee, that is the additive spectral penalty C = 
+
+> 12
+
+log( c2/c 1) remains bounded because Mat´ ern-1 /2’s heavier spectral tails dominate those of any smoother true kernel. All three evaluations confirm that Algorithm 1 remains above Random across oracle retrieval, oracle LLM, and realistic LLM conditions. 
+
+• GP trained on real labels vs. oracle labels. The realistic GP experiment is the strictest test, because no ground-truth SQL is observed during selection, and every label carries LLM measurement noise. Despite this, Algorithm 1 leads Random on SemanticScore from n = 5 onward (compared to the oracle experiment where baselines are competitive at n ≤ 10), and finishes with a Table Match Rate of 0 .600 vs. 0 .400, a 50% relative gain. The earlier onset of the advantage is consistent with the GP receiving higher-variance labels that make the uncer-tainty landscape more informative for acquisition, specifically noise that hurts oracle-based methods by corrupting the label signal instead helps GP-guided acquisition by widening the posterior variance gap between well-covered and under-explored manifold regions, triggering more aggressive exploration under Algorithm 1. 
+
+# 6 Conclusion 
+
+We presented a Gaussian Process-based active learning framework for few-shot example selection in text-to-SQL systems. The “curse of dimensionality,” a standard obstacle for spatial statistics in high-dimensional spaces, is sidestepped by the low-dimensional intrinsic manifold structure of LLM embeddings. We formulated example selection as submodular mutual information maximization 20 under a partition matroid constraint and derived approximation bounds under kernel misspecifica-tion. With a Mat´ ern-1 /2 surrogate, our greedy acquisition retains a constant-factor guarantee on the true information gain regardless of the kernel mismatch. On a production supply-chain dataset, the matroid-constrained selection reached 6/7 domain coverage at n = 10 vs. n = 15 for the best baseline, and finished with a Table Match Rate of 0 .505 vs. 0 .355 for Dist-to-Threshold at n = 50 under oracle labels. Under the more demanding realistic GP experiment, where labels come from online LLM scoring with no access to ground-truth test SQL, Algorithm 1 achieves a Table Match Rate of 0 .600 vs. 0 .400 for Random and a Non-Seed Domain Score of 0 .767 vs. 0 .517 at n = 50. These gains come from structural coverage, not tuning. Specifically, the partition matroid forces the labeled bank to span the full semantic topology of the query space regardless of whether labels are oracle or LLM-generated. One natural extension is to update the manifold topology and matroid clusters as labeled data accumulates, so the partition adapts to discovered semantic structure rather than relying on the initial pool embedding. 
+
+# A Mathematical Background 
+
+This section provides a concise formalization of the spectral and combinatorial foundations used in our derivations. For a detailed treatment, we refer the reader to Stein (1999) for kernel theory and Krause and Golovin (2014) for submodularity. 
+
+A.1 Sobolev Spaces and Spectral Kernel Representation 
+
+A stationary covariance kernel K(x, x ′) = Φ( h) with h = x − x′ is uniquely characterized by its spectral density ˆΦ( ω) via Bochner’s Theorem. We define the Fourier transform of the kernel as: ˆΦ( ω) = 1(2 π)d
+
+Z
+
+> Rd
+
+Φ( h)e−iω T hdh (20) The spatial kernel is dually recovered via the inverse Fourier integral, Φ( h) = R 
+
+> Rd
+
+ˆΦ( ω)eiω T hdω .The smoothness of the functions in the induced Reproducing Kernel Hilbert Space (RKHS) is determined by the asymptotic decay of ˆΦ( ω). Specifically, a kernel is of order s if its spectral density satisfies ˆΦ( ω) ≍ (1 + ∥ω∥2)−s, inducing an RKHS norm-equivalent to the fractional Sobolev space Hs(Rd). A primary example is the Mat´ ern class of kernels, defined in the spectral domain as: ˆΦMat´ ern (ω) = ϕ(2 √π)dΓ( ν + d/ 2) Γ( ν) (1 + ∥ω∥2)−(ν+d/ 2) (21) where ν is the smoothness parameter. Under this formulation, the Mat´ ern kernel corresponds to a Sobolev space of order s = ν + d/ 2. This spectral decay governs the interpolation error. When restricted to a dI -dimensional manifold M, the approximation error scales with the geodesic fill distance hS,M at a rate determined by the Sobolev index s and the intrinsic dimension dI (Fuselier and Wright, 2012). 
+
+A.2 Matroids and Constrained Set Selection 
+
+A matroid is a combinatorial structure abstracting linear independence, providing the setting in which greedy maximization of submodular functions admits constant-factor approximation guar-antees. Formally, a matroid is a pair M = ( E, I) with finite ground set E and family I ⊆ 2E of 21 independent sets satisfying (i) the hereditary property : A ∈ I and B ⊆ A imply B ∈ I ; and (ii) the 
+
+exchange property : if A, B ∈ I with |A| < |B|, there exists x ∈ B \ A such that A ∪ { x} ∈ I .Two instances arise in our setting. The uniform matroid Un,k has independent sets I = {S ⊆
+
+E : |S| ≤ k}, encoding a pure cardinality constraint. The partition matroid is defined by a disjoint partition E = FKi=1 Ci with integer capacities di ≥ 0, and has independent sets 
+
+I = {S ⊆ E : |S ∩ Ci| ≤ di ∀i = 1 , . . . , K } . (22) The partition matroid strictly generalizes the uniform matroid ( K = 1, d1 = k recovers Un,k ). In our framework, the blocks C1, . . . , C K correspond to semantic clusters on the embedding manifold, and the per-block capacity di = 1 enforces selection of at most one example per stratum. 
+
+A.3 Entropy and Submodular Optimization 
+
+For a continuous random variable Y with probability density function p(y), the differential entropy 
+
+H(Y ) is defined as: 
+
+H(Y ) = −
+
+Z
+
+> Y
+
+p(y) log p(y)dy (23) For a multivariate Gaussian random variable YS ∼ N (μ, ΣS ) indexed by a set S, this integral evaluates to: 
+
+H(YS ) = 12 log 
+
+
+
+(2 πe )|S| det(Σ S )
+
+
+
+(24) Mutual information between two random variables YA and YB is defined as the Kullback–Leibler (KL) divergence between their joint distribution and the product of their marginals: 
+
+I(YA; YB ) = DKL 
+
+ p(YA, Y B ) p(YA) p(YB ) (25) This quantity measures how much the joint distribution departs from independence. Expanding the KL divergence using the definition of conditional entropy yields the equivalent form I(YA; YB ) = 
+
+H(YA) − H(YA | YB ). Applying this definition to our setting, we write the objective as F (S) = I(Y ˜M; YS ), which quantifies how much the selected subset S reduces uncertainty about the random variables on the discretized manifold ˜M. This function is a monotone submodular set function, satisfying the property of diminishing returns: for all A ⊆ B ⊆ V and x / ∈ B,
+
+F (A ∪ { x}) − F (A) ≥ F (B ∪ { x}) − F (B) (26) This property ensures that a greedy selection strategy under a partition matroid constraint I,which restricts selection counts within disjoint query clusters, maintains a constant-factor (1 /2)-approximation guarantee relative to the global optimum (Fisher et al., 1978). 
+
+# B Proofs of Main Results 
+
+Proof of Theorem 1. We demonstrate NP-completeness via reduction from the Multipartite Clique 
+
+problem. Let G = ( V, E ) be a K-partite graph with disjoint independent sets V1, . . . , V K .Membership in NP: Given a certificate subset S, verifying the partition constraint requires linear time. Evaluating I(YS ; YC\S ) requires Cholesky decompositions of covariance matrices of maximum dimension |C| × |C| , which executes in O(|C| 3) polynomial time. 22 NP-Hardness: We map the graph directly to our active learning domain by setting the candidate pool C = V and the semantic clusters Ci = Vi. The partition matroid constraint |S∩ Ci| ≤ 1 restricts selections to exactly one vertex per graph partition for a set of size K.Following the standard quadratic construction (Ko et al., 1995), we can generate a symmetric positive-definite matrix Σ in polynomial time such that for any subset S of size K:max  
+
+> S
+
+det(Σ S )
+
+(
+
+≥ τ if G contains a K-partite clique 
+
+≤ τ − ϵ otherwise for a specific polynomial threshold τ and margin ϵ > 0. We assign this Σ as the assumed covariance 
+
+K evaluated on C.To complete the reduction, we restrict the heteroscedastic noise to a uniform limit σ2(x) = 
+
+σ2 → 0+. Under this limit, the Mutual Information for a K-element subset expands as: 
+
+I(YS ; YC\S ) = H(YS ) + H(YC\S ) − H(YC )= 12 log det(Σ S + σ2I) + C(Σ , σ 2)where C(Σ , σ 2) depends on the full pool C but is independent of the specific choice of S. For sufficiently small σ2, the logarithmic sum is strictly monotonic with respect to det(Σ S ). By setting the target information threshold to M = 12 log( τ ) + C(Σ , σ 2), we establish a strict bidirectional mapping: 
+
+I(YS ; YC\S ) ≥ M ⇐⇒ det(Σ S ) ≥ τ
+
+Since determining whether det(Σ S ) ≥ τ determines the existence of a Multipartite Clique, finding a matroid-feasible set S satisfying I ≥ M is NP-hard. 
+
+Proof of Lemma 1. By construction, ¯S = C \ (S ∪ { x}), so ( S ∪ { x}) ⊔ ¯S = C and S ⊔ ( ¯S ∪ { x}) = C;both pairs partition the candidate pool C. Let ∆ F (x | S ) = F (S ∪ { x}) − F (S). By the definition of mutual information I(A; B) = H(A) − H(A | B), the marginal gain is: ∆F (x | S ) = 
+
+h
+
+H(YS∪{ x}) − H(YS∪{ x} | Y ¯S )
+
+i
+
+−
+
+h
+
+H(YS ) − H(YS | Y ¯S∪{ x})
+
+i
+
+(27) = H(YS∪{ x}) −
+
+
+
+H(YC ) − H(Y ¯S )
+
+
+
+− H(YS ) + 
+
+
+
+H(YC ) − H(Y ¯S∪{ x})
+
+
+
+(28) =
+
+
+
+H(YS∪{ x}) − H(YS )
+
+
+
+−
+
+
+
+H(Y ¯S∪{ x}) − H(Y ¯S )
+
+
+
+(29) = H(Yx | YS ) − H(Yx | Y ¯S ) (30) Under the assumed Gaussian Process prior, the assumed entropy is entirely determined by its variance: H(Yx | YT ) = 12 log(2 πe · Var( Yx | YT )). Therefore, ∆F (x | S ) = 12 log 
+
+ Var( Yx | YS )Var( Yx | Y ¯S )
+
+
+
+(31) For a Gaussian Process with base covariance matrix Σ and a diagonal heteroscedastic noise matrix Λ (where Λ ii = σ2(xi)), the exact posterior predictive variances are given by the Schur complements of the block covariance matrix: Var( Yx | YS ) = Σ xx + σ2(x) − ΣxS (Σ SS + Λ S )−1ΣSx (32) Var( Yx | Y ¯S ) = Σ xx + σ2(x) − Σx ¯S (Σ ¯S ¯S + Λ ¯S )−1Σ ¯Sx (33) Defining δx as the ratio of Equation 32 to Equation 33 and substituting it into Equation 31 yields exactly 12 log( δx). 23 Proof of Lemma 2. Let ∆ F (x | S ) = F (S ∪ { x}) − F (S) denote the marginal information gain. From our earlier decomposition, this is equivalent to: ∆F (x | S ) = H(Yx | YS ) − H(Yx | Y ¯S ) (34) where ¯S = C \ (S ∪ { x}). To prove submodularity, we must show that for any S ⊂ S ′ ⊂ C and 
+
+x ∈ C \ S ′, the property of diminishing returns holds: ∆ F (x | S ) ≥ ∆F (x | S ′). First, expanding the observation set from S to S′ therefore decreases or maintains the uncer-tainty at x:
+
+H(Yx | YS ) ≥ H(Yx | YS′ ) (35) Also, since S ⊂ S ′, their respective unselected complements satisfy ¯S′ ⊂ ¯S, which yields H(Yx |
+
+Y ¯S′ ) ≥ H(Yx | Y ¯S ), which negates to: 
+
+−H(Yx | Y ¯S ) ≥ − H(Yx | Y ¯S′ ) (36) Summing inequalities (35) and (36) yields ∆ F (x | S ) ≥ ∆F (x | S ′), proving F is submodular. To verify strict submodularity, note that for Gaussian processes the posterior variance Var( Yx | YS ) = 
+
+K(x, x ) + σ2(x) − kS (x)⊤(KSS + Λ S )−1kS (x) is a strictly decreasing function of the observation set whenever σ2(x) > 0. Therefore, when S ⊊ S′ and x / ∈ S ′, both (35) and (36) are strict, so F is strictly submodular. 
+
+Proof of Lemma 3. To prove ϵ-approximate monotonicity, we must bound the marginal gain ∆ F =
+
+F (S ∪ { x}) − F (S) = H(Yx | YS ) − H(Yx | Y ¯S ) from below by −ϵ, where ¯S = C \ (S ∪ { x}). Let Λ T = diag( σ2(xi)) xi∈T denote the heteroscedastic noise diagonal for any selection T . Since ΣT T ⪰ 0 (as a kernel matrix) and Λ T ⪰ σ2
+
+> min
+
+I, the observation covariance satisfies Σ T T + Λ T ⪰
+
+σ2
+
+> min
+
+I, giving: 
+
+∥(Σ T T + Λ T )−1∥2 ≤ σ−2 
+
+> min
+
+(37) Let Cδ ⊂ M be a minimal δ-net with respect to the geodesic distance dM. For an in-trinsic dimension dI , standard metric entropy bounds guarantee the covering number scales as 
+
+N (δ, M, d M) = O(δ−dI ) (Wainwright, 2019). By the L-Lipschitz continuity of K, for any u, u ′ ∈ M 
+
+such that dM(u, u ′) ≤ δ, the covariance deviation satisfies: 
+
+|K (u, v ) − K (u′, v )| ≤ Lδ ∀v ∈ M (38) To bridge the conditioning sets S and ¯S, we define a surjective mapping π : S → ˜S onto a “shadow set” ˜S ⊂ C δ \ S . For every s ∈ S , we choose its nearest neighbor π(s) ∈ C δ such that 
+
+dM(s, π (s)) ≤ δ. This yields | ˜S| = |S| . Because Cδ is sufficiently dense and can be constructed independently of the finite set S, we guarantee ˜S ∩ S = ∅, implying ˜S ⊆ C \ (S ∪ { x}) = ¯S.Let σ2 
+
+> x|T
+
+= Var( Yx | YT ) = K(x, x ) + σ2(x) − ΣxT (Σ T T + Λ T )−1ΣT x denote the GP posterior variance, with Gaussian conditional entropy H(Yx | YT ) = 12 log(2 πe · σ2 
+
+> x|T
+
+). Define the combined Lipschitz constant ˆL = L + Lσ. The Lipschitz bounds on K and σ2 restrict the deviations of the cross-covariance vector and the observation covariance matrix: 
+
+∥ΣxS − Σx ˜S ∥2 ≤ Lδ p|S| (39) 
+
+∥(Σ SS + Λ S ) − (Σ ˜S ˜S + Λ ˜S )∥F ≤ ˆLδ |S| (40) 24 Let M = max x∈M K(x, x ), which implies the prior cross-covariance vector norms are bounded by ∥ΣxT ∥2 ≤ M p|T | for any subset T .Using the identity A−1 − B−1 = A−1(B − A)B−1, we bound the spectral norm of the inverse matrix difference: 
+
+∥(Σ SS + Λ S )−1 − (Σ ˜S ˜S + Λ ˜S )−1∥2
+
+≤ ∥ (Σ SS + Λ S )−1∥2
+
+· ∥ (Σ SS + Λ S ) − (Σ ˜S ˜S + Λ ˜S )∥2
+
+· ∥ (Σ ˜S ˜S + Λ ˜S )−1∥2
+
+≤ (σ−2
+
+> min
+
+)( ˆLδ |S| )( σ−2
+
+> min
+
+)= ˆLδσ −4
+
+> min
+
+|S| (41) We expand the conditional variance difference via a telescoping sum and apply the triangle inequality alongside the sub-multiplicative property of the spectral norm: 
+
+|σ2 
+
+> x|S
+
+− σ2  
+
+> x|˜S
+
+| = ΣxS (Σ SS + Λ S )−1ΣSx − Σx ˜S (Σ ˜S ˜S + Λ ˜S )−1Σ ˜Sx
+
+≤ ∥ ΣxS − Σx ˜S ∥2∥(Σ SS + Λ S )−1∥2∥ΣSx∥2
+
++ ∥Σx ˜S ∥2∥(Σ SS + Λ S )−1 − (Σ ˜S ˜S + Λ ˜S )−1∥2∥ΣSx∥2
+
++ ∥Σx ˜S ∥2∥(Σ ˜S ˜S + Λ ˜S )−1∥2∥ΣSx − Σ ˜Sx∥2
+
+≤ (Lδ p|S| )( σ−2
+
+> min
+
+)( M p|S| )+ ( M p|S| )( ˆLδσ −4
+
+> min
+
+|S| )( M p|S| )+ ( M p|S| )( σ−2
+
+> min
+
+)( Lδ p|S| )
+
+≤ ˆLδσ −2
+
+> min
+
+|S|  2M + M 2σ−2
+
+> min
+
+|S|  (42) Under the partition matroid constraint, |S| < K . Defining the geometric constant C0 = 2 M +
+
+M 2σ−2
+
+> min
+
+K yields the final perturbation bound: 
+
+|σ2 
+
+> x|S
+
+− σ2  
+
+> x|˜S
+
+| ≤ C0 ˆLδσ −2
+
+> min
+
+|S| (43) The difference in conditional entropy expands logarithmically. By substituting the definition of Gaussian entropy, we isolate the variance perturbation: 
+
+|H(Yx | YS ) − H(Yx | Y ˜S )| = 12 log σ2
+
+> x|S
+
+σ2 
+
+> x|˜S
+
+!
+
+= 12 log 1 + 
+
+σ2 
+
+> x|S
+
+− σ2 
+
+> x|˜S
+
+σ2 
+
+> x|˜S
+
+!
+
+(44) Applying the standard logarithmic inequality log(1 + z) ≤ z (and its symmetric counterpart for the absolute value), and noting that any conditional variance is strictly lower-bounded by the minimum irreducible noise ( σ2  
+
+> x|˜S
+
+≥ σ2
+
+> min
+
+), we bound the entropy perturbation: 
+
+|H(Yx | YS ) − H(Yx | Y ˜S )| ≤ 12
+
+σ2 
+
+> x|S
+
+− σ2 
+
+> x|˜S
+
+σ2
+
+> min
+
+≤ C0 ˆLδσ −2
+
+> min
+
+2σ2
+
+> min
+
+|S| (45) 25 Unpacking this absolute value inequality ( |z| ≤ c =⇒ z ≥ − c) directly yields the required lower bound, cleanly sidestepping any loss of generality: 
+
+H(Yx | YS ) − H(Yx | Y ˜S ) ≥ − C0 ˆLδσ −2
+
+> min
+
+2σ2
+
+> min
+
+|S| (46) Because our shadow set is a strict subset of the unselected locations ( ˜S ⊂ ¯S), conditioning on the larger set ¯S reduces entropy more than conditioning on ˜S:
+
+H(Yx | Y ¯S ) ≤ H(Yx | Y ˜S ) (47) which implies 
+
+H(Yx | YS ) − H(Yx | Y ¯S ) ≥ − C0 ˆLδσ −2
+
+> min
+
+2σ2
+
+> min
+
+|S| (48) For any valid selection bounded by the matroid capacity |S| < K , we can guarantee this negative penalty does not exceed −ϵ by setting the mesh width δ appropriately. Choosing δ ≤ 2ϵσ 4 
+
+> min
+> C0ˆLK
+
+enforces: 
+
+F (S ∪ { x}) − F (S) ≥ − ϵ (49) Because the covering number scales with the intrinsic dimension dI , this ensures approximate monotonicity while strictly avoiding the exponential computational scaling O(δ−d) associated with the ambient dimension d.
+
+Proof of Theorem 2. Let I = {T ⊂ C : |T ∩ Ci| ≤ 1 ∀i = 1 , . . . , K } denote the independent sets of the partition matroid. Algorithm 1 greedily maximizes F (S) subject to S ∈ I .From Lemma 2, F is submodular. From Lemma 3, F is ϵ-approximately monotonic for sets up to size K. We define an auxiliary objective function: 
+
+F ′(S) = F (S) + |S| ϵ (50) Because |S| is a strictly modular cardinality function, F ′ inherits submodularity from F . Note that the mutual information is normalized ( F (∅) = 0), so F ′(∅) = 0. For monotonicity, Lemma 3 guarantees ∆ F (x | S ) ≥ − ϵ for all x ∈ C \ S with |S| < K .Therefore, the marginal gain of the auxiliary function is: ∆F ′(x | S ) = ∆ F (x | S ) + ϵ ≥ − ϵ + ϵ = 0 rendering F ′ monotonically non-decreasing. Because ∆ F ′ and ∆ F differ only by the constant ϵ for all candidates x, the greedy choice at any step i is identical under both functions: arg max 
+
+> x∈C valid
+
+∆F ′(x | S i) = arg max 
+
+> x∈C valid
+
+∆F (x | S i) (51) Therefore, the greedy set Sgreedy produced by Algorithm 1 is exactly identical to the set produced by maximizing F ′.Fisher et al. (1978) proved that maximizing a normalized, monotonic submodular function subject to a matroid constraint using a greedy algorithm yields a 1 /2 approximation ratio. Applying this bound to our auxiliary function gives: 
+
+F ′(Sgreedy ) ≥ 12 F ′(S∗) (52) 26 We assume the algorithm constructs a full basis of the matroid (selecting exactly one element from all K clusters). Therefore, both the greedy selection Sgreedy and the optimal selection S∗
+
+strictly exhaust the constraint, ensuring |S greedy | = |S ∗| = K. Substituting the definition of F ′
+
+back into the inequality yields: 
+
+F (Sgreedy ) + Kϵ ≥ 12 (F (S∗) + Kϵ )
+
+F (Sgreedy ) ≥ 12 F (S∗) − 12 Kϵ F (Sgreedy ) ≥ 12 (F (S∗) − Kϵ ) (53) This bounds the worst-case degradation of the greedy algorithm against the global optimum under the partition matroid constraint. 
+
+Proof of Lemma 4. Let Var Φ(Yx | YS ) and Var K∗ (Yx | YS ) denote the posterior predictive variances. By the spectral representation of Gaussian Processes, the posterior variance for target x using weights w is expressed via the error functional ˆEx, S (ω) = 1 − P 
+
+> i∈S
+
+wie−iω T (xi−x) as: Var K (Yx | YS ) = inf 
+
+> w
+
+Z 
+
+> Rd
+
+| ˆEx, S (ω)|2 ˆK(ω)dω + σ2(x) + wT ΛS w
+
+
+
+(54) Let w∗ and wΦ be the optimal Kriging weights under K∗ and Φ, respectively. To bound the true variance from below, we evaluate the assumed variance using the suboptimal weights w∗:Var Φ(Yx | YS ) ≤
+
+Z
+
+> Rd
+
+| ˆE∗(ω)|2 ˆΦ( ω)dω + σ2(x) + ( w∗)T ΛS w∗ (55) 
+
+≤ c2
+
+Z
+
+> Rd
+
+| ˆE∗(ω)|2(1 + ∥ω∥2)s ˆK∗(ω)dω + σ2(x) + ( w∗)T ΛS w∗ (56) 
+
+≤ c2
+
+Z 
+
+> Rd
+
+| ˆE∗(ω)|2(1 + ∥ω∥2)s ˆK∗(ω)dω + σ2(x) + ( w∗)T ΛS w∗
+
+
+
+(57) = c2Var K∗ (Yx | YS ) + c2
+
+Z
+
+> Rd
+
+| ˆE∗(ω)|2[(1 + ∥ω∥2)s − 1] ˆK∗(ω)dω (58) Inequality 55 follows from the definition of the infimum in Equation 54. Inequality 56 applies the upper spectral bound ˆΦ ≤ c2(1 + ∥ω∥2)s ˆK∗. Inequality 57 absorbs the kernel-independent noise terms into the bracket using c2 ≥ 1. Equation 58 expands the polynomial. The residual integral in Equation 58 represents the Sobolev interpolation error of the assumed operator in the true RKHS. Because our queries are restricted to the compact manifold M, we can bound this high-frequency penalty using scattered data approximation on closed manifolds. By extending the classical misspecified Kriging bounds of Stein (1999, Theorem 4.1) to our intrinsic setting via manifold Sobolev embedding (Fuselier and Wright, 2012, Theorem 4.2), the error is guaranteed to decay with respect to the geodesic fill distance hS,M. This convergence rate avoids the ambient dimension d and scales strictly with the intrinsic dimension dI as E(hS,M) = O(hm−s−dI /2 
+
+> S,M
+
+). Rearranging Equation 58 yields the lower bound on the true variance: Var K∗ (Yx | YS ) ≥ 1
+
+c2
+
+Var Φ(Yx | YS ) − E (hS,M) (59) 27 Conversely, we bound the true variance from above using the optimal weights of the assumed kernel, wΦ:Var Φ(Yx | YS ) = 
+
+Z
+
+> Rd
+
+| ˆEΦ(ω)|2 ˆΦ( ω)dω + σ2(x) + ( wΦ)T ΛS wΦ
+
+≥ c1
+
+Z
+
+> Rd
+
+| ˆEΦ(ω)|2 ˆK∗(ω)dω + σ2(x) + ( wΦ)T ΛS wΦ (60) 
+
+≥ c1
+
+Z 
+
+> Rd
+
+| ˆEΦ(ω)|2 ˆK∗(ω)dω + σ2(x) + ( wΦ)T ΛS wΦ
+
+
+
+(61) 
+
+≥ c1Var K∗ (Yx | YS ) (62) where Inequality 60 applies the lower spectral bound ˆΦ ≥ c1 ˆK∗. Inequality 61 absorbs the noise terms into the bracket using c1 ≤ 1. Inequality 62 holds because wΦ is suboptimal for K∗. This yields Var K∗ (Yx | Y ¯S ) ≤ 1 
+
+> c1
+
+Var Φ(Yx | Y ¯S ). Finally, we translate these posterior variance bounds into the marginal Mutual Information gain, defined as ∆ FK (x | S ) = 12 log (Var K (Yx | YS )/Var K (Yx | Y ¯S )): ∆FK∗ (x | S ) ≥ 12 log  
+
+> 1
+> c2
+
+Var Φ(Yx | YS ) − E  
+
+> 1
+> c1
+
+Var Φ(Yx | Y ¯S )
+
+!
+
+(63) = 12 log 
+
+ c1
+
+c2
+
+Var Φ(Yx | YS )Var Φ(Yx | Y ¯S ) − c1E
+
+Var Φ(Yx | Y ¯S )
+
+
+
+≥ ∆FΦ(x | S ) − 12 log( c2/c 1) − E ′(hS,M) (64) Inequality 63 substitutes our derived lower bound (Equation 59) into the numerator and our derived upper bound into the denominator. Finally, Inequality 64 factors out the assumed information gain ∆FΦ(x | S ) and linearizes the residual term inside the logarithm. Because the heteroscedastic noise is strictly lower-bounded (Var Φ ≥ σ2 
+
+> min
+
+> 0), the denominator cannot vanish, allowing us to safely absorb the scaling constants and spatial residual into a well-behaved vanishing error term E′. This proves the true information gain tracks the assumed gain up to a fixed additive spectral penalty and a vanishing geometric residual. 
+
+Proof of Theorem 3. Let Sgreedy be the set of K queries selected by Algorithm 1 by greedily maxi-mizing the assumed objective FΦ under the partition matroid constraint I. Let S∗ 
+
+> Φ
+
+= arg max S∈I FΦ(S)be the optimal set under the assumed kernel, and S∗K∗ = arg max S∈I FK∗ (S) be the optimal set under the true kernel. From Theorem 2, we know the greedy algorithm achieves a 1 /2 approximation ratio on the function it is actively optimizing ( FΦ), modulo the discretization gap Kϵ . Thus: 
+
+FΦ(Sgreedy ) ≥ 12 FΦ(S∗
+
+> Φ
+
+) − 12 Kϵ (65) Because S∗ 
+
+> Φ
+
+is the global optimum for FΦ, it must yield a value at least as large as evaluating FΦ
+
+on the true optimal set S∗K∗ :
+
+FΦ(S∗
+
+> Φ
+
+) ≥ FΦ(S∗K∗ ) (66) Substituting (66) into (65): 
+
+FΦ(Sgreedy ) ≥ 12 FΦ(S∗K∗ ) − 12 Kϵ (67) 28 We now apply the misspecification bound from Lemma 4 by explicitly expanding the total information gain via the chain rule. Let Sgreedy = {x1, . . . , x K } be the sequence of selected queries, and let Si = {x1, . . . , x i−1} denote the subset selected prior to step i. Setting the additive spectral gap as C = 12 log( c2/c 1), we sum the marginal gains over all K steps: 
+
+FK∗ (Sgreedy ) = 
+
+> K
+
+X
+
+> i=1
+
+∆FK∗ (xi | S i)
+
+≥
+
+> K
+
+X
+
+> i=1
+
+∆FΦ(xi | S i) − C − E ′(hSi,M) (68) =
+
+> K
+
+X
+
+> i=1
+
+∆FΦ(xi | S i) −
+
+> K
+
+X
+
+> i=1
+
+C −
+
+> K
+
+X
+
+> i=1
+
+E′(hSi,M)= FΦ(Sgreedy ) − KC −
+
+> K
+
+X
+
+> i=1
+
+E′(hSi,M) (69) where Inequality 68 substitutes the single-step lower bound from Lemma 4, and Equation 69 re-combines the assumed marginal gains into the total assumed Mutual Information FΦ(Sgreedy ). To relate the right side of (67) back to the true optimum, we apply an argument symmetric to Lemma 4. By reversing the roles of Φ and K∗ using the spectral bounds c1 ≤ ˆΦ( ω)/ ˆK∗(ω) ≤ c2,the assumed Mutual Information similarly dominates the true Mutual Information up to the same additive penalty C and a symmetric residual E′′ :
+
+FΦ(S∗K∗ ) ≥ FK∗ (S∗K∗ ) − KC −
+
+> K
+
+X
+
+> i=1
+
+E′′ (hSi,M) (70) Substituting (70) and (67) into (69) chains the inequalities together: 
+
+FK∗ (Sgreedy ) ≥
+
+ 12 FΦ(S∗K∗ ) − 12 Kϵ 
+
+
+
+− KC −
+
+> K
+
+X
+
+> i=1
+
+E′(hSi,M)
+
+≥ 12
+
+"
+
+FK∗ (S∗K∗ ) − KC −
+
+> K
+
+X
+
+> i=1
+
+E′′ (hSi,M)
+
+#
+
+− 12 Kϵ − KC −
+
+> K
+
+X
+
+> i=1
+
+E′(hSi,M)= 12 (FK∗ (S∗K∗ ) − Kϵ ) − 32 KC −
+
+> K
+
+X
+
+> i=1
+
+E′(hSi,M) + 12
+
+> K
+
+X
+
+> i=1
+
+E′′ (hSi,M)
+
+!
+
+(71) Let OP T K∗ = FK∗ (S∗K∗ ). Expanding the spectral penalty term gives 32 KC = 32 K   12 log( c2/c 1) = 
+
+> 3K
+> 4
+
+log( c2/c 1). Setting Γ = 3K 
+
+> 4
+
+log( c2/c 1) and defining the accumulated spatial residual as R(hS,M) = 
+
+PKi=1 E′(hSi,M) + 12
+
+PKi=1 E′′ (hSi,M), the final bound simplifies to: 
+
+FK∗ (Sgreedy ) ≥ 12 (OP T K∗ − Kϵ ) − Γ − R (hS,M) (72) proving the constant-factor approximation holds under a misspecified kernel, with a fixed additive spectral penalty and a spatial residual that vanishes as the manifold fill distance hS,M → 0. 
+
+# Acknowledgments 
+
+The author thanks Kangana Beri, Aaditya Shukla, and Jiaxiang Ren at NVIDIA for valuable discussions and feedback that improved this work. 29 References 
+
+James Bergstra, R´ emi Bardenet, Yoshua Bengio, and Bal´ azs K´ egl. Algorithms for hyper-parameter optimization. In Advances in Neural Information Processing Systems , volume 24, 2011. Marshall L Fisher, George L Nemhauser, and Laurence A Wolsey. An analysis of approximations for maximizing submodular set functions—II. Mathematical Programming Study , 8:73–87, 1978. Edward J. Fuselier and Grady B. Wright. Scattered data interpolation on embedded submanifolds with restricted positive definite kernels: Sobolev error estimates. SIAM Journal on Numerical Analysis , 50(3):1753–1776, 2012. Dawei Gao, Haibin Wang, Yaliang Li, Xiuyu Sun, Yichen Qian, Bolin Ding, and Jingren Zhou. Text-to-sql empowered by large language models: A benchmark evaluation. Proceedings of the VLDB Endowment , 17(5):1132–1145, 2024. C. Ko, J. Lee, and M. Queyranne. An exact algorithm for maximum entropy sampling. Operations Research , 43(4):684–691, 1995. Andreas Krause and Daniel Golovin. Submodular function maximization. In Lucas Bordeaux, Youssef Hamadi, and Pushmeet Kohli, editors, Tractability: Practical Approaches to Hard Prob-lems , pages 71–104. Cambridge University Press, 2014. Andreas Krause, Ajit Singh, and Carlos Guestrin. Near-optimal sensor placements in gaussian processes: Theory, efficient algorithms and evaluation. Journal of Machine Learning Research ,9:235–284, 2008. Elizaveta Levina and Peter J. Bickel. Maximum likelihood estimation of intrinsic dimension. In 
+
+Advances in Neural Information Processing Systems , volume 17, pages 777–784, 2004. David D. Lewis and William A. Gale. A sequential algorithm for training text classifiers. In Pro-ceedings of the 17th Annual International ACM SIGIR Conference on Research and Development in Information Retrieval , pages 3–12, 1994. Jinyang Li, Binyuan Hui, Ge Qu, Jiaxi Yang, Binhua Li, Bowen Li, Bailin Wang, Bowen Qin, Rongyu Cao, Ruiying Geng, Nan Huo, Xuanhe Zhou, Chenhao Ma, Guoliang Li, Kevin C. C. Chang, Fei Huang, Reynold Cheng, and Yongbin Li. Can LLM already serve as a database interface? a big bench for large-scale database grounded text-to-sqls. In Advances in Neural Information Processing Systems , volume 36, pages 42330–42357. Curran Associates, Inc., 2023. Leland McInnes, John Healy, and James Melville. UMAP: Uniform manifold approximation and projection. Journal of Open Source Software , 3(29):861, 2018. doi: 10.21105/joss.00861. George L. Nemhauser, Laurence A. Wolsey, and Marshall L. Fisher. An analysis of approximations for maximizing submodular set functions—I. Mathematical Programming , 14(1):265–294, 1978. Bojana Rankovi´ c and Philippe Schwaller. Gollum: Gaussian process optimized LLMs—reframing LLM finetuning through Bayesian optimization. In ICLR 2025 Workshop on World Models: Understanding, Modelling and Scaling , 2025. Carl Edward Rasmussen and Christopher K. I. Williams. Gaussian Processes for Machine Learning .MIT Press, 2006. 30 Edward Snelson, Carl Edward Rasmussen, and Zoubin Ghahramani. Warped Gaussian processes. In Advances in Neural Information Processing Systems , volume 16, 2004. Jasper Snoek, Hugo Larochelle, and Ryan P. Adams. Practical Bayesian optimization of machine learning algorithms. In Advances in Neural Information Processing Systems , volume 25, 2012. Niranjan Srinivas, Andreas Krause, Sham M. Kakade, and Matthias Seeger. Gaussian process optimization in the bandit setting: No regret and experimental design. In Proceedings of the 27th International Conference on Machine Learning , pages 1015–1022, 2010. Michael L. Stein. Interpolation of Spatial Data: Some Theory for Kriging . Springer Series in Statistics. Springer New York, 1999. ISBN 978-1-4612-7166-6. Martin J Wainwright. High-dimensional statistics: A non-asymptotic viewpoint , volume 48. Cam-bridge University Press, 2019. Wenjia Wang, Rui Tuo, and CF Jeff Wu. On prediction properties of kriging: uniform error bounds and robustness. Journal of the American Statistical Association , 115(530):920–930, 2020. Tao Yu, Rui Zhang, Kai Yang, Michihiro Yasunaga, Dongxu Wang, Zifan Li, James Ma, Irene Li, Qingning Qing, Qian Wu, et al. Spider: A large-scale human-labeled dataset for complex and cross-domain semantic parsing and text-to-sql task. In Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing , pages 3911–3921, 2018. 31

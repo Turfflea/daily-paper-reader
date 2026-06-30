@@ -1,0 +1,1037 @@
+Title: Latent Bridges for Multi-Table Question Answering
+
+URL Source: https://arxiv.org/pdf/2606.28916v1
+
+Published Time: Tue, 30 Jun 2026 00:43:38 GMT
+
+Number of Pages: 24
+
+Markdown Content:
+# Latent Bridges for Multi-Table Question Answering 
+
+Simone Varriale 1 Tamara Cucumides 2 Floris Geerts 2 Paolo Papotti 1
+
+> 1
+
+EURECOM 2University of Antwerp 
+
+Abstract 
+
+We introduce GRAB , a constructor–enco-der–bridge pipeline for table question answer-ing. Our method lifts relational data into an heterogeneous graph, encodes it via message passing, and transfers the signals to an LLM through a small set of query-conditioned latent tokens. This provides the LLM with a com-pact, task-relevant structural representation to-gether with the flattened text. Crucially, the LLM remains strictly frozen to preserve its general reasoning capabilities; we train only the lightweight graph encoder and latent bridge (91M parameters), allowing the entire pipeline to be trained efficiently. Our pipeline sig-nificantly improves performance on relational Question Answering, with the largest gains in demanding multi-table settings, offering an effi-cient, principled way to connect relational deep learning with LLMs. § Link to Code 
+
+1 Introduction 
+
+Table question answering (TQA) asks language models to answer natural language (NL) questions grounded in structured data. While Text-to-SQL is popular for querying databases, TQA is essen-tial because SQL struggles with messy, unnormal-ized data, implicit relationships, or hybrid contexts where tables are mixed with free text (Badaro et al., 2023). Most LLM-based approaches treat tables as text: they serialize rows and columns into a 1D sequence and rely on the model to recover the underlying structure. This strategy is convenient, but it mismatches the semantics of tables, where row–column organization, permutation invariance, hierarchical headers, and cross-cell dependencies are central to meaning. This loss of structure is a key reason why LLMs remain brittle on table reasoning (Li et al., 2025). A natural alternative is to treat tables as a sep-arate modality and interface them with LLMs through learned representations rather than raw se-rialization alone. In this work, we encode tables with a dedicated neural network and inject the re-sulting features into an LLM as latent tokens. Our starting point is that many of the difficulties of TQA are inherently relational: relevant evidence is dis-tributed across rows, columns, and value groups, and in the multi-table setting the model must reason across linked tables through join dependencies. We therefore propose GRAB (Graph-Relational 
+
+Attention Bridge), a GNN-based table encoder for LLM-based multi-table question answering. As shown in Figure 1, our encoder lifts relational data into a graph, uses message passing to capture struc-tural dependencies, and compresses the result into a small set of latent tokens consumed by the LLM. The representation is conditioned on the NL ques-tion, allowing the encoder to produce question-relevant structure rather than a single static sum-mary of the input table. Adapting LLMs to tabular data typically re-quires computationally expensive full fine-tuning or parameter-heavy adapters, e.g., LoRA (Hu et al., 2022). While LoRA freezes the pretrained back-bone and learns task-specific low-rank updates, it alters the model’s internal representations. This can cause the adapted inference behavior to over-specialize to the fine-tuning domain, potentially re-ducing out-of-distribution cross-task performance and causing catastrophic forgetting (Huang et al., 2024). In contrast, our approach keeps the LLM strictly frozen and isolates the task-specific learn-ing entirely within our 91M parameter external module. This lightweight design allows the entire pipeline to be trained efficiently on a single GPU, democratizing multi-table reasoning. Our central claim is that graph-conditioned la-tent interfaces provide a practical middle ground between two extremes: pure text serialization, which underuses relational structure, and symbolic pipelines, which often sacrifice the flexibility of LLMs on underspecified or compositional ques-tions. By combining a relational graph encoder     
+
+> arXiv:2606.28916v1 [cs.CL] 27 Jun 2026 Figure 1: Architecture Overview. Tables are processed via two parallel streams: text serialization and a tripartite graph that explicitly captures multi-table joins. A Query-Conditioned Latent Resampler uses the natural language question to actively filter the GNN-encoded graph into dynamic soft tokens. These structural tokens guide a frozen LLM to generate the final answer. Only the lightweight graph and resampler modules are updated during training.
+
+with a lightweight latent bridge, we preserve struc-tural bias while keeping the downstream model fully compatible with autoregressive LLM reason-ing. Empirically, we show that this design is es-pecially effective on multi-table and structurally demanding questions. Conceptually, our results confirm that, for TQA, tables should not be treated merely as text, but as a structured modality that requires its own encoder and interface to the LLM. In summary, our main contributions are three-fold. First, we introduce GRAB ’s architecture (Sec-tion 4) and formalize it (Section 5). Second, we de-sign a stress-test taxonomy that isolates structural evidence localization from exact arithmetic, pro-viding a novel diagnostic tool for LLMs (Section 6). Finally, we show that GRAB consistently out-performs serialization-only across 13 single- and multi-table QA benchmarks (Section 7). 
+
+2 Problem Setting 
+
+We formulate multi-table question answering (TQA) as a conditional generation task over a re-lational database 1. Let T = {T1, T 2, . . . , T n} be a set of tables, where each table Ti consists of a set of columns Ci, rows Ri, and cell values Vi. The database is accompanied by metadata M, which defines the schema, including a foreign-key (FK) relationships ( F) linking tables. Columns have a type τ ∈ { cat(egorical) , num(erical) , text }.Given a natural language question Q and the re-lational context (T , M), the goal is to generate a target answer A, which may be a free-form genera-tive text, an extractive span, or a numeric aggregate. In the standard setting, an LLM is either used 
+
+> 1The proposed solution works also for other tasks, such as tabular fact checking. We report these results in Appendix A.
+
+in a zero/few-shot setting (i.e., frozen ) or trained to maximize the probability of the correct answer 
+
+P (A | Q, T , M). Typically, the input tables are flattened into a text sequence Stable , and the LLM implicitly reconstructs row-column alignments and cross-table linkages (Badaro et al., 2023). However, tabular data exhibits unique semantic properties, such as permutation invariance of rows and strict hierarchical header structures, that are distorted or even lost by serialization. 
+
+3 Related Work 
+
+LLMs for Table Question Answering. Early approaches to TQA rely on encoder-only models pretrained on flattened tabular data (Herzig et al., 2020; Liu et al., 2022a). Other models mitigate the loss of structure caused by serialization with specialized attention biases to capture row-column alignments and preserve permutation invariance (Yang et al., 2022), but injecting these structural biases requires retraining of the LLM. Indeed, with LLMs, the paradigm shifted to text serialization (Xie et al., 2022), where tables are converted into (Markdown or HTML) sequences and processed via standard autoregressive generation (Zhang et al., 2024). However, current pure-LLM TQA strategies suffer context-window fragmentation when serial-izing multiple tables, losing structural coherence (Contalbo et al., 2025; Chen et al., 2024). Recent models such as TAMO (Li et al., 2025) inject hypergraph-encoded tables as soft tokens. TAMO constructs a hypergraph over cell occur-rences: each cell is a primitive node, while rows, columns, and the whole table act as hyperedges. In contrast, GRAB canonicalizes repeated val-ues within column classes and merges foreign-key-linked column occurrences into shared classes. Equality patterns and join keys therefore become explicit graph connectivity rather than implicit tex-tual or embedding-level coincidences. Moreover, TAMO’s encoding is query-agnostic, whereas our latent bridge is conditioned on the NL question. 
+
+Graph Learning for Relational Data. Tabular ML is dominated by tree-based models (Chen and Guestrin, 2016) and multilayer perceptrons, which treat rows as independent, identically distributed samples. Tabular foundation models (Hollmann et al., 2025; Chang et al., 2025) introduce cross-row attention but are designed for row-level predictions. For TQA, we argue that relational databases are too dense to be losslessly compressed as static tokens. Conversely, relational deep learning (Robinson et al., 2024) explicitly models multi-table databases as heterogeneous graphs, using message passing to capture foreign key links. While these models excel at node classification over databases, they are rarely integrated into LLM pipelines for TQA. Our work bridges this gap by using graph constructors to encode tabular data before reasoning. 
+
+Soft Tokens & Multimodality. Parameter-efficient fine-tuning methods (Li and Liang, 2021; Liu et al., 2022b) introduced “soft tokens”: continuous, learn-able prompt vectors that steer frozen LLMs without updating their weights. This paradigm has been adapted for multimodal bridging, where models use latent resamplers to compress continuous sig-nals from vision/audio encoders into few soft prefix tokens (Alayrac et al., 2022; Li et al., 2023). We are the first to use query-conditioned latent resam-plers to compress relational structures . Rather than acting as a generic summary, our latents act as a learned structural retrieval bridge (see Appendix I, Table 15 for a feature comparison). 
+
+4 Method 
+
+As illustrated in Figure 1, instead of relying only on Stable , we define a graph constructor γ that lifts the relational context into an explicit het-erogeneous graph G = γ(T , F). In this graph, rows, column classes, and value groups are repre-sented as typed nodes, and foreign-key metadata induces shared column classes. A graph encoder processes G to capture row–column–value depen-dencies and cross-table connectivity. To interface with the LLM, we define a query-conditioned la-tent bridge that projects the encoded graph into a fixed-length sequence of K soft tokens, denoted 
+
+Z = {z1, . . . , z K }. The LLM then generates the answer from both the textual prompt and our struc-tural prefix. Throughout this process, the LLM weights remain frozen; only the graph encoder and bridge are updated. 
+
+Relational Graph Constructor. Intuitively, our constructor translates relational tables into a graph where rows, columns, and actual cell values are all treated as individual nodes. Edges are drawn simply based on inclusion: a row is connected to the values it contains, and a column is connected to the values it can hold. This naturally forces repeated values and foreign-key joins to become shared connection points (hubs) in the graph. The graph constructor γ is a fixed, determinis-tic processing map. It exposes row–column–value incidence and cross-table join structure before any neural message passing occurs. We provide more details in section C. Let us consider the foreign-key metadata in M, that is, F =   (i, c ), (j, d ) |
+
+column c of Ti joins column d of Tj . The con-structor maps the relational input to a tripartite graph γ(T , F) =  G, H (0)  with G =  VR ∪ V C ∪VV , ERV ∪ E CV 
+
+, where VR are row nodes, VC
+
+are column-class nodes, VV are value-group nodes, 
+
+ERV are row–value incidence edges, and ECV are column–value incidence edges. Furthermore, H(0) 
+
+denotes the initial row, column and value node fea-tures H(0)  
+
+> R
+
+, H(0)  
+
+> C
+
+, and H(0)  
+
+> V
+
+.A distinguishing characteristic of our construc-tion is that columns linked by foreign-key pairs in 
+
+F are represented by a single column-class node. This embeds joins directly in the graph and makes related tables accessible to later message passing. For example, in Figure 1, the city columns in T1
+
+and T2 map to a single node in G. Nodes and edges are otherwise defined in the natural way: row–value edges record which value groups occur in each row, and column–value edges record which value groups belong to each column class. For value nodes, we take values after applying a standardization map. Here, categorical and textual values are normalized and canonicalized within their column class, while numerical values are mapped to quantile buckets. For initial features, we use a fixed token-level text encoder and extend it to strings by mean pool-ing. The graph hidden dimension is inherited from the embedding model used to initialize the nodes. In our implementation, row and column nodes are initialized from the same text embedding model, while value nodes are constructed directly in the same hidden dimension. Hence, all node types al-ready lie in a common embedding space, and no additional projection is applied at initialization. Column nodes are initialized from the header embedding of the corresponding column occur-rence. When a column node represents multiple columns identified by foreign-key links, we average their header embeddings. Value nodes are not initialized from the raw cell-value text. Instead, we use a deterministic embedding of the value-group identifier, augmented with column-type information, constructed in the graph hidden dimension. Thus, value nodes primarily act as structural anchors: they indicate where identical categorical/textual values or discretized numeric buckets occur, while exact values remain available to the LLM through Stable .
+
+Graph Encoder. Given the initialized node rep-resentations H(0)  
+
+> R
+
+, H(0)  
+
+> C
+
+, and H(0)  
+
+> V
+
+, the graph en-coder applies message passing over the tripar-tite incidence structure of G. The encoder main-tains separate hidden states for row, column, and value nodes, and updates them through the row-value and column-value adjacency matrices. Let 
+
+ARV ∈ { 0, 1}|V R|×|V V | denote the row-value in-cidence matrix, where (ARV )ig = 1 if row node 
+
+ri is connected to value node vg. Similarly, let 
+
+ACV ∈ { 0, 1}|V C |×|V V | denote the column-value incidence matrix, where (ACV )jg = 1 if column node cj is connected to value node vg.At layer ℓ, value nodes aggregate messages from their incident row and column nodes, while row and column nodes aggregate messages from their incident value nodes: 
+
+M (ℓ) 
+
+> V
+
+= A⊤ 
+
+> RV
+
+H(ℓ) 
+
+> R
+
++ A⊤ 
+
+> CV
+
+H(ℓ) 
+
+> C
+
+,M (ℓ) 
+
+> R
+
+= ARV H(ℓ) 
+
+> V
+
+, M (ℓ) 
+
+> C
+
+= ACV H(ℓ) 
+
+> V
+
+.
+
+The row, column, and value states are then up-dated in parallel using type-specific residual blocks. For each node type X, where X may denote rows 
+
+R, columns C, or values V , the update is: 
+
+˜HℓX = HℓX + Drop 
+
+
+
+N msg  
+
+> X
+
+(M ℓX )
+
+
+
+,Hℓ+1  
+
+> X
+
+= ˜HℓX + Drop 
+
+
+
+FX
+
+
+
+N ffn  
+
+> X
+
+( ˜HℓX )
+
+ 
+
+,
+
+where Drop , N msg  
+
+> X
+
+, N ffn  
+
+> X
+
+, and FX denote dropout, message normalization, FFN normalization, and the feed-forward network, respectively. The up-date follows a Transformer-style residual design: the first residual branch injects aggregated graph messages, while the second residual branch ap-plies a type-specific feed-forward refinement to the message-updated node state. Each node type has separate normalization and feed-forward pa-rameters. This message-passing scheme lets row and column representations exchange information through value nodes. As a result, rows that contain the same canonical value group can influence one another, columns receive signals from the values they generate, and in the multi-table case, shared value or foreign-key-linked structures allow infor-mation to propagate across tables. After L graph layers, the encoder outputs contextualized node representations H(L) 
+
+> R
+
+, H(L) 
+
+> C
+
+, and H(L) 
+
+> V
+
+. These rep-resentations are not pooled into a single graph vec-tor, instead, they are passed to the latent bridge, which compresses the variable-size graph into a fixed number of soft tokens for the LLM. 
+
+Latent Bridge to the LLM. In standard prompt-and prefix-tuning (Li and Liang, 2021), the LLM is steered by a set of task-specific soft tokens that remain static at inference time: the same prompt vectors are prepended regardless of the specific in-put instance. In our TQA setting, however, the structural context changes dynamically based on both the input graph G and the user question Q.Therefore, we design a query-conditioned latent resampler based on the style of a Perceiver Resam-pler to generate a sequence of soft tokens for every forward pass (Alayrac et al., 2022). Let Hgraph ∈ RN ×d denote all final node em-beddings output by the GNN, and HQ ∈ RM ×d
+
+denote the contextualized embeddings of the NL question (e.g., via a lightweight RoBERTa model). To bridge the modality gap without exhausting the LLM’s context window, we initialize a fixed num-ber of K learnable query vectors Z(0) ∈ RK×d.To make the soft tokens question-conditioned, the resampler uses the question embeddings HQ as additional context during latent extraction. The ini-tial learnable latent queries are partitioned by node type as Z(0) = [ Z(0)  
+
+> R
+
+; Z(0)  
+
+> C
+
+; Z(0)  
+
+> V
+
+], where Z(0)  
+
+> R
+
+∈
+
+RKR×d, Z(0)  
+
+> C
+
+∈ RKC ×d, and Z(0)  
+
+> V
+
+∈ RKV ×d
+
+correspond to row, column, and value latents, re-spectively. The question is encoded once to ob-tain HQ and is then reused by the latent groups. Each group performs cross-attention over its corre-sponding graph node representations concatenated with the same question embeddings along the se-quence dimension: ZR = Attn( Z(0)  
+
+> R
+
+, [HR; HQ]) ,
+
+ZC = Attn( Z(0)  
+
+> C
+
+, [HC ; HQ]) , and finally ZV =Attn( Z(0)  
+
+> V
+
+, [HV ; HQ]) .The output is a sequence of K soft tokens 
+
+Z ∈ RK×d, linearly projected to match the hidden dimension dL of the frozen LLM. Unlike static pre-fix tokens, these K latents compress the multi-table graph into a summary conditioned on the question. 
+
+LLM Interface and Answer Generation. The latent bridge outputs a fixed-length sequence of graph-derived soft tokens Z = {z1, . . . , z K } in the graph encoder hidden space. Before being passed to the LLM, these vectors are mapped to the LLM embedding dimension through a learned projector: 
+
+ˆZ = Proj( Z). The projected latents ˆZ are then in-jected as soft prefix embeddings before the prompt. The final LLM input consists of the graph la-tents, the task description, the serialized textual ta-ble context, and the NL question: [ ˆZ; D; Stable ; Q],where D denotes the instruction or dataset-specific description, Stable denotes the retained textual se-rialization of the table or table segments, and Q is the question. Thus, the LLM receives both explicit textual context and a compact structural prefix. 
+
+Training Objective. Our training paradigm is de-signed to be highly parameter-efficient. Let ΘLLM 
+
+denote the parameters of the large language model, and ΦGNN+Bridge denote the parameters of our graph encoder and query-conditioned resampler ( ∼91M parameters). During training, we freeze ΘLLM and optimize only ΦGNN+Bridge to minimize the stan-dard auto-regressive negative log-likelihood of the target answer A: L = − P|A| 
+
+> t=1
+
+log PΘLLM 
+
+ at |
+
+a<t , Q, ˆZ, S table 
+
+ By keeping the gradients entirely within the lightweight ΦGNN+Bridge modules, the computational memory footprint is drastically re-duced, allowing the framework to be trained end-to-end on single GPU while fully preserving the LLM’s pre-trained general knowledge. 
+
+5 Structural Analysis 
+
+Why Explicit Graph Construction Helps? A seri-alized table represents equality, co-occurrence, and joins only indirectly, as repeated strings scattered across a sequence. The constructor turns these rela-tions into graph structure. Repeated categorical or textual values become shared value nodes; foreign-key-linked columns become shared column classes. As a result, duplicate elimination becomes a value-node degree property, and joins become bounded-hop paths through shared value groups. The con-structor therefore makes common relational opera-tions directly available to the encoder. 
+
+What Message Passing Can Extract. The en-coder is a typed message-passing network over row, column-class, and value-group nodes. Each layer expands the accessible neighborhood by one graph hop, so an L-layer encoder extracts bounded-depth structural features of G. In GRAB , these features include row membership, column membership, repeated-value support, row-level co-occurrence, and local foreign-key connectivity. The encoder is most useful when the bottleneck is structural ac-cess, e.g., locating rows, forming groups, detecting repeated values, or following joins. It is less use-ful when the relevant evidence has already been located and the remaining difficulty is exact sym-bolic or numerical computation. 
+
+Limits of the Latent Bridge. The latent bridge is a readout and compression mechanism, not an addi-tional source of graph expressivity. It receives the node representations produced by message passing and turns them into a fixed number of soft tokens. It can select, weight, and summarize information exposed by the graph encoder, but it cannot re-cover distinctions that were not represented in the constructed graph or were erased during message passing. This fixed-capacity compression creates a bottle-neck. A question-agnostic bridge must compress the whole graph into the same sketch regardless of what is being asked, so it may waste capacity on ir-relevant details or discard facts needed for a particu-lar query. A question-conditioned bridge mitigates this by using the question to decide which rows, columns, values, and joins should be emphasized. Thus, it does not make the encoder more expressive, but it makes the limited latent capacity more useful for the current question. Appendix D formalizes this intuition as a sketch-complexity separation. 
+
+6 Experimental Setup 
+
+Datasets. We evaluate our method on a suite of benchmarks covering both single- and multi-table QA, as listed in Table 1. For single-table experiments, we use six datasets. StructQA (Li et al., 2025) focuses on table struc-ture understanding and robustness to structural vari-ation. HiTab (Cheng et al., 2022) emphasizes hier-archical headers and aggregation-heavy reasoning. WTQ (Pasupat and Liang, 2015) and WikiSQL (Zhong et al., 2017) provide standard flat-table benchmarks with broad use in the literature, while HCTQA (Ahmad et al., 2026) focuses on human-Dataset Extra Train Main Challenge Single-table  StructQA No 4.5k Structure sensitivity HiTab No 7.4k Hierarchical tables WTQ No 11.3k Compositional QA WikiSQL No 56.4k Filtering & aggregation HCTQA Layout 62.1k Complex layouts TabMWP Text 23.1k Math reasoning                      
+
+> Multi-table  MultiHierTT Text 7.0k Multi-hop reasoning SciTaT Text 11.6k Scientific evidence MMQA Text 2.3k Cross-modal reasoning TQA-Bench No 9.8k Long-context joins Atis No 0.4k Flight-query reasoning GeoQuery No 0.5k Geographic querying Spider No 6.0k SQL result generation
+
+Table 1: Datasets used in our experiments. The suite spans standard single-table QA, structure-heavy and layout-heavy settings, and multi-table or hybrid bench-marks requiring reasoning across tables and text. 
+
+centric tables with complex layouts. TabMWP (Lu et al., 2023) complements these datasets with table-grounded math word problems that require numeri-cal and multi-step reasoning. For multi-table experiments, we use seven datasets from reasoning with relations to hybrid QA over tables and text. MultiHiertt (Zhao et al., 2022), MMQA (Wu et al., 2025) and SCITAT (Zhang et al., 2025b) combine tables with textual evidence, TQA-Bench (Qiu et al., 2024) focuses on scalable multi-table relational reasoning under long contexts (8K), and Atis, GeoQuery and Spider (Pal et al., 2023) targets QA where the output itself may be tabular. 
+
+Baselines We compare our method, GRAB ,against representative baselines. We include an 
+
+Inference-only baseline, where the model receives only the serialized table(s) and question in zero-shot form, without any trainable table encoder or prompt parameters. For the Frozen LLM setting, we compare against Prompt Tuning , where the base LLM remains fixed and only a small set of learned soft prompt vectors is optimized, and TAMO 2,which encodes each table with a hypergraph neural network and injects the resulting latent table fea-tures into the frozen LLM as soft tokens. Finally, we consider a Tuned LLM setting, where the LLM is adapted with LoRA with and without the GRAB encoder. As an additional reference, we report re-sults for GPT-5.4-mini (OpenAI, 2026) under an inference-only setup. We also include two task-specialized baselines: TableLlama (Zhang et al., 2024) for the single-table setting and MultiTabQA 
+
+> 2TAMO is excluded from our multi-table experiments as the released implementation supports only single-table inputs.
+
+for the multi-table setting. These baselines are fine-tuned separately on each dataset, providing super-vised references for the corresponding evaluation regimes. 
+
+Stress-test Taxonomy. Existing benchmarks con-flate three orthogonal sources of difficulty: the form of the expected answer, the structural depth of table access required to locate evidence, and the computational path needed to derive the final value. Appendix F formalizes this as a three-axis taxonomy (answer type, structural depth, and com-putational path), which lets us attribute failures to a specific axis rather than to aggregate “hardness.” To isolate the contributions of GRAB , we design a targeted stress-test over 15 relational tables that independently varies the structural axis (0–2 cate-gorical filters, plus optional GROUP -BY keys) and the computational axis (LOOKUP , COUNT , MAX ,
+
+> AVG
+
+). 
+
+Implementation Details. Our reference backbone is Qwen3-4B-Base (Yang et al., 2025). For the graph encoder, we initialize textual row and col-umn representations with embeddings from Qwen3-Embedding-0.6B. All experiments, including both inference and fine-tuning, are run on NVIDIA A100 GPUs. The encoder–bridge component is on the order of hundreds of millions of parame-ters. Appendix E reports the full training setup for GRAB and the baselines (optimizer, schedule, batch size, LoRA configuration, GNN hyperparam-eters) as well as dataset preprocessing details. 
+
+Evaluation Metrics. We report the original met-ric from each benchmark. For most datasets it is accuracy: a prediction is correct only if, after nor-malization, its multiset of answer values exactly matches the gold answers. We parse both the pre-diction and the reference into a multiset of values, apply case-folding and numeric canonicalization (comma stripping and integer/float unification), and require multiset equality. The comparison is order-invariant but count-sensitive, partial overlap earns no credit. For HCTQA we report F1 together with Complete Containment (CC), a binary score that is 1 only when the prediction fully covers the gold answer set (recall = 1). As TQA-Bench answers are multiple-choice, we report accuracy by extracting the choice from the generated text before compar-ing it to the gold option. For SciTaT, we follow its protocol and split examples by answer length: short-form answers are scored by Exact Match, while free-form answers are scored by token-level Setting Method StructQA HiTab WTQ WikiSQL HCTQA TabMWP Acc. Acc. Acc. Acc. F1 CC Acc.                                                             
+
+> Inference-only zero-shot 24.26 53.72 32.29 53.86 30.16 14.06 34.75 Frozen LLM Prompt tuning 71.33 69.63 56.02 85.71 68.88 43.09 84.75 TAMO 73.40 65.27 56.95 86.29 70.89 47.70 84.49
+> GRAB 84.80 74.49 58.33 88.30 86.38 72.81 87.01
+> Tuned LLM zero-shot 77.93 76.01 57.51 90.17 86.94 72.53 88.04
+> (LoRA) GRAB 86.00 76.83 58.75 90.23 87.93 75.66 87.78 Others TableLLama 72.00 63.82 48.59 87.37 68.34 43.49 80.05 GPT-5.4-mini 48.46 72.28 65.88 72.99 57.13 36.60 72.06
+
+Table 2: Single-table question answering results with Qwen3-4B-Base as the base model. We report denotation accuracy on all datasets, except F1 and Complete Containment (CC) on HCTQA.                                                                                                     
+
+> Setting Method MultiHiertt SCITAT MMQA TQA Atis GeoQuery Spider EM EM F1 List EM Acc. T-EM Cell F1 T-EM Cell F1 T-EM Cell F1
+> Inference-only zero-shot 7.18 6.18 18.67 3.34 38.19 1.16 16.89 4.74 12.72 2.92 39.27 Frozen LLM Prompt tuning 16.38 23.24 41.49 25.11 84.14 70.93 64.09 43.87 36.28 34.35 71.58
+> GRAB 21.55 26.18 41.38 31.10 91.29 79.07 64.78 51.78 43.12 36.86 75.11
+> Tuned LLM zero-shot 22.99 19.12 36.17 28.70 91.67 86.05 78.35 64.82 46.82 36.44 67.91 (LoRA) GRAB 22.51 26.47 37.42 29.42 90.05 86.05 79.49 63.24 45.84 39.50 71.97
+> Others MultiTabQA 6.51 5.00 34.81 27.27 81.19 61.63 34.00 54.15 41.19 27.68 62.35 GPT-5.4-mini 21.84 32.65 30.16 26.66 54.24 2.33 36.30 36.36 38.24 24.62 57.52
+
+Table 3: Multi-table question answering results with Qwen3-4B-Base. We report denotation accuracy on MultiHiertt and MMQA, EM/F1 on SCITAT, accuracy on TQA-Bench, and Table Exact Match (T-EM) and Cell F1 on Atis, GeoQuery and Spider. 
+
+F1. For the SQL-style multi-table benchmarks (ATIS, GeoQuery, Spider-SQL), the model gen-erates the answer as a linearized result table, which we evaluate by table-level exact match (T-EM), i.e., full ordered table must match, and by cell-level F1, which scores cells as unordered multisets. 
+
+7 Main Results 
+
+Tables 2 and 3 report results across single- and multi-table benchmarks. By comparing GRAB 
+
+against serialization, graph, and scale baselines, four patterns stand out: (i) Massive gains on de-manding structures. GRAB consistently outper-forms serialized baselines, with the largest jumps exactly where 1D text struggles most: complex layouts (HCTQA: +17 .5 F1) and multi-table joins (Spider: +13 .3 Cell F1; TQA: +7 .1 Acc). This confirms that modeling tables relieves the LLM from implicitly reconstructing relational structure. 
+
+(ii) Frozen GRAB rivals LoRA fine-tuning. De-spite training only ∼91 M parameters while keep-ing the LLM frozen, GRAB approaches or beats a LoRA-adapted LLM reading serialized text (e.g., 
+
+84 .80 vs 77 .93 on StructQA). Injecting structural bias proves more efficient than updating LLM weights to brute-force structure from text. Com-bining both yields the strongest results overall. 
+
+(iii) Query-conditioned graphs beat static hy-pergraphs. GRAB outperforms TAMO on every single-table benchmark: dynamically allocating la-tent capacity based on the question is superior to query-agnostic compression. (iv) Punching above its weight class. GRAB consistently outperforms fine-tuned, TQA-specialized models (TableLlama and MultiTabQA). Our 4B-parameter pipeline ri-vals or exceeds GPT-5.4-mini (e.g., +29 .2 F1 on HCTQA, +37 .0 Acc on TQA-Bench), a closed-source model roughly 100 × larger, demonstrating that explicit relational encoding can bridge massive gaps in raw parametric scale. 
+
+Performance by Query Type. Table 4 reports a condensed view of the diagnostic tests (full results in Appendix G), revealing how GRAB ’s topology mitigates structural bottlenecks while exposing in-herent LLM arithmetic limits. On locating evi-dence (LOOKUP ), GRAB gains +14 to +24 F1 across all condition depths, as the graph explic-itly links rows via shared value nodes to route condition-matching information. This structural advantage is most pronounced on counting : while Serialized GRAB ∆F1                                      
+
+> LOOKUP
+> 1 cond. 66.59 80.72 +14 .13
+> 2 cond. 65.56 89.32 +23 .76
+> 3 cond. 73.90 95.52 +21 .62
+> COUNT
+> no cond. 8.63 54.90 +46 .27
+> 1 cond. 23.01 54.29 +31 .28
+> 2 cond. 34.69 57.14 +22 .45
+> AVG
+> no cond. 1.23 1.23 +0 .00
+> 1 cond. 9.38 15.24 +5 .86
+> 2 cond. 28.62 40.95 +12 .33
+> Group-by MAX 1 key 42.92 72.59 +29 .67
+> Group-by AVG 1 key 21.63 38.77 +17 .14
+> Table 4: Stress-test results (F1) for representative cate-gories. Full table in Appendix G.
+
+a serialized baseline must reconstruct frequencies from sequence position, cardinality in our graph re-duces to a local structural property (a value node’s degree), yielding our largest absolute gains (up to +46 F1). Similarly, for group-by operations, 
+
+GRAB ’s explicit column-class nodes act as natural partition anchors, substantially recovering perfor-mance (e.g., Group-by MAX : 42 .9 → 72 .6 F1). Conversely, exact arithmetic (AVG ) defines the ceiling of our structural bridge. Because our graph maps continuous data to quantile buckets, it cannot execute exact math; it merely isolates the correct rows for the frozen LLM. Consequently, AVG re-mains the hardest operator, with gains appearing only when filtering shrinks the operand set. These patterns are not an artifact of backbone size: rerun-ning the stress-test with a larger LLM (Qwen3-14B, Table 14) shows the GRAB gap widens rather than closes, the AVG ceiling is preserved exactly, and the serialized baseline does not improve on Group-by despite the larger model: the bottleneck is struc-tural, not parametric. 
+
+Ablations. GNN Depth and Latent Count. 
+
+A sequential search over latent count K ∈{1, . . . , 256 } and GNN depth L ∈ { 1, . . . , 16 }
+
+(Appendix B) shows that K = 32 suffices and that deeper encoders yield negligible improvement over L = 1 . This is consistent with the tripartite structure: row-node initialization encodes per-row cell content, value nodes act as sinks for rows shar-ing an attribute value, and column nodes aggregate their values, so a single message-passing step ex-poses co-occurrence and column membership to every value node. 
+
+Question Conditioning Variants. Removing ques-tion conditioning from the resampler costs 1–3
+
+points on three of four ablation benchmarks (Ap-pendix B, Table 9). The effect is modest but consistent in direction on multi-table benchmarks, supporting the sketch-complexity argument (Ap-pendix D) that question conditioning helps most where the same graph must answer diverse queries. 
+
+Serialized Table. Removing the serialized table text from the prompt causes a collapse across datasets, e.g., 84.80 to 10.07 on StructQA (Appendix B, Ta-ble 9), confirming that GRAB acts as a structural supplement rather than replacing the textual evi-dence needed by the LLM for exact values. 
+
+Additional Ablations. Appendix B reports fur-ther checks on architectural choices and robust-ness. First, a linear projection head matches or outperforms deeper MLP bridges, indicating that the graph encoder and latent resampler already per-form the relevant structural abstraction. Second, results across five random seeds show low vari-ance, confirming that the gains are stable rather than driven by a favorable initialization. 
+
+8 Conclusion 
+
+We presented GRAB , a graph-relational latent bridge for multi-table QA with frozen LLMs. Be-yond feeding relational evidence into a sequential prompt, GRAB constructs a typed graph over rows, column classes, and value groups, applies mes-sage passing to expose structural dependencies, and compresses the resulting representation into question-conditioned soft tokens. This design pre-serves the flexibility of autoregressive language models while adding an explicit inductive bias for joins, repeated values, and cross-row evidence ag-gregation. Across single- and multi-table bench-marks, GRAB improves over serialization-only and soft-prompt baselines. The results support the view that tables should be treated as a structured modality. Our analysis shows that latent graph to-kens act as structural guidance: they help the LLM locate relevant evidence, while arithmetic and fine-grained symbolic computation remain challenging. Our findings suggest a broader direction for table-language modeling: pre-trained relational en-coders that can be reused across datasets, analo-gous to the role of pre-trained encoders in vision-language models (Dai et al., 2023). We see GRAB 
+
+as a step toward such table foundation interfaces, where relational structure is encoded explicitly and integrated with LLM reasoning without sacrificing the general capabilities of the underlying LLM. 9 Limitations 
+
+While GRAB is parameter-efficient relative to LLM fine-tuning, it introduces additional prepro-cessing and graph-encoding overhead. This cost is modest in our setting, but it may become more sig-nificant for very large databases, highly connected schemas, or applications requiring low-latency in-ference. Future work should study scalable table retrieval jointly with graph construction, stronger pretraining for relational encoders, and tighter in-tegration with symbolic tools for exact arithmetic and executable reasoning. Because GRAB supplements rather than re-places the serialized text, the approach is still bounded by the context window limits of the under-lying LLM (e.g., dropping or truncating tables that exceed 8K tokens). Also, in the graph constructor, missing, noisy, or ambiguous schema information may weaken the structural graph and reduce the benefit of message passing. In TQA datasets, tests come with only the cor-rect tables required to answer a question. In a more general setting, where databases are given as in-put, in the current implementation GRAB assumes that a relevant subset of tables has already been retrieved. To handle this issue, standard pipelines rely on retrieval modules to first extract a relevant subset of tables (Zhang et al., 2025a; Shen et al., 2024). A natural next step is to jointly learn re-trieval, schema linking, and graph construction so that structural representations remain robust under incomplete or noisy database metadata. 
+
+10 Use of AI assistants 
+
+When writing this paper, we used ChatGPT to im-prove the flow of writing and the vocabulary of the initial drafts we manually wrote. Each suggestion has been manually validated by the authors. 
+
+Acknowledgment 
+
+This work was funded by the French government, through the 3IA Côte d’Azur Investments in the IA-cluster project managed by the National Re-search Agency (ANR-23-IACL-0001). This project was provided with resources by GENCI at IDRIS, thanks to grants 2025-AD010616649 and 2025-AD010616180. 
+
+References 
+
+Mohammad S. Ahmad, Zan A. Naeem, Michaël Au-petit, Ahmed Elmagarmid, Mohamed Eltabakh, Xi-aosong Ma, Mourad Ouzzani, Chaoyi Ruan, and Hani Al-Sayeh. 2026. Hct-qa: A benchmark for ques-tion answering on human-centric tables. Preprint ,arXiv:2504.20047. Jean-Baptiste Alayrac, Jeff Donahue, Pauline Luc, An-toine Miech, Iain Barr, Yana Hasson, Karel Lenc, Arthur Mensch, Katie Millicah, Malcolm Reynolds, Roman Ring, Eliza Rutherford, Serkan Cabi, Tengda Han, Zhitao Gong, Sina Samangooei, Marianne Mon-teiro, Jacob Menick, Sebastian Borgeaud, and 8 oth-ers. 2022. Flamingo: a visual language model for few-shot learning. In Proceedings of the 36th Interna-tional Conference on Neural Information Processing Systems , NeurIPS ’22, Red Hook, NY, USA. Curran Associates Inc. Gilbert Badaro, Mohammed Saeed, and Paolo Papotti. 2023. Transformers for tabular data representation: A survey of models and applications. Transactions of the Association for Computational Linguistics ,11:227–249. Pablo Barceló, Egor V. Kostylev, Mikael Monet, Jorge Pérez, Juan Reutter, and Juan Pablo Silva. 2020. The logical expressiveness of graph neural networks. In 
+
+International Conference on Learning Representa-tions .Shuaichen Chang, Madelon Hulsebos, Qian Liu, Wenhu Chen, and Huan Sun, editors. 2025. Proceedings of the 4th Table Representation Learning Workshop .Association for Computational Linguistics, Vienna, Austria. Peter Baile Chen, Yi Zhang, and Dan Roth. 2024. Is ta-ble retrieval a solved problem? exploring join-aware multi-table retrieval. In Proceedings of the 62nd An-nual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 2687– 2699, Bangkok, Thailand. Association for Computa-tional Linguistics. Tianqi Chen and Carlos Guestrin. 2016. Xgboost: A scalable tree boosting system. In Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining , KDD ’16, page 785–794, New York, NY, USA. Association for Computing Machinery. Zhoujun Cheng, Haoyu Dong, Zhiruo Wang, Ran Jia, Jiaqi Guo, Yan Gao, Shi Han, Jian-Guang Lou, and Dongmei Zhang. 2022. HiTab: A hierarchical table dataset for question answering and natural language generation. In Proceedings of the 60th Annual Meet-ing of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 1094–1110, Dublin, Ireland. Association for Computational Linguistics. Michele Luca Contalbo, Sara Pederzoli, Francesco Del Buono, Venturelli Valeria, Francesco Guerra, and Matteo Paganelli. 2025. GRI-QA: a comprehensive benchmark for table question answering over envi-ronmental data. In Findings of the Association for Computational Linguistics: ACL 2025 , pages 15764– 15779, Vienna, Austria. Association for Computa-tional Linguistics. Tamara Cucumides and Floris Geerts. 2026. Grables: Tabular learning beyond independent rows. Preprint ,arXiv:2602.03945. Wenliang Dai, Junnan Li, Dongxu Li, Anthony Tiong, Junqi Zhao, Weisheng Wang, Boyang Li, Pascale Fung, and Steven Hoi. 2023. InstructBLIP: Towards general-purpose vision-language models with instruc-tion tuning. In Thirty-seventh Conference on Neural Information Processing Systems .Justin Gilmer, Samuel S. Schoenholz, Patrick F. Riley, Oriol Vinyals, and George E. Dahl. 2017. Neural message passing for quantum chemistry. In Proceed-ings of the 34th International Conference on Machine Learning - Volume 70 , ICML’17, page 1263–1272. JMLR.org. Jonathan Herzig, Pawel Krzysztof Nowak, Thomas Müller, Francesco Piccinno, and Julian Eisenschlos. 2020. TaPas: Weakly supervised table parsing via pre-training. In Proceedings of the 58th Annual Meet-ing of the Association for Computational Linguistics ,pages 4320–4333, Online. Association for Computa-tional Linguistics. Noah Hollmann, Samuel Müller, Lennart Purucker, Arjun Krishnakumar, Max Körfer, Shi Bin Hoo, Robin Tibor Schirrmeister, and Frank Hutter. 2025. Accurate predictions on small data with a tabular foundation model. Nat. , 637(8044):319–326. Edward J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. 2022. Lora: Low-rank adaptation of large language models. In The Tenth International Conference on Learning Representations, ICLR 2022, Virtual Event, April 25-29, 2022 . OpenReview.net. Chengsong Huang, Qian Liu, Bill Yuchen Lin, Tianyu Pang, Chao Du, and Min Lin. 2024. Lorahub: Ef-ficient cross-task generalization via dynamic loRA composition. In First Conference on Language Mod-eling .Junnan Li, Dongxu Li, Silvio Savarese, and Steven Hoi. 2023. Blip-2: bootstrapping language-image pre-training with frozen image encoders and large language models. In Proceedings of the 40th Interna-tional Conference on Machine Learning , ICML’23. JMLR.org. Liyao Li, Chao Ye, Wentao Ye, Yifei Sun, Zhe Jiang, Haobo Wang, Jiaming Tian, Yiming Zhang, NING-TAO WANG, Xing Fu, Gang Chen, and Junbo Zhao. 2025. Table as a modality for large language models. In The Thirty-ninth Annual Conference on Neural Information Processing Systems .Xiang Lisa Li and Percy Liang. 2021. Prefix-tuning: Optimizing continuous prompts for generation. In 
+
+Proceedings of the 59th Annual Meeting of the Asso-ciation for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 1: Long Papers) , pages 4582– 4597, Online. Association for Computational Lin-guistics. Qian Liu, Bei Chen, Jiaqi Guo, Morteza Ziyadi, Zeqi Lin, Weizhu Chen, and Jian-Guang Lou. 2022a. TAPEX: Table pre-training via learning a neural SQL executor. In International Conference on Learning Representations .Xiao Liu, Kaixuan Ji, Yicheng Fu, Weng Tam, Zhengx-iao Du, Zhilin Yang, and Jie Tang. 2022b. P-tuning: Prompt tuning can be comparable to fine-tuning across scales and tasks. In Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 2: Short Papers) , pages 61–68, Dublin, Ireland. Association for Computational Lin-guistics. Pan Lu, Liang Qiu, Kai-Wei Chang, Ying Nian Wu, Song-Chun Zhu, Tanmay Rajpurohit, Peter Clark, and Ashwin Kalyan. 2023. Dynamic prompt learning via policy gradient for semi-structured mathematical reasoning. In The Eleventh International Conference on Learning Representations .Christopher Morris, Martin Ritzert, Matthias Fey, William L. Hamilton, Jan Eric Lenssen, Gaurav Rat-tan, and Martin Grohe. 2019. Weisfeiler and Leman go neural: Higher-order graph neural networks. In 
+
+AAAI .OpenAI. 2026. Introducing gpt-5.4 mini and nano. https://openai.com/index/ introducing-gpt-5-4-mini-and-nano/ . Ac-cessed: 2026-05-26. Vaishali Pal, Andrew Yates, Evangelos Kanoulas, and Maarten de Rijke. 2023. MultiTabQA: Generating tabular answers for multi-table question answering. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 6322–6334, Toronto, Canada. Association for Computational Linguistics. Panupong Pasupat and Percy Liang. 2015. Composi-tional semantic parsing on semi-structured tables. In 
+
+Proceedings of the 53rd Annual Meeting of the As-sociation for Computational Linguistics and the 7th International Joint Conference on Natural Language Processing (Volume 1: Long Papers) , pages 1470– 1480. Zipeng Qiu, You Peng, Guangxin He, Binhang Yuan, and Chen Wang. 2024. Tqa-bench: Evaluating llms for multi-table question answering with scal-able context and symbolic extension. Preprint ,arXiv:2411.19504. Joshua Robinson, Rishabh Ranjan, Weihua Hu, Kexin Huang, Jiaqi Han, Alejandro Dobles, Matthias Fey, Jan Eric Lenssen, Yiwen Yuan, Zecheng Zhang, Xin-wei He, and Jure Leskovec. 2024. Relbench: Abenchmark for deep learning on relational databases. In The Thirty-eight Conference on Neural Informa-tion Processing Systems Datasets and Benchmarks Track .Zhili Shen, Pavlos Vougiouklis, Chenxin Diao, Kaus-tubh Vyas, Yuanyi Ji, and Jeff Z. Pan. 2024. Im-proving retrieval-augmented text-to-SQL with AST-based ranking and schema pruning. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing , pages 7865–7879, Mi-ami, Florida, USA. Association for Computational Linguistics. Jian Wu, Linyi Yang, Dongyuan Li, Yuliang Ji, Manabu Okumura, and Yue Zhang. 2025. Mmqa: Evaluating llms with multi-table multi-hop complex questions. In International Conference on Learning Representa-tions , volume 2025, pages 48626–48643. Tianbao Xie, Chen Henry Wu, Peng Shi, Ruiqi Zhong, Torsten Scholak, Michihiro Yasunaga, Chien-Sheng Wu, Ming Zhong, Pengcheng Yin, Sida I. Wang, Vic-tor Zhong, Bailin Wang, Chengzu Li, Connor Boyle, Ansong Ni, Ziyu Yao, Dragomir Radev, Caiming Xiong, Lingpeng Kong, and 4 others. 2022. Unified-SKG: Unifying and multi-tasking structured knowl-edge grounding with text-to-text language models. In Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing , pages 602– 631, Abu Dhabi, United Arab Emirates. Association for Computational Linguistics. Keyulu Xu, Weihua Hu, Jure Leskovec, and Stefanie Jegelka. 2019. How powerful are graph neural net-works? In International Conference on Learning Representations .An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, Chujie Zheng, Dayi-heng Liu, Fan Zhou, Fei Huang, Feng Hu, Hao Ge, Haoran Wei, Huan Lin, Jialong Tang, and 41 oth-ers. 2025. Qwen3 technical report. arXiv preprint arXiv:2505.09388 .Jingfeng Yang, Aditya Gupta, Shyam Upadhyay, Luheng He, Rahul Goel, and Shachi Paul. 2022. TableFormer: Robust transformer modeling for table-text encoding. In Proceedings of the 60th Annual Meeting of the Association for Computational Lin-guistics (Volume 1: Long Papers) , pages 528–537, Dublin, Ireland. Association for Computational Lin-guistics. Chi Zhang, Meihui Zhang, Yuxin Yang, Tao Chen, and Zhaojing Luo. 2025a. Aixelask: A stepwise-guided retrieval and reasoning framework for large table qa. 
+
+Proc. ACM Manag. Data , 3(6). Tianshu Zhang, Xiang Yue, Yifei Li, and Huan Sun. 2024. TableLlama: Towards open large general-ist models for tables. In Proceedings of the 2024 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) ,pages 6024–6044, Mexico City, Mexico. Association for Computational Linguistics. Xuanliang Zhang, Dingzirui Wang, Baoxin Wang, Longxu Dou, Xinyuan Lu, Keyan Xu, Dayong Wu, and Qingfu Zhu. 2025b. SCITAT: A question answer-ing benchmark for scientific tables and text covering diverse reasoning types. In Findings of the Asso-ciation for Computational Linguistics: ACL 2025 ,pages 3859–3881, Vienna, Austria. Association for Computational Linguistics. Yilun Zhao, Yunxiang Li, Chenying Li, and Rui Zhang. 2022. MultiHiertt: Numerical reasoning over multi hierarchical tabular and textual data. In Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pages 6588–6600, Dublin, Ireland. Association for Computational Linguistics. Victor Zhong, Caiming Xiong, and Richard Socher. 2017. Seq2sql: Generating structured queries from natural language using reinforcement learning. 
+
+Preprint , arXiv:1709.00103. A Beyond Table Question Answering 
+
+The main focus of our experiments is on table ques-tion answering, where the model must extract or reason over tabular content to produce a natural-language answer. We further hypothesize that the representations learned by GRAB are not specific to QA, but can transfer to structurally different tab-ular tasks. To test this hypothesis, we evaluate on two additional benchmarks: TabFact, a fact verifi-cation benchmark in which the model must classify a statement as entailed or refuted by a given ta-ble, and Spider, a text-to-SQL benchmark in which the model must generate a structured query from a natural-language question and a database schema. These tasks differ from QA both in output format and in the type of reasoning required, providing a broader test of the encoder’s ability to capture table structure in a task-agnostic way. In Table 5, we report accuracy for TabFact and execution accu-racy for Spider. The results confirm that GRAB is able to extract task-agnostic information that can be used for tasks beyond question answering.          
+
+> Dataset Base Soft Prompt GRAB
+> TabFact 67.86 81.15 84.25
+> Spider 23.78 68.84 72.46
+> Table 5: Comparison of Base, Soft Prompt, and GRAB on TabFact and Spider with Qwen3-4B-Base
+
+B Ablation 
+
+B.1 GNN Architecture and Latent Bridge Ablations 
+
+In the first stage, we fix the GNN at 2 layers and the resampler at 1 head and 8 layers, and sweep over latent count K ∈ { 1, 2, 4, 8, 16 , 32 , 64 , 128 , 256 },with results reported in Table 6. We find that K=32 and K=64 perform best while larger values bring no further gain, and very small values ( K ≤ 2) degrade performance no-ticeably. Based on this, we carry forward K ∈{4, 32 , 64 } as representative small, medium, and large capacity settings. In the second stage, we fix the resampler and jointly sweep GNN depth L ∈ {1, 2, 4, 8, 16 }
+
+against the three selected latent counts, for a to-tal of 15 configurations. Results are reported in Table 7. We further ablate the design of the projection head that bridges the GNN encoder to the LLM input space. Specifically, we compare three vari-ants: a single linear layer ( Linear ), a two-layer MLP with a non-linearity ( MLP ), and a deeper MLP with additional hidden layers ( Deep MLP ). All other components are kept fixed. As shown in Table 8, the linear projection con-sistently matches or outperforms the non-linear al-ternatives, suggesting that the resampler already provides sufficient expressivity and that additional capacity in the projection head does not yield fur-ther gains, and can even hurt performance, as seen on MMQA and MultiHierTT. 
+
+B.2 Impact of Conditioning and Serialization 
+
+To assess the contribution of key components of 
+
+GRAB , we conduct two ablation studies. In the first, we remove the question conditioning from the resampler, meaning the GNN produces table em-beddings independently of the input question rather than attending to it during the cross-attention ag-gregation. In the second, we remove the serialized table from the LLM prompt entirely, relying solely on the projected GNN embeddings to convey table content to the language model. These two ablations isolate respectively the role of question-aware table encoding and the role of the text-based table repre-sentation as a complementary signal to the graph embeddings. Results are reported in Table 9 
+
+B.3 Robustness 
+
+To verify that the reported results are not an artifact of a particular random initialization, we retrain the best-performing configuration with three different random seeds and report mean and standard devia-tion across runs. A small variance would confirm that the model converges reliably and that compar-isons with baselines are meaningful beyond a single lucky initialization. Results reported in Table 10. 
+
+C Constructor Details 
+
+For n ∈ N, n̸ = 0 , we let [n] = {1, 2, . . . , n }.The main text already provided some details on the GRAB graph constructor. Here, we give the remaining details in section C.1. For completeness, in section C.2, we include below the corresponding constructor for the TAMO/HyTrel-style baseline used in our comparisons. 
+
+C.1 GRAB: Graph Constructor. 
+
+The graph constructor γ is a fixed, deterministic processing map. It exposes row–column–value in-cidence and cross-table join structure before any Dataset Latents ( K) StructQA HiTab MultiHierTT MMQA Avg                                              
+
+> 179.87 71.84 19.35 27.03 49.52 279.73 71.78 19.83 26.79 49.53 479.07 75.32 20.40 28.47 50.82 880.33 72.03 20.59 27.27 50.06 16 80.60 72.92 20.11 28.95 50.65 32 80.73 73.23 18.87 31.34 51.04
+> 64 81.27 73.17 20.98 28.23 50.91 128 79.53 74.12 19.92 27.99 50.39 256 81.47 73.11 20.31 26.56 50.36
+
+Table 6: Stage 1 ablation: latent count sweep with GNN fixed at 2 layers and resampler fixed at 1 head and 8 layers. Bold denotes the best result per column.                     
+
+> GNN Layers
+> K124816
+> 451.40 50.82 51.17 51.64 52.19 32 52.43 51.04 51.79 52.22 52.61 64 50.99 50.91 52.05 52.20 52.82
+
+Table 7: Joint ablation of GNN depth and latent count 
+
+K (average over StructQA, HiTab, MultiHierTT, and MMQA). The resampler is fixed at 1 head and 8 layers throughout. Bold denotes the best overall configuration.                
+
+> Dataset Linear MLP Deep MLP
+> StructQA 84.80 85.00 80.27 HiTab 74.49 74.05 73.55 MultiHierTT 21.55 19.35 19.54 MMQA 31.10 25.84 23.68
+
+Table 8: Ablation comparison of projection heads across StructProbe, HiTab, MultiHierTT, and MMQA. 
+
+neural message passing occurs. Let F denote the foreign-key metadata in M: F =   (i, c ), (j, d ) |
+
+column c of Ti joins column d of Tj .
+
+The constructor maps the relational input to a tripartite graph γ(T , F) =  G, H (0) , with 
+
+G =  VR ∪ V C ∪ V V , ERV ∪ E CV 
+
+, where VR
+
+are row nodes, VC are column-class nodes, VV are value-group nodes, ERV are row–value incidence edges, and ECV are column–value incidence edges. Furthermore, H(0) = {h(0)  
+
+> v
+
+}v∈V R∪V C ∪V V are the initial node features. In more detail: 
+
+Column classes. Let Cocc = {(i, c ) | i ∈
+
+[n], c ∈ Ci} be the set of column occurrences across all tables. The relation ∼F is the smallest equivalence relation on Cocc containing all foreign-key pairs in F. We write [( i, c )] F for the equiva-lence class of column occurrence (i, c ), and use α
+
+for a generic class. When F = ∅, the relation is the identity and no columns are merged. We denote              
+
+> Dataset No Question Conditioning No Table in Prompt Full Model
+> StructQA 82.07 10.07 84.80 HiTab 74.81 4.42 74.49 MultiHierTT 20.21 2.87 21.55 MMQA 29.67 8.37 31.10
+
+Table 9: Ablation comparison across StructProbe, HiTab, MultiHierTT, and MMQA.                                 
+
+> Seed StructQA HiTab MultiHierTT MMQA
+> 42 84.80 74.49 21.55 31.10 43 87.33 72.98 21.55 27.99 44 89.66 74.12 20.88 30.38 45 87.73 74.24 21.17 27.99 46 88.66 74.37 20.79 27.75 Mean 87.64 74.04 21.19 29.04 Std 1.82 0.62 0.34 1.56
+
+Table 10: Accuracy results across random seeds. 
+
+the set of column classes by CF = Cocc / ∼F . For example, in Figure 1, the city columns in T1 and 
+
+T2 map to a single node in G. Each class α inherits a single type τα ∈ { cat , num , text }.
+
+Nodes. Row nodes are indexed globally across tables, column nodes correspond to FK-induced column classes, and value nodes correspond to canonical value groups within a column class: 
+
+VR = ρi,r | i ∈ [n], r ∈ Ri , VC = cα | α ∈CF , and VV = vα,g | α ∈ C F , g ∈ Im( gα) .Here, for each column class α, the grouping map 
+
+gα standardizes cell contents: 
+
+gα(x) = 
+
+(id α
+
+ norm( x), τα ∈ { cat , text },qα(x), τα = num .
+
+where norm( ·) normalizes the cell string and id α(·)
+
+assigns a unique identifier to each distinct normal-ized value within α, while qα(·) maps values to quantile-based buckets fitted on all numeric values in the class. A value node vα,g therefore represents a repeated categorical/textual value or a numeric range, not an individual cell occurrence. 3
+
+Edges. For each cell x(i) 
+
+> r,c
+
+(value in column 
+
+c in row r in Ri), let α = [( i, c )] F and g =
+
+gα(x(i)
+
+> r,c
+
+). The constructor adds the row–value edge 
+
+{ρi,r , v α,g } to ERV and the column–value edge 
+
+{cα, v α,g } to ECV . Thus, repeated values become shared graph neighborhoods, and foreign-key joins become explicit connectivity through shared col-umn classes and value groups. 
+
+Initial features. Let ϕtok be a fixed token-level text encoder. For any string s ∈ Σ∗, define ϕ(s) as 
+
+MeanPool  ϕtok (s).The graph’s hidden feature dimension is inher-ited from the embedding model used to initialize the nodes. In our implementation, row and column nodes are initialized from the same text embedding model, while value nodes are constructed directly in the same hidden dimension. Therefore, all node types already lie in a common embedding space and no additional projection is applied at initializa-tion. We write ∥ for string concatenation. For a row node ρi,r , we encode a row-level string formed by concatenating header–value pairs: 
+
+si,r = c∈Ci
+
+ h(i) 
+
+> c
+
+: x(i)
+
+> r,c
+
+, h(0)  
+
+> ρi,r
+
+= ϕ(si,r ).
+
+For a column node cα, we initialize from the header embedding of the corresponding column oc-currence. If α contains multiple FK-linked column occurrences, we average their header embeddings 
+
+h(0)  
+
+> cα
+
+= 1
+
+> |α|
+
+P 
+
+> (i,c )∈α
+
+ϕ h(i)
+
+> c
+
+.For a value node vα,g , we do not initialize from the cell-value text. Instead, we use a determinis-tic embedding of the value-group identifier, aug-mented with the column-type information, con-structed in the graph hidden dimension. Thus, value nodes primarily act as structural anchors: they indicate where identical categorical/textual values or discretized numeric buckets occur, while exact values are available to the LLM with Stable .
+
+C.2 TAMO: Graph Constructor 
+
+We describe the TAMO/HyTrel structural encoder for a single flat table. Let T be a table with row set 
+
+R, column set C, and cell values xr,c in V , for r ∈
+
+R and c ∈ C. Each column carries a header string 
+
+hc and a declared type τc ∈ { cat , num , text }.
+
+> 3Value groups are not replacements for exact numeric con-tent, which remains available in the textual prompt.
+
+TAMO/HyTrel constructs a hypergraph in which cell occurrences are primitive nodes, while rows, columns, and the whole table are represented as hyperedges. Equivalently, we represent this hyper-graph by its typed incidence graph. The constructor returns γHT (T ) =  GHT , H (0) HT 
+
+, with 
+
+GHT =  VX ∪ V R ∪ V C ∪ V T , EXR ∪ E XC ∪ E XT 
+
+,
+
+where VX are cell-occurrence nodes, VR are row-hyperedge nodes, VC are column-hyperedge nodes, 
+
+VT contains the table-hyperedge node, and EXR ,
+
+EXC , and EXT encode incidences between cell nodes and row, column, and table hyperedge nodes. The initial node features are 
+
+H(0) HT = {h(0)  
+
+> v
+
+}v∈V X ∪V R∪V C ∪V T .
+
+Cell, row-hyperedge, column-hyperedge, and table-hyperedge nodes. For every cell occur-rence xr,c we introduce a cell node; for every row we introduce a row-hyperedge node; for every col-umn we introduce a column-hyperedge node; and for the whole table we introduce a table-hyperedge node: 
+
+VX = ur,c | r ∈ R, c ∈ C ,
+
+VR = ρr | r ∈ R ,
+
+VC = κc | c ∈ C ,
+
+VT = θT .
+
+Here ur,c denotes the node corresponding to the cell occurrence whose surface value is xr,c . Thus, equal cell values in different positions still give distinct cell nodes. The node θT represents the whole-table hyperedge and provides a global ag-gregation channel. 
+
+Incidence edges. The incidence edges encode membership of cells in rows, columns, and the whole table. For each cell occurrence ur,c , we add 
+
+(ur,c , ρ r) to EXR , (ur,c , κ c) to EXC , and (ur,c , θ T )
+
+to EXT :
+
+EXR = (ur,c , ρ r) | r ∈ R, c ∈ C ,
+
+EXC = (ur,c , κ c) | r ∈ R, c ∈ C ,
+
+EXT = (ur,c , θ T ) | r ∈ R, c ∈ C .
+
+Equivalently, each cell node belongs to exactly one row hyperedge, one column hyperedge, and the table hyperedge. Initial features. Let ϕtok be a fixed token-level text encoder. For any string s ∈ Σ∗, define its pooled representation by 
+
+ϕ(s) = MeanPool  ϕtok (s).
+
+For a cell node ur,c , the cell-value text is used: 
+
+sXr,c = xr,c , h(0)  
+
+> ur,c
+
+= ϕ(sXr,c ).
+
+Thus, the value of the cell is encoded as the content of a cell-occurrence node. For a column-hyperedge node κc, one initializes from the column header: 
+
+h(0)  
+
+> κc
+
+= ϕ(hc).
+
+For a row-hyperedge node ρr, a learned or random initialization is used: 
+
+h(0)  
+
+> ρr
+
+= uRr ,
+
+where uRr ∈ Rdh is an initialized row-hyperedge embedding. For the table-hyperedge node θT , one initializes from a table caption, title, or identifier when available: 
+
+h(0)  
+
+> θT
+
+= ϕ(sT ),
+
+where sT denotes the available textual description of the table. If no such description is available, a learned or random table-hyperedge initialization can be used instead: 
+
+h(0)  
+
+> θT
+
+= uT ,
+
+where uT ∈ Rdh is an initialized table-hyperedge embedding. 
+
+D Formal View of the Latent Bridge 
+
+We next formalize the discussion in section 5 about the role and limits of the latent bridge. As we will see, the bridge does not increase the expressive power of the message-passing encoder. Rather, it provides a finite, question-conditioned readout over the graph features already made available by the constructor and encoder. The relevant starting point is that the theoreti-cal limits of message-passing GNNs are well stud-ied. Their expressive power is closely related to the Weisfeiler–Leman hierarchy and to correspond-ing fragments of first-order logic (Gilmer et al., 2017; Morris et al., 2019; Xu et al., 2019; Barceló et al., 2020). More recently, the Grables frame-work (Cucumides and Geerts, 2026) extended this perspective to tabular learning, showing that row-local methods fail on “extension-sensitive” queries: tasks whose answers depend on cross-row structure, such as counting, overlaps, or joins. This motivates making the graph construction explicit, as we do here, so that these relations are exposed to message passing rather than left implicit in a serialized table. 
+
+D.1 Logical View of the Constructed Graph 
+
+We here use the connection between message-passing and graded modal logic (Barceló et al., 2020). Our graph constructor maps the relational input to the tripartite structure 
+
+G = γ(T , F) =  VR ∪ V C ∪ V V , ERV ∪ E CV 
+
+,
+
+where row nodes are denoted by ρi,r (with i indi-cating the source table), column-class nodes by cα,and value-group nodes by vα,g . We view G as a finite relational structure with unary predicates 
+
+Row( x), Col( x), Val( x),
+
+type-specific refinements such as Row i(x) (identi-fying rows belonging to table i) and Val α(x) (iden-tifying values in column class α), and binary inci-dence relations ERV (r, v ) and ECV (c, v ).Let GML L denote graded modal logic of modal depth at most L over this tripartite vocabulary. Its characteristic modality is 
+
+∃≥N y  Eρ(y, x ) ∧ φ(y),
+
+where Eρ ranges over the typed incidence relations and their inverses. This modality identifies nodes 
+
+x that have at least N neighbors y satisfying φ.Under standard expressivity assumptions on typed multiset aggregation, an L-layer message-passing encoder can represent depth-L GML facts: one message-passing layer corresponds to one step of graded neighborhood inspection. Thus, the graph encoder is best understood as a local logical feature extractor over the tripartite table graph. The constructor matters because it makes useful table relations local. For example, repeated values in a column class are detected by the value-node formula 
+
+Dup α(v) := Val α(v)∧∃ ≥2r  ERV (r, v )∧Row( r).
+
+Hence duplicate and equality information is no longer merely a coincidence between cell strings in a serialization; it is a one-hop counting fact around a value node. Similarly, if two foreign-key-linked columns are represented by the same column class α, then rows joined by that key are connected through a shared value node. A bounded-hop join therefore becomes a bounded-depth GML pattern in G.
+
+D.2 The Bridge as a Question-Conditioned Readout 
+
+After message passing, the bridge receives three typed multisets of node states: rows, columns, and values. The question-conditioned resampler se-lects and compresses information from these states into K latent tokens. A useful logical abstraction is therefore a typed, question-conditioned readout over GML-definable node properties. For a formula φ and a node type X ∈ { R, C, V },write 
+
+#X φ(G) = {x ∈ V X | G , x |= φ(x)} ,
+
+for the number of nodes of type X satisfying φ.The bridge can be idealized as a finite sketch 
+
+sQ(G) = ηQ
+
+ #RφRQ, 1(G), . . . , #RφRQ,m R (G),
+
+#C φCQ, 1(G), . . . , #C φCQ,m C (G),
+
+#V φVQ, 1(G), . . . , #V φVQ,m V (G),
+
+where the formulas are depth-L GML formulas and the finite map ηQ may depend on the question. We denote this abstraction by 
+
+QRead B (GML L).
+
+This abstraction should be read conservatively. The bridge does not create new message-passing information; it selects and compresses what the encoder has already made available. If two graphs have the same typed multisets of depth-L GML node types, then any permutation-invariant bridge reading only those encoded states receives the same graph-side information. Question conditioning at the bridge can improve relevance and compression, but it cannot recover distinctions erased by the con-structor or encoder. 
+
+D.3 Why Question Conditioning Helps 
+
+The bridge has fixed capacity, so the relevant issue is not only which facts are locally encodable, but also how many graph states the bridge must sepa-rate. Let G be a finite set of possible constructed tripartite graphs. Each question Q ∈ Q induces an answer map 
+
+aQ : G → A Q
+
+and therefore a partition ΠQ of G:
+
+G ≡ Q G′ ⇐⇒ aQ(G) = aQ(G′).
+
+Let 
+
+ΠQ = ^
+
+> Q∈Q
+
+ΠQ
+
+be the common refinement. Thus, two graphs are equivalent under ΠQ exactly when they have the same answer to every question in Q.We call a bridge exact for a question family if its code is sufficient to recover the correct answer for every graph in G and every question in the fam-ily. In the question-agnostic case, the bridge uses one code map for all questions. In the question-conditioned case, the bridge may use a different code map for each Q.
+
+Proposition 1 (Exact sketch complexity) . For a finite graph class G and finite question family Q,the minimum number of bits required by a question-agnostic exact bridge is 
+
+Cagn (Q) = ⌈log 2 |ΠQ|⌉ .
+
+The minimum number of bits required by a question-conditioned exact bridge is 
+
+Ccond (Q) = 
+
+
+
+log 2 max  
+
+> Q∈Q
+
+|ΠQ|
+
+
+
+.
+
+Consequently, 
+
+Ccond (Q) ≤ Cagn (Q),
+
+and the inequality can be strict. Proof. A question-agnostic sketch s : G →{0, 1}B induces a partition Πs of graph states. If 
+
+s is exact for all Q ∈ Q , then two graphs with the same sketch must have the same answer to every question. Hence Πs refines ΠQ, so s must use at least |ΠQ| distinct codes. Thus 2B ≥ | ΠQ|. This gives the lower bound, and it is tight by assigning one code to each block of ΠQ.For the question-conditioned case, the same ar-gument applies separately to each Q. Exactness for Q requires at least |ΠQ| codes, and this is tight by encoding the block of ΠQ. Since the same bit budget must work for every question, the required number of bits is 
+
+
+
+log 2 max  
+
+> Q∈Q
+
+|ΠQ|
+
+
+
+.
+
+Finally, ΠQ refines every ΠQ, so |ΠQ| ≤ | ΠQ| for all Q ∈ Q .Exponential separation in code space. The gap can be exponential at the level of distinguishable graph classes. Let there be m independent binary facts b1(G), . . . , b m(G) ∈ { 0, 1} about the con-structed graph, and let Q = {Q1, . . . , Q m} where 
+
+aQj (G) = bj (G).
+
+Assume every bit vector b ∈ { 0, 1}m is realized by some graph in G. Then, for each fixed question Qj ,the partition ΠQj has two blocks, so 
+
+Ccond (Q) = 1 .
+
+However, the joint answer vector 
+
+(aQ1 (G), . . . , a Qm (G)) = ( b1(G), . . . , b m(G)) 
+
+can take all 2m values. Hence 
+
+|ΠQ| = 2 m, Cagn (Q) = m. 
+
+Thus, the question-conditioned bridge needs to dis-tinguish only two answer classes for the current question, while a question-agnostic bridge must distinguish 2m joint classes. In bits, this is a gap of 
+
+m versus 1; in codewords, it is exponential. 
+
+E Experimental Setup Details 
+
+E.1 Dataset and Benchmark Details 
+
+Table 11 summarises the number of samples per split and the fraction excluded by our token-budget filter. To keep all inputs within a context window of the LLM backbone, we discard any sample whose linearised table exceeds 8,192 tokens , as measured by the Qwen3-4B tokenizer. The resulting indices are stored in a skip file and applied consistently to training, validation, and test splits, as well as to graph pre-computation, ensuring that excluded samples never appear in any evaluation. This is ap-plied to all the baselines when training and testing. The vast majority of datasets are unaffected ( 0% 
+
+skipped); the most impacted datasets are MMQA (≈ 13 –14% per split, owing to long concatenated table texts) and Spider ( ≈ 9% train, 27% test). Most datasets are well within the 8,192-token bud-get at the median, confirming that filtering has a mi-nor impact. The high maximum for WTQ (25,943 tokens) and HCTQA (7,705 tokens) reflects a small number of extremely wide Wikipedia tables. For the dataset which did not provide a split, the full dataset has been split as in three parts. 
+
+E.2 Per-Row and Column-Header Token Statistics 
+
+For graph-based encoder variants, each table row is tokenised independently in the format col n: val n,and each column header is tokenised separately. Table 12 reports the maximum observed lengths us-ing the Qwen3-Embedding-0.6B tokenizer across all splits, which determine the safe settings for the max limit for rows and columns length. 
+
+E.3 Training Setup 
+
+We use a unified training setup across all experi-ments to ensure that differences in performance are attributable to the model components rather than optimization choices. Unless otherwise stated, the LLM backbone is kept frozen and only the task-specific adaptation modules are trained. All models are optimized with AdamW ( β1=0 .9,
+
+β2=0 .95 , weight decay 0.05 ) at a learning rate of 
+
+10 −4, following a half-cycle cosine decay sched-ule with 1 epoch of linear warmup and a mini-mum learning rate of 5×10 −6. Gradient norms are clipped to 0.1. Training runs for up to 10 epochs with early stopping (patience 3), using an effec-tive batch size of 32, adapted on the number of GPUs. The effective training time depends on the number of GPUs used for training, which lin-early reduces the time per epoch through data par-allelism, but the per-step cost remains dominated by the frozen LLM’s forward pass, which cannot be skipped since its intermediate activations are re-quired for the gradient signal to flow back through the projector and table encoder. Consequently, to-tal time scales with dataset size: a small dataset can complete in under two hours (StructQA), while a large one may require close to a full day (HCT-QA), even with the same hardware configuration. All experiments use seed 42. 
+
+Base LLM and LoRA. When LoRA is applied, we use rank r=8 , α=16 , dropout 0.05 , targeting the query and value projection matrices ( q_proj ,
+
+v_proj ), with no bias adaptation. In all GNN en-coder runs the LLM is otherwise frozen, leaving only the table encoder and projector trainable. 
+
+Soft prompt baseline. The soft prompt model prepends 10 learnable virtual tokens to the LLM input with a dimension of 1024. 
+
+TableLlama. TableLlama (Zhang et al., 2024) is fine-tuned with LoRA using rank r = 16 , scaling factor α = 32 , and dropout 0.05 . LoRA adapters Dataset Task Train Val Test Skip train Skip val Skip test                                                                                                   
+
+> StructProbe Table QA 4,500 1,500 1,500 0.00 0.00 0.00 HiTab Hier. table QA 7,417 1,671 1,584 0.00 0.00 0.00 WTQ Table QA 11,321 2,831 4,344 1.25 0.64 1.27 WikiSQL TableQA 56,355 8,421 15,878 0.27 0.20 0.40 HCTQA Table QA 62,053 7,740 7,789 0.03 0.19 0.00 TabMWP Math on tables 23,059 7,686 7,686 0.00 0.00 0.00 TabFact Fact verif. 92,283 12,792 12,779 0.00 0.00 0.00 MultiHierTT Multi-table QA 7,047 783 1,044 0.00 0.00 0.00 SciTaT Sci. table QA 11,573 1,282 953 0.00 0.00 0.00 MMQA Multi-table QA 2,292 515 488 12.91 12.82 14.34 TQA-Bench Multi-table QA 9,800 2,100 2,100 0.00 0.00 0.00 Spider SQL Multi-table QA 6,044 671 985 ∗9.00 10.13 27.01 ATIS Multi-table QA 384 45 86 0.00 0.00 0.00 GeoQuery Multi-table QA 530 49 253 0.00 0.00 0.00
+
+Table 11: Dataset split sizes and percentage of samples removed by the 8,192-token table-length filter. Counts reflect the dataset size before filtering. *Since Spider has no test set available, the validation set has been used for testing only purposes.                          
+
+> Dataset Row max Header max
+> StructProbe 959 20 HiTab 2,206 214 WTQ 994 40 WikiSQL 507 175 HCTQA 1,023 38 TabMWP 97 11 MultiHierTT 691 117 SciTaT 1,545 296 TQA-Bench 337 7Spider SQL 342 9GeoQuery 52 4ATIS 122 5
+
+Table 12: Maximum row and column-header token lengths per dataset using the Qwen3-Embedding-0.6B tokenizer across all splits. 
+
+are applied to all attention projection matrices: 
+
+q_proj , k_proj , v_proj , and o_proj . The model is trained with learning rate 2 × 10 −4, weight de-cay 0.01 , and a linear warmup over the first 6% of training steps. LLaMA-2’s absolute position em-beddings are capped at 4096, so the effective input length is necessarily clamped to 4,096 tokens in all runs. Within this limit, only the table is truncated, while the instruction prefix and question are always preserved. 
+
+MultiTabQA. MultiTabQA (Pal et al., 2023) is implemented using the base model checkpoint fine-tuned with learning rate 10 −4, weight decay 0.01 ,and a linear warmup over the first 6% of training steps. For Atis, GeoQuery and Spider the check-points were already available. Its absolute position embeddings are capped at 1,024 tokens due to ar-chitectural constraints. As a result, the effective input length is limited to 1,024 tokens, regardless of the configured max_length . This substantially limits the amount of table content that the model can process and makes it less suitable for large inputs. 
+
+GNN encoder. The graph encoder operates on a tripartite graph of row ( R), column ( C), and value (V ) nodes. Node embeddings are precomputed offline using Qwen3-Embedding-0.6B and stored as float16 tensors, together with question token embeddings, row/column validity masks, and ad-jacency matrices encoding R–V and C–V edges. The GNN applies 1 message-passing layer over this structure, producing 32 row latents, 32 column latents, and 32 value latents. A cross-attention re-sampler with 4 heads and 2 layers then pools these into a fixed-size representation per table. GNN dropout is 0.1; A single linear projector maps the encoder output to the LLM embedding space, ini-tialized with Xavier uniform (gain 0.01 ). 
+
+F Structural Hierarchy of TQA Queries 
+
+This appendix introduces a taxonomy of table ques-tion answering queries along three orthogonal axes: the form of the expected answer, the structural depth of table access required to locate evidence, and the computational path required to derive the fi-nal value. The taxonomy supports the stress-test in Appendix G, which varies the structural and com-putational axes independently to attribute GRAB ’s gains (and limitations) to a specific source. The answer-type axis is included for completeness and to justify why we hold it fixed in the stress-test, as we discuss below. 
+
+F.1 Axis I: Answer Type 
+
+The first axis concerns the form of the expected answer, independently of how it is computed. We distinguish three classes. 
+
+Boolean queries (A1). The answer is a truth value (yes/no), e.g., “Is the value in column c
+
+greater than k?” or “Do any two rows share the same value in column c?” 
+
+Retrieval queries (A2). The answer is a value that exists verbatim in the table and is identified by locating the right position, e.g., “What is the value of column c for the row where column d equals a?” 
+
+Derived queries (A3). The answer is computed from the table and does not need to appear in it, e.g., “What is the average of column c for rows where column d equals a?” 
+
+Why we do not vary this axis. Answer type gov-erns the evaluation protocol but not the reasoning required to produce a correct answer. A boolean question such as “Is the average salary of employ-ees in London higher than the company-wide av-erage?” is A1 by output form but requires two aggregations and a comparison, making it as de-manding as any A3 query. The only effect that is specific to A1 is that the binary output space in-flates baseline accuracy through guessing, masking rather than revealing reasoning difficulty. We there-fore fix the answer type at A2/A3 in the stress-test and vary the two axes that actually expose hardness: structural depth and computational path. 
+
+F.2 Axis II: Structural Depth 
+
+The second axis concerns how much relational structure must be accessed to locate the evidence required for the answer. We distinguish four lev-els, ordered by minimum structural access. Each question is assigned to the lowest sufficient level. 
+
+Scan-sufficient queries (S1). The answer is de-termined by locating the right row and reading off a cell value; no aggregation across rows is needed. Example: “What is the value in column c for the row where column d equals a?” A model reading the serialized table sequentially has access to all required information. 
+
+Single-column queries (S2). The answer re-quires aggregating or filtering over the values of a single column, e.g., “How many rows have value a
+
+in column c?” or “What is the average of column 
+
+c for rows where column d equals a?” The flat serialization contains all necessary values but does not make cross-row statistics explicit. 
+
+Multi-column queries (S3). The answer requires reasoning jointly over two or more columns within a single table, e.g., “Which value in column c1
+
+co-occurs most often with value a in column c2?” 
+
+or “Is there a pair of rows sharing values in both 
+
+c1 and c2?” These cannot be decomposed into independent single-column computations; the joint distribution across columns must be accessible to the model. 
+
+Multi-table queries (S4). The answer requires traversing two or more tables via foreign-key rela-tionships, e.g., “What is the total of column c in T2
+
+for all rows linked to this row in T1 via column d?” 
+
+The relevant evidence is distributed across tables and cannot be recovered from any single table in isolation. 
+
+F.3 Axis III: Computational Path 
+
+The third axis concerns the arithmetic operations performed after the relevant data has been located. This axis is orthogonal to both answer type and structural depth: a scan-sufficient boolean query may require multi-step arithmetic, while a multi-table retrieval query may require no computation beyond identification. Separating this axis is essen-tial for diagnosis: a model that correctly identifies the relevant rows but produces a wrong numeric answer is failing on computation, not on structural reasoning, and the two failure modes call for differ-ent interventions. 
+
+Lookup (C0). No arithmetic. The answer is read off once the relevant row or cell is located, e.g., 
+
+“Which department does employee x belong to?” 
+
+C0 is the cleanest probe of structural reasoning in isolation: any failure is attributable to incorrect row identification. 
+
+Counting (C1). The answer is the number of rows satisfying a condition, e.g., “How many trans-actions were placed by customers over 30?” Count-ing maps naturally to degree statistics on value nodes in GRAB ’s graph but can be unreliable for LLMs on serialized text as the matching set grows. Single aggregation (C2). A single arithmetic op-eration over a set of values: sum, max, min, or mean, e.g., “What is the average age of employees in the engineering department?” These operations require exact numeric values. Because GRAB ’s graph encodes numeric values as quantile buckets, the graph alone cannot perform exact arithmetic; the exact values must be recovered from the textual serialization. 
+
+Multi-step derivation (C3). Chained arithmetic where the output of one operation feeds the next, e.g., “By how much does the average order value of returning customers exceed that of new customers?” 
+
+C3 queries compound structural and arithmetic er-rors: a failure may stem from incorrect row selec-tion, from arithmetic error at any step, or from both simultaneously. 
+
+F.4 Using the Taxonomy 
+
+The stress-test in Appendix G uses this taxonomy as an experimental scaffold. It holds the answer-type axis fixed (queries are A2 or A3) and varies the structural and computational axes independently, so that each empirical result can be attributed to a single source. Three diagnostic recipes follow from the orthog-onality of the axes: • Fix S, vary C. Holds the structural access pattern constant while increasing arithmetic demand. Failures isolate the arithmetic ceil-ing of the model and are not attributable to incorrect row identification. • Fix C, vary S. Holds the computation con-stant (typically at C0, pure lookup) while in-creasing the structural depth required to find the right rows. Failures isolate structural rea-soning capacity. • Match (S, C ), compare with/without GRAB. At matched cells of the (S, C ) grid, the difference between the serialized baseline and GRAB isolates the contribution of the graph encoder. A characteristic signature follows: if the graph encoder improves performance at C0 across S lev-els but not at C2–C3, the structural token is locating the right evidence, but arithmetic remains the bind-ing constraint. Appendix G reports exactly this. 
+
+G Fine-Grained Error Analysis and Stress-Test Design 
+
+Building on the taxonomy in Appendix F, we now apply it as an experimental scaffold. The stress-test holds the answer-type axis fixed and varies the structural and computational axes jointly, generat-ing a controlled grid of questions over which each failure mode can be attributed to a specific axis. We begin by stating two predictions about GRAB ’s expected behavior on this grid, then describe the design and analyze the results. 
+
+Prediction 1: arithmetic ceiling at C2. GRAB ’s graph constructor encodes numeric values as quantile buckets, not as exact numeric content. The graph therefore cannot perform exact arith-metic; it can only isolate the correct rows over which arithmetic must be applied by the LLM. We predict that pure aggregation queries (C2, espe-cially A VG ) will fail at low structural depth (S1, no filtering required), since there is no structural bottleneck for GRAB to relieve — only the arith-metic step remains, and that step is unchanged by the presence of the graph. The clearest case is the unconditioned A VG query: the model must sum a set of values and divide by their count, two op-erations that LLMs perform unreliably on serial-ized input regardless of how cleanly the input is presented. Conversely, when filtering reduces the value set, GRAB should help indirectly by shrink-ing the operand set the LLM must aggregate over. 
+
+Prediction 2: structural gain at S2–S3. Multi-ple simultaneous conditions on different columns (S3) require the model to identify rows satisfying joint constraints. On a serialized table, this de-mands matching patterns distributed across distant positions in the sequence; on GRAB ’s graph, the conditions correspond to explicit incidence edges from a row node to typed value nodes. We predict that the graph encoder will help most on (S2–S3, C0–C1) cells: queries where locating the right rows is the dominant subtask and no exact arithmetic is required. Note that the flattening of hierarchi-cal column headers in GRAB ’s graph construction (where a nested header such as Export > 2020 
+
+> Q1 is expanded into separate columns) means that filtering on a deeply nested cell is structurally equivalent to applying multiple column conditions simultaneously, so both manifest as the same pat-tern in the graph. G.1 Stress-Test Set Design 
+
+We construct a controlled set of questions that varies the structural and computational axes inde-pendently, so that each cell of the (S, C ) grid can be attributed to a specific source of difficulty. A model that fails on A VG queries, for instance, may be failing because it cannot identify the correct rows (structural), because it cannot compute the mean over correctly identified rows (arithmetic), or both; varying one axis at a time disentangles these explanations. 
+
+Tables. The stress-test is conducted on 15 stan-dard relational tables constructed in the style of HCT-QA. Concretely, the tables span the same do-mains as the real-world HCT-QA sources: scien-tific paper benchmarks, government statistics, and demographic census reports, and follow the same structural conventions as the HCT-QA synthetic generator: a flat relational layout where categor-ical attributes define row identity and numerical attributes fill the value columns. All tables contain at least three categorical columns and two numeri-cal columns, a requirement imposed to support the increasing levels of structural difficulty examined below. Tables from the original HCT-QA pool were not used directly because too few contained the minimum number of categorical columns needed for the multi-condition experiments; the synthetic tables are otherwise in-distribution with the HCT-QA data the model was trained on. 
+
+Design. Questions are generated by indepen-dently varying two axes: • Structural axis (S1–S3). The number of si-multaneous filter conditions applied before computing the answer: no conditions (global, over all rows; S1), one condition (single cat-egorical filter; S2), or two conditions (joint filter on two distinct categorical columns; S3), optionally followed by a group-by operator partitioning rows by one or two categorical keys (G1 and G2 respectively). • Computational axis (C0–C2). The aggrega-tion operator applied to the retrieved values: LOOKUP (C0), C OUNT (C1), M AX (C2), and AVG (C2). This design, extended with group-by variants, yields 2,337 questions across 15 tables and isolates each source of difficulty independently, allowing failures to be attributed to their origin rather than conflating structural and arithmetic errors. 
+
+Arithmetic bottleneck (verifies Prediction 1). 
+
+Table 13 reveals a clear operator hierarchy. LOOKUP (C0) is the strongest category across all models and filter levels, with the serialized baseline achieving F1 of 66–74 regardless of the number of conditions. M AX (C2) occupies a middle ground (F1 = 52–69), while A VG (C2) is the hardest op-erator by a large margin: both models score near zero on unconditioned average queries (F1 = 1.23 at (S1, C2)), where no filtering is required and arith-metic alone must be performed. This rules out a structural explanation for average failures and iden-tifies exact arithmetic as a persistent limitation of LLMs on serialized tables, one that +GRAB can-not fully resolve either, exactly as predicted by the quantile-bucket encoding of value nodes. COUNT (C1) shows a qualitatively different pattern: the serialized baseline performs poorly (F1 = 8.63 with no condition), while +GRAB achieves 54.90 — the largest absolute gain in the entire table ( +46.27 F1). This aligns with the nat-ural capacity of message-passing GNNs to aggre-gate over neighborhoods, which maps directly onto counting over row-conditioned subgraphs. 
+
+Filtering makes questions easier, not harder. 
+
+A consistent and counterintuitive pattern emerges across all operators: adding filter conditions re-duces difficulty rather than increasing it. For LOOKUP , performance improves monotonically from single (F1 = 66.59) to triple conditions (F1 = 73.90) on the serialized baseline. This is because more conditions uniquely identify the tar-get row more precisely, reducing ambiguity in the answer. The LLM benefits from additional anchors in the text: each extra condition narrows the search space and makes the correct row easier to locate by pattern-matching over the serialized sequence. The same effect holds for A VG : performance rises from F1 = 1.23 with no filter to 28.62 with two conditions, because filtering also reduces the number of values over which the mean must be computed, easing the arithmetic load. For C OUNT 
+
+and M AX , the trend is less pronounced but con-sistent in direction. This finding has a practical implication: the stress-test categories without any filter condition are structurally the hardest, not the easiest, contrary to the intuition that more condi-tions imply more complexity. GRAB amplifies this effect (verifying Predic-tion 2). The graph encoder provides column-typed value nodes that act as precise structural anchors, allowing the model to locate target cells even more reliably than pattern-matching over flat text. The gain is largest on L OOKUP (+14–24 F1 across S2– S3) and C OUNT (+22–46 F1 across S1–S3), where locating the correct rows is the dominant subtask. 
+
+Group-by as the hardest structural probe. 
+
+Group-by questions expose a qualitatively harder regime than any other category. Unlike lookup or aggregation, group-by requires the model to simul-taneously partition the table by one or two categori-cal keys, apply an aggregation within each partition, and produce a complete structured answer with one tuple per group. This demands not only locating the relevant rows, but retaining and organizing them across multiple groups before producing the out-put: a form of working memory over the table that serialized text processing handles poorly. The serialized baseline drops to F1 = 42.92 on Group-by M AX single key and CC = 0.00 on all double-key variants, meaning the model essen-tially never produces a fully correct multi-group answer. GRAB recovers substantially: F1 = 72.59 on Group-by M AX single key ( +29.67) with CC rising from 4.76 to 48.57, indicating that the graph encoder helps produce complete structured outputs rather than only partial ones. The counterintuitive filtering effect reappears here too. Adding a filter to a group-by query does not consistently increase difficulty and in some cases reduces it, presumably because the filter con-strains the set of groups the model must track, re-ducing the working memory demand. Group-by AVG remains the hardest setting overall, since it compounds the group-tracking difficulty with exact arithmetic; GRAB reaches at most F1 = 56.59 here, consistent with the arithmetic ceiling identified in the scalar setting. 
+
+G.2 Taxonomy Verification 
+
+We close by mapping the results back onto the diagnostic recipes in Appendix F.4, then verifying that the observed pattern is not an artifact of model scale. 
+
+Fixing S, varying C. At S1 (no filtering), the operator hierarchy is C0 > C1 > C2 for both the serialized baseline and +GRAB. A VG at (S1, C2) is the unique cell where neither model exceeds F1 = 1.23, isolating exact arithmetic as the binding constraint when no structural reasoning is required. This is Prediction 1 confirmed. 
+
+Fixing C, varying S. At C0, the serialized base-line improves with more filters (66.59 → 73.90 F1) and +GRAB improves further (80.72 → 95.52), confirming that structural localization is the bind-ing constraint when no arithmetic is required. The gap between baseline and +GRAB widens at higher S, indicating that the graph’s incidence struc-ture provides increasing relative value as the num-ber of joint conditions grows — Prediction 2 con-firmed. 
+
+Matched (S, C ), with vs. without GRAB. GRAB ’s gains concentrate at (S2–S3, C0–C1) cells, where the graph encoder relieves a real struc-tural bottleneck without competing with arithmetic demand. Gains shrink at (S1, C2), where no struc-tural bottleneck exists and only arithmetic remains. This is the characteristic signature predicted in Ap-pendix F.4: the structural token is locating the right evidence, and arithmetic remains the binding con-straint where it appears. 
+
+Robustness to model scale. We change the un-derlying LLM from Qwen3-4B to Qwen3-14B and rerun the stress-test on both the serialized base-line and +GRAB (Table 14). Three patterns con-firm that the gains attributed to GRAB reflect a structural rather than a capacity bottleneck. First, the overall +GRAB gain widens with scale, from 
+
++21 .42 F1 at 4B to +31 .68 F1 at 14B: a stronger backbone does not absorb the structural signal, it amplifies the benefit of receiving it in encoded form. Second, the arithmetic ceiling at (S1, C2) is pre-served exactly — 1.23 F1 across all four 4B/14B 
+
+× Serialized/+GRAB configurations — exactly as predicted by the quantile-bucket encoding of value nodes. Third, the largest 14B gains concen-trate precisely where the diagnostic recipes predict. On C OUNT , +GRAB adds +54 .90 , +51 .43 , and 
+
++26 .98 F1 across the three condition depths, since counting still maps onto value-node degree regard-less of backbone size. On group-by, the contrast is sharper: the 14B serialized baseline actually re-gresses relative to 4B on several Group-by C OUNT 
+
+settings (e.g., single key 34 .58 → 24 .65 F1, double key 37 .44 → 18 .70 ), consistent with the working-memory failure mode being orthogonal to model scale, while +GRAB recovers above 73 F1 in every Group-by C OUNT cell and lifts CC on Group-by MAX single key by +65 .72 points. Taken together, Table 13: Stress-test results. F1 and CC scores averaged over questions across 15 different tables. +Prompt Tuning uses learned soft prompt vectors without a graph encoder; +GRAB adds the full graph encoder and query-conditioned latent bridge; Serialized only uses the frozen LLM with flattened table input. ∆ reports the gain of +GRAB over Serialized only. 
+
+Serialized only +Prompt Tuning +GRAB ∆
+
+Question type Cond. F1 CC F1 CC F1 CC ∆F1 ∆CC Overall (2337) — 39.29 22.59 46.39 21.69 60.71 39.50 +21.42 +16.91 
+
+Lookup 
+
+Single condition AND ×1 66.59 37.14 60.49 20.95 80.72 58.10 +14.13 +20.96 Double condition AND ×2 65.56 54.29 72.96 50.48 89.32 74.29 +23.76 +20.00 Triple condition AND ×3 73.90 87.62 82.63 86.67 95.52 92.38 +21.62 +4.76 
+
+Count 
+
+No condition — 8.63 9.80 3.92 3.92 54.90 54.90 +46.27 +45.10 Single condition AND ×1 23.01 24.76 5.71 5.71 54.29 54.29 +31.28 +29.53 Double condition AND ×2 34.69 40.00 8.57 8.57 57.14 57.14 +22.45 +17.14 
+
+Max 
+
+No condition — 57.67 62.96 56.79 56.79 93.83 93.83 +36.16 +30.87 Single condition AND ×1 52.21 56.19 63.81 63.81 85.71 85.71 +33.50 +29.52 Double condition AND ×2 68.76 75.24 68.57 68.57 79.05 79.05 +10.29 +3.81 
+
+Avg 
+
+No condition — 1.23 1.23 1.23 1.23 1.23 1.23 +0.00 +0.00 Single condition AND ×1 9.38 14.29 8.57 8.57 15.24 15.24 +5.86 +0.95 Double condition AND ×2 28.62 34.29 22.86 22.86 40.95 40.95 +12.33 +6.66 
+
+Group-by Max 
+
+Single key G1 42.92 4.76 66.48 24.76 72.59 48.57 +29.67 +43.81 Single key + filter G1, AND ×1 43.69 6.67 71.73 40.00 70.20 37.14 +26.51 +30.47 Double key G2 38.28 0.00 52.96 1.90 60.00 17.14 +21.72 +17.14 Double key + filter G2, AND ×1 38.58 0.00 63.89 3.81 55.88 12.38 +17.30 +12.38 
+
+Group-by Count 
+
+Single key G1 34.58 2.08 49.83 8.33 62.40 30.21 +27.82 +28.13 Single key + filter G1, AND ×1 39.35 1.90 57.81 11.43 62.46 25.71 +23.11 +23.81 Double key G2 37.44 0.00 50.47 0.00 62.57 11.46 +25.13 +11.46 Double key + filter G2, AND ×1 39.70 0.00 51.52 0.00 49.84 7.14 +10.14 +7.14 
+
+Group-by Avg 
+
+Single key G1 21.63 1.90 28.95 1.90 38.77 6.67 +17.14 +4.77 Single key + filter G1, AND ×1 30.12 6.67 35.19 7.62 53.64 17.14 +23.52 +10.47 Double key G2 27.44 0.00 45.66 0.00 49.02 1.90 +21.58 +1.90 Double key + filter G2, AND ×1 38.46 0.95 56.79 0.95 56.59 14.29 +18.13 +13.34 
+
+the predicted (S, C) signature reproduces at scale, and the graph encoder contributes along an axis of difficulty that additional parameters do not resolve. 
+
+H Licenses 
+
+We indicate the licenses of the artifacts used in this work, based on the official repositories, dataset cards, or release pages whenever available. All the artifacts used in this paper can be used for re-search: HiTab (Computational Use of Data Agree-ment v1.0), WikiTableQuestions (CC BY-SA 4.0), WikiSQL (BSD-3-Clause repository license), HCT-QA (MIT), TabMWP (CC BY-NC-SA 4.0), Multi-HierTT (MIT), TQABench (GPL-3.0 license), Geo-Query (GPL-2.0), Spider (CC BY-SA 4.0), TabFact (CC BY 4.0), Qwen models (Apache 2.0), Multi-TabQa (MIT), TableLLama (MIT). 
+
+I Architectural Comparison with Frozen-LLM Table Adapters 
+
+Table 15 summarizes the main architectural dif-ferences between GRAB and the closest frozen-LLM table adaptation baselines. The comparison highlights whether each method explicitly models multi-table structure, conditions its latent represen-tation on the question, and incorporates foreign-key information. Table 14: Stress-test results across two backbones (Qwen3-4B and Qwen3-14B). F1 and CC scores averaged over questions across 15 different tables. Serialized only uses the frozen LLM with flattened table input; +GRAB adds the full graph encoder and query-conditioned latent bridge. ∆F1 reports the F1 gain of +GRAB over Serialized only within each backbone. 
+
+Qwen3-4B Qwen3-14B 
+
+Serialized +GRAB Serialized +GRAB 
+
+Question type Cond. F1 CC F1 CC ∆F1 F1 CC F1 CC ∆F1 Overall (2337) — 39.29 22.59 60.71 39.50 +21.42 40.65 27.04 72.33 52.20 +31.68 
+
+Lookup 
+
+Single condition AND ×1 66.59 37.14 80.72 58.10 +14.13 76.44 49.52 83.82 64.76 +7.38 Double condition AND ×2 65.56 54.29 89.32 74.29 +23.76 77.74 64.76 90.61 78.10 +12.87 Triple condition AND ×3 73.90 87.62 95.52 92.38 +21.62 81.71 88.57 96.76 95.24 +15.05 
+
+Count 
+
+No condition — 8.63 9.80 54.90 54.90 +46.27 21.57 21.57 76.47 76.47 +54.90 Single condition AND ×1 23.01 24.76 54.29 54.29 +31.28 27.62 27.62 79.05 79.05 +51.43 Double condition AND ×2 34.69 40.00 57.14 57.14 +22.45 56.83 57.14 83.81 83.81 +26.98 
+
+Max 
+
+No condition — 57.67 62.96 93.83 93.83 +36.16 84.03 85.19 96.30 96.30 +12.27 Single condition AND ×1 52.21 56.19 85.71 85.71 +33.50 72.31 79.05 94.29 94.29 +21.98 Double condition AND ×2 68.76 75.24 79.05 79.05 +10.29 73.65 74.29 87.62 87.62 +13.97 
+
+Avg 
+
+No condition — 1.23 1.23 1.23 1.23 +0.00 1.23 1.23 1.23 1.23 +0.00 Single condition AND ×1 9.38 14.29 15.24 15.24 +5.86 9.71 10.48 17.14 17.14 +7.43 Double condition AND ×2 28.62 34.29 40.95 40.95 +12.33 34.41 36.19 52.38 52.38 +17.97 
+
+Group-by Max 
+
+Single key G1 42.92 4.76 72.59 48.57 +29.67 36.49 8.57 86.59 74.29 +50.10 Single key + filter G1, AND ×1 43.69 6.67 70.20 37.14 +26.51 41.81 11.43 86.15 62.86 +44.34 Double key G2 38.28 0.00 60.00 17.14 +21.72 39.68 2.86 72.67 19.05 +32.99 Double key + filter G2, AND ×1 38.58 0.00 55.88 12.38 +17.30 37.52 0.95 80.32 39.05 +42.80 
+
+Group-by Count 
+
+Single key G1 34.58 2.08 62.40 30.21 +27.82 24.65 6.25 73.50 46.88 +48.85 Single key + filter G1, AND ×1 39.35 1.90 62.46 25.71 +23.11 20.22 1.90 78.99 50.48 +58.77 Double key G2 37.44 0.00 62.57 11.46 +25.13 18.70 1.04 78.17 35.42 +59.47 Double key + filter G2, AND ×1 39.70 0.00 49.84 7.14 +10.14 20.62 0.00 78.13 38.10 +57.51 
+
+Group-by Avg 
+
+Single key G1 21.63 1.90 38.77 6.67 +17.14 11.95 0.00 46.66 7.62 +34.71 Single key + filter G1, AND ×1 30.12 6.67 53.64 17.14 +23.52 27.78 3.81 65.83 27.62 +38.05 Double key G2 27.44 0.00 49.02 1.90 +21.58 24.49 0.00 55.65 3.81 +31.16 Double key + filter G2, AND ×1 38.46 0.95 56.59 14.29 +18.13 30.26 0.95 69.27 21.90 +39.01 
+
+Method Multi-table Query-cond. FK-aware Frozen LLM Serialization 
+
+Prompt tuning × × × ✓ ✓
+
+TAMO × × × ✓ ✓
+
+GRAB ✓ ✓ ✓ ✓ ✓
+
+Table 15: Comparison of GRAB with representative frozen-LLM table adaptation methods. GRAB differs by explicitly modeling multi-table relational structure, conditioning its latent structural tokens on the question, and incorporating foreign-key-aware graph construction.

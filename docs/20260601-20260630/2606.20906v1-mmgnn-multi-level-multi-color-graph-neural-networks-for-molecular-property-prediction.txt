@@ -1,0 +1,656 @@
+Title: MMGNN: Multi-level, multi-color graph neural networks for molecular property prediction
+
+URL Source: https://arxiv.org/pdf/2606.20906v1
+
+Published Time: Tue, 23 Jun 2026 00:16:38 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# MMGNN: Multi-level, multi-color graph neural networks for molecular property prediction 
+
+## Trung Nguyen 1 , and Duc Duy Nguyen 2∗
+
+1The Bredesen Center, University of Tennessee, Knoxville, TN 37996, USA 
+
+2Department of Mathematics, University of Tennessee, Knoxville, TN 37996, USA June 23, 2026 
+
+Abstract 
+
+Molecular message-passing neural networks commonly propagate chemically diverse interac-tions through a single graph, which may mix interaction-specific signals and require deep prop-agation to capture long-range effects. We introduce the Multi-level, Multi-color Graph Neural Network (MMGNN), a hierarchical framework that decomposes a molecular graph into over-lapping atom-type-pair-specific subgraphs while preserving atom-level resolution. MMGNN-2D constructs chemical-colored subgraphs from covalent connectivity, whereas MMGNN-3D con-structs geometric-colored subgraphs from spatial proximity and augments their edges with distance, angular, and torsional descriptors. Both variants apply a shared communicative message-passing backbone to each subgraph and combine the resulting representations through atom-wise aggregation and molecular readout. We evaluated MMGNN on five classification and three regression benchmarks from MoleculeNet using common scaffold splits and five in-dependent runs. MMGNN-2D achieved the highest macro-average AUC-ROC of 0.838 across the classification datasets and the lowest RMSE on ESOL (0.803). MMGNN-3D obtained the highest mean AUC-ROC on BBBP (0.956) and the lowest RMSE on FreeSolv (1.793), indicating complementary strengths of topological and geometric representations. Structural and leave-one-out analyses further illustrate how the subgraph decomposition affects learned representations and atom-type-pair sensitivities. These results support overlapping interaction-specific graph decomposition as a competitive strategy for molecular property prediction. 
+
+# 1 Introduction 
+
+Accurate molecular property prediction is central to computational chemistry, drug discovery, and materials design [1]. Classical quantitative structure–activity relationship models depend on prede-fined descriptors, whereas graph neural networks (GNNs) learn molecular representations directly from atom and bond information [2, 3]. In a message-passing neural network, each atom repeat-edly aggregates information from its graph neighbors, providing an effective and flexible framework for graph-level classification and regression. This paradigm has become a standard foundation for molecular representation learning. 
+
+> ∗
+
+Address correspondence to Duc Duy Nguyen. E-mail: ducnguyen@utk.edu 
+
+1
+
+> arXiv:2606.20906v1 [cs.LG] 18 Jun 2026
+
+Most molecular message-passing models nevertheless operate on a single atom–bond graph and use a shared aggregation channel for chemically diverse interactions. Their expressive power is bounded by the one-dimensional Weisfeiler–Lehman test in common formulations [4], and long-range communication requires increasingly deep propagation. Greater depth can blur node representations through over-smoothing [5] or compress many distant signals into fixed-size messages through over-squashing [6]. Moreover, aggregation on a single graph may mix signals associated with distinct atom-type environments before their contributions can be represented separately. The resulting challenge is not merely to enlarge the receptive field, but to preserve interaction-specific information while still forming a coherent molecular representation. Several lines of research address related aspects of this problem. Element-specific models sep-arate interactions according to chemical element types [7], while reduced, functional-group, mo-tif, and hierarchical molecular graphs introduce higher-level structural representations. Recent multi-representation approaches further show that atom-, functional-group-, junction-tree-, and pharmacophore-level graphs provide complementary information [8]. In parallel, geometric models such as SchNet and equivariant GNNs incorporate interatomic distances or coordinate-aware oper-ations to represent three-dimensional molecular structure [9, 10]. These advances demonstrate the value of both chemical abstraction and molecular geometry. However, reduced-graph approaches may discard atom-level detail, and global geometric message passing can still combine chemically distinct spatial interactions within the same propagation channel. We therefore propose the Multi-level, Multi-color Graph Neural Network (MMGNN), which represents a molecule as an overlapping collection of atom-type-pair-specific subgraphs. Unlike a disjoint fragmentation or graph-coarsening scheme, this construction retains atoms in every rele-vant interaction channel; an atom may participate in multiple colored subgraphs, and its subgraph-specific embeddings are subsequently combined by atom-wise aggregation. MMGNN-2D constructs chemical-colored subgraphs from covalent connectivity, whereas MMGNN-3D constructs geometric-colored subgraphs from spatial proximity and augments their edges with distance, angular, and torsional descriptors. A shared Communicative Message Passing Neural Network (CMPNN) back-bone [11] processes each colored subgraph independently before the resulting representations are integrated at the atom and molecular levels. This design aims to delay the mixing of chemi-cally distinct interactions while preserving communication through overlapping atoms and the final molecular readout. The principal contributions of this work are threefold. First, we introduce an overlapping atom-type-pair decomposition that preserves atom-level resolution while creating interaction-specific message-passing channels. Second, we formulate complementary 2D and 3D variants within a unified architecture, enabling a controlled comparison of covalent topology and spatial geometry. Third, we evaluate MMGNN on eight MoleculeNet benchmarks using common scaffold splits and examine its behavior through aggregation ablations, a structural case study, and leave-one-out subgraph-sensitivity analyses. Across these benchmarks, MMGNN achieves competitive classifica-tion and regression performance, with the 2D and 3D variants showing complementary strengths across molecular properties. 22 Methodology 
+
+## 2.1 MMGNN Overview 
+
+Standard message-passing graph neural networks (MPNNs) [3] operate on a single global molecular graph, where all neighboring interactions are propagated through a shared aggregation mecha-nism. While global molecular graphs enable information exchange across the entire molecule, all neighboring interactions are propagated through the same message-passing channel. Consequently, chemically distinct interactions may be mixed during aggregation, obscuring important local pat-terns. To address this limitation, we propose the Multi-level, Multi-color Graph Neural Network (MMGNN), a hierarchical framework that decomposes a molecular graph into a collection of over-lapping atom-type-specific subgraphs. Each subgraph focuses on a particular interaction type be-tween pairs of atom categories, enabling the model to learn specialized representations for distinct chemical or geometric environments. Importantly, MMGNN does not replace global molecular communication with isolated local fragments. The colored subgraphs form an overlapping decomposition of the original molecular graph, where the same atom may participate in multiple interaction-specific subgraphs. Through these shared atoms and the subsequent atom-wise aggregation step, information from different chemical environments can be integrated into a unified molecular representation. Thus, MMGNN preserves global molecular connectivity while reducing premature mixing of chemically distinct interactions. Another advantage of MMGNN is its ability to improve information flow beyond immediate covalent neighborhoods. In standard 2D MPNNs, messages are propagated along covalent bonds, so information from distant atoms can only reach a target atom after multiple message-passing layers. This may lead to information attenuation, over-squashing, or over-smoothing. In con-trast, the geometric-colored subgraphs in MMGNN-3D introduce spatial interaction edges between atom pairs that are close in three-dimensional space but not necessarily adjacent in the covalent graph. As a result, important non-covalent and long-range geometric interactions can be conveyed more directly. Meanwhile, MMGNN-2D preserves longer-range topological communication through overlapping atom-type-specific subgraphs and atom-wise aggregation, allowing information from different chemical environments to be integrated without prematurely mixing all interaction types in a single global channel. The overall MMGNN framework consists of three major stages, illustrated in Figure 1. First, a molecule is represented by a complete atom-pair reference graph from which multiple atom-type-specific interaction subgraphs are selected. Second, each subgraph is processed independently using a shared communicative message passing neural network (CMPNN) [11] backbone to generate subgraph-specific atom embeddings. Third, atom-level embeddings from different subgraphs are aggregated to produce the final molecular representation for downstream property prediction. To investigate the role of topology and geometry in molecular representation learning, we design MMGNN in two complementary variants: 
+
+• MMGNN-2D constructs chemical-colored subgraphs based on covalent bonding patterns and chemical atom-type interactions. This variant focuses on learning chemically localized topological representations without explicit 3D geometric information. 
+
+• MMGNN-3D constructs geometric-colored subgraphs based on spatial proximity and geo-metric interactions. In addition to chemical bond features, this variant incorporates multi-3⨀ MLP 
+
+𝑚 𝑠𝑢𝑚 −𝑁 1
+
+𝑚 𝑏𝑜𝑜𝑠𝑡 −𝑁 1
+
+𝑚 𝐶 𝑖 →𝑁 1
+
+> 𝑡 −1
+
+Max 
+
+Pool 
+
+⨁
+
+ℎ𝑁 1
+
+> 𝑡
+
+𝑚 𝐶 𝑖 𝑁 1
+
+> 𝑡
+
+ℎ𝑁 1
+
+> 𝑡 −1
+
+Molecular Graph 
+
+Construction 
+
+Parallel Subgraphs 
+
+Message Passing 
+
+Subgraphs Aggregation and 
+
+Property Prediction 
+
+Chemical 
+
+bond 
+
+features 
+
+Chemical 
+
+atom features 
+
+O=C1C=CNC(=O)N1 
+
+C
+
+OO
+
+Geometric 
+
+bond 
+
+features 
+
+O1
+
+O2
+
+O1 O2
+
+𝐺 𝑁 −𝐶 
+
+𝐺 𝑂 −𝑁 
+
+𝐺 𝐶 −𝑂 
+
+ℎ𝑡 /𝑚 𝑡 : node /edge 
+
+feature at state t
+
+Property 
+
+Prediction 
+
+FFN Readout  
+
+> Atom -level Aggregation
+
+hN1
+
+> t,O−N
+
+hN1
+
+> t,N−C
+
+∅: ⨁, 𝜇 , 𝛼 
+
+𝐴𝐺𝐺 ∅ ℎ𝑁 1
+
+ℎ𝐶 1
+
+ℎ𝐶 2
+
+ℎ𝐶 3
+
+ℎ𝐶 4
+
+ℎ𝑁 1
+
+ℎ𝑁 2
+
+ℎ𝑂 2
+
+ℎ𝑂 1
+
+⨁: sum , μ: mean 
+
+α: attention Figure 1: The MMGNN architecture. The framework proceeds in three stages: (1) Molecular graph construction: the molecule is featurized with atomic, chemical bond, and geometric bond features. (2) Parallel subgraph message passing: the molecule is decomposed into bipartite subgraphs (e.g., 
+
+GN−C, GO−N), and each subgraph is processed independently in parallel. The top block shows how node features are updated using communicative message passing. (3) Subgraph aggregation and prediction: subgraph-specific atom embeddings are aggregated via AGG ϕ and then read out into a global vector for property prediction. body geometric descriptors including distances, bond angles, and torsion angles to capture local three-dimensional molecular environments. By combining overlapping interaction-specific subgraphs with structured message propagation, MMGNN provides a unified framework for learning both chemically localized and globally coupled molecular representations. 42.2 Subgraph Constructions 
+
+2.2.1 Molecular Graph and Atom-Type Coloring 
+
+We represent a molecule as an atom-type-colored molecular graph G = ( V, E), where the vertex set 
+
+V represents atoms and each atom is assigned a color according to its atom type. The edge set E
+
+will be specified according to the type of interaction considered, including covalent chemical bonds for MMGNN-2D and spatial geometric interactions for MMGNN-3D. For a given molecular dataset, we define a finite set of atom types 
+
+C = {C1, C 2, . . . , C K },
+
+where each Ck ∈ C denotes a distinct atom type. In datasets considered in this work, we use 
+
+C = {C, H, O, N, P, Cl , F, Br , S, Si , I, X},
+
+where X denotes any atom type outside the first eleven categories. Formally, the vertex set is written as 
+
+V = (ri, α i) ri ∈ R3, α i ∈ C , i = 1 , 2, . . . , N , (1) where N is the number of atoms in the molecule, ri ∈ R3 denotes the coordinate of atom i, and 
+
+αi ∈ C denotes its atom type. The complete set of possible atom pairs is given by 
+
+Eall = {i, j } i, j ∈ [N ], i ̸ = j , (2) where [ N ] = {1, 2, . . . , N }. We use Eall only as a reference set from which chemically or geometrically meaningful interaction edges are selected. Specifically, MMGNN-2D restricts message passing to covalent bond edges, while MMGNN-3D selects spatial interaction edges based on geometric criteria. This atom-type-colored representation provides the common backbone for constructing the chemical-colored and geometric-colored subgraphs described below. 
+
+2.2.2 Chemical-colored Subgraphs 
+
+Chemical-colored subgraphs are designed to capture covalent interaction patterns associated with specific atom-type pairs. While the complete set of atom pairs provides a reference for possible in-teractions, MMGNN-2D restricts chemical message passing to covalent bonds, which better reflects the local connectivity structure of molecular graphs. We first define the set of covalent bond edges as 
+
+Ebond = {i, j } atoms i and j are connected by a covalent bond in the molecule . (3) This edge set encodes the chemical connectivity of the molecule as determined by valence structure, bond order, and aromaticity. For a given pair of atom types ( Ck, C k′ ) ∈ C × C , we define the corresponding chemical-colored subgraph as 
+
+Gchem  
+
+> kk ′
+
+=  Vkk ′ , Echem 
+
+> kk ′
+
+, (4) 5where the vertex set Vkk ′ ⊆ V contains all atoms whose types belong to {Ck, C k′ }:
+
+Vkk ′ = i ∈ [N ] αi ∈ { Ck, C k′ } , (5) and the edge set is restricted to covalent bonds within this vertex subset: 
+
+Echem  
+
+> kk ′
+
+= {i, j } ∈ E bond i, j ∈ V kk ′ . (6) This construction yields a collection of atom-type-specific chemical subgraphs, each emphasiz-ing covalent interactions between selected atom categories. Because atoms may appear in multiple chemical-colored subgraphs, the resulting decomposition preserves the connectivity of the origi-nal molecular graph while allowing MMGNN-2D to learn interaction-specific representations for different chemical environments. 
+
+2.2.3 Geometric-colored Subgraphs 
+
+In contrast to chemical-colored subgraphs, which are restricted to covalent bonds, geometric-colored subgraphs are designed to capture spatial interactions between atoms that may be distant in the co-valent molecular graph but close in three-dimensional space. This construction allows MMGNN-3D to incorporate non-covalent and long-range geometric interactions that cannot be directly repre-sented by standard 2D message passing along covalent bonds. Recall that each atom i is represented by its coordinate ri ∈ R3 and atom type αi ∈ C . For any pair of atoms i and j, let 
+
+dij = ∥ri − rj ∥
+
+denote their Euclidean distance. We define the set of geometric interaction edges as 
+
+Egeom = {i, j } i, j ∈ [N ], i ̸ = j, d min (i, j ) ≤ dij ≤ dcut , (7) where dcut is a spatial cutoff radius and 
+
+dmin (i, j ) = rvdw ,i + rvdw ,j + σ
+
+is a steric lower bound determined by the van der Waals radii of atoms i and j, with σ denoting a tolerance parameter. The lower bound removes unrealistically close atom pairs, while the upper cutoff restricts the geometric graph to spatially local but potentially non-covalent interactions. For a given pair of atom types ( Ck, C k′ ) ∈ C × C , we construct the geometric-colored subgraph 
+
+Ggeom  
+
+> kk ′
+
+=  Vkk ′ , Egeom 
+
+> kk ′
+
+, (8) where the vertex set is defined as in the chemical case: 
+
+Vkk ′ = i ∈ [N ] αi ∈ { Ck, C k′ } , (9) and the edge set contains geometric interactions within this atom-type-specific vertex subset: 
+
+Egeom  
+
+> kk ′
+
+= {i, j } ∈ E geom i, j ∈ V kk ′ . (10) This construction extends molecular connectivity beyond covalent bonds by directly linking atom pairs that are close in three-dimensional space. As a result, MMGNN-3D can convey spatial and non-covalent information within fewer message-passing steps, while still preserving atom-type-specific interaction channels through the colored subgraph decomposition. 62.3 Node and Edge Features 
+
+Each molecular graph representation is enriched with node- and edge-level descriptors that encode both chemical and geometric information. We distinguish between cheminformatics atomic and bond features, and weighted colored subgraph (WCS)-based geometric features. 
+
+Chemical atomic features. We integrate cheminformatics atomic features (CAF), denoted as 
+
+X CAF  
+
+> i
+
+, derived from cheminformatics tools such as RDKit [12]. These include the atom type, represented by a one-hot encoding of the atomic number (100 dimensions), the number of bonds the atom is involved in (6-dimensional one-hot encoding), formal charge (5-dimensional encoding), and chirality (4-dimensional encoding capturing cases such as unspecified, tetrahedral CW/CCW, or other). Additional descriptors include the number of bonded hydrogen atoms (5-dimensional), hybridization state (sp, sp2, sp3, sp3d, or sp3d2, encoded over 5 dimensions), aromaticity (a binary indicator of whether the atom is part of an aromatic system), and atomic mass (a real-valued scalar scaled by 1/100). All categorical features are one-hot encoded to ensure consistency and numerical stability in learning [13]. 
+
+Chemical bond features. Along with atomic-level chemical descriptors, we define the chemical bond features, X Bond  
+
+> ij
+
+, between atoms i and j to enrich the message-passing process with edge-level information [13]. These features, also derived from RDKit, include the bond type (single, double, triple, or aromatic, encoded in 4 dimensions), whether the bond is conjugated (1-dimensional), whether the bond is part of a ring (1-dimensional), and the bond stereochemistry (none, any, E/Z or cis/trans, encoded in 6 dimensions). All bond features are represented using one-hot encoding. 
+
+Geometric edge features. To capture the rich spatial context of the molecular graph, we extend the edge representations beyond simple chemical features to include multi-body geometric interac-tions. Specifically, we encode 2-body distances, 3-body bond angles, and 4-body torsion angles into the final geometric edge feature X Geom ij .
+
+Distance (2-body). We encode the continuous Euclidean distance dij = || ri − rj || between atoms i and j using a Gaussian Radial Basis Function (RBF) expansion. This projects the scalar distance into a high-dimensional vector space, allowing the model to learn non-linear dependencies. We define K centers μk uniformly spaced between 0 and a cutoff dcut , with widths γ determined by center spacing. The distance feature vector eRBF ij ∈ RK is computed as: [eRBF ij ]k = exp( −γ(dij − μk)2), k = 1 , . . . , K 
+
+Angles (3-body). To capture local angular geometry, we consider the bond angles formed by the edge i → k and the neighbors of atom i. For every neighbor j ∈ N (i) \ { k}, we calculate the bond angle θjik via the dot product of the displacement vectors. We expand the cosine of this angle using a set of M Circular Basis Functions (CBF) centered at μm over [ −1, 1]: 
+
+ϕm(θjik ) = exp 
+
+
+
+− (cos( θjik ) − μm)2
+
+σ2
+
+
+
+Since an atom may have varying numbers of neighbors, we aggregate these individual triplet vectors via summation to produce a fixed-length angular feature vector f angular ik ∈ RM :
+
+f angular ik = X 
+
+> j∈N (i)\{ k}
+
+[ϕ1(θjik ), . . . , ϕ M (θjik )] ⊤
+
+7Torsions (4-body). To incorporate stereochemical information and conformational geometry, we compute features based on dihedral angles. For a directed bond j → k, we identify all paths of four connected atoms i − j − k − l. The dihedral angle τijkl ∈ (−π, π ] is calculated using the normal vectors of the planes defined by the bonds. Respecting the periodicity of torsion angles, we encode 
+
+τijkl using a Fourier series expansion with frequency dimension K′:
+
+vtorsion ijkl = [sin( τ ), cos( τ ), sin(2 τ ), cos(2 τ ), . . . , sin( K′τ ), cos( K′τ )] These path features are aggregated over all valid paths Pjk sharing the central bond to form the final torsion feature f torsion jk . The final geometric bond feature X Geom ij is the concatenation of these multi-body descriptors: 
+
+X Geom ij := [ eRBF ij ∥ f angular ij ∥ f torsion ij ]
+
+Feature composition. The final node and edge features depend on the type of colored subgraph. For chemical-colored subgraphs {G chem  
+
+> kk ′
+
+}, we use 
+
+Xi = X CAF  
+
+> i
+
+, (11) 
+
+Xij = X Bond  
+
+> ij
+
+. (12) For geometric-colored subgraphs {G geom  
+
+> kk ′
+
+}, we use the same atomic descriptors and augment the edge representation with geometric features: 
+
+Xi = X CAF  
+
+> i
+
+, (13) 
+
+Xij = X Bond  
+
+> ij
+
+∥ X Geom 
+
+> ij
+
+. (14) This feature design allows MMGNN-2D to focus on covalent chemical topology, while MMGNN-3D incorporates spatial interactions, including non-covalent and topologically distant atom pairs. A visual summary of the 2D topological and 3D geometric feature sets is provided in Figure 2. 
+
+## 2.4 Structured Message Passing and Prediction 
+
+After constructing the chemical-colored and geometric-colored subgraphs, MMGNN applies a shared message-passing backbone to each subgraph independently. In this work, we use the Communicative Message Passing Neural Network (CMPNN) [11], which updates directed edge representations using a neighbor-flow mechanism and a residual message booster. This design allows information to propagate efficiently while preserving the initial atom and edge features during iterative message passing. Let Gs = ( Vs, Es) denote a colored subgraph, where s indexes either a chemical-colored or geometric-colored subgraph. For a directed edge i → j in Gs, let h(t,s ) 
+
+> i→j
+
+denote its hidden represen-tation at message-passing step t. The initial directed edge representation is defined by 
+
+h(0 ,s ) 
+
+> i→j
+
+= τ (Win [Xi ∥ X ij ]) , (15) where Xi and Xij are the node and edge features defined in the previous section, ∥ denotes con-catenation, and τ is a nonlinear activation function. 8Figure 2: Left: 2D Topological Features including Atom features ( X CAF ) such as hybridization and aromaticity, and Bond features ( X Bond ) representing covalent connectivity. Right: 3D Geometric Features ( X Geom ) capturing spatial context via torsion angles ( ϕijkl ), bond angles ( θijk ), and radial basis functions ( eRBF ) for distances. 
+
+Communicative message passing 
+
+At each message-passing step t, the incoming messages to atom i within subgraph Gs are aggregated as 
+
+m(t,s ) 
+
+> i
+
+= X
+
+> k∈N s(i)
+
+h(t−1,s ) 
+
+> k→i
+
+, (16) where Ns(i) denotes the neighbors of atom i in subgraph Gs.For a directed edge i → j, the neighbor-flow message excludes the reverse edge j → i:
+
+δ(t,s ) 
+
+> i→j
+
+= m(t,s ) 
+
+> i
+
+− h(t−1,s ) 
+
+> j→i
+
+. (17) This update avoids immediately passing information back along the same edge and reduces redun-dant message loops. The directed edge state is then updated using the CMPNN message booster: 
+
+h(t,s ) 
+
+> i→j
+
+= τ
+
+
+
+Wcomm δ(t,s ) 
+
+> i→j
+
++ h(0 ,s )
+
+> i→j
+
+
+
+. (18) The residual term h(0 ,s ) 
+
+> i→j
+
+preserves the initial atom-edge information throughout message propaga-tion. After T message-passing steps, the atom representation of atom i within subgraph Gs is com-puted as 
+
+h(i,s )sub = Wout 
+
+Xi ∥ X
+
+> j∈N s(i)
+
+h(T,s )
+
+> j→i
+
+ . (19) 9Atom-wise subgraph aggregation 
+
+Because the colored subgraphs form an overlapping decomposition of the molecular graph, an atom may appear in multiple subgraphs. Let Si denote the set of colored subgraphs that contain atom i.MMGNN aggregates the subgraph-specific representations {h(i,s )sub : s ∈ S i} to obtain a final atom representation hfinal  
+
+> i
+
+.For sum aggregation, we use 
+
+hfinal  
+
+> i
+
+= X
+
+> s∈S i
+
+h(i,s )sub . (20) For mean aggregation, we use 
+
+hfinal  
+
+> i
+
+= 1
+
+|S i|
+
+X
+
+> s∈S i
+
+h(i,s )sub . (21) For attention aggregation, the model assigns a learnable importance weight to each subgraph-specific atom representation. Specifically, 
+
+ei,s = LeakyReLU 
+
+
+
+Watt h(i,s )sub 
+
+
+
+, (22) and the normalized attention coefficient is 
+
+αi,s = exp( ei,s )
+
+P 
+
+> r∈S i
+
+exp( ei,r ) . (23) The final atom representation is then given by 
+
+hfinal  
+
+> i
+
+= X
+
+> s∈S i
+
+αi,s h(i,s )sub . (24) Finally, the molecular representation is obtained by summing the final atom representations: 
+
+hmol = X
+
+> i∈V
+
+hfinal  
+
+> i
+
+. (25) The molecular embedding hmol is passed to a feed-forward neural network for property prediction. This message-passing and readout procedure is shared by both MMGNN variants. In MMGNN-2D, the procedure is applied to chemical-colored subgraphs constructed from covalent bond inter-actions and chemical bond features. In MMGNN-3D, the same procedure is applied to geometric-colored subgraphs constructed from spatial interaction edges, with edge features augmented by distance, angular, and torsional descriptors. Thus, the two variants differ only in the type of col-ored subgraphs and edge features used, while sharing the same subgraph-level CMPNN backbone, atom-wise aggregation, and molecular readout. 
+
+# 3 Results and Discussion 
+
+## 3.1 Datasets 
+
+We evaluated MMGNN on eight benchmark datasets from MoleculeNet [1], covering both clas-sification and regression tasks. The classification benchmarks include BBBP, BACE, ClinTox, 10 SIDER, and Tox21, which assess blood–brain barrier penetration, β-secretase inhibition, clinical toxicity, drug side effects, and toxicity across multiple biological targets, respectively. The regression benchmarks include Lipophilicity, FreeSolv, and ESOL, which measure octanol/water distribution coefficient, hydration free energy, and aqueous solubility, respectively. To evaluate model generalization, we used scaffold splitting to partition each dataset into train-ing, validation, and test sets with an 8:1:1 ratio. Scaffold splitting groups molecules according to their core chemical scaffolds, reduces scaffold overlap between partitions, and provides a more chal-lenging assessment of generalization to structurally distinct molecules than a random split [1, 14]. For each dataset, we performed five independent runs using random seeds from 0 to 4. To ensure a fair comparison, all baseline models were retrained using the same scaffold splits and random seeds. Final performance is reported as the mean and standard deviation across the five runs. 
+
+## 3.2 Evaluation Metrics 
+
+For classification tasks, model performance was evaluated using the area under the receiver operat-ing characteristic curve (AUC-ROC), where higher values indicate better classification performance. For regression tasks, performance was evaluated using root mean square error (RMSE), where lower values indicate better predictive accuracy. 
+
+## 3.3 Performance comparison 
+
+To evaluate the effectiveness of the MMGNN framework, we compared our proposed MMGNN-2D and MMGNN-3D with a suite of state-of-the-art GNN architectures across eight benchmark datasets. We selected 11 baselines covering diverse GNN paradigms. GCN [15] and GAT [16] serve as standard benchmarks for graph convolution and attention mechanisms, respectively. Weave [17] and SchNet [9] represent early architectures specifically designed for molecular representation learning. We also included powerful message-passing frameworks, including the original MPNN [3], its advanced variants D-MPNN [14] and CMPNN [11], which explicitly optimize edge-based message flow. Furthermore, we compared against AttentiveFP [18], an attention-based fingerprint model, and recent advanced architectures such as the transformer-inspired CoMPT [19], the dual-view CD-MVGNN [20], and the structure-learning-based GSL-MPP [21]. Unless otherwise stated, MMGNN results are reported using atom-wise sum aggregation. Adetailed ablation study comparing different aggregation strategies (including mean and attention mechanisms) can be found under the section “Comparison of Aggregation Strategies” in the Sup-porting Information. For the classification benchmarks, as presented in Table 1, our models achieved competitive performance across all five classification benchmarks, with MMGNN-2D obtaining the best macro-average AUC-ROC. The macro average is the unweighted mean of the dataset-level mean AUC-ROC values, giving equal importance to each dataset. MMGNN-2D demonstrated robust performance, achieving a macro-average AUC-ROC of 0.838 and the highest mean AUC-ROC on BACE (0 .877). On ClinTox, MMGNN-2D and CD-MVGNN obtained the same rounded mean AUC-ROC (0 .913), but MMGNN-2D had a lower standard deviation (0 .019 versus 0 .050). MMGNN-3D obtained the highest mean AUC-ROC on BBBP (0 .956), closely followed by MMGNN-2D (0 .955). These results suggest that explicit 3D spatial information may be particularly beneficial for modeling blood–brain barrier penetration. Overall, MMGNN-2D achieved the strongest macro-average performance, while MMGNN-3D showed particular strength on BBBP. 11 Table 1: Performance comparison (AUC-ROC ↑) on five classification datasets. Dataset-level values are reported as the mean ± standard deviation across five runs. Macro Avg. is the unweighted mean of the five dataset-level mean AUC-ROC values and is reported without a standard deviation. Best results are highlighted in bold , and second-best results are underlined. When displayed means are tied, the lower standard deviation is used to break the tie. 
+
+Model BBBP BACE ClinTox SIDER Tox21 Macro Avg. 
+
+SchNet 0.847 ± 0.024 0.750 ± 0.033 0.717 ± 0.042 0.545 ± 0.038 0.727 ± 0.025 0.717 Weave 0.837 ± 0.065 0.791 ± 0.008 0.823 ± 0.023 0.543 ± 0.034 0.731 ± 0.044 0.745 GAT 0.846 ± 0.054 0.822 ± 0.024 0.850 ± 0.030 0.528 ± 0.002 0.741 ± 0.021 0.757 GCN 0.813 ± 0.031 0.813 ± 0.031 0.855 ± 0.025 0.598 ± 0.014 0.779 ± 0.014 0.772 MPNN 0.896 ± 0.041 0.815 ± 0.044 0.869 ± 0.054 0.545 ± 0.040 0.768 ± 0.024 0.779 CMPNN 0.928 ± 0.025 0.853 ± 0.023 0.898 ± 0.022 0.615 ± 0.020 0.810 ± 0.022 0.820 D-MPNN 0.898 ± 0.031 0.852 ± 0.053 0.868 ± 0.040 0.618 ± 0.023 0.822 ± 0.023 0.812 AttentiveFP 0.878 ± 0.050 0.793 ± 0.015 0.899 ± 0.020 0.593 ± 0.060 0.774 ± 0.020 0.787 CD-MVGNN 0.929 ± 0.031 0.854 ± 0.053 0.913 ± 0.050 0.625 ± 0.029 0.828 ± 0.019 0.830 CoMPT 0.925 ± 0.027 0.832 ± 0.043 0.878 ± 0.029 0.613 ± 0.014 0.792 ± 0.022 0.808 GSL-MPP 0.939 ± 0.028 0.858 ± 0.020 0.828 ± 0.020 0.648 ± 0.014 0.800 ± 0.021 0.815 
+
+MMGNN-2D 0.955 ± 0.023 0.877 ± 0.027 0.913 ± 0.019 0.624 ± 0.011 0.823 ± 0.013 0.838 MMGNN-3D 0.956 ± 0.009 0.830 ± 0.052 0.902 ± 0.036 0.608 ± 0.025 0.816 ± 0.018 0.822 
+
+For the regression tasks, Table 2 shows that the MMGNN framework continued to demonstrate strong predictive capability. MMGNN-3D achieved the lowest RMSE on FreeSolv (1 .793), outper-forming standard message-passing baselines such as CMPNN (2 .060) and suggesting that explicit 3D geometric features may be beneficial for predicting hydration free energy. MMGNN-2D achieved the second-lowest RMSE on Lipophilicity (0 .599) and the lowest RMSE on ESOL (0 .803). We do not average RMSE values across these datasets because their target properties have different units and scales. Table 2: Performance comparison (RMSE ↓) on three regression datasets. Values are reported as the mean ± standard deviation across five runs. RMSE values are not averaged across datasets because the target properties have different units and scales. Best results are highlighted in bold ,and second-best results are underlined. 
+
+Model FreeSolv Lipophilicity ESOL 
+
+SchNet 3.215 ± 0.755 0.909 ± 0.098 1.045 ± 0.064 Weave 3.131 ± 0.250 0.813 ± 0.132 1.158 ± 0.055 GAT 2.510 ± 0.410 0.851 ± 0.128 0.942 ± 0.062 GCN 2.410 ± 0.852 0.763 ± 0.080 0.894 ± 0.030 MPNN 2.185 ± 0.952 0.712 ± 0.051 1.167 ± 0.430 CMPNN 2.060 ± 0.505 0.625 ± 0.027 0.838 ± 0.140 D-MPNN 2.271 ± 0.508 0.639 ± 0.017 0.963 ± 0.082 AttentiveFP 2.830 ± 0.420 0.730 ± 0.030 0.853 ± 0.060 CD-MVGNN 1.921 ± 0.423 0.569 ± 0.038 0.825 ± 0.093 CoMPT 2.119 ± 0.651 0.629 ± 0.038 0.829 ± 0.075 GSL-MPP 2.083 ± 0.437 0.694 ± 0.070 0.818 ± 0.067 
+
+MMGNN-2D 1.856 ± 0.375 0.599 ± 0.013 0.803 ± 0.095 MMGNN-3D 1.793 ± 0.367 0.742 ± 0.040 0.814 ± 0.102 
+
+12 4 Chemical Interpretability and Subgraphs Analysis 
+
+## 4.1 Preservation of Localized Chemical Signals: A Structural Case Study 
+
+A potential limitation of global message-passing networks is that signals from small but discrimina-tive functional groups may be diluted by a large shared structural scaffold. To examine whether the subgraph decomposition in MMGNN helps preserve such localized signals, we compared its learned representations with those of a standard global CMPNN using a pair of structural analogs from the BBBP test set (Figure 3a). The two molecules, GR85571 (BBB+) and GR94839 (BBB-), share an identical Murcko scaffold but differ in localized functional groups (e.g., an explicit chloride and distinct nitrogen substitu-tions), resulting in opposite blood–brain barrier permeability labels. Because they share such a large common scaffold, their initial atom-level features, which are derived from basic topological properties such as atomic number, hybridization, and degree, are nearly identical, yielding baseline cosine similarities approaching 1.0 (Figure 3b). To quantify information preservation during message passing, we calculated the cosine simi-larity between the final-layer hidden representations of the two molecules. Specifically, the node embeddings were mean-pooled by atom type (C, N, O, Cl) at the final network layer prior to the global readout phase, and the cosine similarity was computed between the corresponding aggregated vectors. When processed by the global CMPNN, the atom-type embeddings of the two analogs remain highly similar (e.g., Oxygen similarity = 0 .95), suggesting that the dominant shared scaffold over-smooths the representations. In this case study, this limited separation in the feature space causes the global model to incorrectly predict the permeability of the BBB- analog (Figure 3c). In contrast, MMGNN decomposes the molecular graph into chemically colored subgraphs that are processed independently before atom-wise aggregation. As illustrated in Figure 3b, this de-sign reduces interference from the shared scaffold, producing significantly lower cosine similarities for corresponding atom types (e.g., lowering the similarity of Oxygen embeddings to 0.66). By preserving these localized chemical distinctions, the MMGNN effectively separates the analogs in the latent space and correctly predicts the probability P (BBB+) for both compounds relative to the 0.5 decision threshold (Figure 3c). Although this single example does not establish a universal solution to over-smoothing, it empirically supports the hypothesis that subgraph-based message passing better preserves localized chemical differences. 13 Figure 3: Comparison of atom-type embedding similarities and BBBP predictions for a pair of structural analogs using a global CMPNN and MMGNN. (a) The molecular pair shares a large Murcko scaffold but possesses opposite BBBP permeability labels. (b) Cosine similarities of atom-type representations. Initial atom features exhibit similarities near 1.0 due to the shared backbone topology. Latent similarities are calculated by comparing the aggregated hidden feature vectors for each specific atom type (C, N, O, Cl) at the final network layer prior to global pooling. MMGNN produces significantly lower cosine similarities across atom types, indicating successful preservation of localized functional differences compared to the over-smoothed CMPNN representations. (c) Predictive outputs for both models, with the dashed line indicating the P (BBB+) = 0 .5 classifi-cation threshold, MMGNN correctly classifies both analogs, whereas CMPNN incorrectly classifies the BBB- compound. 14 4.2 Subgraph Importance Analysis 
+
+To examine whether the MMGNN framework is sensitive to distinct chemically meaningful subgraph patterns across different task domains, we expanded our interpretability analysis to the entire MoleculeNet benchmark suite. We employed a Leave-One-Out subgraph ablation strategy across both the MMGNN-2D and MMGNN-3D architectures. To reduce the influence of rare subgraph types, we applied a strict frequency filter: any sub-graph type appearing in less than 5% of a dataset’s molecules was excluded from the ranking. For each dataset, we systematically removed a qualifying subgraph and recorded the resulting degra-dation in predictive performance. Focusing on the top 5 most influential subgraphs, the results were aggregated into classification tasks (BBBP, BACE, ClinTox, SIDER, Tox21) and regression tasks (FreeSolv, Lipophilicity, ESOL) to summarize the atom-type-pair sensitivities learned by the models. For the classification tasks, as illustrated in Figure 4, the topological MMGNN-2D model shows high sensitivity to the fundamental organic framework and standard functional connectivity. Its top subgraphs (C-C, C-N, C-O, C-S, C-Cl) are consistent with contributions from molecular scaffold structure and common polar functional environments. Because the 2D model does not use explicit spatial geometry, these sensitivities likely reflect the information available from covalent topology. In contrast, the spatially-aware MMGNN-3D model shows greater sensitivity to dense, electron-rich heteroatom spatial pairs. Its top subgraphs are dominated by O-O, N-N, and N-O, alongside the common C-O and C-C pairs. For classification tasks involving biological activity or permeability, this pattern suggests that the model uses spatial arrangements involving polar or electron-rich regions as informative features, rather than relying only on the carbon scaffold. 0.000 0.005 0.010 0.015 0.020 
+
+> Decrease in AUC-ROC
+> C-C
+> (n = 1361, 100%)
+> C-N
+> (n = 1121, 60%)
+> C-O
+> (n = 1221, 78.8%)
+> C-S
+> (n = 296, 16.4%)
+> C-Cl
+> (n = 196, 13%)
+> Subgraph types (atom pairs)
+> 0.0194
+> 0.0147
+> 0.0142
+> 0.0089
+> 0.0082
+> Top 5 Important Subgraphs - Classification
+> 0.010
+> 0.012
+> 0.014
+> 0.016
+> 0.018
+
+(a) MMGNN-2D: Classification 0.000 0.005 0.010 0.015 0.020  
+
+> Decrease in AUC-ROC
+> O-O
+> (n = 1123, 66.2%)
+> N-N
+> (n = 829, 36%)
+> N-O
+> (n = 1017, 47.6%)
+> C-O
+> (n = 186, 12.3%)
+> C-C
+> (n = 1370, 100%)
+> Subgraph types (atom pairs)
+> 0.0205
+> 0.0154
+> 0.0135
+> 0.0121
+> 0.0016
+> Top 5 Important Subgraphs (Classification)
+> 0.0025
+> 0.0050
+> 0.0075
+> 0.0100
+> 0.0125
+> 0.0150
+> 0.0175
+> 0.0200
+
+(b) MMGNN-3D: Classification 
+
+Figure 4: Top 5 Subgraph Importance for Classification Tasks. The 2D architecture shows high sensitivity to core structural framework pairs (C-C, C-N) and basic connectivity, whereas the 3D architecture shows increased sensitivity to spatial heteroatom pairs (O-O, N-N). When evaluating continuous thermodynamic properties (e.g., hydration free energy and aqueous solubility), the baseline error scales vary across FreeSolv, Lipophilicity, and ESOL. To account for this, we standardized the predictive impact metric to measure the percentage increase in Root Mean Square Error (% ∆ RMSE) upon subgraph ablation. 15 As shown in Figure 5, the MMGNN-2D regression profile is most sensitive to C-C, C-O, C-N, Br-C, and C-Cl. This hierarchy is chemically plausible because carbon scaffolds, polar heteroatom environments, and halogenated motifs are all relevant to solvation and lipophilicity, although the ablation ranking should be interpreted as model sensitivity rather than direct causal attribution. Mirroring the classification results, the MMGNN-3D regression profile assigns high importance to polar spatial pairings. The prominence of O-O, C-O, N-O, Cl-Cl, and C-C is consistent with the relevance of three-dimensional heteroatom environments, electronegative regions, and molecular scaffold structure to solvation-related properties. The recurrence of C-C and C-O across the top-5 profiles suggests that these atom-type pairs are broadly informative in this benchmark suite, while the remaining subgraph sensitivities vary with the property and with the availability of 3D spatial information. 0 25 50 75 100 125 150 175 
+
+> Percentage increase in RMSE degradation
+> C-C
+> (n = 602, 100%)
+> C-O
+> (n = 321, 53.3%)
+> C-N
+> (n = 157, 26.1%)
+> Br-C
+> (n = 25, 2.3%)
+> C-Cl
+> (n = 113, 18.8%)
+> Subgraph types (atom pairs)
+> 170.8
+> 169.5
+> 150.3
+> 122.0
+> 112.7
+> Top 5 Important Subgraphs - Regression
+> 120
+> 130
+> 140
+> 150
+> 160
+> 170
+
+(a) MMGNN-2D: Regression 0 100 200 300 400 500 600  
+
+> Percentage increase in RMSE degradation
+> O-O
+> (n = 190, 30.8%)
+> C-O
+> (n = 723, 65.2%)
+> N-O
+> (n = 52, 8.4%)
+> Cl-Cl
+> (n = 69, 7%)
+> C-C
+> (n = 617, 100%)
+> Subgraph types (atom pairs)
+> 565.5
+> 394.3
+> 248.5
+> 234.1
+> 60.7
+> Top 5 Important Subgraphs (Regression)
+> 100
+> 200
+> 300
+> 400
+> 500
+
+(b) MMGNN-3D: Regression 
+
+Figure 5: Top 5 Subgraph Importance for Regression Tasks. Evaluated by normalizing the per-centage increase in RMSE. The 2D architecture shows sensitivity to polar motifs (C-O, C-N) and halogenated pairs (Br-C, C-Cl), whereas the 3D architecture shows sensitivity to spatial heteroatom pairings (O-O, N-O). For a comprehensive dataset-by-dataset analysis of all eight MoleculeNet benchmarks, see Fig-ures S3–S10 in the Supporting Information. 
+
+# 5 Conclusion 
+
+In this work, we introduced the Multi-level, Multi-color Graph Neural Network (MMGNN), a hierarchical framework for molecular property prediction that decomposes molecular graphs into overlapping atom-type-specific subgraphs. Both MMGNN variants use a CMPNN backbone to learn subgraph-level representations and aggregate them into atom- and molecule-level embed-dings. MMGNN-2D operates on covalent connectivity, whereas MMGNN-3D incorporates spatial interactions through distance, angular, and torsional descriptors. Across eight MoleculeNet benchmarks evaluated using common scaffold splits, MMGNN-2D achieved the highest macro-average AUC-ROC of 0.838 over the five classification datasets. It also obtained the lowest RMSE on ESOL and the second-lowest RMSE on Lipophilicity and FreeSolv. 16 MMGNN-3D achieved the highest mean AUC-ROC on BBBP and the lowest RMSE on FreeSolv, suggesting that explicit geometric information may be particularly beneficial for selected molecular properties. Because the regression targets have different units and scales, we did not average RMSE values across datasets. The structural case study and leave-one-out analyses further illustrate how subgraph decom-position affects the representations and atom-type-pair sensitivities learned by the models. These analyses should be interpreted as evidence of model behavior rather than causal identification of universal chemical drivers. Overall, the results support atom-type-specific graph decomposition as a competitive approach to molecular representation learning. Future work will evaluate the framework on larger molecular systems, including protein–ligand complexes, and investigate self-supervised pretraining with unlabeled chemical data. 
+
+# Associated Content 
+
+Supporting Information. Additional aggregation-strategy comparisons, geometric-feature abla-tion studies, and dataset-specific leave-one-out subgraph importance analyses are available in the Supporting Information. 
+
+# Author Information 
+
+Corresponding Author 
+
+Duc Duy Nguyen – Department of Mathematics, University of Tennessee, Knoxville, TN 37996, USA; Email: ducnguyen@utk.edu 
+
+Author Contributions 
+
+T.N. and D.D.N. designed the study. T.N. implemented the method, performed experiments, analyzed results, and drafted the manuscript. D.D.N. supervised the project and revised the manuscript. Both authors reviewed and approved the final manuscript. 
+
+Notes 
+
+The authors declare no competing financial interest. 
+
+# Data and Software Availability 
+
+The source code is available at the GitHub repository: https://github.com/MathIntelligence/ MMGNN . The benchmark datasets used in this study are publicly available through MoleculeNet. Details of dataset splits, model settings, and supporting analyses are provided in the manuscript and Supporting Information. 
+
+# Acknowledgments 
+
+This work is supported in part by funds from the National Science Foundation (NSF: #2516126, #2151802, and #2534947). 17 References 
+
+[1] Zhenqin Wu, Bharath Ramsundar, Evan N Feinberg, Joseph Gomes, Caleb Geniesse, Aneesh S Pappu, Karl Leswing, and Vijay Pande. Moleculenet: A benchmark for molecular machine learning. Chemical Science , 9(2):513–530, 2018. doi: 10.1039/C7SC02664A. [2] David K Duvenaud, Dougal Maclaurin, Jorge Iparraguirre, Rafael Bombarell, Timothy Hirzel, Al´ an Aspuru-Guzik, and Ryan P Adams. Convolutional networks on graphs for learning molecular fingerprints. Advances in neural information processing systems , 28, 2015. doi: 10.48550/arXiv.1509.09292. [3] Justin Gilmer, Samuel S Schoenholz, Patrick F Riley, Oriol Vinyals, and George E Dahl. Neural message passing for quantum chemistry. In International conference on machine learning , pages 1263–1272. PMLR, 2017. doi: 10.48550/arXiv.1704.01212. [4] Keyulu Xu, Weihua Hu, Jure Leskovec, and Stefanie Jegelka. How powerful are graph neural networks? In International Conference on Learning Representations , 2019. doi: 10.48550/arXiv.1810.00826. URL https://openreview.net/forum?id=ryGs6iA5Km .[5] Qimai Li, Zhichao Han, and Xiao-Ming Wu. Deeper insights into graph convolutional net-works for semi-supervised learning. In Proceedings of the Thirty-Second AAAI Conference on Artificial Intelligence , 2018. doi: 10.1609/aaai.v32i1.11604. [6] Uri Alon and Eran Yahav. On the bottleneck of graph neural networks and its prac-tical implications. In International Conference on Learning Representations , 2021. doi: 10.48550/arXiv.2006.05205. [7] Timothy Szocinski, Duc Duy Nguyen, and Guo-Wei Wei. Awegnn: Auto-parametrized weighted element-specific graph neural networks for molecules. Computers in Biology and Medicine , 134:104460, 2021. doi: 10.1016/j.compbiomed.2021.104460. [8] Apakorn Kengkanna and Masahito Ohue. Enhancing property and activity prediction and interpretation using multiple molecular graph representations with mmgx. Communications Chemistry , 7(1), 2024. doi: 10.1038/s42004-024-01155-w. [9] Kristof Sch¨ utt, Pieter-Jan Kindermans, Felix E Sauceda, Stefan Chmiela, Alexandre Tkatchenko, and Klaus-Robert M¨ uller. Schnet: A continuous-filter convolutional neural net-work for modeling quantum interactions. In Advances in neural information processing systems ,volume 30, 2017. doi: 10.48550/arXiv.1706.08566. [10] Victor Garcia Satorras, Emiel Hoogeboom, and Max Welling. E(n) equivariant graph neural networks. In International conference on machine learning , pages 9323–9332. PMLR, 2021. doi: 10.48550/arXiv.2102.09844. [11] Ying Song, Shuangjia Zheng, Zhangming Niu, Zhang-Hua Fu, Yefeng Yang, and Xiang-zeng Yang. Communicative representation learning on attributed molecular graphs. In Proceedings of the Twenty-Ninth International Joint Conference on Artificial Intelligence , pages 2831–2838, 2020. doi: 10.24963/ijcai.2020/392. [12] Greg Landrum. Rdkit: Open-source cheminformatics, 2006. URL https://www.rdkit.org/ .18 [13] Esther Heid, Kevin P Greenman, Yunsie Chung, Shih-Cheng Li, David E Graff, Florence H Vermeire, Haoyang Wu, William H Green, and Charles J McGill. Chemprop: A machine learn-ing package for chemical property prediction. Journal of Chemical Information and Modeling ,64(1):9–17, 2023. doi: 10.1021/acs.jcim.3c01250. [14] Kevin Yang, Kyle Swanson, Wengong Jin, Connor Coley, Philipp Eiden, Hua Gao, Angel Guzman-Perez, Timothy Hopper, Brian Kelley, Miriam Mathea, et al. Analyzing learned molecular representations for property prediction. Journal of chemical information and mod-eling , 59(8):3370–3388, 2019. doi: 10.1021/acs.jcim.9b00237. [15] Thomas N Kipf and Max Welling. Semi-supervised classification with graph convolu-tional networks. In International Conference on Learning Representations , 2017. doi: 10.48550/arXiv.1609.02907. [16] Petar Veliˇ ckovi´ c, Guillem Cucurull, Arantxa Casanova, Adriana Romero, Pietro Lio, and Yoshua Bengio. Graph attention networks. In International Conference on Learning Rep-resentations , 2018. doi: 10.48550/arXiv.1710.10903. [17] Steven Kearnes, Kevin McCloskey, Marc Berndl, Vijay Pande, and Patrick Riley. Molecular graph convolutions: moving beyond fingerprints. Journal of computer-aided molecular design ,30(8):595–608, 2016. doi: 10.1007/s10822-016-9938-8. [18] Zhaoping Xiong, Dingyan Wang, Xiaohong Liu, Feisheng Zhong, Xiaozhe Wan, Xutong Li, Zhaojun Li, Xiaomin Luo, Kaixian Chen, Hualiang Jiang, et al. Pushing the boundaries of molecular representation for drug discovery with the graph attention mechanism. Journal of medicinal chemistry , 63(16):8749–8760, 2019. doi: 10.1021/acs.jmedchem.9b00959. [19] Jianwen Chen, Shuangjia Zheng, Ying Song, Jiahua Rao, and Yefeng Yang. Learning attributed graph representation with communicative message passing transformer. In Proceedings of the Thirtieth International Joint Conference on Artificial Intelligence , pages 2242–2248, 2021. doi: 10.24963/ijcai.2021/309. [20] Hehuan Ma, Yatao Bian, Yu Rong, Wenbing Huang, Tingyang Xu, Weidong Xie, Gongshen Ye, and Junzhou Huang. Cross-dependent graph neural networks for molecular property prediction. 
+
+Bioinformatics , 38(7):2003–2009, 2022. doi: 10.1093/bioinformatics/btac039. [21] Bangyi Zhao, Weixia Xu, and Jihong Guan. Molecular property prediction based on graph structure learning. Bioinformatics , 40(5):btae304, 2024. doi: 10.1093/bioinformatics/btae304. 19

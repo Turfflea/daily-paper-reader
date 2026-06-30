@@ -1,0 +1,1174 @@
+Title: What Makes a Desired Graph for Relational Deep Learning?
+
+URL Source: https://arxiv.org/pdf/2606.08491v1
+
+Published Time: Tue, 09 Jun 2026 01:05:06 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# What Makes a Desired Graph for Relational Deep Learning? 
+
+Yao Cheng 1 Siqiang Luo 1
+
+## Abstract 
+
+Relational deep learning (RDL) converts re-lational databases (RDBs) into heterogeneous graphs, but graphs derived directly from database schemas are often not well suited for how graph neural networks (GNNs) perform relational rea-soning. We study what makes a relational graph suitable for deep learning and show that schema-derived graphs suffer from two systematic fail-ures: information overload and semantic fragmen-tation. Our empirical analysis reveals that the desired graph is not the raw schema, but a result of controlled structural adaptation. Performance depends on balancing two operations: mitigating information overload via filtering, and repairing semantic fragmentation via injection. Specifically, filtering serves as a bias-variance knob with non-monotonic effects, while injection improves per-formance only when it explicitly restores the re-lational dependencies missing from the original schema. Based on these findings, we develop an end-to-end structural optimizer that applies both operations to adapt relational graphs auto-matically. Across 26 tasks spanning classification, regression, and recommendation, the optimized graphs consistently improve accuracy while of-ten reducing inference cost. Code and data are available at https://github.com/cy623/ Structural_Optimizer_RDL.git .
+
+## 1. Introduction 
+
+Relational databases (RDBs) (Codd, 1970; Ke et al., 2017; Banachewicz & Massaron, 2022) form the backbone of mod-ern data infrastructure. They are organized under normal-ization principles (Fagin, 1979; Maier, 1983) to ensure data integrity and storage efficiency. Recently, Relational Deep Learning (RDL) (Fey et al., 2024) has made it possible to ap-ply Graph Neural Networks (GNNs) (Liu et al., 2026c;b;a) directly to RDBs by representing tables and foreign-key relations as heterogeneous graphs.  
+
+> 1Nanyang Technological University, College of Computing and Data Science, Singapore. Correspondence to: <> .
+> Preprint. June 9, 2026.
+
+While intuitive and convenient, this conversion introduces a fundamental mismatch in design objectives. RDB schemas are optimized for reliable storage and efficient querying, which often requires decomposing information across mul-tiple normalized tables based on various normal forms (e.g., 2NF, 3NF or BCNF) to remove different levels of data anomalies. In contrast, GNNs rely on local connectivity and short relational paths to propagate information efficiently. Consequently, a graph that is derived from a database schema in a standardized way is rarely desired for learn-ing (Chen et al., 2025; Dwivedi et al., 2025). Such graphs typically exhibit two systematic failures. First, informa-tion overload : many attributes and entity types in an RDB are weakly or not at all related to the prediction target (e.g., identifiers, logging fields). When mapped into a graph, these variables increase representational complex-ity without adding useful predictive signal. Second, se-mantic fragmentation : normalization decomposes mean-ingful relationships into chains of foreign-key links. For example, a “User–Item” interaction is often represented as “User–Order–OrderItem–Item”. This forces message pass-ing to traverse long paths to recover a dependency that is con-ceptually direct, increasing both computational depth and the risk of signal decay. These effects imply that a schema-derived graph is not necessarily a task-faithful graph: pre-serving all tables and relations may maintain database se-mantics, but it often obscures the relational structure most relevant for prediction. In this paper, we move beyond model architecture design and focus on a more fundamental problem: what makes a desired graph for Relational Deep Learning? We argue that the desired graph is not the raw database schema, but a task-dependent transformation of it. Constructing a de-sired graph requires two complementary operations. On one hand, we must remove relational structures and attributes that contribute little to the prediction target. On the other hand, we must introduce relational links that directly ex-pose the dependencies required for reasoning. In this sense, graph construction is not a forward mapping from schema to topology, but a controlled process of compression and augmentation guided by the learning objective. Accordingly, this paper adopts a principled two-stage ap-proach. We first investigate the determinants of an effective 1
+
+> arXiv:2606.08491v1 [cs.AI] 7 Jun 2026 What Makes a Desired Graph for Relational Deep Learning?
+
+relational graph by systematically analyzing how filtering and structural injection influence predictive performance across a diverse array of real-world databases. This analy-sis reveals consistent, task-dependent regularities govern-ing the trade-off between mitigating information overload and restoring relational connectivity. Guided by these in-sights, we design a structural optimizer that operationalizes these two operations within an end-to-end trainable frame-work. Extensive evaluation on 23 tasks from the RELBench benchmark (Robinson et al., 2024) demonstrates that our learned graphs consistently outperform those derived from raw schemas and existing relational learning pipelines. The main contributions of this work are summarized as follows: • We provide a systematic analysis of how graph struc-ture derived from relational databases affects relational deep learning, identifying information overload and 
+
+semantic fragmentation as the main sources of perfor-mance degradation. • We reveal that constructing effective graphs requires a delicate trade-off between filtering out structural noise and injecting task-relevant signals. Our empirical anal-ysis further characterizes how this structural balance is dictated by the semantics of the downstream task. • We translate these insights into an end-to-end structural optimizer that automatically adapts relational graphs to the learning objective, and demonstrate its effec-tiveness on a large benchmark of real-world relational databases. 
+
+## 2. Preliminaries 
+
+2.1. Relational Database 
+
+A relational database D is defined as a tuple D = ( T , Rdb ),where T = {T1, . . . , T N } is a finite set of N tables, and 
+
+Rdb ⊆ T × T is a set of referential constraints. Each table Ti ∈ T has a set of attributes Ai, and each constraint 
+
+(Ti, T j ) ∈ R db indicates that Ti contains a foreign key referencing the primary key of Tj . The database schema 
+
+(T , Rdb ) defines the organizational structure of entities and their relationships, optimized for data integrity and efficient query processing rather than representation learning. 
+
+2.2. RDB-derived Heterogeneous Graph 
+
+A heterogeneous graph is defined as G = (V, E, ϕ, ψ ),where V denotes the set of nodes and E ⊆ V ×V denotes the set of directed edges. The function ϕ : V → N maps each node to a node type in the set N , while ψ : E → R maps each edge to a relation type in the set R. In RDB schema-derived graphs, node types correspond to database tables, i.e., N = T . The conversion from a relational database 
+
+D = ( T , Rdb ) to a heterogeneous graph G proceeds as fol-lows. First, each tuple in a table Ti ∈ T is mapped to a node v ∈ V with node type ϕ(v) = Ti and feature vector xv
+
+derived from its attributes. Second, for each referential con-straint (Ti, T j ) ∈ R db , directed edges are created between corresponding nodes, with edge types ψ(e) ∈ R reflecting the underlying foreign-key relationships. Edge directions follow the referential semantics from foreign-key tables to referenced tables. To support supervised learning, each predictive task intro-duces a dedicated training table Ttrain , which contains labels but no input features. During training, seed nodes are sam-pled from Ttrain . Each training node v ∈ Ttrain is associated with a timestamp tv , a ground-truth label yv , and foreign-key links connecting it to relevant entity tables. Tempo-ral information is essential, for example, when predicting whether a user will purchase an item at time t, the model should rely solely on data observed prior to t; otherwise, temporal leakage will occur. To ensure causal consistency in downstream learning tasks, we construct time-consistent subgraphs during sampling. For a given seed node at time 
+
+t, the temporal neighborhood includes only nodes whose timestamps satisfy tv ≤ t, thereby excluding any future information and preventing leakage. 
+
+2.3. Graph Neural Networks 
+
+A GNN learns node or edge representations by recursively aggregating information from local neighborhoods. When applied to heterogeneous graphs, the aggregation and trans-formation functions must account for the diversity of node and relation types. Each node v ∈ V is associated with an initial feature vector xv derived from the corresponding tuple in the relational database. These features are linearly transformed to initialize the hidden state using learnable parameters Wϕ(v):
+
+h(0)  
+
+> v
+
+= Wϕ(v)xv , (1) which serves as the input representation for message pass-ing in GNNs. Formally, for a heterogeneous graph G =(V, E, ϕ, ψ ), the message-passing process of a heteroge-neous GNN can be expressed as: 
+
+h(l+1)  
+
+> v
+
+= AGG r∈R 
+
+
+
+AGG u∈N r (v)fr (h(l) 
+
+> u
+
+, h (l) 
+
+> v
+
+)
+
+
+
+, (2) where Nr (v) denotes the neighbors of node v under rela-tion type r, fr (·) is a relation-specific message function, and AGG is an aggregation operator such as mean or sum pooling. 
+
+## 3. What Makes a Desired Graph? 
+
+RDBs are engineered for data integrity and storage effi-ciency, not for representation learning (Fagin, 1979). Con-sequently, a heterogeneous graph derived mechanically from an RDB schema is rarely the optimal topology for downstream prediction. It often suffers from two oppos-ing pathologies: information overload and semantic frag-mentation . In this section, we investigate the fundamental 2What Makes a Desired Graph for Relational Deep Learning? 
+
+question: What makes a desired graph for RDL? We view graph construction as a controlled process and probe struc-tural effects via two operators: “information filtering” and “structural injection”. 
+
+3.1. Information Filtering 
+
+Filtering aims to remove task-irrelevant entities and at-tributes. In RDL, additional types/columns can introduce nuisance variables and increase the effective search space the GNN must traverse. Thus, we treat filtering as a mech-anism for structural capacity control: it constrains which parts of the schema-derived representation are even avail-able to the learner. We implement filtering via a simple hierarchical gating design that can suppress redundancy at two granularities. 
+
+Column-Level Filtering. For a node v with type ϕ(v) = Ti,we introduce a dedicated learnable gating vector gTi ∈
+
+[0 , 1] di , where di denotes the dimensionality of the feature vector. This vector is applied element-wise to the initial feature h(0)  
+
+> v
+
+:
+
+ˆhv = gTi ⊙ h(0)  
+
+> v
+
+, ∀v with ϕ(v) = Ti. (3) To allow near-discrete selection while preserving differen-tiability, we use a Hard-Concrete relaxation (Louizos et al., 2017): 
+
+gTi = σ
+
+ log u − log(1 − u) + θTi
+
+τ
+
+
+
+· (ζ − γ) + γ, u ∼ Uniform (0 , 1) di .
+
+(4) Here θTi are learnable logits, τ controls the temperature. Following (Louizos et al., 2017), the gates are stretched to (γ, ζ ) and then clipped to the [0 , 1] . During inference, deterministic gating is applied as gTi = I[σ(θTi ) > τ g],where threshold τg is a hyperparameter. 
+
+Table-Level Filtering. At a coarser scale, a scalar gating variable sTi ∈ [0 , 1] is assigned to each node type Ti and applied to the column-filtered output: 
+
+˜hv = sTi · ˆhv . (5) Similar to column gating, sTi is parameterized by a scalar logit ϑTi via the Hard-Concrete distribution. 
+
+3.2. Structural Injection 
+
+Filtering alone cannot fix semantic fragmentation: when the schema decomposes an interaction into multi-hop chains, a GNN may need excessive depth to recover a dependency. Structural injection addresses this by adding edges that re-pair missing relational motifs. However, a key subtlety is that injection is not a free lunch: adding edges indiscrim-inately can distort neighborhoods and introduce harmful inductive bias. Therefore, we treat injection strategies as controlled, interpretable probes, and empirically ask when each prior helps. We consider four generic “semantic repair” strategies: 
+
+Type-wise KNN (Homophily Repair). RDB tables often lack explicit links between similar entities. To restore local neighborhoods, we connect each node to its top-n most similar peers within the same type Ti:
+
+E(i) 
+
+> knn
+
+= {(u, v ) | v ∈ Top-n v′∈Ti (sim (h(0)  
+
+> u
+
+, h (0)  
+
+> v′
+
+)) }, (6) where sim (·, ·) denotes cosine similarity. This reinforces intra-type homophily. 
+
+Two-hop Shortcuts (Topological Repair). To mitigate signal attenuation across long relational chains A r1
+
+−→ B r2
+
+−→
+
+C, we introduce direct shortcut edges: 
+
+E2hop = {(ua, u c) | ∃ ub s.t. (ua, u b) ∈ E r1 ∧(ub, u c) ∈ E r2 }.
+
+(7) This explicitly reduces the message-passing depth for high-order dependencies. 
+
+Behavioral Similarity (Collaboration Repair). For node types A, B connected by relation r, we aggregate each A-type node’s neighbors of type B and compute pairwise similarity: 
+
+Esim =
+
+{(vai , v aj ) | sim (fagg (N rB (vai )) , f agg (N rB (vaj ))) > τ sim },
+
+(8) where N rB (va) denotes the set of B-type neighbors of va
+
+connected via relation r, fagg is an aggregation function, and τsim is a similarity threshold. 
+
+Temporal Continuity (Causal Repair). RDBs store states as discrete rows. To capture causal evolution, we link time-indexed nodes of an entity in their natural temporal order. For a sequence [v1, . . . , v m] sorted by time, we define: 
+
+Etime = {(vt−1, v t) | t = 2 , . . . , m }. (9) This allows the graph to explicitly model state transitions 
+
+(vt−1 → vt). This template is only instantiated for node types with a timestamp column, and edges connect records of the same entity across time. A single strategy can be instantiated at multiple compatible node-type configurations; we refer to each realization as a “template instance” and isolate the effect of one strategy per analysis experiment by enabling only its template set. For a fixed strategy s, its instantiation over the graph yields a finite set of templates: M(s) = {E (s) 
+
+> k
+
+}Ks
+
+> k=1
+
+, where each E(s) 
+
+> k
+
+rep-resents a concrete injected edge set and Ks = |M (s)| is the number of instantiated templates. The resulting augmented graph is given by: E′ = E ∪ SKs 
+
+> k=1
+
+E(s) 
+
+> k
+
+.
+
+3.3. Empirical Analysis: Structural Probes for Desired Graphs 
+
+We conduct controlled experiments on 9 tasks from REL-Bench (Robinson et al., 2024) to characterize how these 3What Makes a Desired Graph for Relational Deep Learning? 
+
+Table 1. Performance of information filtering. We highlight the best result in bold and the second best in italics. 
+
+Methods study-outcome( ↑)driver -top3( ↑)user-repeat( ↑)user-clicks( ↑)study-adverse( ↓)driver-position( ↓)user-attendance( ↓)condition-sponsor-run( ↑)post-post -related( ↑)
+
+Base 69.44 ±0.50 81.48 ±1.06 78.70 ±0.05 65.44 ±0.70 45.50 ±0.14 3.88 ±0.02 0.24 ±0.01 2.83 ±0.01 1.24 ±0.08 
+
+RandFilter 63.21 ±1.14 75.36 ±1.75 73.27 ±1.66 61.54 ±1.82 48.23 ±1.17 4.85 ±0.87 0.47 ±0.05 2.41 ±0.01 0.41 ±0.08 
+
+VarFilter 69.91 ±0.43 82.07 ±0.81 78.16 ±0.12 66.04 ±0.57 45.18 ±0.11 3.51 ±0.03 0.24 ±0.01 2.91 ±0.01 1.63 ±0.05 
+
+ColFilter 69.87 ±0.01 83.64 ±0.04 79.95 ±0.82 66.31 ±0.18 43.83 ±0.38 3.83 ±0.03 0.23 ±0.01 3.12 ±0.01 1.74 ±0.01 
+
+FullFilter 70.85 ±0.46 84.66 ±0.61 80.47 ±0.89 67.17 ±0.06 43.60 ±0.05 3.79 ±0.16 0.23 ±0.01 3.63 ±0.01 1.77 ±0.01 
+
+Figure 1. Performance gains from structural injection across tasks. Black boxes highlight the best score for each task. Due to space limitations, we use abbreviations for all tasks. 𝝀          
+
+> 60
+> 64
+> 68
+> 72
+> 0.0001 0.001 0.01 0.1 1
+> ROC -AUC
+> !
+> study -outcome 80
+> 82
+> 84
+> 86
+> 0.0001 0.001 0.01 0.1 1
+> ROC -AUC
+> driver -top3
+> !
+
+60 
+
+64 
+
+68 
+
+72 
+
+0.0001 0.001 0.01 0.1 1
+
+> ROC -AUC
+
+ColFilter FullFilter 
+
+Figure 2. Effects of filtering strength on study-outcome and driver-top3 tasks. 
+
+structural primitives affect learning. By observing the behav-ior of these probes, we derive key insights into the anatomy of a desired graph. The statistics and details of these datasets and tasks can be found in Appendix A. 3.3.1. S EMANTIC SPARSIFICATION BEATS STATISTICAL PRUNING 
+
+Table 1 contrasts different filtering approaches. A par-ticularly revealing comparison is variance-based filtering (VarFilter) versus semantic gating. VarFilter keeps high-variance features, yet it does not consistently improve over the base graph and can underperform stronger semantic filters. This highlights a core property of relational data: many high-variance attributes are operational artifacts that are statistically “active” but causally irrelevant to the label. In other words, variance is not predictive signal in RDBs; filtering must reflect semantic relevance to the task. Next, Figure 2 shows a consistent non-monotonic trend as we increase filtering strength (by varying the sparsity weight 
+
+λ). Performance first improves as nuisance structure is re-moved, peaks at an intermediate regime, and then degrades when the filtering begins to erase task-relevant evidence. This inverted-U behavior means the desired graph is not the sparsest graph, nor the fullest schema graph, but the one that strikes a task-dependent balance between denois-ing and information retention. Overall, when optimizing schema-derived graphs, treat filtering as a bias–variance knob: insufficient filtering leaves semantic noise that can cause oversmoothing and signal dilution, while excessive filtering induces under-specification by removing useful relational evidence. 3.3.2. I NJECTION HELPS WHEN IT INTRODUCES THE RIGHT RELATIONAL MOTIF 
+
+Figure 1 provides a complementary picture for injection. A naive expectation might be that adding edges increases ex-pressivity and thus helps performance. The data contradicts that: injection is beneficial only for certain task families, and can be neutral or negative when the injected motif does not match what the label depends on. We intentionally proposed multiple, qualitatively different repair motifs and used the re-sults to infer task–motif regularities: (1) Classification tasks tend to benefit from homophily repair (type-wise KNN), consistent with the need to reinforce local cluster structure for separability. (2) Regression tasks show strong gains from temporal continuity, indicating that explicit causal chains provide the most relevant inductive bias. (3) Recommenda-tion tasks benefit most from behavioral similarity, aligning with the need to expose collaborative signals that are oth-erwise fragmented across join paths. Equally important is the negative evidence: applying a mismatched motif can degrade performance (e.g., adding shortcuts to temporal tasks), which implies that the desired graph is not character-4What Makes a Desired Graph for Relational Deep Learning? Materials  
+
+> Relational Database Schema -derived Graph
+
+Structural Optimizer     
+
+> Column and Table Filtering
+> Type -wise KNN
+> Two -hop Shortcuts
+> Behavioral Similarity
+> Temporal Continuity
+> Structure
+> Injection
+> Desired Graph
+> Heterogeneous GNN &Prediction
+> Classification GNN
+> Schema -to -Graph
+> Regression
+> Recommendation
+
+Figure 3. Overview of the unified structural optimizer. The framework takes a relational database, converts it into heterogeneous graphs, and applies two complementary structural operations, namely information filtering and structural injection, before passing the optimized graph into a heterogeneous GNN for end-to-end prediction. 
+
+ized by edge density, but by whether the topology injects task-relevant inductive bias. Overall, structural injection should be treated as motif selection: add edges to expose the dependency pattern the task appears to require. Filtering and injection are complementary, filtering removes weakly relevant structure, while injection selectively adds relational “shortcuts”. A desired graph emerges when these two operations jointly move the schema-derived graph away from overload and fragmentation toward a compact topol-ogy whose neighborhoods reflect task-relevant dependen-cies. More analysis of the effects of filtering and injection strength can be found in Appendix D. 
+
+3.4. Theoretical Principles 
+
+We formalize the notion of a desired graph and connect it to the two structural operators studied in Section 3.3. Let ϕg
+
+denote structural parameters (feature/type/template gates) that induce a graph view Gϕg from a schema-derived graph 
+
+G, and let θ denote backbone parameters. In particular, we define the regularized risk: 
+
+R(ϕg , θ ) = ELtask (Y, ˆYϕg ,θ )
+
++ βvib E
+
+h
+
+KL  q(zv | ˜hv ) ∥ N (0 , I )i
+
+, (10) and the structural complexity: 
+
+Ω( ϕg ) = λ X
+
+> Ti∈T
+
+E∥gTi ∥0
+
+ + λs
+
+X
+
+> Ti∈T
+
+E∥sTi ∥0
+
+
+
++ λkKtemp 
+
+X
+
+> k=1
+
+E∥gk∥0
+
+,
+
+(11) where gTi and sTi are the column-level and table-level gates of table Ti, and gk is the gate associated with the k-th injec-tion template. For a fixed structure ϕg , the best achievable population risk is: 
+
+R⋆(ϕg ) := inf  
+
+> θ
+
+R(ϕg , θ ). (12) 
+
+Definition 3.1 (Desired graph) . A desired graph for a given task is any graph view Gϕ⋆g whose structure parameter ϕ⋆g
+
+solves: 
+
+ϕ⋆g ∈ arg min 
+
+> ϕg
+
+n
+
+R⋆(ϕg ) + Ω( ϕg )
+
+o
+
+. (13) Intuitively, a desired graph is one that (i) supports good task performance after optimizing the encoder parameters 
+
+θ, and (ii) is structurally simple according to the sparsity-promoting regularizer Ω( ϕg ).The regularized risk (Eq. (10) ) includes a VIB term 
+
+βvib E[KL (· · · )] , which provides continuous information compression complementary to discrete gate-based filtering. We defer the VIB module design to Section 4.1, where the complete unified optimizer is presented. 
+
+Filtering as structural capacity control. 
+
+Let M = ( M1, . . . , M J ) denote the collection of Bernoulli gates (covering attribute-, type-, and optionally template-level selection), and let μ := E∥M ∥0 be the expected num-ber of active components. The following theorem shows that expected sparsity controls an explicit upper bound on the entropy of gating configurations, hence restricting the structural hypothesis space. 
+
+Theorem 3.2 (Filtering controls structural capacity) . Let 
+
+M = ( M1, . . . , M J ) be Bernoulli gates with πj = P(Mj =1) and μ = PJj=1 πj = E∥M ∥0. Then H(M ) ≤
+
+PJj=1 h(πj ) ≤ J h   μJ
+
+ , where H(·) is Shannon entropy and h(·) is binary entropy. In the sparse regime μ/J ≤ 1/2
+
+(encouraged by ℓ0 penalties), the bound J h (μ/J ) is mono-tone increasing in μ.
+
+The proof is in Appendix H. This provides a theoretical lens for the inverted-U behavior in Section 3.3: too little filtering 5What Makes a Desired Graph for Relational Deep Learning? 
+
+preserves a large structural space where nuisance config-urations persist, while too much filtering overly restricts structure and removes useful evidence. 
+
+Injection as search-space enrichment. Structural injec-tion introduces additional candidate edges via instantiated templates. When template gates are learnable (and penal-ized in Ω( ϕg ) via Eq. (11) , injection enlarges the feasible family of structures; in an idealized population setting, this cannot worsen the best achievable regularized objective in Eq. (13) , since the optimizer can always suppress harmful templates by setting their gates to zero. We formalize this monotonicity in Appendix H. 
+
+## 4. A Unified Structural Optimizer 
+
+Section 3 characterizes what makes a desired graph by treating graph construction as a controlled process with two operators: information filtering and structural injection. Here we provide a simple end-to-end instantiation that op-erationalizes these operators. Our goal in this section is not to claim a uniquely optimal optimizer design, but to show that the empirical regularities can be exploited auto-matically by learning (i) what to remove and (ii) what to add under a unified objective. Our optimizer is deliber-ately constrained to use interpretable templates rather than free-form edge parameters. This design choice prioritizes scientific interpretability over maximum flexibility: each template has semantic identity (homophily repair, temporal continuity, etc.), allowing us to extract reusable findings about task-motif regularities. An unconstrained structure learner could achieve higher numbers but would produce opaque structures from which no generalizable principles can be extracted. An overview of the architecture is shown in Figure 3. Given the relational-to-graph transformation in Section 2, the model operates on temporally consistent subgraphs. Ini-tial node embeddings are obtained via the heterogeneous encoder in Eq. (1) . These embeddings are then refined by the two operators. The resulting graph is processed by a heterogeneous GNN, followed by a multi-layer perceptron (MLP) (LeCun et al., 2015) head for prediction. 
+
+4.1. Information Filtering 
+
+The information filtering module implements the dual-level sparsification defined in Section 3.1. It operates on the encoded features h(0)  
+
+> v
+
+and applies column- and table-level gates based on the Hard-Concrete relaxation. Concretely, we reuse the gating functions in Eqs. (3) – (5) : column-level gates gTi suppress noisy feature dimensions, and type-level gates sTi modulate the contribution of each node type. To complement discrete sparsification with continuous com-pression, we apply a type-wise Variational Information Bot-tleneck (VIB) on the filtered representations. For each node 
+
+v of type Ti, the VIB module maps ˜hv to a stochastic latent representation zv :
+
+zv = μ(˜hv ) + σ(˜hv ) ⊙ ϵ, ϵ ∼ N (0, I), (14) where μ(·) and σ(·) are learnable functions producing the mean and standard deviation of the latent distribution. Dur-ing inference, we use the mean zv = μ(˜hv ).This VIB layer provides a continuous information bottle-neck on top of the hard-concrete gates, encouraging com-pact, task-relevant representations while leaving structural decisions to the gating module. 
+
+4.2. Structural Injection 
+
+The structural injection module enhances the relational graph by adding auxiliary edges that improve information propagation. It complements feature-level filtering by ad-dressing connectivity limitations arising from schema-based graphs. We implement the four strategies introduced in Section 3.2: type-wise KNN, two-hop shortcuts, behavioral similarity, and temporal continuity. Each strategy s ∈ S 
+
+yields a set of instantiated templates: 
+
+M(s) = {E (s) 
+
+> k
+
+}Ks
+
+> k=1
+
+, (15) and the full candidate set is: 
+
+Mall = [
+
+> s∈S
+
+M(s). (16) To adaptively regulate the contribution of each template, we associate every Ek ∈ M all with a learnable gate gk ∈ [0 , 1] .We parameterize each template gate gk using the same Hard-Concrete relaxation as in Eqs. (3) - (5) , so that gk acts as a stochastic gate during training and its expected acti-vation E[∥gk∥0] admits an ℓ0-style sparsity penalty. Let 
+
+g = ( g1, . . . , g K ) denote all structural gates. During train-ing, we retain differentiability by using gk as a continuous weight on template-specific messages rather than perform-ing hard selection. For template Ek, the aggregated message at layer l is: 
+
+z(l) 
+
+> v,k
+
+= gk · AGG  z(l) 
+
+> u
+
+: u ∈ N k(v), (17) where Nk(v) is the neighbor set induced by Ek and AGG is an aggregation operator (e.g., mean or sum). At inference time, we switch to deterministic selection for efficiency: 
+
+E′ = E ∪ {E k | gk > τ k}, (18) where τk is a threshold hyperparameter, and retaining only templates with gk > τ k results in a sparse augmented graph. 
+
+4.3. Integrated Graph Representation Learning 
+
+The filtered features and injected structure are combined in the final representation learning phase. The latent represen-tations zv serve as node features, and the edge set E′ defines the connectivity. A GNN then performs message passing over both original and template-induced relations. 6What Makes a Desired Graph for Relational Deep Learning? 
+
+We treat each instantiated structural template as defining a distinct relation type. Let R denote the set of original rela-tion types and Rtemplate includes all instantiated templates 
+
+Ek. For node v at layer l, the update rule aggregates over all relation types: 
+
+z(l+1)  
+
+> v
+
+= AGG r∈R∪R template 
+
+
+
+AGG u∈N r (v)fr (z(l) 
+
+> u
+
+, z (l) 
+
+> v
+
+)
+
+
+
+,
+
+(19) where Nr (v) denotes the neighbors of v under relation r.For template-induced relations, message aggregation is mod-ulated by the corresponding structural gate gk as defined in Eq. (17) . The final node representations z(L) 
+
+> v
+
+are fed to an MLP head: 
+
+ˆyv = MLP (z(L) 
+
+> v
+
+), (20) where L is the maximum depth of the GNN. Finally, the model is trained end-to-end using the following objective: 
+
+L = Ltask ( ˆY , Y )+ βvib 
+
+X
+
+> Ti∈T
+
+1
+
+|Ti|
+
+X
+
+> v∈Ti
+
+KL 
+
+
+
+q(zv | ˜hv ) ∥ N (0, I)
+
+
+
++ λ X
+
+> Ti∈T
+
+E[∥gTi ∥0] + λs
+
+X
+
+> Ti∈T
+
+E[∥sTi ∥0]
+
+!
+
++ λkKtemp 
+
+X
+
+> k=1
+
+E[∥gk∥0] ,
+
+(21) where Ltask is the supervised loss, βvib , λ, λs, and λk are hyperparameters, and Ktemp denotes the total number of instantiated structural templates. 
+
+## 5. Related Work 
+
+5.1. Traditional Methods on Relational Databases 
+
+The conventional approach to predictive modeling on RDBs involves two distinct steps: feature engineering via SQL-based data integration from multiple tables, followed by training standard tabular models (Ke et al., 2017; Chen, 2016). XGBoost (Chen, 2016) is an advanced gradient boosting framework that enhances model performance by sequentially building decision trees. It is renowned for achieving high predictive accuracy while maintaining ex-ceptional computational speed and scalability, making it a benchmark algorithm for tabular data. LightGBM (Ke et al., 2017) is a gradient boosting framework designed for high performance and scalability. By leveraging histogram-based algorithms and innovative sampling techniques, it delivers exceptional training speed and efficiency. A key limita-tion of this two-step paradigm is its inability to capture the rich structural information that inherently connects database entities. 
+
+5.2. Deep Learning on Relational Databases 
+
+RDL aims to directly apply deep neural networks to the structured data in relational databases (Cvitkovic, 2020; Fey et al., 2024; Chen et al., 2025; ˇS´ır, 2021; Zahradn ´ık et al., 2023; Kanatsoulis et al., 2025). Its core idea is to learn complex patterns and dependencies from multiple interre-lated tables in an end-to-end manner. Fey et al. (Fey et al., 2024) introduces a blueprint for end-to-end learning on re-lational databases. It represents the relational database as a temporal heterogeneous graph, and then a graph neural network learns to leverage representations from all input data. REL-GNN (Chen et al., 2025) introduces atomic paths to enable direct single-hop interactions between source and target nodes, and designs a new composite message-passing and graph attention mechanism, thus reducing redundancy and enhancing prediction accuracy. RelGT (Dwivedi et al., 2025) is the first graph transformer architecture specifically designed for relational tables. It employs a novel multi-element tokenization strategy capable of efficiently encod-ing heterogeneity, temporality, and topology without requir-ing expensive pre-computation. However, the performance of these RDL models is fundamentally bounded by the ini-tial relational-to-graph conversion. Prevailing mechanical mapping strategies often produce graphs with high com-plexity and redundancy, which in turn cripples downstream learning from the very beginning. 
+
+5.3. Structural Optimization in Heterogeneous Graphs 
+
+Existing methods for structural optimization in hetero-geneous graphs (Zhao et al., 2021; Yun et al., 2019; Schlichtkrull et al., 2018; Wang et al., 2019; You et al., 2021) generally aim to enhance graph quality through topol-ogy refinement, often by adjusting edge weights or learn-ing latent structures. For instance, GTN (Yun et al., 2019) introduces an approach to automatically generate useful meta-paths and identify soft connections between nodes, effectively learning a new graph topology that is more con-ducive to message passing. Meanwhile, HGSL (Zhao et al., 2021) jointly learns both the graph structure and node rep-resentations in an end-to-end manner, adapting the connec-tivity pattern by injecting new edges and refining existing ones based on task-specific objectives. HAN (Wang et al., 2019) uses meta-path–guided attention to enhance semantic connectivity, serving as a classical heterogeneous structure optimizer that strengthens predefined relational semantics. A key limitation of these approaches is their underlying assumption that the input graph possesses a semantically meaningful base topology to be refined. However, in graphs derived from relational databases, connectivity is dictated by schema design and foreign-key constraints rather than task relevance. This results in node and relation types that reflect data organization principles instead of task semantics. 7What Makes a Desired Graph for Relational Deep Learning? 
+
+Table 2. Overall predictive performance (ROC-AUC (%), ↑) on classification tasks. We highlight the best result in bold and the second best in italics. 
+
+Method study-outcome driver-dnf driver-top3 user-repeat user-ignore user-clicks user-visits 
+
+Base 69.44 ±0.53 74.53 ±0.27 81.48 ±1.06 78.75 ±0.62 75.39 ±0.54 65.44 ±0.71 63.82 ±0.67 
+
+LightGBM 65.27 ±0.81 69.13 ±1.14 76.09 ±0.93 74.51 ±0.72 74.58 ±0.71 61.27 ±0.93 63.03 ±0.85 
+
+HAN 69.05 ±0.67 74.05 ±1.08 82.09 ±0.93 79.24 ±0.75 79.27 ±0.76 66.15 ±0.63 66.57 ±0.74 
+
+GTN 68.15 ±0.47 72.36 ±0.68 82.50 ±0.63 79.85 ±0.61 78.62 ±0.77 64.85 ±0.69 66.82 ±0.34 
+
+HGSL 69.51 ±0.47 71.56 ±0.48 83.51 ±0.75 80.64 ±0.81 77.23 ±1.07 63.42 ±0.86 67.08 ±0.71 
+
+REL-GNN 70.86 ±0.54 75.41 ±0.29 82.71 ±0.83 79.08 ±0.81 80.31 ±0.86 65.91 ±0.82 68.14 ±0.76 
+
+RelGT 69.74 ±0.32 76.33 ±0.58 83.14 ±0.75 79.46 ±0.32 81.24 ±0.77 66.87 ±0.60 68.94 ±0.65 
+
+LLM-Struct 70.83 ±0.48 76.80 ±0.39 83.57 ±0.37 80.13 ±0.77 79.90 ±0.73 68.75 ±0.37 69.25 ±0.39 
+
+Ours 72.35 ±0.37 78.21 ±0.15 86.82 ±0.61 82.36 ±0.55 81.25 ±0.64 67.53 ±0.15 70.15 ±0.56 
+
+Table 3. Overall predictive performance (MAE, ↓) on regression tasks. Best results are in bold , second best are in italics. 
+
+Method study-adverse site-success driver-position user-attendance ad-ctr 
+
+Base 45.50 38.86 3.88 0.24 0.231 LightGBM 48.31 0.38 4.95 0.51 0.242 HAN 45.16 0.35 3.76 0.24 0.228 GTN 44.82 0.36 3.70 0.23 0.225 HGSL 44.69 0.36 3.85 0.25 0.246 REL-GNN 44.93 0.34 3.78 0.23 0.227 RelGT 44.62 0.32 3.72 0.23 0.225 LLM-Struct 44.73 0.34 3.69 0.23 0.228 Ours 41.28 0.31 2.13 0.23 0.221 
+
+Table 4. Overall predictive performance on recommendation tasks (MAP, ↑). Best results are in bold , second best are in italics.                                     
+
+> Method user-ad -visit user-post-comment post-post-related condition-sponsor-run site-sponsor -run
+> Base 2.31 8.77 1.24 2.83 10.21 LightGBM 1.14 6.26 0.41 2.15 8.35 HAN 2.33 11.06 1.31 2.91 15.27 ID-GNN 3.24 13.41 10.61 11.65 18.25 REL-GNN 2.87 13.12 2.43 3.47 17.31 LLM-Struct 3.28 13.64 4.72 4.62 18.71 Ours 3.84 14.82 8.53 6.24 19.15
+
+## 6. Experiments 
+
+6.1. Experimental Setup Datasets and tasks. We use the same RELBench tasks and evaluation protocol as in Section 3.3, covering entity classification, regression, and recommendation. Dataset statistics are deferred to Appendix A. 
+
+Evaluation. We evaluate predictive performance using task-specific metrics. For entity classification, we report the Area Under the ROC Curve (ROC-AUC) (Hanley & McNeil, 1983), where higher values indicate better perfor-mance. For entity regression, we use Mean Absolute Error (MAE), where lower values indicate better performance. For recommendation tasks, we report Mean Average Pre-cision (MAP), where higher values correspond to better ranking quality. All reported results are averaged over five independent runs with different random seeds. 
+
+Baselines. We compare our unified structural optimizer with five groups of baselines. (1) Base relational GNN pipeline: Base. (2) Traditional non-graph methods: 
+
+LightGBM (Ke et al., 2017). (3) Heterogeneous graph structure optimization methods: HAN (Wang et al., 2019), ID-GNN (You et al., 2021), GTN (Yun et al., 2019) and HGSL (Zhao et al., 2021). (4) RDL methods: REL-GNN (Chen et al., 2025) and Relational Graph Transformer (RelGT) (Dwivedi et al., 2025). (5) LLM-based structural optimization: LLM-Struct (Achiam et al., 2023). All meth-ods use identical temporal splits, feature encoders, and GNN backbones where applicable. For HAN, we construct simple meta-paths directly from the database schema. We defer details on datasets (A), baselines (B), experimental setup (C), effects of filtering strength and injection strength (D), overall predictive performance on large-scale datasets (E), ablation study (F) and choice of structural complexity metri (G) to the Appendix. 
+
+6.2. Overall Predictive Performance 
+
+Tables 2, 3, and 4 report results on classification, regres-sion, and recommendation tasks. Three consistent patterns emerge. (1) Our method achieves the best or near-best performance across almost all tasks. This is because, as predicted by our analysis in Section 3.3, filtering removes task-irrelevant structure that introduces noise and over-smoothing, while structural injection exposes task-relevant dependencies that are otherwise fragmented by the schema. As a result, our graphs provide cleaner signals for classi-fication, lower-variance features for regression, and more coherent interaction structure for recommendation. (2) Tra-ditional RDL and heterogeneous GNN baselines (e.g., HAN, REL-GNN, RelGT) yield only moderate improvements over the Base model. Although these methods improve message passing, they operate on the same schema-derived graphs and therefore inherit their information overload and frag-mented connectivity. When these structural bottlenecks dominate, architectural improvements alone cannot recover the missing or diluted task-relevant information. (3) LLM-8What Makes a Desired Graph for Relational Deep Learning? 
+
+Table 5. Inference time comparison on six tasks. We report average inference time in seconds (s). Best results are in bold.                                      
+
+> Method study-outcome user-engagement study-adverse post-votes condition-sponsor-run user-item-purchase
+> Base 0.55 29.01 1.06 26.90 13.71 58.86 REL-GNN 0.64 27.93 1.75 28.06 17.24 60.48 HAN 1.15 32.56 2.90 33.65 19.04 70.85 ColFilter 0.18 14.07 0.47 13.64 5.87 15.76 FullFilter 0.12 15.10 0.39 9.41 5.35 13.24
+> Ours 0.46 20.60 0.86 15.57 10.07 25.81
+
+based structural optimization is competitive but inconsistent. While LLMs can propose reasonable schema-level modifi-cations, they cannot exploit fine-grained instance-level pat-terns such as interaction frequency or temporal continuity, leading to injections that are often misaligned with the learn-ing objective. In contrast, our optimizer is guided directly by task-aware gradients, allowing it to identify structural changes that consistently improve predictive performance. Overall, these results confirm that principled structural opti-mization is effective across task types. Injection strength !!  
+
+> Filtering strength  !
+> AUC
+> Injection strength !!
+> Filtering strength  !
+> MAE
+> study -outcome study -adverse
+
+Figure 4. Trade-off between information filtering and structural injection on study-outcome and study-adverse tasks. 
+
+6.3. Trade-off Between Filtering and Injection 
+
+To study how filtering and structural injection interact, we vary two regularization coefficients: λ, which controls fil-tering strength, and λk, which controls the sparsity of in-jected templates. Figure 4 shows the resulting performance landscape on the study-outcome and study-adverse tasks. Across both tasks, performance depends non-monotonically on these two factors. When injection is strong but filtering is weak, performance degrades, indicating that excessive added structure amplifies noise. When filtering is strong but injection is weak, performance is also limited, as aggressive pruning removes useful relational signals. The best results appear in a balanced regime where both mechanisms are active. For study-outcome, the highest AUC (72.35) occurs around λ ≈ 10 −3 and λk ≈ 10 −2, while for study-adverse the optimum (41.28) occurs near λ ≈ 10 −3 and λk ≈ 10 −3.In both cases, the optimal region forms a smooth plateau, indicating robustness to small hyperparameter changes. 
+
+Table 6. Effect of backbone GNNs on predictive performance. Best results are in bold. OOM denotes the out-of-memory error.                    
+
+> Method study-outcome ( ↑)study-adverse ( ↓)condition-sponsor-run ( ↑)
+> Base (GraphSAGE) 69.44 45.50 2.83 Ours (GraphSAGE) 72.35 41.28 6.24
+> Base (REL-GNN) 70.86 44.93 3.47 Ours (REL-GNN) 71.68 42.37 4.84 Base (HGT) 70.18 44.60 OOM Ours (HGT) 72.84 42.55 OOM
+
+6.4. Inference efficiency 
+
+Table 5 reports the average inference time on six down-stream tasks. FullFilter consistently achieves the lowest latency due to aggressive structural pruning. While not the fastest, our method maintains competitive and stable inference efficiency, consistently outperforming heavier re-lational baselines such as HAN and REL-GNN. Compared with filtering-only approaches, our method incurs moderate additional cost from relational modeling, but this overhead remains well controlled. Overall, the results show that our approach strikes a practical balance between predictive ex-pressiveness and inference efficiency. 
+
+6.5. Robustness to Backbone GNNs 
+
+To evaluate robustness across GNN backbones, we replace GraphSAGE with REL-GNN and HGT and test each back-bone with and without our structural optimizer on three tasks. As shown in Table 6, the optimizer consistently im-proves performance across backbones and task types. Gains are largest for GraphSAGE, while REL-GNN shows smaller but still consistent improvements, indicating that relation-aware message passing only partially mitigates structural deficiencies. HGT also benefits from our optimizer on tasks where training is feasible. Overall, these results confirm that structural optimization is backbone-agnostic and comple-mentary to different heterogeneous GNN architectures. 
+
+## 7. Conclusion 
+
+This work demonstrates that strict adherence to raw database schemas limits predictive performance in RDL. We identify a fundamental structural mismatch between RDB storage efficiency and GNN reasoning requirements, resulting in information overload and semantic fragmentation. By fram-ing graph construction as a structural information bottleneck problem, we show that an optimal graph requires balancing variational compression to eliminate noise with inductive augmentation to restore connectivity. Our unified structural optimizer instantiates these principles, consistently outper-forming state-of-the-art baselines across 26 diverse tasks. 9What Makes a Desired Graph for Relational Deep Learning? 
+
+## Impact Statement 
+
+This research significantly advances the integration of deep learning with modern data infrastructure by addressing the structural mismatch between relational databases and graph neural networks. By introducing a principled framework to optimize relational graphs through information filtering and task-aligned structural injection, this work enhances the ac-cessibility and efficiency of machine learning for large-scale relational datasets. The proposed structural optimizer not only improves predictive accuracy across diverse domains but also reduces the computational cost of inference by re-moving task-irrelevant data components. Furthermore, by automating the transformation of raw database schemas into task-dependent topologies, this work reduces the reliance on manual, domain-specific feature engineering, thereby democratizing the application of advanced graph-based rea-soning to a wide range of industrial and scientific challenges. 
+
+## References 
+
+Achiam, J., Adler, S., Agarwal, S., Ahmad, L., Akkaya, I., Aleman, F. L., Almeida, D., Altenschmidt, J., Altman, S., Anadkat, S., et al. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 , 2023. Banachewicz, K. and Massaron, L. The Kaggle Book: Data analysis and machine learning for competitive data sci-ence . 2022. Chen, T. Xgboost: A scalable tree boosting system. Cornell University , 2016. Chen, T., Kanatsoulis, C., and Leskovec, J. Relgnn: Com-posite message passing for relational deep learning. arXiv preprint arXiv:2502.06784 , 2025. Codd, E. F. A relational model of data for large shared data banks. Communications of the ACM , 13(6):377–387, 1970. Cvitkovic, M. Supervised learning on relational databases with graph neural networks. arXiv preprint arXiv:2002.02046 , 2020. Dwivedi, V. P., Jaladi, S., Shen, Y., L ´opez, F., Kanatsoulis, C. I., Puri, R., Fey, M., and Leskovec, J. Relational graph transformer. arXiv preprint arXiv:2505.10960 , 2025. Fagin, R. Normal forms and relational database operators. In Proceedings of the 1979 ACM SIGMOD international conference on Management of data , pp. 153–160, 1979. Fey, M., Hu, W., Huang, K., Lenssen, J. E., Ranjan, R., Robinson, J., Ying, R., You, J., and Leskovec, J. Position: Relational deep learning-graph representation learning on relational databases. In International Conference on Machine Learning , 2024. Hamilton, W., Ying, Z., and Leskovec, J. Inductive repre-sentation learning on large graphs. Advances in neural information processing systems , 30, 2017. Hanley, J. A. and McNeil, B. J. A method of comparing the areas under receiver operating characteristic curves derived from the same cases. Radiology , 148(3):839–843, 1983. Hu, W., Yuan, Y., Zhang, Z., Nitta, A., Cao, K., Kocijan, V., Sunil, J., Leskovec, J., and Fey, M. Pytorch frame: A modular framework for multi-modal tabular learning. 
+
+arXiv preprint arXiv:2404.00776 , 2024. Kanatsoulis, C. I., Choi, E., Jegelka, S., Leskovec, J., and Ribeiro, A. Learning efficient positional encodings with graph neural networks. arXiv preprint arXiv:2502.01122 ,2025. Ke, G., Meng, Q., Finley, T., Wang, T., Chen, W., Ma, W., Ye, Q., and Liu, T.-Y. Lightgbm: A highly efficient gradient boosting decision tree. Advances in neural infor-mation processing systems , 30, 2017. Kingma, D. P. Adam: A method for stochastic optimization. 
+
+arXiv preprint arXiv:1412.6980 , 2014. LeCun, Y., Bengio, Y., and Hinton, G. Deep learning. nature ,521(7553):436–444, 2015. Liu, C., Sun, H., Zehmakan, A. N., and Zhang, Z. Efficient edge rewiring strategies for enhancing pagerank fairness. 
+
+Theoretical Computer Science , 1067:115765, 2026a. Liu, C., Xie, Z., Zehmakan, A. N., and Zhang, Z. Efficient algorithms for computing random walk centrality. IEEE Transactions on Knowledge and Data Engineering , 38 (1):235–247, 2026b. Liu, C., Zhou, X., Zhang, B., Zehmakan, A. N., and Zhang, Z. Fast estimation of pairwise biharmonic distance on graphs. Proceedings of the ACM on Management of Data ,4(2):27, 2026c. Louizos, C., Welling, M., and Kingma, D. P. Learning sparse neural networks through l 0 regularization. arXiv preprint arXiv:1712.01312 , 2017. Maier, D. The theory of relational databases , volume 11. 1983. Robinson, J., Ranjan, R., Hu, W., Huang, K., Han, J., Dobles, A., Fey, M., Lenssen, J. E., Yuan, Y., Zhang, Z., et al. Relbench: A benchmark for deep learning on relational databases. Advances in Neural Information Processing Systems , 37:21330–21341, 2024. 10 What Makes a Desired Graph for Relational Deep Learning? 
+
+Schlichtkrull, M., Kipf, T. N., Bloem, P., Van Den Berg, R., Titov, I., and Welling, M. Modeling relational data with graph convolutional networks. In European semantic web conference , pp. 593–607, 2018. ˇS´ır, G. Deep Learning with Relational Logic Representa-tions . 2021. Wang, X., Ji, H., Shi, C., Wang, B., Ye, Y., Cui, P., and Yu, P. S. Heterogeneous graph attention network. In The world wide web conference , pp. 2022–2032, 2019. You, J., Gomes-Selman, J. M., Ying, R., and Leskovec, J. Identity-aware graph neural networks. In Proceedings of the AAAI conference on artificial intelligence , volume 35, pp. 10737–10745, 2021. Yun, S., Jeong, M., Kim, R., Kang, J., and Kim, H. J. Graph transformer networks. Advances in neural information processing systems , 32, 2019. Zahradn ´ık, L., Neumann, J., and ˇS´ır, G. A deep learning blueprint for relational databases. In NeurIPS 2023 Sec-ond Table Representation Learning Workshop , 2023. Zhao, J., Wang, X., Shi, C., Hu, B., Song, G., and Ye, Y. Heterogeneous graph structure learning for graph neural networks. In Proceedings of the AAAI conference on artificial intelligence , volume 35, pp. 4697–4705, 2021. 11 What Makes a Desired Graph for Relational Deep Learning? 
+
+Table 7. Datasets statistics.                                                                                                                                          
+
+> Dataset Task Abbr Task type #Rows of training table
+> Train Validation Test rel-amazon item-churn i-ch classification 2,559,264 177,689 166,842 item-ltv i-ltv regression 2,707,679 166,978 178,334 user-item-review u-i-v recommendation 2,324,177 116,970 127,021 rel-avito user-clicks u-clk classification 59,454 21,183 47,996 user-visits u-vis classification 86,619 29,979 36,129 ad-ctr a-ctr regression 5,100 1,766 1,816 user-ad-visit u-a-v recommendation 86,616 29,979 36,129 rel-event user-repeat u-rep classification 3,842 268 246 user-ignore u-ign classification 19,239 4,185 4,010 user-attendance u-att regression 19,261 2,014 2,006 rel-f1 driver-dnf d-dnf classification 11,411 566 702 driver-top3 d-t3 classification 1,353 588 726 driver-position d-pos regression 7,453 499 760 rel-hm user-churn u-ch classification 3,871,410 76,556 74,575 item-sales i-sal regression 5,488,184 105,542 105,542 user-item-purchase u-i-p recommendation 3,878,451 74,575 67,144 rel-stack user-engagement u-eng classification 1,360,850 85,838 88,137 user-badge u-bdg classification 3,386,276 247,398 255,360 post-votes p-vot regression 2,453,921 156,216 160,903 user-post-comment u-p-c recommendation 21,239 825 758 post-post-related p-p-r recommendation 5,855 226 258 rel-trial study-outcome st-out classification 11,994 960 825 study-adverse st-adv regression 43,335 3,596 3,098 site-success si-suc regression 151,407 19,740 22,617 condition-sponsor-run c-sp-r recommendation 36,934 2,081 2,057 site-sponsor-run si-sp-r recommendation 669,310 37,003 27,428
+
+## A. Datasets 
+
+We evaluate our method on RELBench (Robinson et al., 2024), a comprehensive benchmark for relational learning derived from real-world, temporal relational databases. It provides a diverse collection of databases and realistic prediction tasks across seven distinct domains: e-commerce, online marketplaces, social event planning, sports analytics, retail, Q&A platforms, and clinical trials. Each dataset features a multi-table schema with temporal foreign-key relationships, enabling the construction of temporal heterogeneous graphs for end-to-end predictive modeling. The benchmark encompasses 26 prediction tasks spanning three fundamental types: entity classification, entity regression, and recommendation. Table 7 provides detailed statistics for each dataset and task. Below, we briefly describe the domain and core content of each constituent dataset within RELBench. 
+
+rel-amazon. This dataset models interactions on the Amazon e-commerce platform. It encompasses product metadata (e.g., price, category), user reviews (including rating and text), and user engagement history, supporting tasks related to product recommendation and user behavior analysis. 
+
+rel-avito. Derived from Avito, a major online classifieds marketplace, this dataset contains user search queries, advertisement characteristics, and contextual metadata for transactions across various categories such as real estate and vehicles. It facilitates tasks like click-through-rate prediction and user activity forecasting. 
+
+rel-event. Sourced from Hangtime, a mobile app for tracking social plans, this dataset includes user interactions, event metadata, user demographic profiles, and social network connections. It is designed to study how social relationships influence event participation and user engagement. 
+
+rel-f1. This dataset comprises historical Formula 1 racing data from 1950 onward. It covers drivers, constructors, circuits, and includes granular records of race results, qualifying sessions, practice laps, and pit stops, enabling predictions about race outcomes and driver performance. 
+
+rel-hm. Capturing customer transactions and product information from H&M’s e-commerce platform, this dataset includes customer demographic attributes, detailed product descriptions, and purchase histories, supporting customer- and product-centric prediction tasks. 12 What Makes a Desired Graph for Relational Deep Learning? 
+
+rel-stack. Based on the Stack Exchange network of Q&A websites, this dataset contains detailed activity logs such as user biographies, posts, comments, edits, votes, and question-answer links. It enables the study of user engagement dynamics and content popularity. 
+
+rel-trial. Aggregated from the Aggregate Analysis of ClinicalTrials.gov (AACT) database, this dataset includes detailed records of clinical trial protocols, study designs, participant demographics, interventions, and outcome measures, serving as a foundation for predicting trial results and safety profiles. 
+
+## B. Baselines 
+
+We compare our unified structural optimizer with five groups of baselines. 
+
+(1) Base relational GNN pipeline. This group corresponds to the standard schema-to-graph pipeline without explicit structural optimization: • Base. The relational GraphSAGE (Hamilton et al., 2017) model used in Section 3.3, trained on the original heteroge-neous graph obtained from the RDB schema without filtering or structural injection. 
+
+(2) Traditional non-graph methods. To measure the benefit of explicit relational modeling, we include a strong tabular baseline: • LightGBM (Ke et al., 2017). A gradient boosting decision tree model trained on flattened relational features, ignoring the graph structure. 
+
+(3) Heterogeneous graph structure optimization methods. This category contains classical heterogeneous GNNs that enhance or reweight connectivity based on schema semantics: • HAN (Wang et al., 2019). A meta-path–based attention network. We construct simple meta-paths directly from the database schema and let HAN learn attention weights over these paths, providing a lightweight handcrafted structural optimization baseline. • GTN (Yun et al., 2019). A graph transformer that automatically generates useful meta-paths by learning to com-pose adjacency matrices. We initialize GTN with schema-derived relation matrices and allow it to learn multi-hop compositions, providing a learnable alternative to manually specified meta-paths. • HGSL (Zhao et al., 2021). A heterogeneous graph structure learning method that jointly optimizes graph topology and node representations. We apply HGSL to refine the schema-derived graph by learning edge weights and injecting new connections based on feature similarity, serving as a feature-driven structural optimization baseline. • ID-GNN (You et al., 2021) incorporates learnable node identity embeddings, particularly effective for recommendation tasks. We evaluate whether our structural optimizer provides orthogonal gains when applied to ID-GNN. 
+
+(4) Relational deep learning (RDL) methods. These models are specifically designed for relational databases but do not explicitly optimize the graph structure: • REL-GNN (Chen et al., 2025). A relational GNN that aggregates information along foreign-key relations with task-specific encoders. • Relational Graph Transformer (RelGT) (Dwivedi et al., 2025). A transformer-style relational encoder that applies multi-relation attention over the schema-derived graph. 
+
+(5) LLM-based structural optimization. Finally, we consider a baseline that uses an external large language model to design the graph structure ahead of training: • LLM-Struct (Achiam et al., 2023). A single LLM module that jointly (i) filters irrelevant tables and columns and (ii) proposes additional task-relevant relations based on the textual schema and task description. The resulting filtered and augmented graph is then trained with the same Base backbone. 13 What Makes a Desired Graph for Relational Deep Learning?  
+
+> Table 8. Hyperparameter search space for the unified structural optimizer.
+
+Hyperparameter Search Range / Setting 
+
+Learning rate {1e-4, 1e-3, 1e-2 }
+
+Hidden dimension {64, 128, 256 }
+
+Column-level sparsity λ [1e-4, 1e-2] Table-level sparsity λs [1e-4, 1e-2] Structural-template sparsity λk [1e-4, 1e-2] VIB coefficient βvib [1e-4, 1e-2] KNN neighbors n {1, 5, 10, 15, 20 }
+
+Temporal chain length m {1, 3, 5, 7, 9 }
+
+## C. Experimental Setup 
+
+We implemented all models in PyTorch (Hu et al., 2024) and conducted experiments on RELBench tasks using a single NVIDIA A30 GPU. All GNN-based methods, including our optimizer and RDL baselines, are trained with the Adam optimizer (Kingma, 2014). To ensure fair comparison, every baseline is trained under the same temporal train/validation/test split and uses the same heterogeneous encoder described in Section 2. For methods requiring schema-derived structures (e.g., HAN), we generate meta-paths directly from the RDB schema without task-specific tuning. For the LLM-Struct baseline, we conduct experiments with GPT-4 (Achiam et al., 2023), and the LLM is queried once per task to produce a filtered and augmented graph, which is then used to train the same Base backbone as in Section 3.3. Figure 5 shows the complete prompt template. Hyperparameters for all GNN-based models are selected through grid search on the validation set, following the same search ranges across methods. For our optimizer, Table 8 summarizes the hyperparameter space, covering gating sparsity coefficients, VIB regularization strength, and GNN depth/hidden dimensions. All results are averaged over five independent runs with different random seeds, and mean performance along with standard deviations are reported.                      
+
+> System Role: You are an expert in relational database schema design and graph neural network architectures. Your task is to analyze database schemas for machine learning tasks and recommend structural optimizations.
+> Your Task: Given a relational database schema and a prediction task, you need to: (1) Filter : Identify tables and columns that are likely irrelevant to the prediction task. (2) Augment : Propose additional edge types that would improve information flow for graph neural networks.
+> Input:
+> Prediction Task: {task description }
+> Database Schema: {dataset schema }
+> Output (JSON): {
+> "keep": {
+> "table name 1": ["column1", "column2", ...], "table name 2": ["column1", "column2", ...], ...
+> },"add edges": [
+> {"from": "table A", "to": "table B", "reason": "brief explanation" },... ]
+> }
+> Figure 5. LLM-Struct prompt template.
+
+## D. Empirical Analysis 
+
+D.1. Effects of Filtering Strength. 
+
+Figure 6 examines how filtering strength λ affects predictive performance across eight diverse tasks, where λ represents the sparsity regularization coefficient in the gating module. The results yield two primary observations: (1) Performance 14 What Makes a Desired Graph for Relational Deep Learning? 60                                   
+
+> 64
+> 68
+> 72
+> 0.0001 0.001 0.01 0.1 1
+> ROC -AUC
+> 𝝀
+> 𝝀 𝝀
+> study -outcome
+> 42
+> 44
+> 46
+> 48
+> 0.0001 0.001 0.01 0.1 1
+> MAE
+> study -adverse 1
+> 2
+> 3
+> 4
+> 0.0001 0.001 0.01 0.1 1
+> MAP
+> condition -sponsor -run
+> 3
+> 4
+> 5
+> 0.0001 0.001 0.01 0.1 1
+> MAE
+> 80
+> 82
+> 84
+> 86
+> 0.0001 0.001 0.01 0.1 1
+> ROC -AUC
+> 1
+> 1.5
+> 2
+> 0.0001 0.001 0.01 0.1 1
+> MAP
+> 74
+> 76
+> 78
+> 80
+> 82
+> 0.0001 0.001 0.01 0.1 1
+> ROC -AUC
+> 62
+> 64
+> 66
+> 68
+> 0.0001 0.001 0.01 0.1 1
+> ROC -AUC
+
+60 
+
+64 
+
+68 
+
+72 
+
+0.0001 0.001 0.01 0.1 1
+
+> ROC -AUC
+
+ColFilter FullFilter       
+
+> driver -position post -post -related
+> driver -top3 user -repeat user -clicks
+> 𝝀 𝝀 𝝀
+> 𝝀 𝝀
+
+Figure 6. Effects of filtering strength across tasks. 
+
+follows a consistent non-monotonic pattern. For classification (ROC-AUC) and recommendation (MAP) tasks, we observe an inverse-U trajectory : performance improves as λ increases from negligible values, peaks at an optimal λ∗, and then deteriorates as λ becomes too aggressive. Conversely, regression tasks (MAE) exhibit a corresponding U-shaped pattern ,where the error decreases to a minimum before rising again. This confirms the existence of an optimal compression point for all tasks, that effectively suppresses redundancy without discarding task-critical information. (2) The optimal filtering strength λ∗ is highly task-dependent. The “sweet spot” varies significantly depending on the task semantics. For instance, most classification tasks, such as driver-top3 , user-repeat , and user-clicks , align with study-outcome 
+
+in achieving peak performance at a moderate strength ( λ ≈ 0.01 ). In contrast, regression and recommendation tasks like driver-position and condition-sponsor-run tend to favor a milder filtering strength ( λ ≈ 0.001 ). This sensitivity analysis underscores that filtering is not a “one-size-fits-all” operation; rather, the optimal balance between noise reduction and evidence retention is intrinsically dictated by the specific nature of the downstream prediction task. 65 
+
+70 
+
+75 
+
+1 5 10 15 20 
+
+> ROC -AUC
+
+𝒏 𝒏 𝒏 𝒏 
+
+study -outcome study -outcome 
+
+80 
+
+82 
+
+84 
+
+86 
+
+88 
+
+1 5 10 15 20 
+
+> ROC -AUC
+
+driver -top3 62 
+
+64 
+
+66 
+
+68 
+
+1 5 10 15 20 
+
+> ROC -AUC
+
+78 
+
+80 
+
+82 
+
+84 
+
+1 5 10 15 20 
+
+> ROC -AUC
+
+user -clicks 
+
+40 
+
+45 
+
+50 
+
+1 5 10 15 20 
+
+> MAE
+
+study -adverse 3
+
+4
+
+5
+
+6
+
+1 5 10 15 20 
+
+> MAE
+
+driver -position 3
+
+4
+
+5
+
+6
+
+1 5 10 15 20 
+
+> MAP
+
+condition -sponsor 
+
+-run 2
+
+3
+
+4
+
+1 5 10 15 20 
+
+> MAP
+
+post -post -related 
+
+user -repeat 
+
+𝒏 𝒏 𝒏 𝒏 
+
+Figure 7. Effects of structural injection strength of KNN across tasks. 
+
+D.2. Effects of Injection Strength. 
+
+Figure 7 and Figure 8 report how the injection strength affects the performance of KNN (controlled by the number of neighbors n) and TempCont (controlled by the chain length m) on eight representative tasks. (1) For KNN, as n increases, 15 What Makes a Desired Graph for Relational Deep Learning? 40 
+
+45 
+
+50 
+
+1 3 5 7 9
+
+> MAE
+
+2
+
+3
+
+4
+
+5
+
+1 3 5 7 9
+
+> MAE
+
+3
+
+4
+
+5
+
+1 3 5 7 9
+
+> MAP
+
+3
+
+4
+
+5
+
+1 3 5 7 9
+
+> MAP
+
+80 
+
+82 
+
+84 
+
+86 
+
+1 3 5 7 9
+
+> ROC -AUC
+
+76 
+
+78 
+
+80 
+
+82 
+
+1 3 5 7 9
+
+> ROC -AUC
+
+62 
+
+64 
+
+66 
+
+68 
+
+1 3 5 7 9
+
+> ROC -AUC
+
+65 
+
+70 
+
+75 
+
+1 3 5 7 9
+
+> ROC -AUC
+
+𝒎 𝒎 𝒎 𝒎 
+
+study -outcome driver -top3 user -clicks 
+
+study -adverse 
+
+driver -position 
+
+condition -sponsor 
+
+-run post -post -related 
+
+user -repeat 
+
+𝒎 𝒎 𝒎 𝒎 
+
+Figure 8. Effects of structural injection strength of TempCont across tasks. 
+
+Table 9. Performance on large-scale datasets across three task types. For classification we report ROC-AUC ( ↑), for regression MAE ( ↓), and for recommendation MAP ( ↑). Best scores are in bold , second best in italics.                                                                         
+
+> Method user-churn (↑)item-churn (↑)user-engagement (↑)user-badge (↑)item-ltv (↓)post-votes (↓)item-sales (↓)user-item-purchase (↑)user-item-review (↑)Base 68.24 ±0.18 80.87 ±0.21 88.86 ±0.16 86.83 ±0.35 48.75 ±0.03 0.074 ±0.02 0.058 ±0.02 2.64 ±0.11 0.47 ±0.08
+> LightGBM 65.33 ±0.20 75.46 ±0.25 64.94 ±0.36 65.71 ±0.33 53.20 ±0.04 0.078 ±0.02 0.079 ±0.03 0.68 ±0.04 0.36 ±0.10
+> HAN 67.65 ±0.17 78.27 ±0.20 73.72 ±0.30 75.57 ±0.19 47.65 ±0.03 0.078 ±0.02 0.068 ±0.02 1.37 ±0.11 0.51 ±0.07
+> REL-GNN 70.16 ±0.15 81.66 ±0.19 88.26 ±0.27 88.94 ±0.25 47.02 ±0.03 0.065 ±0.02 0.053 ±0.02 2.88 ±0.10 0.62 ±0.06
+> LLM-Struct 73.50 ±0.16 82.51 ±0.21 90.21 ±0.35 87.31 ±0.54 46.31 ±0.03 0.063 ±0.02 0.056 ±0.03 3.12 ±0.10 0.57 ±0.07
+> Ours 72.18 ±0.14 84.17 ±0.18 91.62 ±0.14 90.47 ±0.28 44.93 ±0.03 0.065 ±0.02 0.054 ±0.02 3.36 ±0.09 0.68 ±0.06
+
+performance first improves and then declines. Moderate neighborhoods yield the best results, indicating that reinforcing localized similarity is helpful, whereas larger neighborhoods introduce unrelated nodes and weaken the signal. (2) For TempCont, performance improves as m increases by reinforcing short-to-medium temporal dependencies, but gains plateau at larger values. This indicates that the useful temporal horizon is limited. Extending chains too far adds little new information. Overall, these findings reinforce the principle that effective structural optimization requires task-aware calibration of both the strategy and its intensity, rather than applying fixed heuristics. 
+
+## E. Overall Predictive Performance on Large-scale Datasets 
+
+Table 9 reports the predictive performance on large-scale datasets spanning classification, regression, and recommendation tasks. Overall, our method demonstrates strong and stable performance across task types, achieving the best results on four out of six tasks and remaining competitive on the rest. On classification and regression tasks, our method consistently outperforms architectural baselines and achieves the best or second-best performance, indicating that principled structural optimization remains effective at scale. In particular, the gains on item-churn and item-ltv suggest that filtering and task-aligned structural injection help control redundancy and preserve predictive signals in large, heterogeneous graphs. For recommendation tasks (user-item-purchase and user-item-review), our method achieves the best performance, outperforming both relational GNN baselines and LLM-based structural heuristics. While LLM-Struct performs competitively on certain tasks such as user-churn and post-votes, its performance varies across tasks, whereas our approach maintains more consistent gains. Overall, these results demonstrate that the proposed structural optimization framework scales effectively to large datasets, providing robust improvements across diverse tasks without relying on task-specific heuristics or dataset-dependent tuning. 
+
+## F. Ablation Study 
+
+To better understand the contribution of each component in our structural optimizer, we conduct an ablation study on six representative RELBench tasks. We compare the full model (Ours) with several variants: Ours ncf ( no column-level 
+
+filtering), Ours ntf ( no type-level filtering), Ours nf ( no filtering), Ours nv ( no VIB), Ours ni ( no injection). 16 What Makes a Desired Graph for Relational Deep Learning? 65       
+
+> 70
+> 75
+> study-outcome
+> ROC -AUC
+> 80
+> 85
+> 90
+> driver-top3
+> ROC -AUC
+> 40
+> 45
+> 50
+> study-adverse
+> MAE
+> 30
+> 35
+> 40
+> site-success
+> MAE
+> 2
+> 4
+> 6
+> 8
+> condition-sponsor-run
+> MAP
+> 2
+> 4
+> 6
+> 8
+> 10
+> post-post-related
+> MAP
+> 60
+> 70
+> 80
+> 90
+> study-outcome driver-top3
+> ROC -AUC
+> Ours_ncf Ours_ntf Ours_nf Ours_nv Ours_ni Ours
+
+Figure 9. Ablation Study. 
+
+Figure 9 reports the results. We observe three clear trends from Figure 9. First, the full model consistently achieves the best performance across all six tasks, indicating that filtering, VIB, and structural injection are all useful and complementary. Removing all filtering (Ours nf) leads to the largest degradation, especially on the regression-style tasks, showing that column/type sparsification is crucial for preventing noisy relations from dominating the graph. Second, turning off either column-level or type-level filtering (Ours ncf and Ours ntf) also hurts performance, but less severely than removing filtering entirely, which suggests that both levels contribute and their combination is most effective. Third, disabling injection (Ours ni) or the VIB term (Ours nv) consistently reduces performance compared to the full model: injection brings larger gains on tasks that benefit from additional relational paths, while VIB provides a smaller but steady improvement by regularizing node representations. Overall, these trends support our design choice that effective relational learning requires both information filtering and carefully controlled structural augmentation. 
+
+## G. Choice of Structural Complexity Metric 
+
+We compare ℓ0 sparsity against two alternatives: ℓ1 penalty and edge density penalty (Yun et al., 2019). 
+
+Complexity Term study-outcome ( ↑) driver-top3 ( ↑) condition-sponsor-run ( ↑)
+
+Density penalty 70.46 83.91 4.22 
+
+ℓ1 penalty 71.58 84.25 5.36 
+
+ℓ0 (Ours) 72.35 86.82 6.24 
+
+Table 10. Ablation on structural complexity metrics. 
+
+Table 10 reports the performance, from the table, we observe: (1) Density penalties cannot distinguish between removing one irrelevant 10,000-node table vs. ten relevant 100-node tables—both reduce edge count equally but have drastically different effects on signal quality. (2) ℓ1 over-smooths: it encourages all gates toward zero uniformly, whereas ℓ0 via Hard-Concrete creates discrete keep/drop decisions aligned with Theorem 3.2’s entropy bound. 
+
+## H. Additional Theoretical Analysis and Proofs 
+
+H.1. Proof of Theorem 3.2 
+
+Let M = ( M1, . . . , M J ) be Bernoulli gates with πj = P(Mj = 1) and μ = PJj=1 πj = E∥M ∥0. By subadditivity of Shannon entropy, 
+
+H(M ) = H(M1, . . . , M J ) ≤
+
+> J
+
+X
+
+> j=1
+
+H(Mj ). (22) Since each Mj is Bernoulli, H(Mj ) = h(πj ) where h(·) is binary entropy, hence 
+
+H(M ) ≤
+
+> J
+
+X
+
+> j=1
+
+h(πj ). (23) By concavity of h(·) and Jensen’s inequality, 
+
+1
+
+J
+
+> J
+
+X
+
+> j=1
+
+h(πj ) ≤ h
+
+ 1
+
+J
+
+> J
+
+X
+
+> j=1
+
+πj
+
+ = h
+
+ μJ
+
+
+
+, (24) 17 What Makes a Desired Graph for Relational Deep Learning? 
+
+which implies JX
+
+> j=1
+
+h(πj ) ≤ J h 
+
+ μJ
+
+
+
+. (25) Combining yields H(M ) ≤ PJj=1 h(πj ) ≤ J h (μ/J ). Finally, h(p) is monotone increasing on p ∈ [0 , 1/2] , so in the sparse regime μ/J ≤ 1/2, the bound J h (μ/J ) increases with μ.
+
+H.2. Structural injection as search-space enrichment 
+
+We formalize the “enrichment” claim used in Section 3.3. Recall that R(ϕg , θ ), Ω( ϕg ), and R⋆(ϕg ) are defined in Eq. (10) ,Eq. (11) , and Eq. (12) , respectively. For any feasible set Φ of structural parameters, define the best achievable regularized objective 
+
+J⋆(Φ) := inf  
+
+> ϕg∈Φ
+
+n
+
+R⋆(ϕg ) + Ω( ϕg )
+
+o
+
+. (26) 
+
+Feasible families. Let Φfilter denote the structural family obtainable using filtering alone (e.g., all template gates fixed to zero), and let Φfull denote the family when both filtering and (gated) injection are allowed. By construction, 
+
+Φfilter ⊆ Φfull . (27) 
+
+Proposition H.1 (Monotonicity under structural enrichment) . Assume (27) . Then 
+
+J⋆(Φ full ) ≤ J⋆(Φ filter ). (28) 
+
+Moreover, if there exists some ¯ϕg ∈ Φfull \ Φfilter such that R⋆( ¯ϕg ) + Ω( ¯ϕg ) < J ⋆(Φ filter ), then the inequality in (28) is strict. Proof. By (27), taking the infimum over the larger feasible set cannot increase the optimum: 
+
+J⋆(Φ full ) = inf  
+
+> ϕg∈Φfull
+
+R⋆(ϕg ) + Ω( ϕg ) ≤ inf  
+
+> ϕg∈Φfilter
+
+R⋆(ϕg ) + Ω( ϕg ) = J⋆(Φ filter ).
+
+If there exists ¯ϕg ∈ Φfull \ Φfilter with R⋆( ¯ϕg ) + Ω( ¯ϕg ) < J ⋆(Φ filter ), then ¯ϕg achieves a strictly smaller objective value than any ϕg ∈ Φfilter , hence J⋆(Φ full ) < J ⋆(Φ filter ).18

@@ -1,0 +1,2092 @@
+Title: Learning residue-level context for modeling protein-protein interactions
+
+URL Source: https://www.biorxiv.org/content/10.64898/2026.06.01.729118v1.full.pdf
+
+Published Time: Mon, 08 Jun 2026 08:24:44 GMT
+
+Number of Pages: 33
+
+Markdown Content:
+Learning residue -level context for modeling protein -protein interactions 
+
+Zechuan Zhang 1,2, *, Zongxin Yang 3, *, Anbang Liu 2,4, *, Kun -Hsing Yu 3,5,6,7 , Junhan Zhao 3,8,9 , Yi 
+
+Yang 10,+ , Benjamin Neale 1,11,+ , Siwei Chen 1,2,+ 
+
+1. Program in Medical and Population Genetics, Broad Institute of MIT and Harvard, Cambridge, 
+
+MA, USA 
+
+2. Department of Human Genetics, University of Chicago, Chicago, IL, USA 
+
+3. Department of Biomedical Informatics, Harvard Medical School, Boston, MA, USA 
+
+4. Department of Computer Science, Northwestern University, Chicago, IL, USA 
+
+5. Department of Pathology, Brigham and Women’s Hospital, Boston, MA, USA 
+
+6. Harvard Data Science Initiative, Harvard University, Cambridge, MA, USA 
+
+7. Kempner Institute of Natural and Artificial Intelligence, Harvard University, Cambridge, MA, 
+
+USA 
+
+8. Department of Pediatrics, University of Chicago, Chicago, IL, USA 
+
+9. Comprehensive Cancer Center, UChicago Medicine, Chicago, IL, USA 
+
+10. College of Computer Science and Technology, Zhejiang University, Zhejiang, China 
+
+11. Analytic and Translational Genetics Unit, Massachusetts General Hospital, Boston, MA, 
+
+USA 
+
+* These authors contributed equally to this manuscript. 
+
++ Correspondence to S.Chen, B.Neale, and Y.Yang. Abstract 
+
+Protein language models (PLMs) enable prediction of protein properties by learning residue -level 
+
+features from sequence, yet most PLM -based approaches to protein -protein interactions 
+
+aggregate information across entire proteins, limiting resolution and int erpretability. Here we 
+
+present ReCLIP, a transformer -based framework that learns interaction -specific representations 
+
+at the level of individual residues by combining intra -protein residue neighborhoods with residue -
+
+conditioned representations of interacti on partners. We show that residue -centered context 
+
+provides a general framework for modeling protein interactions across diverse biological settings. 
+
+ReCLIP accurately predicts mutation -induced perturbations (AUROC = 0.973), generalizes to 
+
+post -translation al modifications that do not alter sequence (AUROC = 0.822), and enables zero -
+
+shot prediction of peptide -MHC binding across unseen alleles (AUROC up to 0.972). Analysis of 
+
+learned residue neighborhoods reveals structurally and functionally coherent pattern s aligned 
+
+with known determinants of binding. Applied to clinically annotated genetic variants, ReCLIP 
+
+identifies disease -associated interaction perturbations that link pathogenic variants to specific 
+
+molecular interaction contexts. Our results establish a generalizable and interpretable framework 
+
+for modeling protein interactions and provide insights into how residue -level context shapes 
+
+interaction specificity and its perturbation. Introduction 
+
+Protein language models (PLMs) have achieved remarkable success in modeling protein 
+
+sequence -function relationships. Trained on millions of natural proteins, these models learn 
+
+representations (“embeddings”) that capture diverse biochemical and evolutionar y properties 
+
+directly from amino acid sequences, enabling prediction of structure, function, and variant effects 
+
+for virtually any given protein. 1-3
+
+However, proteins rarely function in isolation, as most cellular processes are mediated by protein -
+
+protein interactions (PPIs). Modeling PPIs is inherently more complex than modeling individual 
+
+proteins, because interaction outcomes depend not only on each interacting partner but also on 
+
+context -dependent interactions between specific residues across proteins. Early PLM -based 
+
+approaches to PPIs extended single -sequence models by concatenating partner sequences. 4-8
+
+Although concatenation captures compatibility between partners, it treats an interacting protein 
+
+pair as a single unified entity, potentially obscuring interaction -specific features and degrading 
+
+representation quality. More recent methods introduced inte raction -aware architectures that learn 
+
+partner -conditioned representations of proteins, leading to improved performance in PPI -related 
+
+tasks. 9,10 Nevertheless, most existing approaches still summarize each protein or protein pair into 
+
+a fixed embedding, creating a resolution bottleneck in which residue -specific determinants of 
+
+binding can be diluted before prediction. 
+
+A key biological insight is that PPIs are often governed by a restricted subset of residues. 11,12 
+
+Large -scale structural and genetic studies have shown that mutations perturbing PPIs 
+
+disproportionately localize to interaction interfaces, modulating local binding without globally 
+
+altering protein structure or stability. 13 -16 These observations underscore that PPI function is 
+
+encoded within localized residue neighborhoods rather than distributed uniformly across entire 
+
+sequences. This raises a fundamental question: which residue neighborhoods are most 
+
+informative for modeling interaction outcomes? 
+
+Sequence adjacency provides a simple definition of neighborhood and has been adopted in 
+
+previous interaction modeling approaches. 17 However, residues distant in sequence can become 
+
+proximal in three -dimensional space upon protein folding, forming functional neighborhoods that 
+
+are not captured by sequence -based adjacency. 18 -20 Advances in structure prediction, notably 
+
+through AlphaFold, 21 have enabled inference of structural neighborhoods directly from sequence. 
+
+Yet accurate prediction of multi -protein structures remains infeasible at the scale of hundreds of 
+
+thousands of PPIs, and experimentally resolved complex structures are available f or only a small 
+
+fraction of known interactions. 22 Even when structures are available, spatial proximity alone does 
+
+not fully capture functional dependencies driven by allosteric coupling, conformational dynamics, 
+
+and other long -range effects. 22,23 These limitations motivate a learned definition of residue context 
+
+that is not restricted to sequence adjacency or predefined structural distance. 
+
+In this study, we present Residue -level Context Learning for Interacting Proteins (ReCLIP), a 
+
+transformer -based interaction modeling framework that learns interaction -specific, residue -level 
+
+dependencies from PLM representations. ReCLIP models PPIs through learning functional 
+
+residue neighborhoods from internal PLM attention patterns, without restricting context to 
+
+sequence proximity or explicit structural information. By organizing interaction modeling around a 
+
+specific residue, ReCLIP constructs residue -centered representations that capture how local 
+
+context within one protein and residue -conditioned dependencies with its partner jointly determine 
+
+interaction outcomes. This formulation reframes PPI prediction as a residue -centered interaction 
+
+modeling prob lem rather than a protein -level embedding classification task. We validated ReCLIP in diverse biological settings, where it consistently outperforms state -of -
+
+the -art methods. First, ReCLIP accurately predicts mutation -induced perturbations to PPIs across 
+
+multiple interaction outcome classes (area under the receiver op erating characteristic curve 
+
+[AUROC] = 0.973, P<1e -200). Second, ReCLIP generalizes to post -translational modifications 
+
+(PTMs) that regulate interactions without changing the primary sequence, a setting not accessible 
+
+to methods that require explicit wild -type versus mutant comparisons (AUROC = 0.822, P = 3.48e -
+
+39). Third, ReCLIP effectively models peptide -MHC (pMHC) interactions, a clinically important 
+
+class of PPIs characterized by extensive allelic diversity ( AUROC up to 0.972; P = 1.02e -9). 
+
+Analysis of the learned residue neighborhoods reveals structurally and functionally coherent 
+
+contexts associated with improved predictive performance. Finally, systematic application to over 
+
+140,000 clinically annotated variants (ClinVar 24 ) identifies interaction perturbations enriched 
+
+among pathogenic variants and organized within disease -relevant molecular contexts . Together, 
+
+these results establish a generalizable and interpretable framework for modeling PPIs and for 
+
+understanding how residue -level context encodes interaction specificity, its perturbation, and the 
+
+molecular consequences of human genetic variation. 
+
+Results 
+
+Overview of the ReCLIP framework 
+
+PLMs learn context -dependent representations of individual residues that capture biochemical, 
+
+structural, and evolutionary constraints encoded in protein sequences. 1-3 Yet the use of such 
+
+residue -level representations for modeling PPIs remains limited by how they are summarized for 
+
+prediction. Most PLM -based approaches to PPIs, including sequence -concatenation or 
+
+interaction -aware architectures, ultimately represent eac h protein or protein pair with a fixed 
+
+embedding ( Fig. 1a ). 4-10 This protein -level aggregation is misaligned with the biology of protein 
+
+interactions, which are often governed by a restricted subset of residues that mediate binding and 
+
+determine specificity. 11,12 As a result, residue -level determinants of interaction outcomes can be 
+
+diluted when information is pooled across entire sequences. 
+
+To address this gap, we developed Residue -level Context Learning for Interacting Proteins 
+
+(ReCLIP ), a framework that formulates PPI modeling as a residue -centered, context -dependent 
+
+problem rather than a protein -level classification task. Conceptually, ReCLIP asks: given a 
+
+specific residue on a protein, which residues within that protein and on its bi nding partner are 
+
+most informative for the interaction outcome? By explicitly centering representation learning on a 
+
+queried residue, ReCLIP constructs a residue -specific interaction context rather than assigning a 
+
+single fixed representation to the entire protein pair. 
+
+ReCLIP employs the attention mechanism of PLMs to construct query -centered context 
+
+(Methods). Given an interacting protein pair (A -B) and a residue of interest on protein A, ReCLIP 
+
+first defines a functional neighborhood as a small set of residues in protein A prioritized by 
+
+attention from the queried residue ( Fig. 1b ). This attention -defined neighborhood allows ReCLIP 
+
+to capture residue dependencies that may be nearby in sequence, proximal in three -dimensional 
+
+structure, or functionally coupled through lon ger -range constraints. 
+
+Second, ReCLIP builds a residue -conditioned representation of the interaction partner. Because 
+
+not all residues on the partner (i.e., protein B) contribute to binding equally, ReCLIP computes 
+
+cross -protein attention from the queried residue to partner resi dues and uses these weights to 
+
+define an interaction relevance distribution (Methods). The partner residue embeddings are then 
+
+aggregated according to this distribution, producing a representation of protein B that is explicitly 
+
+conditioned on the queried residue rather than on the interaction pair as a whole ( Fig. 1b ). This 
+
+design enables the same protein pair to be represented differently depending on the queried residue, supporting a many -to -many mapping between query and partner residues without 
+
+requiring explicit structural annotations or predefined interfaces. 
+
+Finally, ReCLIP combines the residue -centered intra -protein context and the residue -conditioned 
+
+partner representation to form a joint interaction representation ( Fig. 1b ). This representation is 
+
+used for predicting interaction specificity and quantitative changes in binding driven by residue -
+
+level perturbations ( Fig. 1c ). By constructing representations around residue -specific context 
+
+prior to prediction, ReCLIP captures interaction -specific, residue -level information that would 
+
+otherwise be lost through early global pooling. 
+
+ReCLIP predicts mutation -induced perturbations to PPIs 
+
+We first evaluated ReCLIP on predicting mutation -induced perturbations to PPIs, a biologically 
+
+important task as many functional missense mutations act by perturbing specific protein 
+
+interactions rather than overall protein stability. 13 -16 We used the IntAct database, 25 which curates 
+
+experimentally characterized missense mutations with annotated effects on protein binding, 
+
+comprising 19,559 mutations evaluated across 56,429 PPIs (Methods). We formulated this as a 
+
+four -class classification problem, distinguishing mutations that disrupt, decrease, increase, or do 
+
+not affect binding strength ( Fig. 2a ). For each mutation, the model takes as input the sequence 
+
+of the mutated protein, the mutation position, and the sequence of its interaction partner .
+
+Predictive performance was evaluated on held -out test data under stratified cross -validation 
+
+(Methods). 
+
+ReCLIP achieved an overall AUROC of 0.973, outperforming several representative classes of 
+
+recent approaches (bootstrap P<1e -200 versus second -best; Fig. 2b ). These include an 
+
+interaction -aware model that encodes protein pairs into a single embedding (MINT, 9 AUROC = 
+
+0.923), a sequence -adjacency -based approach that restricts residue context to local windows 
+
+(SWING, 17 AUROC = 0.851), and a global embedding baseline that operates on pooled protein 
+
+representations (BERT -baseline, AUROC = 0.788). PPI -unaware variant effect predictors, such 
+
+as AlphaMissense 26 and PrimateAI -3D, 27 showed substantially lower performance in this setting 
+
+(AUROCs = 0.564 and 0.561, respectively), consistent with their focus on single -protein -level 
+
+variant effects rather than interaction -specific outcomes. 
+
+To account for the class imbalance arising from the overrepresentation of no -effect variants 
+
+(56.8%; Fig. 2a ), we further evaluated performance using balanced accuracy. ReCLIP achieved 
+
+a balanced accuracy of 0.787, exceeding the second -best model (MINT, 0.653) by 0.134 
+
+(bootstrap P<1e -200; Fig. 2c ). Performance of sequence -adjacency -based and global 
+
+embedding approaches decreased more markedly (0.506 and 0.395, respectively), suggesting 
+
+reduced robustness to class imbalance. Moreover, ReCLIP maintained strong discrimination 
+
+across individual interaction outcome classes (AUROCs of disrupting = 0.957 [ P<1e -200], 
+
+decreasi ng = 0.977 [ P<1e -200], increasing = 0.982 [ P = 1.37e -68], and no -effect mutations = 
+
+0.977 [ P<1e -200]; Fig. 2d ). The ranking of comparison methods remained consistent across 
+
+classes, with the largest performance differences observed for the disrupting class. Across 
+
+additional evaluation metrics, including accuracy, precision, recall, F1 -score, and precision -recall 
+
+AUC (AUPRC), ReCLIP consistently outperformed other models ( Fig. 2e ), and improvements 
+
+were stable across cross -validation folds (Wilcoxon signed -rank test P = 9.77e -4; Fig. 2f ). 
+
+Many existing mutation -effect prediction approaches focus on interaction disruption effects, we 
+
+reformulated the task using only disrupting and no -effect labels and compared ReCLIP with 
+
+additional PLM -based interaction models designed for binary classification. 28,29 ReCLIP continued 
+
+to outperform all comparison methods under this setting ( Extended Data Fig. 1 ), demonstrating that its advantage generalizes across alternative formulations of interaction perturbation 
+
+prediction .
+
+Because functional validation is often limited to a small number of candidate mutations, we next 
+
+evaluated ranking performance by ordering predictions according to model confidence and 
+
+calculating macro precision across Top -K thresholds . ReCLIP maintained higher precision across 
+
+the full ranking range compared to other methods ( Fig. 2g ). At the top 10% of predictions, 
+
+precision reached 81.8% (bootstrap P<1e -200 versus second -best), indicating strong enrichment 
+
+of correctly classified mutations among top -ran ked candidates and supporting their prioritization 
+
+for downstream functional studies .
+
+ReCLIP generalizes to PTM -regulated interaction perturbations 
+
+We then asked whether ReCLIP generalizes beyond sequence variation to regulatory 
+
+perturbations, focusing on post -translational modifications (PTMs). This setting differs 
+
+fundamentally from mutation -based prediction because PTMs do not alter the underlying protein 
+
+sequence . Methods that rely on comparisons between wild -type and mutant sequences (e.g., 
+
+MINT, AlphaMissense, and PrimateAI -3D) are therefore not applicable in this context. 
+
+We used the PTMint database, 30 a manually curated collection of 3,052 experimentally supported 
+
+PTM -regulated PPIs annotated as either enhancing or inhibiting binding ( Fig. 3a ; Methods). We 
+
+formulated this as a binary classification problem and evaluated performance using the same 
+
+cross -validation scheme as in the mutation -based prediction setting. Each instance is defined by 
+
+the sequences of the interacting proteins and the position of the modification site (Methods). 
+
+ReCLIP achieved an AUROC of 0.822, substantially outperforming comparison methods 
+
+(bootstrap P = 3.48e -39 versus second -best; Fig. 3b ). Improvements were consistent across 
+
+evaluation metrics, cross -validation folds, and interaction outcome classes ( Fig. 3c,d ). Notably, 
+
+the performance gain was larger for the underrepresented “inhibiting” class, highlighting ReCLIP’s 
+
+robustness to class imbalance and limited sample sizes. ReCLIP also maintained high precision 
+
+among top -ranked predictions, exceeding 90% through the top 50% threshold, whereas other 
+
+methods showed a more pronounced decline (bootstrap P = 2.02e -4 at top 10%; Fig. 3e ). Across 
+
+evaluation metrics, the relative improvement over competing models was greater than that 
+
+observed in the mutation -prediction setting. This pattern suggest s that residue -centered modeling 
+
+is especially effective when interaction outcomes must be inferred from subtle regulatory 
+
+perturbations w ithout explicit sequence changes .
+
+ReCLIP models pMHC binding across diverse MHC alleles 
+
+We further applied ReCLIP to predict pMHC binding, a distinct class of interactions involving short 
+
+peptide ligands and highly polymorphic receptors. 31 This setting is particularly challenging, as it 
+
+requires generalization across diverse MHC alleles, including those not observed during training. 
+
+We therefore adopted a zero -shot evaluation framework in which test alleles were strictly 
+
+excluded from the training set ( Fig. 4a ). We used curated datasets previously assembled for 
+
+pMHC modeling, 17,32 comprising 171,560 pMHC interaction pairs spanning 14 MHC alleles with 
+
+varying degrees of functional similarity ( Fig. 4a,b ). For each pMHC pair, the peptide sequence 
+
+and its central position were treated as the query and the MHC binding -groove region as the 
+
+interaction partner. 
+
+We first trained the model on MHC class I alleles and evaluated it on three unseen alleles that 
+
+were functionally proximal to the training set ( HLA -A* 02:02, HLA -B* 40:02, and HLA -C* 05:01). 
+
+ReCLIP achieved AUROCs of 0.964, 0.926, and 0.972, respectively, outperforming all comparison methods across each held -out allele (bootstrap P = 4.35e -111, 2.36e -33, and 1.02e -
+
+9, respectively; Fig. 4c ). To assess performance under stronger distribution shift, we evaluated 
+
+three functionally distal alleles (HLA -A* 32:01, HLA -C* 03:03, and HLA -B* 38:01). ReCLIP 
+
+remained the top -performing model, achieving AUROCs of 0.935, 0.854, and 0.871, respectively, 
+
+whereas competing methods declined more sharply, with average AUROCs falling below 0.75 
+
+(Fig. 4d ). 
+
+We further examined model robustness by training a mixed -class model incorporating both class 
+
+I and class II pMHC interactions and evaluating performance on the same six unseen class I 
+
+alleles. ReCLIP maintained the highest performance with minimal perform ance degradation 
+
+(ΔAUROC < 0.01; Fig. 4e ), demonstrating robustness to increased interaction diversity. Together, 
+
+these results suggest that residue -centered interaction modeling generalizes across diverse 
+
+interaction contexts while preserving sensitivity to residue -level determinants of binding specificity. 
+
+ReCLIP captures biologically meaningful residue neighborhoods 
+
+A key technical design of ReCLIP is that it represents PPIs through learned residue -centered 
+
+context rather than pooled global embeddings or fixed sequence windows. To characterize the 
+
+biological properties of these learned representations, we analyzed the mutation dataset at the 
+
+level of individual residues. For each queried residue (mutation site), we defined its functional 
+
+neighborhood as the five residues receiving the highest attention weights in each of the 20 
+
+attention heads and compared them with ma tched sets of randomly sampled residues from the 
+
+same protein (Methods). 
+
+Functional neighborhoods were strongly localized in both sequence and structure. Relative to 
+
+random controls, these residues were significantly closer to the queried residue along the primary 
+
+sequence (medians = 16.7 versus 132.5 amino acids, Wilcoxon signed -rank test P<1e -200; Fig. 
+
+5a ) and in three -dimensional space (medians = 11. 5 versus 34.6 Å, Wilcoxon signed -rank test 
+
+P<1e -200; Fig. 5b ; Methods). Notably, this structural proximity remained evident even when 
+
+restricting the analysis to residues distal in primary sequence (separated by more than 10 amino 
+
+acids; medians = 19. 6 versus 35.9 Å, Wilcoxon signed -rank test P<1e -200; Fig. 5b ), indicating 
+
+that the model captures non -local contacts arising from protein folding rather than simply 
+
+recovering adjacent sequence contexts. 
+
+We next evaluated whether these neighborhoods correspond to biologically meaningful regions. 
+
+Residues within functional neighborhoods were significantly enriched for annotated functional 
+
+sites, 33 including catalytic residues, binding sites, modified residues, and disulfide bonds (odds 
+
+ratios (ORs) = 1.3 3-3. 78 , all Fisher’s exact test P<1e -50 ; Fig. 5c ; Methods). Consistently, these 
+
+residues were located closer to functional sites in three -dimensional protein structures, with the 
+
+strongest enrichment observed for binding sites ( medians = 14.3 versus 19.2 Å, Wilcoxon signed -
+
+rank test P=2.42e -16 ; Fig. 5d ). These neighborhoods also exhibited domain -level coherence, with 
+
+a higher fraction of residues falling within the same annotated domain 34 as the queried residue 
+
+than expected by chance ( 0.83 versus 0. 24 , Fisher’s exact test P<1e -200; Fig. 5e ; Methods). 
+
+Moreover, the amino -acid composition of the functional neighborhoods revealed a distinctive 
+
+biochemical signature ( Fig. 5f ; Methods). Relative to random background, these neighborhoods 
+
+were enriched for residues known to contribute to protein interaction interfaces, particularly 
+
+aromatic residues ( such as tryptophan, tyrosine) and arginine, which are characteristic of 
+
+energetic “hot spots” clustered near the cores of binding interfaces. 11,35,36 These analyses show that ReCLIP learns residue -centered neighborhoods that are structurally and functionally 
+
+coherent, providing a biologically grounded and interpretable basis for its predictive performance. 
+
+ReCLIP identifies clinically relevant interaction perturbations 
+
+To evaluate the clinical relevance of predicted interaction perturbations, we applied ReCLIP to 
+
+clinically annotated variants from ClinVar and classified each variant by its predicted effect on 
+
+protein interactions (disrupting, decreasing, increasing, or n o effect ; Methods ). Across 144,837 
+
+missense variants evaluated over 500,083 interaction pairs, predicted interaction perturbations 
+
+were significantly more frequent among pathogenic and likely pathogenic (PG/LP) variants than 
+
+among benign and likely benign (BN/LB) variants ( Fig. 6a ). This enrichment was evident both at 
+
+the level of individual variant -interaction pairs (135,951/201,021=67.6% versus 
+
+122,481/299,062=41.0%, Fisher’s exact test P<1e -200) and when effects were aggregated 
+
+across variants (49,393/74,263=66.5% versus 52,490/116,487=45.1%, Fisher’s exact test P<1e -
+
+200). Applying more stringent class -specific probability thresholds further sharpened the 
+
+separation ( Extended Data Fig. 2a ), supporting the use of ReCLIP predictions to prioritize 
+
+missense v ariants with potential clinical relevance .
+
+Because individual proteins often participate in multiple interactions, we examined perturbation 
+
+patterns across up to five interaction partners per variant (Methods). PG/LP variants showed 
+
+consistently higher perturbation frequencies than BN/LB variants across one to five partners ( Fig. 
+
+6b ). Among variants evaluated against five partners, 84.0% (23,565/28,058) of PG/LP variants 
+
+were predicted to perturb at least one interaction, and nearly half (12,969/28,058) perturbed all 
+
+five interactions (1.41 - and 2.01 -fold enrichments relative to BN/L B variants; Fig. 6b ). 
+
+To control for protein - and interaction -specific context, we compared PG/LP and BN/LB variants 
+
+within matched interaction pairs. Within the same interaction, PG/LP variants exhibited higher 
+
+perturbation probabilities in the majority of cases (8,593 of 10,3 57 pairs, 83.0%), with a
+
+significantly higher overall perturbation probability than BN/LB variants (medians=0.68 versus 
+
+0.55, paired Wilcoxon signed -rank test P<1e -200; Extended Data Fig. 2b ). These results indicate 
+
+that the enrichment of predicted perturb ations among PG/LP variants is not driven by protein - or 
+
+interaction -level context, but reflects consistent residue -level differences in predicted molecular 
+
+consequences. 
+
+We next assessed the biological relevance of perturbed interaction partners. Compared with 
+
+predicted no -effect interactions, perturbed partners of PG/LP variants were enriched for proteins 
+
+that also harbor PG/LP variants (OR = 1.59, Fisher’s exact test P=1.57e -14; Fig. 6c ). Moreover, 
+
+these interaction pairs were more likely to involve proteins with shared disease phenotypes 
+
+(OR=17.4, Fisher’s exact test P=1.14e -46; Fig. 6d ; Methods ), suggesting that ReCLIP captures 
+
+coordinated perturbations within functiona lly coherent, disease -associated interaction contexts .
+
+These associations spanned diverse disease categories, including metabolism and homeostasis, 
+
+neoplasms, nervous system disorders, digestive disease, and hematopoietic phenotypes ( Fig. 
+
+6e ). 
+
+Representative examples illustrate how ReCLIP links variant effects to plausible molecular 
+
+mechanisms. In mitochondrial metabolism, predicted interaction -disrupting variants in SDHB localized to interfaces within the succinate dehydrogenase (SDH) complex ( Fig. 6f ), whose 
+
+disruption is known to impair mitochondrial respiration and promote metabolite -driven oncogenic 
+
+signaling .37 In RAS signaling, ReCLIP predicted increased interaction between KRAS G12 
+
+variants and RAF1, despite the mutated residues being distal from the binding interface ( Fig. 6g ). 
+
+This is consistent with allosteric mechanisms in which G12 substitutions increase the active GTP -
+
+bound state and enhance downstream RAF signaling. 38,39 Similarly, in hemoglobin, predicted 
+
+perturbations localized to residues near the heme pocket ( Fig. 6h ), reflecting the known allosteric 
+
+coupling between oxygen binding and tetramer conformational transitions, through which variant 
+
+effects can indirectly alter subunit interactions. 40,41 
+
+Together , these analyses demonstrate that ReCLIP can distinguish clinically pathogenic from 
+
+benign variants, identify disease -relevant perturbations across molecular interaction contexts, 
+
+and provide mechanistic insight into how genetic variation alters protein in teractions through both 
+
+direct interface perturbation and non -local regulatory effects. 
+
+Discussion 
+
+PLMs have advanced protein modeling by learning rich residue -level representations from 
+
+sequence, yet most PLM -based approaches to PPIs rely on protein -level aggregation. As a result, 
+
+local determinants of interaction specificity can become difficult to re solve, limiting the ability to 
+
+distinguish context -dependent interaction outcomes. Here, we present ReCLIP, which explicitly 
+
+models this context through learned functional neighborhoods and improves PPI prediction across 
+
+diverse biological settings, spanni ng residue -level perturbations and distinct interaction contexts. 
+
+A central implication of our evaluation is that residue -centered context provides a useful 
+
+organizing principle for modeling protein interactions. This design is particularly important for 
+
+residue -level perturbation prediction, where the same protein pair can exhibit distinct outcomes 
+
+depending on the specific residue being affected. Existing interaction -aware approaches partially 
+
+capture this by presenting mutated protein pairs as input, yet ultimately compress the resulting 
+
+representations into protein -le vel embeddings that may dilute residue -specific effects. 9 Moreover, 
+
+approaches that rely on comparing wild -type and mutant sequences are not applicable to 
+
+perturbations that do not change primary sequence (such as PTMs). In contrast, ReCLIP learns 
+
+functional neighborhoods centered on each residue, enabling direc t modeling of interaction -
+
+relevant context and generalization to perturbations without requiring explicit sequence change. 
+
+The pMHC results further highlight the ability of residue -centered modeling to generalize across 
+
+diverse interaction contexts. Predic ting peptide binding to MHC alleles requires extrapolating 
+
+across extensive receptor polymorphism while preserving sensitivity to residue -level determinants 
+
+of peptide recognition. The consistently high zero -shot performance of ReCLIP suggests that the 
+
+mod el captures shared residue -level constraints relevant to pMHC binding rather than relying 
+
+solely on allele -specific patterns. Collectively, these tasks span qualitatively distinct biological 
+
+settings, establishing residue -centered interaction modeling as a general framework for protein 
+
+binding that is not tied to a specific perturbation type or task formulation .
+
+These findings complement emerging evidence that PLMs encode rich residue -level functional 
+
+information and show that such information can be organized for protein interaction modeling. To 
+
+evaluate the importance of residue -conditioned neighborhood selectio n, we constructed a control 
+
+model in which functional neighborhoods were replaced with randomly sampled residues from the 
+
+same protein, approximating protein -level aggregation. Predictive performance declined 
+
+substantially ( Extended Data Fig. 3a ), indicati ng that the improvements achieved by ReCLIP depend on selective residue -centered context rather than global aggregation of sequence 
+
+information. 
+
+The analysis of learned neighborhoods provides a biological rationale for these performance 
+
+gains. Residues prioritized by ReCLIP are not uniformly distributed along the sequence, but form 
+
+coherent neighborhoods that extend beyond immediate sequence adjace ncy and reflect broader 
+
+structural and functional relationships. Importantly, these biologically coherent neighborhoods are 
+
+also evident in clinically relevant settings. Predicted interaction perturbations were enriched 
+
+among pathogenic variants and organized within interaction pairs sharing disease phenotypes, 
+
+reinforcing that residue -centered interaction modeling captures coordinated perturb ations within 
+
+disease -associated molecular contexts rather than nonspecific interaction effects. This 
+
+perspective provides a framework for understanding how genetic variation propagates through 
+
+interaction networks to influence disease biology. More broadl y, interaction -centered 
+
+representations could complement existing variant interpretation frameworks by providing 
+
+molecular context for variant impact and prioritizing therapeutically actionable perturbations, 
+
+including variants directly targeted by small -molecule inhibitors such as KRAS G12C. 38,39 
+
+Despite these advances, several limitations should be noted. First, the framework depends on 
+
+pretrained PLM embeddings and therefore inherits biases and representational constraints from 
+
+the underlying model. In this study, we employed embeddings from the final transformer layer of 
+
+ESM -2, selected to align backbone capacity with the PLM -based baselines. Evaluation across 
+
+alternative transformer layers yielded similar performance ( Extended Data Fig. 3b ), suggesting 
+
+that ReCLIP is robust to layer selection, although systematic benchmarking across PLM 
+
+architectures and training regimes remains an important direction for future work . Second, the 
+
+curated datasets used for evaluation, although widely adopted, are inherently enriched for well -
+
+studied proteins and experimentally tractable perturbations. This bias is particularly evident for 
+
+underrepresented outcome classes, such as interac tion -increasing mutations and interaction -
+
+inhibiting PTMs, where predictive performance remains comparatively modest across all me thods. 
+
+Nevertheless, ReCLIP consistently achieves larger performance gains in these challenging 
+
+settings , indicating robustness to the sparse and unevenly distributed observations that 
+
+characterize many biological datasets . Finally, although the learned neighborhoods align with 
+
+known structural and functional features, model attention weights should not be interpreted as 
+
+direct evidence of causal importance. The prioritized residues provide informative hypotheses 
+
+about inte raction -relevant context but do no t establish mechanistic causality. Determining which 
+
+of these learned associations correspond to bona fide determinants of interaction specificity will 
+
+require targeted functional validation .
+
+In summary, our study supports a residue -centered view of protein interactions in which binding 
+
+specificity and its perturbation are encoded in localized, structurally and functionally coherent 
+
+neighborhoods. By explicitly modeling these neighborhoods and their partner -specific 
+
+dependencies, ReCLIP provides a generalizable and interpretable framework for predicting 
+
+protein interaction outcomes and linking residue -level perturbations to disease -relevant molecular 
+
+contexts across diverse biological settings .Methods 
+
+ReCLIP framework 
+
+ReCLIP is a residue -centered machine learning framework for modeling protein -protein 
+
+interactions ( PPIs ) directly from sequence. ReCLIP takes as input a target protein sequence, an 
+
+interaction partner sequence, and a queried residue position on the target protein. The queried 
+
+residue is task -specific and may correspond to a mutation site, a PTM residue, or a peptide anchor 
+
+position in a pMHC molecule .
+
+ReCLIP integrates two complementary feature representations to model PPIs at residue 
+
+resolution. The intra -protein representation encodes the queried residue together with its learned 
+
+functional neighborhood in the target protein, capturing sequence -derived dependencies among 
+
+residues. The inter -protein representation encodes the interaction partner conditioned on the 
+
+queried residue, with partner residues weighted according to their relevance to the query. These 
+
+representations are concatenated into a join t feature vector and used for supervised prediction of 
+
+interaction outcomes .
+
+Intra -protein feature representation 
+
+ReCLIP employs self -attention patterns from a pretrained ESM -2 model to construct residue -
+
+centered representations of the target protein. ESM -2 is a transformer -based protein language 
+
+model (PLM) whose self -attention weights encode context -dependent dependencies between 
+
+residues, capturing bioc hemical, structural, and evolutionary relationships learned during large -
+
+scale pretraining. We adopted the 650M -parameter ESM -2 backbone (esm2_t33_650M_UR50D) 
+
+to match the scale of the PLM -based baselines , ensur ing th at performance differences primarily 
+
+reflected architectural differences rather than backbone scale . Residue embeddings (1,280 
+
+dimensions) and corresponding L×L self -attention matrices (up to 510x510 depending on input 
+
+sequence length ) were extracted from the final transformer layer (layer 33). Robustness to 
+
+embedding layer selection was evaluated using alternative ESM -2 layers ( Extended Data Fig. 
+
+3b). 
+
+For each queried residue, self -attention weights from the queried position to all other residues in 
+
+the target sequence were extracted from all attention heads (n=20) of the final layer. 
+
+Let 𝐴 !(𝑖 , 𝑗 ) denote the attention weight assigned by attention head ℎ from queried residue 𝑖 to 
+
+residue 𝑗 . Within each head, residues were ranked by attention weight, and the top -𝑘 residues 
+
+were selected to define the functional neighborhood: 
+
+𝑁 !(𝑖 ) = 𝑘 "𝐴 !(𝑖 , 𝑗 )
+
+For each selected residue 𝑗 ∈ 𝑁 !(𝑖 ), the corresponding hidden -state embedding from the same 
+
+transformer layer was extracted. Let 𝑧 (𝑗 ) ∈ 𝑅 # denote the residue embedding for residue 𝑗 , where 
+
+𝑑 =1,2 80 . Embeddings were concatenated in descending attention order to form a head -specific 
+
+representation: 
+
+𝑓 !(𝑖 ) = [𝑧 (𝑗 $) || 𝑧 (𝑗 %) || … || 𝑧 (𝑗 &)]
+
+where 𝑗 $, … , 𝑗 & denote residues ranked by attention weight. This rank -preserving concatenation 
+
+retains the relative hierarchy of residue importance and preserves complementary neighborhood 
+
+information captured by different attention heads, in contrast to pooling -based approaches that 
+
+collapse this information into averaged representations. 
+
+The final intra -protein representation was constructed by concatenating head -specific 
+
+neighborhood vectors across all attention heads: 𝑧 '()* !+,-!,,# (𝑖 ) = [𝑓 $(𝑖 ) || 𝑓 %(𝑖 ) || … || 𝑓 .(𝑖 )]
+
+If fewer than 𝑘 valid residues were available for a given head, zero -padding was applied to 
+
+preserve output dimensionality. We selected 𝑘 = 5 based on ablation experiments evaluating 
+
+neighborhood sizes of 𝑘 = 3, 5, 7, and 10, which showed comparable predictive performance but 
+
+substantially increased computational cost for larger neighborhoods ( Extended Data Table 1 ).
+
+Inter -protein feature representation 
+
+To model interaction -specific dependencies between the target and partner proteins, ReCLIP 
+
+constructs a residue -conditioned representation of the interaction partner. Target and partner 
+
+sequences were jointly encoded using MINT, a multimer -aware PLM built upon the ESM -2
+
+architecture and trained to model interacting protein sequences .
+
+For queried residues on the target protein, inter -protein ( cross -chain ) attention weights to partner 
+
+residues were extracted from the MINT final layer (up to 1 ,020x1,020 depending on input 
+
+sequence length ). Let 𝐴 !
+
+> /-,00
+
+(𝑖 , 𝑗 ) denote the attention weight from queried residue 𝑖 to partner 
+
+residue 𝑗 in attention head ℎ. These weights were averaged across all 20 heads to reduce head -
+
+specific variability and normalized to define a consensus partner relevance distribution: 
+
+𝛽 " =
+
+1
+
+𝐻 ∑ 𝐴 !
+
+> /-,00
+
+(𝑖 , 𝑗 ).
+
+> !1$
+
+∑ 1
+
+𝐻 ∑ 𝐴 !
+
+> /-,00
+
+(𝑖 , 𝑗 ′).
+
+> !1$"2
+
+Let 𝑧 (𝑗 ) denote the hidden -state embedding of partner residue 𝑗 from the same transformer layer. 
+
+The residue -conditioned partner representation was computed as a weighted sum of partner 
+
+residue embeddings: 
+
+𝑧 34-5'(-(𝑖 ) = : 𝛽 "𝑧 (𝑗 )
+
+> "
+
+This formulation allows the same protein pair to generate distinct representations depending on 
+
+the queried residue, enabling residue -specific modeling of interaction context. 
+
+Joint interaction feature representation and supervised prediction 
+
+The final ReCLIP representation was constructed by concatenating intra -protein and partner -
+
+conditioned feature vectors: 
+
+𝑧 6(789: (𝑖 ) = [𝑧 '()* !+,-!,,# (𝑖 ); 𝑧 34-5'(-(𝑖 )]
+
+This joint feature representation was used as input to a gradient -boosted decision -tree classifier 
+
+implemented using XGBoost. Multiclass tasks (e.g., mutation effect prediction) were trained using 
+
+the multi:softprob objective, whereas binary tasks (e.g., PTM effect predicti on and pMHC binding 
+
+prediction) used binary:logistic. 
+
+XGBoost hyperparameters were fixed across tasks: n_estimators = 3500, learning_rate = 0.02, 
+
+max_depth = 4, min_child_weight = 12, subsample = 0.85, colsample_bytree = 0.85, gamma = 
+
+1.0, reg_lambda = 10.0, and reg_alpha = 0.1. Hyperparameter optimization wa s performed 
+
+exclusively on training partitions to prevent information leakage. 
+
+Mutation -induced PPI perturbation Dataset. Mutation effect prediction data were curated from the IntAct database. 25 We retained 
+
+single amino acid substitutions with annotated effects on protein binding and mapped annotations 
+
+into four outcome classes: disrupting, decreasing, increasing, and no effect. Entries were 
+
+deduplicated by mutation, target protein, interaction p artner, and outcome label, and mutation -
+
+interaction pairs with conflicting annotations were excluded. Records involving multiple interaction 
+
+partners were expanded into pairwise target –partner interactions, followed by secondary 
+
+deduplication and conflict resolution. Target and partner sequences were mapped to human 
+
+UniProt/Swiss -Prot reference sequences, 42 and entries lacking valid sequence mappings were 
+
+removed. Mutant sequences were generated by applying the annotated amino acid substitution 
+
+at the corresponding position. The final dataset comprised 56,429 mutation –interaction pairs, 
+
+including 13,780 disr upting, 9,069 decreasing, 2,228 increasing, and 31,352 no -effect interactions .
+
+Prediction . Prediction of mutation -induced PPI perturbation was formulated as a four -class 
+
+classification task. For each instance, ReCLIP used the mutated target sequence, mutation 
+
+position, and partner sequence to generate the joint interaction representation. Model 
+
+performance was evaluated using 10 -fold stratified cross -validation while preserving class 
+
+proportions across folds. Evaluation metrics included multiclass area under the curve ( AUROC )
+
+and area under the precision -recall curve ( AUPRC ), accuracy , balanced accuracy, macro -
+
+precision, macro -recall, and macro -F1 score. To evaluate ranking performance, predictions were 
+
+ranked separately for each class according to the class -specific probability produced by the 
+
+classifier, treating each class in a one -vs -rest manner. Precision was computed at multiple Top -
+
+K thresholds for each class, and the final ranking metric was reported as macro -precision 
+
+averaged across the four classes. 
+
+PTM -regulated PPI perturbation 
+
+Dataset. PTM effect prediction data were curated from the PTMint database. 30 We retained 
+
+phosphorylation events experimentally annotated as enhancing or inhibiting binding. Records 
+
+were deduplicated by modification site, target protein, interaction partner, and outcome label. The 
+
+final dataset comprised 3,052 PTM -interaction pairs, including 2,084 enhancing and 968 inhibiting 
+
+instances. 
+
+Prediction. Prediction of PTM -regulated PPI perturbation was formulated as a binary classification 
+
+task (enhancing versus inhibiting). Each instance was defined by the target protein sequence, 
+
+modification site, and interaction partner sequence, and interaction repre sentations were 
+
+generated using the modification site as the queried residue. Because PTMs do not alter the 
+
+primary amino acid sequence, methods requiring explicit comparison between wild -type and 
+
+mutant sequences (MINT, AlphaMissense, and Prima teAI -3D) were not applied to this task. 
+
+Performance was evaluated using 10 -fold stratified cross -validation. Evaluation metrics were 
+
+consistent with those used for mutation -induced perturbation prediction, including AUROC, 
+
+AUPRC, balanced accuracy, precisi on, recall, and F1 score .
+
+pMHC binding 
+
+Dataset. pMHC interaction datasets were obtained from previously curated resources assembled 
+
+by SWING. 17 The original datasets were derived from the NetMHCpan v4.1 32 and NetMHCIIpan 
+
+v4.2 43 benchmark collections and comprised experimentally supported pMHC interactions 
+
+spanning multiple HLA alleles. MHC sequences were obtained from the MHC Restriction 
+
+Ontology, 44 and alleles were grouped according to functional similarity using MHCCluster v2.0. 45 
+
+The class I training set included eight HLA alleles: HLA -B* 15:03, HLA -C* 07:02, HLA -A* 25:01, 
+
+HLA -C* 08:02, HLA -B* 07:02, HLA -A* 02:11, HLA -A* 11:01, and HLA -B* 40:01. Held -out alleles 
+
+were divided into functionally proximal ( HLA -A* 02:02, HLA -B* 40:02, and HLA -C* 05:01) and 
+
+functionally distal ( HLA -A* 32:01, HLA -C* 03:03, and HLA -B* 38:01) sets. For mixed -class analyses, the class I training data were combined with curated class II datasets comprising DRB1* 01:01, 
+
+DRB1* 03:01, DRB1* 04:01, DRB1* 07:01, and DRB1 *15:01. 
+
+Prediction. pMHC binding prediction was formulated as a binary classification task (binding versus 
+
+not binding). Interaction representations were generated for each pMHC pair, with the peptide 
+
+sequence used as the target sequence, its central position as the queried residue, and the MHC 
+
+binding groove as the interaction partner. Evaluati on was performed under strict zero -shot 
+
+settings in which test alleles were excluded from training. The class I model was evaluated on 
+
+proximal and distal held -out alleles t o assess generalization across varying degrees of MHC 
+
+similarity, and the mixed -class model was evaluated on the same class I held -out alleles to assess 
+
+robustness to heterogeneous training data. Evaluation metrics were consistent with those used 
+
+for mutat ion and PTM tasks. 
+
+Benchmark models 
+
+ReCLIP was benchmarked against state -of -the -art PLM -based protein interaction models and 
+
+single -protein variant effect predictors. MINT 9 is an interaction -aware PLM that jointly encodes 
+
+interacting protein sequences and generates pair -conditioned representations through cross -
+
+chain attention. SWING 17 is a sequence -window -based interaction model that represents PPIs 
+
+using local sequence neighborhoods centered on fixed sequence windows. A BERT -based PLM 
+
+was included as a global sequence -embedding baseline, in which proteins were independently 
+
+encoded an d pooled into fixed -length representations. For mutation -induced perturbation 
+
+prediction, AlphaMissense 26 and PrimateAI -3D 27 were included as single -protein -level variant 
+
+effect predictors that do not explicitly model interaction partners. For binary mutation effect 
+
+prediction, we additionally compared ReCLIP with recent PLM -based interaction models 
+
+developed for binary classification, including PLM -Interact 29 and eSIG -Net, 28 evaluated on the 
+
+disrupting -versus -no -effect subset of the IntAct dataset. All baseline models were implemented 
+
+using the recommended settings or publicly available configurations described in the original 
+
+publications .
+
+Bootstrap significance testing 
+
+Statistical significance of performance differences between models was assessed using paired 
+
+bootstrap resampling. For each evaluation metric, predictions from ReCLIP and the strongest 
+
+competing baseline were compared on identical test instances using 200 paired bootstrap 
+
+resamples of the test set generated by sampling with replacement . For bootstrap iteration 𝑏 , the 
+
+metric difference was defined as: 
+
+𝑑 (+) = 𝑚 6(789:  
+
+> (+)
+
+− 𝑚 +40(=)'( 
+
+> (+)
+
+The bootstrap distribution of 𝑑 (+) was summarized by its mean and 95% confidence interval (CI: 
+
+2.5 th -97.5 th percentiles). Statistical significance was assessed by approximating the bootstrap 
+
+difference distribution as Gaussian and computing the standardized test statistic: 
+
+𝑍 = 𝜇 #
+
+𝜎 #
+
+where 𝜇 # and 𝜎 # denote the mean and standard deviation of the bootstrap differences, 
+
+respectively. Two -sided 𝑃 -values were computed from the standard normal distribution. 
+
+Analysis of residue -centered functional neighborhoods 
+
+To characterize the biological properties of residue -centered representations learned by ReCLIP, 
+
+we analyzed the sequence, structural, and functional organization of attention -derived residue 
+
+neighborhoods in the mutation perturbation task . ReCLIP -prioritized residue neighborhoods were defined as the top five residues receiving the highest self -attention weights from the queried 
+
+residue within each of the 20 attention heads . Matched random residue sets were generated 
+
+independently for each queried residue by sampling an equal number of residues from the 
+
+corresponding protein sequence . Unless otherwise specified, all analyses were performed in a 
+
+paired manner between prioritized and random residue sets associated with the same queried 
+
+residue. 
+
+Sequence distance . Sequence distance was defined as the absolute difference in residue index 
+
+between the queried residue and each prioritized or random residue along the primary protein 
+
+sequence. For each queried residue, the mean sequence distance was computed across 
+
+prioritized residues aggregated over 20 attention heads and compared with matched random 
+
+residue sets . In total, 19,547 querie d residues across 3,202 proteins were included in the analysis 
+
+(n = 19,547 paired observations). Differences were ass essed using two -sided paired Wilcoxon 
+
+signed -rank tests .
+
+Structural proximity . Structural proximity was quantified using residue -to -residue distances 
+
+derived from AlphaFold -predicted structures .46 Distances were computed as the mean Euclidean 
+
+distance between the Cα atom of the queried residue and those of prioritized or random residues .
+
+Analyses were restricted to high -confidence structures, defined as proteins with predicted local 
+
+distance difference test ( pLDDT ) ≥ 70 for more than 80% of residues in the protein . Queried 
+
+residues with at least one prioritized residue mapped to the corresponding structure were retained, 
+
+resulting in 8,466 queried residues across 965 proteins (n = 8,466 paired obser vations). To 
+
+assess non -local structural organization independently of sequence adjacency , analyses were 
+
+additionally repeated after restricting residue neighborhoods to those separated by more than 10 
+
+amino acids in primary sequence. Differences were assessed using two -sided paired Wilcoxon 
+
+signed -rank tests .
+
+Functional annotation enrichment . Functional enrichment was evaluated using UniProtKB 
+
+functional site annotations .42 Prioritized residues were intersected with annotated functional sites, 
+
+including catalytic sites, binding sites, post -translationally modified residues, and disulfide -bonded 
+
+cysteines. Enrichment was quantified by comparing annotation frequencies between prioritized 
+
+and background residues using two -sided Fisher’s exact tests . In total, 56,360 of 1,269,100 (4. 4%) 
+
+prioritized residues overlapped annotated functional sites, compared with 125,650 of 5,465,707 
+
+(2. 3%) background residues across 2,369 proteins. Analyses were additionally performed 
+
+separately for catalytic sites, binding sites, modified residues, and disulfide -bonded cysteines .
+
+We further evaluated the structural proximity of prioritized residues to annotated functional sites 
+
+using AlphaFold -predicted structures . For each queried residue, Euclidean distances to the 
+
+nearest annotated site were averaged across associated prioritized (or random) residues .
+
+Analyses were performed both across all annotations (n = 4,059 paired observations) and 
+
+separately for catalytic sites (n = 953 ), binding sites (n = 1,998 ), modified residues (n = 3,441 ), 
+
+and disulfide -bonded cysteines (n = 719 ). Consistent structural quality -control filters were applied 
+
+as described in the structural proximity analysis. Differences were assessed using two -sided 
+
+paired Wilcoxon signed -rank tests .
+
+Domain coherence . Domain -level organization was evaluated using InterPro annotations. 47 For 
+
+each queried residue, domain coherence was defined as whether all five residues prioritized by 
+
+an attention head co -localized within the same annotated domain interval as the queried residue .
+
+Analyses were restricted to proteins containing at least one annotated domain interval and 
+
+queried residues located within annotated domains . In total, 190,209 of 229,340 (82.9 %)
+
+prioritized residue neighborhoods exhibited domain coherence, compared with 54,108 of 229,340 (23.6%) random residue sets across 1,872 proteins . Statistical significance was assessed using 
+
+two -sided Fisher’s exact tests. 
+
+Amino -acid composition . Amino -acid composition was analyzed across the 20 canonical amino 
+
+acids. Residue counts were aggregated across prioritized residues from all 20 attention heads 
+
+and compared with matched random residues sampled from the corresponding protein 
+
+sequences (19,547 queried residues across 3,202 proteins). Amino acids were ranked according 
+
+to their relative enrichment in prioritized versus random residues. 
+
+Analysis of ClinVar variants 
+
+ClinVar variants were obtained from the UCSC Table Browser 48 ClinVar SNVs track. Analyses 
+
+were restricted to single amino acid substitutions with clinical significance corresponding to 
+
+pathogenic (PG), likely pathogenic (LP), benign (BN), or likely benign (LB) annotations. Variants 
+
+were mapped to UniProt protein sequences and retained only if the annotated amino acid 
+
+substitution matched the corresponding UniProt residue and position. Protein interaction partners 
+
+were retrieved from the HINT database, 49 which compiles high -quality experimentally supported 
+
+physical interactions. For each protein harboring ClinVar variants, variant effects were evaluated 
+
+against up to five interaction partners .
+
+Interaction perturbations were inferred using ReCLIP trained on the IntAct dataset under a four -
+
+class classification setting (disrupting, decreasing, increasing, and no effect) . For each ClinVar 
+
+variant -interaction pair, the mutant protein sequence, variant position, and interaction partner 
+
+sequence were used to generate residue -centered interaction representations and to predict 
+
+interaction outcomes . A total of 591 variant -interaction pairs overlapping between the ClinVar and 
+
+IntAct datasets were excluded from downstream analyses. The final dataset comprised 144,837 
+
+ClinVar missense variants (19,045 PG, 35,347 LP, 20,811 BN, and 69,634 LB variants) evaluated 
+
+across 500,083 interaction pairs. 
+
+For the disease phenotype analysis in Fig. 6d, phenotype annotations were obtained from Human 
+
+Phenotype Ontology (HPO) terms associated with ClinVar entries in the original UCSC ClinVar 
+
+annotation table. Interaction pairs were considered to share a disease phenotype if the two 
+
+interacting proteins were annotated with at least one common HPO term . For the disease 
+
+category analysis in Fig. 6e, HPO annotations were mapped to first -level subclasses under 
+
+HP:0000118 (“Phenotypic abnormality”) to define broad dis ease categories. 
+
+Data availability 
+
+The mutation -induced PPI perturbation dataset was obtained from the IntAct database 25 
+
+https://www.ebi.ac.uk/intact/download/datasets#mutations. The PTM -regulated interaction 
+
+dataset was downloaded from PTMint 30 https://ptmint.sjtu.edu.cn/. pMHC datasets were derived 
+
+from previously curated datasets assembled by SWING 17 https://github.com/jishnu -lab/SWING. 
+
+Protein sequences and functional annotations were obtained from UniProtKB/Swiss -Prot 42 
+
+https://www.uniprot.org/. Predicted and experimentally resolved protein structures were obtained 
+
+from the AlphaFold Protein Structure Database 46 https://alphafold.ebi.ac.uk/ and the RCSB 
+
+Protein Data Bank (PDB) 50 https://www.rcsb.org/, respectively. Domain annotations were 
+
+obtained from InterPro 47 https://www.ebi.ac.uk/interpro/. ClinVar variants and annotations were 
+
+obtained from the UCSC Table Browser 48 ClinVar SNVs (clinvarMain) table under the ClinVar 
+
+Variant track https://genome.ucsc.edu/cgi -bin/hgTables. Protein interactions used for ClinVar 
+
+interaction perturbation inference were retrieved from the HINT 49 Homo sapiens binary high -
+
+quality interaction dataset https://hint.yulab.org/. Code availability 
+
+All code used for data processing, model training, benchmarking, and statistical analyses are 
+
+publicly available at https://github.com/SiweiLab/ReCLIP .References 
+
+1 Ruffolo, J. A. & Madani, A. Designing proteins with language models. Nat Biotechnol 42 , 200 –202 
+
+(2024). https://doi.org/10.1038/s41587 -024 -02123 -4
+
+2 Schmirler, R., Heinzinger, M. & Rost, B. Fine -tuning protein language models boosts predictions 
+
+across diverse tasks. Nat Commun 15 , 7407 (2024). https://doi.org/10.1038/s41467 -024 -51844 -2
+
+3 Ruffolo, J. A. What does a language model know about proteins? Nat Methods 22 , 2017 –2019 
+
+(2025). https://doi.org/10.1038/s41592 -025 -02837 -6
+
+4 Sledzieski, S., Singh, R., Cowen, L. & Berger, B. D -SCRIPT translates genome to phenome with 
+
+sequence -based, structure -aware, genome -scale predictions of protein -protein interactions. Cell 
+
+Syst 12 , 969 –982.e966 (2021). https://doi.org/10.1016/j.cels.2021.08.010 
+
+5 Charih, F., Biggar, K. K. & Green, J. R. Assessing sequence -based protein -protein interaction 
+
+predictors for use in therapeutic peptide engineering. Sci Rep 12 , 9610 (2022). 
+
+https://doi.org/10.1038/s41598 -022 -13227 -9
+
+6 Sledzieski, S., Devkota, K., Singh, R., Cowen, L. & Berger, B. TT3D: Leveraging precomputed 
+
+protein 3D sequence models to predict protein -protein interactions. Bioinformatics 39 (2023). 
+
+https://doi.org/10.1093/bioinformatics/btad663 
+
+7 Singh, R., Devkota, K., Sledzieski, S., Berger, B. & Cowen, L. Topsy -Turvy: integrating a global 
+
+view into sequence -based PPI prediction. Bioinformatics 38 , i264 –i272 (2022). 
+
+https://doi.org/10.1093/bioinformatics/btac258 
+
+8 Sledzieski, S. et al. Democratizing protein language models with parameter -efficient fine -tuning. 
+
+Proc Natl Acad Sci U S A 121 , e2405840121 (2024). https://doi.org/10.1073/pnas.2405840121 
+
+9 Ullanat, V., Jing, B., Sledzieski, S. & Berger, B. Learning the language of protein -protein 
+
+interactions. Nat Commun 17 , 1199 (2026). https://doi.org/10.1038/s41467 -025 -67971 -3
+
+10 Liu, J., Chen, H. & Zhang, Y. A paired sequence language model for protein -protein interaction 
+
+modeling. Nat Commun 17 (2026). https://doi.org/10.1038/s41467 -026 -70457 -5
+
+11 Bogan, A. A. & Thorn, K. S. Anatomy of hot spots in protein interfaces. J Mol Biol 280 , 1 –9 (1998). 
+
+https://doi.org/10.1006/jmbi.1998.1843 
+
+12 Lise, S., Archambeau, C., Pontil, M. & Jones, D. T. Prediction of hot spot residues at protein -protein 
+
+interfaces by combining machine learning and energy -based methods. BMC Bioinformatics 10 , 365 
+
+(2009). https://doi.org/10.1186/1471 -2105 -10 -365 
+
+13 Sahni, N. et al. Widespread macromolecular interaction perturbations in human genetic disorders. 
+
+Cell 161 , 647 –660 (2015). https://doi.org/10.1016/j.cell.2015.04.013 
+
+14 Ng, P. K. et al. Systematic Functional Annotation of Somatic Mutations in Cancer. Cancer Cell 33 ,
+
+450 –462.e410 (2018). https://doi.org/10.1016/j.ccell.2018.01.021 
+
+15 Chen, S. et al. An interactome perturbation framework prioritizes damaging missense mutations for 
+
+developmental disorders. Nat Genet 50 , 1032 –1040 (2018). https://doi.org/10.1038/s41588 -018 -
+
+0130 -z
+
+16 Cheng, F. et al. Comprehensive characterization of protein -protein interactions perturbed by 
+
+disease mutations. Nat Genet 53 , 342 –353 (2021). https://doi.org/10.1038/s41588 -020 -00774 -y
+
+17 Siwek, J. C. et al. Sliding Window Interaction Grammar (SWING): a generalized interaction 
+
+language model for peptide and protein interactions. Nat Methods 22 , 1707 –1719 (2025). 
+
+https://doi.org/10.1038/s41592 -025 -02723 -1
+
+18 Li, B., Roden, D. M. & Capra, J. A. The 3D mutational constraint on amino acid sites in the human 
+
+proteome. Nat Commun 13 , 3273 (2022). https://doi.org/10.1038/s41467 -022 -30936 -x
+
+19 Niu, B. et al. Protein -structure -guided discovery of functional mutations across 19 cancer types. 
+
+Nat Genet 48 , 827 –837 (2016). https://doi.org/10.1038/ng.3586 
+
+20 Huang, K. L. et al. Spatially interacting phosphorylation sites and mutations in cancer. Nat Commun 
+
+12 , 2313 (2021). https://doi.org/10.1038/s41467 -021 -22481 -w
+
+21 Jumper, J. et al. Highly accurate protein structure prediction with AlphaFold. Nature 596 , 583 –589 
+
+(2021). https://doi.org/10.1038/s41586 -021 -03819 -2
+
+22 Lu, D., Yu, S., Huang, Y. & Gong, X. Multimeric protein interaction and complex prediction: 
+
+Structure, dynamics and function. Comput Struct Biotechnol J 27 , 1975 –1997 (2025). 
+
+https://doi.org/10.1016/j.csbj.2025.05.009 
+
+23 Boehr, D. D. in Front Mol Biosci Vol. 11 1363100 (2024). 24 Landrum, M. J. et al. ClinVar: public archive of relationships among sequence variation and human 
+
+phenotype. Nucleic Acids Res 42 , D980 –985 (2014). https://doi.org/10.1093/nar/gkt1113 
+
+25 Del Toro, N. et al. The IntAct database: efficient access to fine -grained molecular interaction data. 
+
+Nucleic Acids Res 50 , D648 –d653 (2022). https://doi.org/10.1093/nar/gkab1006 
+
+26 Cheng, J. et al. Accurate proteome -wide missense variant effect prediction with AlphaMissense. 
+
+Science 381 , eadg7492 (2023). https://doi.org/10.1126/science.adg7492 
+
+27 Gao, H. et al. The landscape of tolerated genetic variation in humans and primates. Science 380 ,
+
+eabn8153 (2023). https://doi.org/10.1126/science.abn8197 
+
+28 Pan, X. et al. eSIG -Net: an interaction language model that decodes the protein code of single 
+
+mutations. Nat Methods (2026). https://doi.org/10.1038/s41592 -026 -03086 -x
+
+29 Liu, D. et al. PLM -interact: extending protein language models to predict protein -protein interactions. 
+
+Nat Commun 16 , 9012 (2025). https://doi.org/10.1038/s41467 -025 -64512 -w
+
+30 Hong, X. et al. PTMint database of experimentally verified PTM regulation on protein -protein 
+
+interaction. Bioinformatics 39 (2023). https://doi.org/10.1093/bioinformatics/btac823 
+
+31 Jensen, P. E. Recent advances in antigen processing and presentation. Nat Immunol 8, 1041 –
+
+1048 (2007). https://doi.org/10.1038/ni1516 
+
+32 Reynisson, B., Alvarez, B., Paul, S., Peters, B. & Nielsen, M. NetMHCpan -4.1 and NetMHCIIpan -
+
+4.0: improved predictions of MHC antigen presentation by concurrent motif deconvolution and 
+
+integration of MS MHC eluted ligand data. Nucleic Acids Res 48 , W449 –w454 (2020). 
+
+https://doi.org/10.1093/nar/gkaa379 
+
+33 Ahmad, S. et al. The UniProt website API: facilitating programmatic access to protein knowledge. 
+
+Nucleic Acids Res 53 , W547 –w553 (2025). https://doi.org/10.1093/nar/gkaf394 
+
+34 Paysan -Lafosse, T. et al. The Pfam protein families database: embracing AI/ML. Nucleic Acids Res 
+
+53 , D523 –d534 (2025). https://doi.org/10.1093/nar/gkae997 
+
+35 Ma, B., Elkayam, T., Wolfson, H. & Nussinov, R. Protein -protein interactions: structurally conserved 
+
+residues distinguish between binding sites and exposed protein surfaces. Proc Natl Acad Sci U S 
+
+A 100 , 5772 –5777 (2003). https://doi.org/10.1073/pnas.1030237100 
+
+36 Chakrabarti, P. & Janin, J. Dissecting protein -protein recognition sites. Proteins 47 , 334 –343 (2002). 
+
+https://doi.org/10.1002/prot.10085 
+
+37 Wang, J., Yuan, T., Yang, B., He, Q. & Zhu, H. SDH defective cancers: molecular mechanisms and 
+
+treatment strategies. Cell Biol Toxicol 41 , 74 (2025). https://doi.org/10.1007/s10565 -025 -10022 -w
+
+38 Weng, C., Faure, A. J., Escobedo, A. & Lehner, B. The energetic and allosteric landscape for KRAS 
+
+inhibition. Nature 626 , 643 –652 (2024). https://doi.org/10.1038/s41586 -023 -06954 -0
+
+39 Ostrem, J. M., Peters, U., Sos, M. L., Wells, J. A. & Shokat, K. M. K -Ras(G12C) inhibitors 
+
+allosterically control GTP affinity and effector interactions. Nature 503 , 548 –551 (2013). 
+
+https://doi.org/10.1038/nature12796 
+
+40 Ahmed, M. H., Ghatge, M. S. & Safo, M. K. Hemoglobin: Structure, Function and Allostery. Subcell 
+
+Biochem 94 , 345 –382 (2020). https://doi.org/10.1007/978 -3-030 -41769 -7_14 
+
+41 Szczesny -Malysiak, E. et al. Irreversible alterations in the hemoglobin structure affect oxygen 
+
+binding in human packed red blood cells. Biochim Biophys Acta Mol Cell Res 1867 , 118803 (2020). 
+
+https://doi.org/10.1016/j.bbamcr.2020.118803 
+
+42 UniProt: the Universal Protein Knowledgebase in 2025. Nucleic Acids Res 53 , D609 –d617 (2025). 
+
+https://doi.org/10.1093/nar/gkae1010 
+
+43 Nilsson, J. B. et al. Machine learning reveals limited contribution of trans -only encoded variants to 
+
+the HLA -DQ immunopeptidome. Commun Biol 6, 442 (2023). https://doi.org/10.1038/s42003 -023 -
+
+04749 -7
+
+44 Vita, R. et al. An ontology for major histocompatibility restriction. J Biomed Semantics 7, 1 (2016). 
+
+https://doi.org/10.1186/s13326 -016 -0045 -5
+
+45 Thomsen, M., Lundegaard, C., Buus, S., Lund, O. & Nielsen, M. MHCcluster, a method for 
+
+functional clustering of MHC molecules. Immunogenetics 65 , 655 –665 (2013). 
+
+https://doi.org/10.1007/s00251 -013 -0714 -9
+
+46 Bertoni, D. et al. AlphaFold Protein Structure Database 2025: a redesigned interface and updated 
+
+structural coverage. Nucleic Acids Res 54 , D358 –d362 (2026). 
+
+https://doi.org/10.1093/nar/gkaf1226 
+
+47 Blum, M. et al. InterPro: the protein sequence classification resource in 2025. Nucleic Acids Res 
+
+53 , D444 –d456 (2025). https://doi.org/10.1093/nar/gkae1082 48 Casper, J. et al. The UCSC Genome Browser database: 2026 update. Nucleic Acids Res 54 ,
+
+D1331 –D1335 (2026). https://doi.org/10.1093/nar/gkaf1250 
+
+49 Das, J. & Yu, H. HINT: High -quality protein interactomes and their applications in understanding 
+
+human disease. BMC Syst Biol 6, 92 (2012). https://doi.org/10.1186/1752 -0509 -6-92 
+
+50 Berman, H. M. et al. The Protein Data Bank. Nucleic Acids Res 28 , 235 –242 (2000). 
+
+https://doi.org/10.1093/nar/28.1.235 Figures and Tables 
+
+Figure legends 
+
+Figure 1 | Overview of ReCLIP for residue -centered modeling of protein -protein interactions (PPIs) .
+
+a, Limitations of existing protein language model ( PLM )-based approaches for PPI modeling. Current methods 
+
+often rely on protein -level aggregation or local sequence windows, which can obscure residue -level interaction 
+
+context or miss long -range dependencies. b, Overview of the ReCLIP framework. ReCLIP organizes interaction 
+
+representations around residue -centered context, combining learned intra -protein functional neighborhoods with 
+
+residue -conditioned representations of interaction partners to capture interaction -specific, residue -level 
+
+information. c, Applicat ions of ReCLIP across diverse PPI prediction tasks. Left, prediction of mutation -induced 
+
+perturbations with four outcome classes (disrupting, decreasing, increasing, no effect). Middle, prediction of 
+
+PTM -regulated interaction changes (enhancing or inhibiti ng). Right, prediction of peptide -MHC (pMHC) binding 
+
+across diverse MHC alleles. 
+
+Figure 2 | ReCLIP predicts mutation -induced perturbations to PPIs .
+
+a, Overview of the mutation -induced interaction perturbation prediction, formulated as a four -class classification 
+
+problem (disrupting, decreasing, increasing, no effect). b, Receiver operating characteristic (ROC) curves 
+
+comparing ReCLIP with baseline methods across all mutation classes. ReCLIP achieves the highest overall 
+
+AUROC. c, Balanced accuracy comparison across methods, highlighting ReCLIP’s robustness to class 
+
+imbalance. d, Class -specific ROC curves for each interaction outcome. ReCLIP consistently outperforms 
+
+comparison methods across all classes. e,f, Performance comparison across evaluation metrics for each 
+
+prediction class ( e) and across 10 cross -validation folds ( f). ReCLIP shows high and consistent performance 
+
+across these settings . In f, each point represents one fold; center lines indicate medians and error bars denote 
+
+the 2.5 th -97.5 th percentile range. Statistical significance was assessed using a two -sided Wilcoxon signed -rank 
+
+test. g, Precision as a function of top -ranked pred ictions. ReCLIP maintains higher precision across the ranking 
+
+range, exceeding 80% at the top 10% threshold. Statistical significance was assessed using bootstrap 
+
+resampling (n = 200) of the difference in precision between ReCLIP and the second -best method . For b-d,
+
+evaluation metrics are reported as mean with 95% confidence intervals (CIs) computed from 200 bootstrap 
+
+resamples; statistical significance was assessed from the bootstrap distribution of metric differences between 
+
+ReCLIP and the second -best met hod. 
+
+Figure 3 | ReCLIP generalizes to PTM -regulated interaction perturbations .
+
+a, Overview of the PTM -regulated interaction perturbation prediction, formulated as a binary classification 
+
+problem (enhancing versus inhibiting). b, ROC curves comparing ReCLIP with baseline methods. ReCLIP 
+
+achieves the highest overall AUROC. AUROC values are reported as mean with 95% CIs computed from 200 
+
+bootstrap resamples; statistical significance was assessed from the bootstrap distribution of m etric differences 
+
+between ReCLIP and the second -best method . c,d, Performance comparison across evaluation metrics for each 
+
+interaction outcome class (c) and across cross -validation folds (d). ReCLIP shows consistently strong 
+
+performance across metrics and folds relative to baselines. In d, each point represents one fold; center lines 
+
+indicate medians and error bars denote the 2.5 th -97.5 th percentile range. Statistical significance was assessed 
+
+using a two -sided Wilcoxon signed -rank test. e, Precision as a function of top -ranked predictions. ReCLIP 
+
+maintains higher precision across the ranking range, remaining above 90% through the top 50% of predictions. 
+
+Statistical significance was assessed using bootstrap resampling (n = 200) of the diffe rence in precisio n between 
+
+ReCLIP and the second -best method. 
+
+Figure 4 | ReCLIP models p eptide -MHC (pMHC) binding across diverse MHC alleles. 
+
+a, Overview of the pMHC binding prediction task and zero -shot evaluation framework. MHC alleles are 
+
+partitioned into training and held -out test sets such that test alleles are excluded from training. A hierarchical 
+
+clustering tree based on functional simila rity is used to define proximal and distal test alleles, enabling evaluation 
+
+under varying degrees of distribution shift. b, Data composition across MHC alleles. Each circle represents one 
+
+allele; circle size indicates sample size and color denotes binding (colored) versus non -binding (grey) 
+
+composition. Sample sizes and binding class fractions are as follows: , HLA -B* 15:03 (n=20,164; 8.6%), HLA -
+
+C* 07:02 (n=6,855; 8.1%), HLA -A* 25:01 (n=3,124; 10.7%), HLA -C* 08:02 (n=14,574; 9.2%), HLA -B* 07:02 (n=1,114; 11.1%), HLA -A* 02:11 (n=21,499; 7.5%), HLA -A* 11:01 (n=14,858; 10.3%), HLA -B* 40:01 (n=8,486; 
+
+10.9%), HLA -A* 32:01 (n=12,427; 8.3%), HLA -C* 03:03 (n=15,954; 9.9%), HLA -B* 38:01 (n=4,248; 10.3%), HLA -
+
+C* 05:01 (n=3,193; 10.7%), HLA -A* 02:02 (n=34,347; 7.7%), and HLA -B* 40:02 (n=10,717; 10.3%). c,d, ROC 
+
+curves for zero -shot prediction on functionally proximal ( c) and distal ( d) MHC alleles. ReCLIP achieves the 
+
+highest performance across all held -out alleles. e, Performance comparison under class I (hollow box es) and 
+
+mixed -class (filled boxes) training. ReCLIP maintains the highest performance with greater stability across 
+
+training settings. For c-e, AUROC values are reported as mean with 95% CIs computed from 200 bootstrap 
+
+resamples. Statistical significance was assessed using the bootstrap distribution of metric differences between 
+
+ReCLIP and the second -best method ( c,d) or between training settings ( e). n.s., not significant ( P > 0.05). 
+
+Figure 5 | ReCLIP captures biologically meaningful residue neighborhoods .
+
+a,b , Distribution of sequence ( a) and three -dimensional ( b) distance between residues prioritized by ReCLIP 
+
+(purple) and the queried residue, compared with randomly sampled residues from the same protein (grey). In b,
+
+dashed lines indicate residues that are distal in sequence (>10 amino acids), highlighting enrichment of non -
+
+local structural neighborhoods . c, Enrichment of prioritized residues in annotated functional sites, including 
+
+catalytic residues, binding sites, modified residues, and disulfide bonds. Enrichment is quantified as odds ratios 
+
+(ORs) relative to random expectation; error bars indicate 95% CIs . The dashed vertical line indicates an OR of 
+
+1 (no enrichment). d, Distribution of three -dimensional distances between prioritized residues (purple) and 
+
+annotated functional sites , compared with random controls (grey). Dashed horizontal lines indicate medians and 
+
+interquartile ranges. e, Fraction of prioritized residues (purple) located within the same annotated protein domain 
+
+as the queried residue, compared with randomly sampled residues (grey). Error bars indicate Wilson 95% 
+
+binomial CIs. f, Amino -acid composition of prioritized residues (purple) compared with random background (grey) .
+
+Bars are ordered by relative enrichment compared to background. For a-f, statistical significance was assessed 
+
+using two -sided Wilcoxon signed -rank tests ( a,b,d ) or Fisher’s exact tests ( c,e,f ). 
+
+Figure 6 | ReCLIP identifies clinically relevant interaction perturbations. 
+
+a, Predicted interaction perturbations among clinically annotated ClinVar missense variants. Variants were 
+
+evaluated across protein interactions and classified into four outcome classes (disrupting, decreasing, increasing, 
+
+or no effect) based on ReCLIP pred ictions. Left, total numbers of variants and variant –interaction pairs, stratified 
+
+by predicted interaction outcome and ClinVar annotation. Right, corresponding fractions of predicted perturbation 
+
+classes across variants and interaction pairs. Predicted pe rturbations were enriched among pathogenic and 
+
+likely pathogenic (PG/LP) variants relative to benign and likely benign (BN/LB) variants at both variant and 
+
+interaction levels. Statistical significance was assessed using two -sided Fisher’s exact tests. b, Predicted 
+
+perturbation frequencies across different numbers of interaction partners evaluated per variant. Bubble size 
+
+indicates the number of variants in each category, and percentages indicate the fraction of variants predicted to 
+
+perturb the correspon din g number of interactions. PG/LP variants showed consistently higher perturbation 
+
+frequencies than BN/LB variants across one to five interaction partners. c,d, Enrichment of perturbed interaction 
+
+partners harboring PG/LP variants ( c) and interaction pairs sharing disease phenotypes ( d). Bars indicate odds 
+
+ratios (ORs) for each perturbation class and for all perturbations combined relative to no -effect predictions; error 
+
+bars represent 95% CIs. e, Distribution of perturbed interaction pairs sharing phenotype annotations across 
+
+major disease categories. Disease categories were derived from first -level Human Phenotype Ontology (HPO) 
+
+subclasses (HP:0000118). Bars are stratified by predicted perturbation class. f-h, Representative examples 
+
+illustrating that ReCLIP links variant effects to plausible molecular mechanisms. f, Predicted interaction -
+
+disrupting variants in SDHB localize to interaction interfaces within the succinate dehydrogenase (SDH) complex, 
+
+disruption of which is associated with succinate -driven onco genic signaling. g, Predicted interaction -increasing 
+
+KRAS G12 variants localize near the GTP -binding site, where stabilization of the GTP -bound state enhances 
+
+RAF1 signaling. h, Predicted interaction -disrupting variants in hemoglobin localize near the heme pocket, where 
+
+oxygen binding regulates subunit interactions and tetramer conformational transitions. Highlighted residues 
+
+indicate PG/LP variants mapped onto experimentally res olved protein structures (PDB IDs: 8GS8, 6XHA, and 
+
+2HHB, respectively). 
+
+Extended Data Figure 1 | ReCLIP maintains robust performance across different task formulations .
+
+a, Overview of the mutation -induced interaction perturbation prediction reformulated as a binary classification 
+
+problem (disrupting versus no effect). b,c , Performance comparison of ReCLIP with baseline methods, including 
+
+two additional PLM -based interaction models designed for binary prediction. ReCLIP achieves the highest overall 
+
+AUROC ( b) and consistently outperforms comparison methods across evaluation metrics ( c). Evaluation metrics are reported as mean with 95% CIs computed from 200 bootstrap resamples; statistical significance was 
+
+assessed from the bootstrap distribution of metric differences between ReCLIP and the second -best method. 
+
+Extended Data Figure 2 | ReCLIP prioritizes pathogenic variants. 
+
+a, Predicted interaction perturbations for ClinVar missense variants under different single -class probability 
+
+thresholds. Variants were classified into four outcome classes (disrupting, decreasing, increasing, or no effect) 
+
+based on ReCLIP predictions. Rows c orrespond to increasingly stringent thresholds requiring the predicted 
+
+probability of a single interaction outcome class to exceed 0.5, 0.6, or 0.7. Left two columns, total numbers of 
+
+variants and variant -interaction pairs, stratified by predicted inter action outcome and ClinVar annotation. Right 
+
+two columns, corresponding fractions of predicted perturbation classes across variants and interaction pairs. 
+
+Increasing probability thresholds sharpened the separation between PG/LP and BN/LB variants. Odds rat ios 
+
+(ORs) and Fisher’s exact test P values are shown. b, Comparison of PG/LP and BN/LB variants within matched 
+
+interaction contexts. Left, distribution of proteins stratified by the numbers of PG/LP and BN/LB variants. Middle, 
+
+corresponding distribution of interaction pairs. Right, comparison of median predicted perturbation probabilities 
+
+for PG/LP and BN/LB variants within the same interaction pairs. Statistical significance was assessed using a 
+
+two -sided Wilcoxon signed -rank test. 
+
+Extended Data Figure 3 | ReCLIP captures functional residue context and is robust to PLM layer selection. 
+
+a, Comparison of ReCLIP with a control model in which selected functional neighborhoods are replaced with 
+
+randomly sampled residues. ReCLIP outperforms the control model across evaluation metrics, supporting the 
+
+importance of residue -conditioned neighborhood selection. b, Performance of ReCLIP using embeddings from 
+
+different ESM -2 transformer layers, including the final layer (layer 33), the middle layer (layer 24), and the first 
+
+layer. ReCLIP maintains consistent performance across layers, indicating robustness to embeddin g layer choice. 
+
+For both panels, evaluation me trics are reported as the mean; error bars indicate 95% CIs computed from 200 
+
+bootstrap resamples. Statistical significance was assessed from the bootstrap distribution of metric differences 
+
+between ReCLIP and the comparison model . n.s., not significant ( P > 0.05). • Interaction-aware representation, but aggregated at the protein level • Pairwise residue representation, but restricted to local sequence windows • Global pooling loses interaction-specific, residue-level context 
+
+... ... ... 
+
+PLM PLM PLM PLM ... 
+
+PLM PLM Slinding window ... 
+
+Residue-conditioned partner Learned residue neighborhoods Residue of interest 
+
+a Existing methods 
+
+Our framework b
+
+Applications c
+
+• Residue-centered representation captures interaction-specific, residue-level context 
+
+Disrupting Decreasing Increasing No effect 
+
+Enhancing Inhibiting 
+
+Binding Not binding • Predicting mutation-induced PPI perturbations • Generalizing to PTM-regulated PPI perturbations • Modeling peptide binding across diverse MHC alleles 
+
+Weighted sum Top K 
+
+MHC Peptide 
+
+OR 
+
+# Figure 1 
+
+Protein sequence Embeddings ... Protein Mutation PTM 0.0 0.2 0.4 0.6 0.8 1.0 False positive rate 0.0 0.2 0.4 0.6 0.8 1.0 True positive rate ReCLIP (0.957 ± 0.002) MINT (0.870 ± 0.003) SWING (0.816 ± 0.003) BERT-baseline (0.754 ± 0.005) 
+
+0.0 0.2 0.4 0.6 0.8 1.0 False positive rate 0.0 0.2 0.4 0.6 0.8 1.0 True positive rate ReCLIP (0.973 ± 0.001) MINT (0.923 ± 0.002) SWING (0.851 ± 0.003) BERT-baseline (0.788 ± 0.003) AlphaMissense (0.565 ± 0.005) PrimateAI-3D (0.561 ± 0.008) 
+
+ReCLIP MINT AlphaMissense PrimateAI-3D SWING BERT-baseline 0.0 0.2 0.4 0.6 0.8 1.0 Balanced accuracy 0.787 0.653 0.580 0.551 0.506 0.395 
+
+0.80 0.88 0.96 AUROC 0.45 0.60 0.75 0.90 AUPRC 0.4 0.6 0.8 Balanced accuracy 0.4 0.6 0.8 F1 10 cross-validation folds: ReCLIP MINT SWING BERT-baseline 
+
+20 40 60 80 100 Top-ranked predictions (%) 0.4 0.6 0.8 1.0 Precision ReCLIP MINT SWING BERT-baseline 
+
+0.0 0.2 0.4 0.6 0.8 1.0 False positive rate 0.0 0.2 0.4 0.6 0.8 1.0 True positive rate ReCLIP (0.977 ± 0.001) MINT (0.938 ± 0.002) SWING (0.864 ± 0.004) BERT-baseline (0.782 ± 0.005) 
+
+0.0 0.2 0.4 0.6 0.8 1.0 False positive rate 0.0 0.2 0.4 0.6 0.8 1.0 True positive rate ReCLIP (0.982 ± 0.003) MINT (0.946 ± 0.004) SWING (0.826 ± 0.008) BERT-baseline (0.786 ± 0.009) 
+
+0.0 0.2 0.4 0.6 0.8 1.0 False positive rate 0.0 0.2 0.4 0.6 0.8 1.0 True positive rate ReCLIP (0.977 ± 0.001) MINT (0.938 ± 0.002) SWING (0.900 ± 0.002) BERT-baseline (0.831 ± 0.003) 
+
+Precision Recall Accuracy AUPRC F1 
+
+Precision Recall Accuracy AUPRC F1 
+
+Precision Recall Accuracy AUPRC F1 
+
+Precision Recall Accuracy AUPRC F1 
+
+a b cdef g
+
+Class: Disrupting Class: Disrupting Class: Increasing Class: No effect Class: Decreasing 
+
+Mutation-induced perturbations Disrupting (13,780) Decreasing (9,069) Increasing (2,228) No effect (31,352) Four-class classification Class: Disrupting Class: Increasing Class: No effect Class: Decreasing 
+
+P<1e-200 
+
+P<1e-200 P<1e-200 P<1e-200 P=1.37e-68 
+
+P<1e-200 at 10% 
+
+P=9.77e-4 P=9.77e-4 P=9.77e-4 P=9.77e-4 
+
+P<1e-200 
+
+# Figure 2 75% 50% 25% 75% 50% 25% 75% 50% 25% 75% 50% 25% 0.0 0.2 0.4 0.6 0.8 1.0 False positive rate 0.0 0.2 0.4 0.6 0.8 1.0 True positive rate  ReCLIP (0.822 ± 0.014) BERT-baseline (0.684 ± 0.021) SWING (0.603 ± 0.020) Not applicable: MINT AlphaMissense PrimateAI-3D 
+
+0.60 0.75 0.90 AUROC 
+
+0.72 0.80 0.88 0.96 AUPRC 
+
+0.5 0.6 0.7 0.8 Balanced accuracy 
+
+0.72 0.78 0.84 F1 
+
+10 cross-validation folds: ReCLIP BERT-baseline SWING 
+
+a b
+
+PTM-regulated perturbations Enhancing (2,084) Inhibiting (968) Binary classification 
+
+c
+
+Precision Recall Accuracy AUPRC F1 
+
+Class: Enhancing 
+
+Precision Recall Accuracy AUPRC F1 
+
+Class: Inhibiting 
+
+eb
+
+20 40 60 80 100 Top-ranked predictions (%) 0.7 0.8 0.9 1.0 Precision ReCLIP SWING BERT-baseline 
+
+d
+
+P=3.48e-39 
+
+P=9.77e-4 P=9.77e-4 P=9.77e-4 P=9.77e-4 
+
+P=2.02e-4 at 10% 
+
+# Figure 3 75% 50% 25% 75% 50% 25% 0.0 0.2 0.4 0.6 0.8 1.0 False positive rate 0.0 0.2 0.4 0.6 0.8 1.0 True positive rate ReCLIP (0.964 ± 0.003) MINT (0.920 ± 0.005) BERT-baseline (0.869 ± 0.006) SWING (0.742 ± 0.011) 0.0 0.2 0.4 0.6 0.8 1.0 False positive rate 0.0 0.2 0.4 0.6 0.8 1.0 True positive rate ReCLIP (0.926 ± 0.007) MINT (0.865 ± 0.010) SWING (0.731 ± 0.016) BERT-baseline (0.723 ± 0.016) 0.0 0.2 0.4 0.6 0.8 1.0 False positive rate 0.0 0.2 0.4 0.6 0.8 1.0 True positive rate ReCLIP (0.972 ± 0.009) MINT (0.933 ± 0.013) BERT-baseline (0.840 ± 0.023) SWING (0.834 ± 0.024) 0.0 0.2 0.4 0.6 0.8 1.0 False positive rate 0.0 0.2 0.4 0.6 0.8 1.0 True positive rate ReCLIP (0.935 ± 0.006) BERT-baseline (0.794 ± 0.013) MINT (0.717 ± 0.014) SWING (0.682 ± 0.018) 0.0 0.2 0.4 0.6 0.8 1.0 False positive rate 0.0 0.2 0.4 0.6 0.8 1.0 True positive rate ReCLIP (0.854 ± 0.009) MINT (0.756 ± 0.013) BERT-baseline (0.723 ± 0.011) SWING (0.638 ± 0.014) 0.0 0.2 0.4 0.6 0.8 1.0 False positive rate 0.0 0.2 0.4 0.6 0.8 1.0 True positive rate ReCLIP (0.871 ± 0.014) BERT-baseline (0.737 ± 0.024) MINT (0.682 ± 0.021) SWING (0.644 ± 0.027) 
+
+a
+
+Peptide-MHC binding 
+
+c HLA-A*02:02 HLA-C*05:01 HLA-B*40:02 
+
+d HLA-A*32:01 HLA-B*38:01 HLA-C*03:03 
+
+b         
+
+> HLA-B*15:03 HLA-C*07:02 HLA-A*25:01 HLA-C*08:02 HLA-B*07:02 HLA-A*02:11 HLA-A*11:01 HLA-B*40:01 HLA-A*02:02 HLA-B*40:02 HLA-C*05:01 HLA-B*38:01 HLA-A*32:01 HLA-C*03:03
+
+Binding Not binding 5K 15K 30K Sample size Training Testing ( proximal distal) HLA-A*32:01 HLA-B*15:03 HLA-C*07:02 HLA-A*25:01 HLA-C*03:03 HLA-C*05:01 HLA-C*08:02 HLA-B*07:02 HLA-A*02:11 HLA-A*02:02 HLA-A*11:01 HLA-B*38:01 HLA-B*40:02 HLA-B*40:01 
+
+P=4.35e-111 P=2.36e-33 P=1.02e-9 
+
+P=6.40e-90 P=4.67e-73 P=2.63e-48 
+
+e
+
+0.70 0.75 0.80 0.85 0.90 0.95 AUROC 
+
+HLA-A*02:02 
+
+0.70 0.75 0.80 0.85 0.90 0.95 
+
+HLA-B*40:02 
+
+0.80 0.85 0.90 0.95 1.00 
+
+HLA-C*05:01 
+
+ReCLIP MINT SWING BERT-baseline 0.7 0.8 0.9 AUROC 
+
+HLA-A*32:01 
+
+ReCLIP MINT SWING BERT-baseline 0.6 0.7 0.8 0.9 
+
+HLA-B*38:01 
+
+ReCLIP MINT SWING BERT-baseline 0.60 0.65 0.70 0.75 0.80 0.85 
+
+HLA-C*03:03 Training set: Class I Mixed class 
+
+P=4.08e-20 
+
+P=3.13e-63 
+
+P=0.045 n.s. 
+
+P=1.92e-3 
+
+P=0.018 P=7.79e-3 
+
+P=0.016 n.s. n.s. n.s. n.s. n.s. n.s. 
+
+P=4.44e-13 
+
+P=1.19e-3 
+
+P=1.04e-30 
+
+P=3.83e-4 
+
+P=6.32e-3 n.s. P=0.012 n.s. n.s. 6.6e-3 
+
+# Figure 4 All Catalytic Binding Modified Disulfide 020 40 60 80 100 120 3D distance (Å) ReCLIP-prioritized Random 
+
+0 20 40 60 80 100 3D distance to queried residue (Å) 0.00 0.05 0.10 0.15 0.20 Density ReCLIP-prioritized (distal in sequence) Random (distal in sequence) 
+
+Trp Tyr Arg His Lys Met Phe Ala Cys Asn Gln Asp Gly Glu Leu Thr Ile Ser Val Pro 0246810 Composition (%)  ReCLIP-prioritized Random 
+
+0 1 2 3 4Enrichment Functional sites (All) Catalytic Binding Modified Disulfide 
+
+ReCLIP Random 0.0 0.2 0.4 0.6 0.8 Fraction within domain 
+
+0 50 100 150 200 250 300 Sequence distance to queried residue 0.00 0.02 0.04 0.06 Density ReCLIP-prioritized Random 
+
+acbedf
+
+P<1e-200 P<1e-200 OR=1.98 
+
+P=4.00e-104 
+
+P<1e-200 
+
+# Figure 5 
+
+3.78 2.38 1.78 1.33 1.56e-6 2.42e-16 3.85e-51 0.16 Disrupting Decreasing Increasing Combined 0.0 0.5 1.0 1.5 2.0 2.5 Enrichment of partners with PG/LP variants 
+
+PG LP LB BN 020K 40K 60K 80K Number of variants PG LP LB BN 050K 100K 150K 200K Number of interactions PG LP LB BN 0.0 0.2 0.4 0.6 0.8 1.0 Fraction of variants PG LP LB BN 0.0 0.2 0.4 0.6 0.8 1.0 Fraction of interactions ClinVar annotation Predicted effects Disrupting Decreasing Increasing No effect 
+
+1 2 3 4 5012345Number of predicted perturbed interactions  Pathogenic 30.9% 69.1% 19.9% 11.7% 68.4% 24.5% 11.4% 13.5% 50.6% 16.0% 4.9% 9.3% 10.3% 59.6% 15.4% 8.8% 7.0% 8.1% 12.6% 48.1% 1 2 3 4 5
+
+Likely pathogenic 31.0% 69.0% 21.1% 11.8% 67.1% 25.0% 12.8% 13.9% 48.2% 16.0% 6.8% 8.9% 9.9% 58.2% 16.3% 8.4% 7.6% 8.4% 14.0% 45.2% 1 2 3 4 5
+
+Likely benign 60.3% 39.7% 50.5% 16.7% 32.8% 46.0% 12.9% 13.4% 27.7% 40.3% 11.4% 10.9% 11.7% 25.8% 40.9% 10.8% 8.2% 7.8% 9.5% 22.8% 1 2 3 4 5
+
+Benign 58.6% 41.4% 52.3% 17.3% 30.3% 44.3% 12.5% 13.3% 29.9% 42.1% 10.4% 11.5% 11.8% 24.2% 39.7% 11.0% 7.5% 8.2% 10.1% 23.5% Number of interactions evaluated Number of variants 2,000 5,000 10,000 
+
+abFigure 6 
+
+P<1e-200 P<1e-200 
+
+0 20 40 60 80 Number of interaction pairs Metabolism/homeostasis Neoplasm Nervous system Endocrine Digestive system Blood/hematopoietic Eye Cardiovascular Genitourinary Musculoskeletal Immune system Head or neck Disease category Predicted effects Disrupting Decreasing Increasing 
+
+OR= 1.50 1.81 1.96 1.59 
+
+Disrupting Decreasing Increasing Combined 10 010 110 2Enrichment of interaction pairs in the same disease 
+
+OR= 16.7 8.11 37.0 17.4 
+
+SDHB SDHA SDHC SDHD Succinate Fumarate 
+
+(PDB:8GS8) Oncogenic signaling SDH complex associated with gastrointestinal stromal tumor 
+
+GTP 
+
+KRAS-RAF1 associated with embryonal rhabdomyosarcoma Hemoglobin associated with hemoglobinopathies HBB HBA 
+
+GDP Heme 
+
+R242S 
+
+W200C/R 
+
+C93R (PDB:6XHA) KRAS KRAS RAF1 Oncogenic signaling 
+
+G12C/D 
+
+O2
+
+(PDB:2HHB) 
+
+L29Q 
+
+F43S V99M 
+
+c d fegh0.0 0.2 0.4 0.6 0.8 1.0 False positive rate 0.0 0.2 0.4 0.6 0.8 1.0 True positive rate ReCLIP (0.975 ± 0.001) MINT (0.920 ± 0.003) SWING (0.890 ± 0.003) eSIG-Net (0.844 ± 0.004) BERT-baseline (0.824 ± 0.004) PLM-interact (0.605 ± 0.006) 
+
+0.0 0.2 0.4 0.6 0.8 1.0 Balanced accuracy 0.910 0.826 0.767 0.765 0.675 0.511 0.0 0.2 0.4 0.6 0.8 1.0 AUPRC 0.953 0.866 0.793 0.721 0.665 0.433 0.0 0.2 0.4 0.6 0.8 1.0 Precision 0.914 0.832 0.806 0.617 0.692 0.311 0.0 0.2 0.4 0.6 0.8 1.0 Recall 0.856 0.716 0.597 0.729 0.434 0.820 0.0 0.2 0.4 0.6 0.8 1.0 F1 0.884 0.770 0.686 0.668 0.533 0.451 ReCLIP MINT SWING eSIG-Net BERT-baseline PLM-interact 
+
+a b
+
+Mutation-induced perturbations Disrupting (13,017) No effect (31,092) Binary classification 
+
+# Extended Data Figure 1 c
+
+P<1e-200 
+
+P=1.25e-14 
+
+P<1e-200 
+
+P=1.44e-140 P<1e-200 
+
+P<1e-200 0 1 >1 Number of PG/LP variants 01>1 Number of BN/LB variants 95 141 1567 91 164 4834 614 2153 Number of proteins 1,000 2,000 Number of interactions 2,000 5,000 0 1 >1 Number of PG/LP variants 333 549 5129 347 621 15366 2064 7325 
+
+Single-class prob>0.5 Single-class prob>0.6 Single-class prob>0.7 
+
+PG/LP BN/LB 0.0 0.2 0.4 0.6 0.8 1.0 Median probability of interaction perturbation 
+
+OR=4.90 
+
+P<1e-200 OR=3.78 
+
+P<1e-200 OR=8.12 
+
+P<1e-200 OR=6.35 
+
+P<1e-200 OR=14.8 
+
+P<1e-200 OR=11.7 
+
+P<1e-200 
+
+aExtended Data Figure 2 b
+
+P<1e-200 AUROC PRAUC Balanced accuracy Precision Recall F1 0.0 0.2 0.4 0.6 0.8 1.0 Score 0.973 0.889 0.787 0.857 0.787 0.815 0.907 0.688 0.566 0.698 0.566 0.598 ReCLIP Control model 
+
+AUROC PRAUC Balanced accuracy Precision Recall F1 0.0 0.2 0.4 0.6 0.8 1.0 Score 0.973 0.889 0.787 0.857 0.787 0.815 0.971 0.884 0.784 0.849 0.784 0.811 0.973 0.887 0.779 0.849 0.779 0.807 PLM layer selection: Final layer (ReCLIP) Middle layer First layer 
+
+aExtended Data Figure 3 b
+
+P<1e-200 P<1e-200 
+
+P<1e-200 P<1e-200 P<1e-200 P<1e-200 n.s. n.s. n.s. n.s. n.s. n.s. Extended Data Table 1 | Effect of neighborhood size on ReCLIP performance and computational cost. 
+
+Mutation effect prediction PTM effect prediction 
+
+Neighborhood 
+
+size ( 𝒌 ) AUROC ± 95% CI Runtime per fold (s) AUROC ± 95% CI Runtime per fold (s) 
+
+3 0.972 ± 0.001 211. 8 0.820 ± 0.014 15. 6
+
+5 0.973 ± 0.001 316.5 0.823 ± 0.015 21.5 
+
+7 0.974 ± 0.001 398. 3 0.824 ± 0.015 27.7 
+
+10 0.975 ± 0.001 546.5 0.825 ± 0.013 37. 2
+
+ReCLIP was evaluated using neighborhood sizes of 𝑘 = 3, 5, 7, and 10 on the mutation -effect and PTM -effect 
+
+prediction tasks. Predictive performance is reported as AUROC (mean ± 95% confidence interval [CI] ), with CI s
+
+estimated from 200 bootstrap resamples. Runtime corresponds to the average computational time per cross -
+
+validation fold. Larger neighborhoods yielded only modest performance gains while substantially increasing 
+
+computational cost.

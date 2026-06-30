@@ -1,0 +1,705 @@
+Title: HALO: Hierarchical Auction-assisted Learning for Offloading in SAGIN
+
+URL Source: https://arxiv.org/pdf/2606.26293v1
+
+Published Time: Fri, 26 Jun 2026 00:08:03 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# HALO: Hierarchical Auction-assisted Learning for Offloading in SAGIN 
+
+Xuli Cai, Poonam Lohan, Sachin Ravikant Trankatwar, and Burak Kantarci 
+
+University of Ottawa, Ottawa, ON, Canada 
+
+{xcai049, ppoonam, sravikan, burak.kantarci }@uottawa.ca 
+
+Abstract —In this paper, we investigate delay-aware task of-floading and resource scheduling in a three-tier space–air–ground integrated network (SAGIN) consisting of IoT devices, UAV edge nodes, and a high-altitude platform station (HAPS). We formulate joint task association and continuous resource control (including bandwidth, transmit power, and CPU frequency allocation) as a non-convex mixed-integer nonlinear programming (MINLP) problem, which is inherently NP-hard. To capture fine-grained system dynamics, we introduce a macro-micro slot model that tracks cumulative transmission and computation progress over time. Based on this model, we propose HALO, a hierarchical auction-assisted learning framework that combines auction-based task association with hierarchical Proximal Policy Optimization (HPPO) for resource allocation. Simulation results under different traffic loads show that HALO consistently outperforms represen-tative deep reinforcement learning (DRL) baselines. In particular, HALO achieves an average improvement of 8.7 percentage points in task success rate over PPO (corresponding to an 11.4% relative gain) and shows consistently greater robustness than DDPG and SAC, with relative improvements of 32.4% and 89.9%, respectively. These results highlight HALO’s ability to maintain stable and efficient performance under varying traffic conditions, making it well-suited for delay-sensitive SAGIN environments. 
+
+Index Terms —SAGIN, task offloading, auction-based associa-tion, hierarchical PPO, resource allocation. 
+
+I. I NTRODUCTION 
+
+Space-Air-Ground Integrated Networks (SAGINs) are in-creasingly recognized as a promising architecture for latency-sensitive IoT services, by integrating terrestrial devices, UAV edge nodes, and high-altitude platform stations (HAPS) into a unified computing–communication system [1]–[3]. With this multi-tier structure, tasks can be flexibly offloaded across het-erogeneous nodes, improving service coverage and resilience. However, achieving efficient and delay-aware scheduling in SAGIN remains a challenging problem due to the tight coupling between task association, wireless transmission, and distributed computation under dynamic queue backlogs, and heteroge-neous resource constraints. Recent studies have built strong foundations for SAGIN-enabled communication and computing. Existing works cover global transmission optimization and wide-area data collec-tion [4], hierarchical HAPS–UAV aerial computing [3], multi-agent offloading in aerial-edge systems [1], and multi-HAP-assisted offloading [2]. Other efforts investigate joint offload-ing/association/resource allocation [5], perception-aware of-floading [6], and task-prediction-driven edge offloading [7]. At the communication and control layers, prior work also ad-dresses UAV-assisted robustness [8], hybrid FSO/RF coverage and deployment [9], channel modeling and estimation [10], RIS-enabled multifunctional architectures [11], outage/fairness analysis [12], blockchain-supported trusted offloading [13], and game-theoretic resource distribution [14]. Despite these ad-vances, three limitations remain from a delay-aware scheduling perspective. First, many methods rely on macro-scale delay abstractions (e.g., average-rate or static-capacity assumptions), which miss fine-grained service dynamics. Second, queue evolution is often modeled coarsely, weakening cross-interval carry-over under bursty traffic arrivals. Third, while joint optimization formulations can be theoretically appealing, they are often difficult to deploy practically due to mixed discrete-continuous coupling and high computational complexity. To address these challenges, we formulate the delay-aware task offloading and resource scheduling problem in a three-tier SAGIN as a non-convex MINLP. We then propose HALO, a hierarchical auction-assisted learning framework that com-bines auction-based task association with HPPO-based resource allocation, supported by a macro–micro slot design for fine-grained system dynamics. The main contributions of this work are summarized as follows:  
+
+> •
+
+We propose a macro–micro slot scheduling framework for three-tier SAGIN that models transmission and computa-tion dynamics, enabling accurate latency characterization and consistent queue evolution.  
+
+> •
+
+We design a UAV-centric auction for task association, combining latency-aware utility and resource-aware bid-ding to enable efficient and adaptive task–UAV matching under dynamic network conditions.  
+
+> •
+
+We propose HALO, a two-stage hierarchical learning framework that combines auction-based task association with HPPO-based resource allocation, enabling effective coordination between discrete association decisions and continuous control across multiple timescales. We evaluate HALO against single-layer DRL baselines, in-cluding PPO, DDPG, and SAC. Simulation results, averaged over multiple traffic loads, demonstrate consistent performance gains in task success rate, with an average improvement of 8.70 percentage points (+11.4% relative) over PPO. The remainder of this paper is organized as follows. Section II presents the system model and problem formulation. Section III introduces the proposed HALO framework. Section IV provides simulation results under varying traffic conditions. Section V concludes the paper. 
+
+> arXiv:2606.26293v1 [cs.NI] 24 Jun 2026
+
+Fig. 1: SAGIN System Model II. S YSTEM MODEL AND PROBLEM FORMULATION 
+
+As illustrated in Fig. 1, we consider a three-tier SAGIN with ground IoT devices N = {1, . . . , N }, UAVs M = {1, . . . , M }
+
+as aerial-edge nodes, and one HAPS as the high-altitude cloud tier. Each IoT device generates delay-sensitive tasks that may be processed locally, offloaded to an associated UAV, or further relayed to the HAPS. UAVs provide aerial edge computing and relay services, while the HAPS offers wider-area cloud-level computation. In the following, we first describe the task arrival and dynamic queueing model under a mixed macro– micro timescale framework. We then present the channel, communication, and computation models, define the resulting end-to-end task delay, and finally formulate the joint task offloading and resource scheduling problem. 
+
+A. Task Arrival and Dynamic Queueing Model 
+
+We adopt a mixed-timescale framework: macro-slots capture Poisson task arrivals with rate λ, while micro-slots enable fine-grained resource scheduling. At each macro-slot, a task generated by IoT device i is defined as: 
+
+ϕi ≜ (Di, C i, T max  
+
+> i
+
+, t arr i ), (1) where Di denotes the data size, Ci is the computation intensity, 
+
+T max  
+
+> i
+
+is latency constraint, and tarr i is the arrival time. Each task is partitioned into local, UAV, and HAPS components with ratios αi, β i, γ i, respectively, satisfying αi + βi + γi = 1 . The task partitioning variables are determined at macro slots by the Manager agent (detailed in Section III). Whereas resource allocation is performed dynamically at each micro-slot rather than reserved over the entire task lifetime. Urgency-aware scheduling (e.g., based on remaining slack time) is applied to prioritize tasks. Completed transmission and computation stages are immediately removed, freeing resources for reuse and efficient operation under stochastic traffic while maintain-ing consistent task progress across micro-scheduling intervals. 
+
+B. Channel Model 1) IoT-to-UAV Link ( Air-to-Ground (A2G) Channel): For IoT-UAV access links, blockage is modeled via probabilistic LoS/NLoS A2G propagation. The LoS probability between IoT 
+
+i and UAV m is: 
+
+PLoS (θi,m ) = 1 /[1 + a exp ( −b(θi,m − a))] , (2) where θi,m = 180  
+
+> π
+
+arcsin 
+
+ Hm
+
+> di,m
+
+
+
+, Hm is UAV altitude, di,m 
+
+is 3D distance between Iot device i and UAV m, and a, b 
+
+are environment parameters. Then PN LoS = 1 − PLoS (θi,m ).Average path loss (dB) is: 
+
+¯Li,m = PLoS (θi,m )( LF S ) + PN LoS (LF S + ηN LoS ) , (3) with LF S = 20 log 10 ((4 πf cdi,m )/c ), where ηN LoS , fc, and 
+
+c denote excess loss in NLoS link, carrier frequency and C
+
+speed of light, respectively. The corresponding channel gain is 
+
+hi,m = 10 − ¯Li,m /10 . (4) 
+
+2) UAV-to-HAPS Link (Air-to-Air(A2A) Channel): For UAV-HAPS backhaul, high-altitude propagation is LoS-dominant. The corresponding channel gain is: 
+
+hm,H = ρ0d−αAA  
+
+> m,H
+
+, (5) where ρ0 = ( c/ 4πf c)2 is the 1 m reference gain, dm,H is UAV-HAPS distance, and αAA ≈ 2 is path loss exponent. 
+
+C. Communication Model 
+
+Let T be macro-slot duration (index t ∈ { 1, 2, . . . }), and let each macro-slot contain K micro-slots of duration ∆t (index 
+
+k ∈ { 1, 2, . . . , K }) such that T = K∆t.
+
+1) IoT-to-UAV Uplink (Access Link): If task i uses band-width fraction wUi [t, k ] and power pIoT i [t, k ] at micro-slot k,its uplink rate to UAV m is: 
+
+RUi,m [t, k ] = wUi [t, k ]BU
+
+× log 2
+
+
+
+1 + pIoT i [t, k ]hi,m 
+
+NowUi [t, k ]BU + Ii,m [t, k ]
+
+
+
+, (6) where BU is the total bandwidth available at each UAV, No is the AWGN power spectral density (PSD) and Ii,m [t, k ] denotes inter-cell interference (ICI) on task i.Intra-cell FDMA eliminates intra-cell interference; only ICI is considered. For victim task i (UAV m) and interferer j
+
+(UAV v̸ = m), define Bi[t, k ] = wUi [t, k ]BU , and Bj [t, k ] = 
+
+wUj [t, k ]BU . The interference PSD from j at UAV m is 
+
+ρj,m [t, k ] = P rx j,m [t, k ]
+
+Bj [t, k ] = pIoT j [t, k ]hj,m 
+
+wUj [t, k ]BU , (7) where hj,m = ρod−2
+
+> j,m
+
+. With independent FDMA across cells, expected overlap bandwidth is 
+
+E
+
+h
+
+Boverlap i,j [t, k ]
+
+i
+
+=  wUi [t, k ]wUj [t, k ]BU . (8) Using Eq. 7 and Eq. 8, the ICI from task j to task i is: 
+
+Ij→i[t, k ] = ρj,m [t, k ] · E
+
+h
+
+Boverlap i,j [t, k ]
+
+i
+
+= wUi [t, k ]pIoT j [t, k ]hj,m .
+
+(9) Thus, the total interference on task i is 
+
+Ii,m [t, k ] = wUi [t, k ] X
+
+> v∈M\{ m}
+
+X 
+
+> j∈N v[t,k ]
+
+pIoT j [t, k ]hj,m , (10) where Nv [t, k ] is the active tasks set associated with UAV v,determined by the auction mechanism described in Section III. For offloaded data (βi + γi)Di, let the generation time coor-dinate be (tarr i , 0) and the uplink completion time coordinates be (tf in,uav,tx i , k f in,uav,tx i ). The transmission duration is: 
+
+T U AV i,tx = ( tf in,uav,tx i − tarr i )T + kf in,uav,tx i ∆t. (11) 
+
+By aggregating the uplink rate over all active micro-slots within this interval, the completion condition is succinctly given by:  
+
+> tf in,uav,tx i
+
+X
+
+> t=tarr i
+
+X
+
+> k
+
+RUi,m [t, k ]∆ t ≥ (βi + γi)Di, (12) 
+
+where the inner sum runs up to K for intermediate macro-slots, and up to kf in,uav,tx i in the final macro-slot. 
+
+2) UAV-to-HAPS Uplink (Backhaul Link): At micro-slot k,UAV m allocates wHi [t, k ] and pU AV i,m [t, k ] for relayed task i.Neglecting inter-UAV backhaul interference, the rate is: 
+
+RHi,m [t, k ] = wHi [t, k ]BH × log 2 1 + pU AV i,m [t, k ]hm,H 
+
+N0wHi [t, k ]BH
+
+!
+
+, (13) 
+
+where BH denotes the total bandwidth available at HAPS. For the relayed data γiDi, backhaul starts and ends at 
+
+(tf in,uav,tx i , k f in,uav,tx i ) and (tf in,haps,tx i , k f in,haps,tx i ), re-spectively. The total backhaul duration T HAP S i,tx is calculated as the exact time elapsed between these two boundary coordinates. The capacity constraint over this period is:  
+
+> tf in,haps,tx i
+
+X
+
+> t=tf in,uav,tx i
+
+X
+
+> k
+
+RHi,m [t, k ]∆ t ≥ γiDi. (14) 
+
+D. Computation Model 
+
+CPU frequencies are scheduled at the micro-slot level. The total computation workload of task i is DiCi, which is split into local, UAV, and HAPS parts according to αi, β i, and γi. Similar to the transmission model, the exact computation duration for each tier is calculated as the time elapsed between its respective start and end coordinates. 
+
+1) Local IoT Computing: For the local portion, processing starts at (tarr i , 0) and ends at (tf in,loc,comp i , k f in,loc,comp i ),yielding the local computation duration T loc i,comp . By aggregat-ing the local CPU frequency f loc i [t, k ] over this period, the processed workload constraint is:  
+
+> tf in,loc,comp i
+
+X
+
+> t=tarr i
+
+X
+
+> k
+
+f loc i [t, k ]∆ t ≥ αiDiCi. (15) 
+
+2) UAV Edge Computing: Edge processing can only begin after the A2G transmission is completed. It starts at (tf in,uav,tx i , k f in,uav,tx i ) and ends at 
+
+(tf in,uav,comp i , k f in,uav,comp i ), taking a duration of T U AV i,comp .The allocated UAV CPU frequency f Ui [t, k ] must satisfy:  
+
+> tf in,uav,comp i
+
+X
+
+> t=tf in,uav,tx i
+
+X
+
+> k
+
+f Ui [t, k ]∆ t ≥ βiDiCi. (16) 
+
+3) HAPS Cloud Computing: Similarly, HAPS processing starts after the A2A backhaul is completed and ends at (tf in,haps,tx i , k f in,haps,tx i ) and 
+
+(tf in,haps,comp i , k f in,haps,comp i ), respectively, with a duration of T HAP S i,comp . The required cloud workload constraint is:  
+
+> tf in,haps,comp i
+
+X
+
+> t=tf in,haps,tx i
+
+X
+
+> k
+
+f Hi [t, k ]∆ t ≥ γiDiCi. (17) 
+
+E. Total Delay Definition 
+
+Under the partial offloading scheme, the local, edge, and cloud computation branches are executed in parallel. Queueing delays are implicitly captured by the boundary coordinates of the scheduled micro-slots. The edge and cloud branches share the initial A2G transmission phase T U AV i,tx and then diverge. The overall task makespan is defined as the maximum latency among the three branches: 
+
+T total i = max T Local i , T Edge i , T Cloud i , (18) where the latency of each individual branch is given by: 
+
+T Local i = T loc i,comp , T Edge i = T U AV i,tx + T U AV i,comp , and T Cloud i =
+
+T U AV i,tx + T HAP S i,tx + T HAP S i,comp .
+
+F. Problem Formulation 
+
+Define A = {αi, β i, γ i}, F = {f loc i [t, k ], f Ui [t, k ], f Hi [t, k ]},
+
+W = {wUi [t, k ], w Hi [t, k ]}, P = {pIOT i [t, k ], p U AV i,m [t, k ]}. The optimization problem is: 
+
+max 
+
+> A,W,P,F
+
+1
+
+|N all |
+
+X
+
+> i∈N all
+
+I T total i ≤ T max 
+
+> i
+
+ (19a) s.t. αi + βi + γi = 1 , α i, β i, γ i ∈ [0 , 1] , ∀i, (19b) 
+
+X  
+
+> i∈N tx m[t,k ]
+
+wUi [t, k ] ≤ 1, ∀m, t, k, (19c) 
+
+X 
+
+> i∈M tx H[t,k ]
+
+wHi [t, k ] ≤ 1, ∀t, k, (19d) 
+
+pIoT i [t, k ] ≤ P IoT  
+
+> max
+
+, ∀i, t, k, (19e) 
+
+X
+
+> i
+
+pU AV i,m [t, k ] ≤ P U AV  
+
+> max
+
+, ∀m, t, k, (19f) 
+
+f loc i [t, k ] ≤ F IoT  
+
+> max
+
+, ∀i, t, k, (19g) 
+
+X
+
+> i
+
+f Ui [t, k ] ≤ F U AV  
+
+> max
+
+, ∀m, t, k, (19h) 
+
+X
+
+> i
+
+f Hi [t, k ] ≤ F HAP S  
+
+> max
+
+, ∀t, k. (19i) Problem (19) is a non-convex MINLP. The task success rate indicator objective and coupling among A, W, P, F in-duce bilinear and quadratic-fractional SINR terms, making the problem NP-hard. In addition, active sets (e.g., Nm[t, k ]) vary stochastically with arrivals/departures, so static convex methods are not directly applicable. III. P ROPOSED SOLUTION FRAMEWORK 
+
+To address the formulated problem, we propose HALO 
+
+presented in Fig. 2, a hierarchical auction-assisted learning framework for joint task association and resource allocation. Fig. 2: Proposed Framework: Task Offloading and Execution Flow (Macro - Micro Slot Operations) 
+
+A. UAV-Centric Online Auction Association 
+
+From [15] stochastic local search-based auction we proposed a auction algorithm for UAV association. For each arriving task i defined by the tuple ϕi = ( Di, C i, T max  
+
+> i
+
+, t arr i ), only UAVs within communication coverage are eligible bidders. The bidder set is strictly: 
+
+Mi = {m ∈ M | di,m ≤ Rm}, (20) where Rm is the coverage radius of UAV m. UAVs outside coverage are never considered for bidding or assignment. The task value reflects urgency and is defined as vi =
+
+Di/T max  
+
+> i
+
+. The association cost accounts for task size and prop-agation distance: ci,m = Di (1 + di,m /d 0) , m ∈ M i. where 
+
+d0 is a reference distance used to normalize the distance effect. Thus, larger tasks and farther UAVs incur higher association cost. We apply batch-wise min–max normalization: 
+
+˜vi = Norm( vi), ˜ci,m = Norm( ci,m ), and define pre-price utility πi,m = ˜ vi − ˜ci,m . Let p(0)  
+
+> i
+
+= 0 be the task price. In auction round r (distinct from the micro-slot index k), 
+
+U (r) 
+
+> i,m
+
+= πi,m − p(r) 
+
+> i
+
+, m⋆i = arg max 
+
+> m∈B i
+
+U (r)
+
+> i,m
+
+, (21) where Bi ⊆ M i is the capacity-aware bidder set. Specifically, 
+
+Bi only includes UAVs possessing sufficient unallocated band-width and computation resources to satisfy the physical limits 
+
+P U AV  
+
+> max
+
+and F U AV  
+
+> max
+
+established in (19f) and (19h). With U (1)  
+
+> i
+
+and U (2)  
+
+> i
+
+the best and second-best net utilities, the bid increment and price update are: 
+
+∆b(r) 
+
+> i
+
+= ( U (1)  
+
+> i
+
+− U (2)  
+
+> i
+
+) + ε, p(r+1)  
+
+> i
+
+= p(r) 
+
+> i
+
++ ∆ b(r) 
+
+> i
+
+. (22) Task i is assigned to m⋆i . The set of tasks associated with UAV 
+
+m at time (t, k ) is denoted by Nm[t, k ], which forms the active association set used in the communication model. If Mi = ∅,the task remains unassigned. 
+
+B. Two-Timescale Hierarchical PPO Architecture 
+
+To prevent action-space explosion and non-stationarity caused by differing timescales, we adopt a hierarchical Manager-Worker DRL architecture. 
+
+Algorithm 1 MLP-HPPO Training 
+
+Require: load set L, episodes E, horizon T , worker update threshold 
+
+Uw , manager update threshold Um 
+
+> 1:
+
+Initialize manager/worker PPO agents and replay buffers Dm, Dw
+
+▷ U w , U m are minimum numbers of stored transitions before one PPO update  
+
+> 2:
+
+for e = 1 to E do  
+
+> 3:
+
+Sample load ℓ ∼ L and reset environment  
+
+> 4:
+
+Decay manager/worker learning rates and entropy coefficients  
+
+> 5:
+
+for t = 1 to T do  
+
+> 6:
+
+if new tasks exist then  
+
+> 7:
+
+Manager samples high-level action atm 
+
+> 8:
+
+else  
+
+> 9:
+
+Use manager no-op action  
+
+> 10:
+
+end if  
+
+> 11:
+
+Append one manager transition to Dm 
+
+> 12:
+
+Worker samples per-UAV low-level actions and executes low-level step(s)  
+
+> 13:
+
+Append all valid worker transitions in this second to Dw
+
+▷ |D w | grows by the number of active UAV-task decisions  
+
+> 14:
+
+Compute manager reward and update the latest manager transition reward  
+
+> 15:
+
+end for  
+
+> 16:
+
+Mark episode-end terminals in Dm, Dw 
+
+> 17:
+
+if |D w | ≥ Uw then  
+
+> 18:
+
+Update worker by PPO-Clip+GAE; clear Dw 
+
+> 19:
+
+end if  
+
+> 20:
+
+if |D m| ≥ Um then  
+
+> 21:
+
+Update manager by PPO-Clip+GAE; clear Dm 
+
+> 22:
+
+end if  
+
+> 23:
+
+end for  
+
+> 24:
+
+Save best manager/worker checkpoints 
+
+1) Stable Policy Optimization via PPO: Both Actor-Critic agents use PPO to ensure stable updates and avoid congestion. Let r(θ) = πθ (a|s)  
+
+> πθold (a|s)
+
+be policy ratio. The clipped objective is: 
+
+LCLIP (θ) = ˆE
+
+h
+
+min 
+
+
+
+r(θ) ˆA, clip( r(θ), 1 − ϵ, 1 + ϵ) ˆA
+
+i 
+
+, (23) 
+
+where ϵ is the clipping coefficient and ˆA is the GAE-estimated advantage. PPO ensures conservative policy evolution via clip-ping and cross-timescale variance reduction via GAE. 2) Macro-Level Manager Agent (Task Splitting): At macro-slot t (e.g., 1 s), the Manager assigns task splitting for arrivals.  
+
+> •
+
+State Space ( sMt ): Processing up to Nmax tasks (with zero-padding or truncation), each task i is encoded as 
+
+ ˜di, ˜ℓi, ˜quav  
+
+> i
+
+, ˜qhaps , ˜ui
+
+,
+
+capturing normalized size, distance, UAV/HAPS backlogs, and urgency. Concatenation yields sMt ∈ R5Nmax . 
+
+> •
+
+Action Space ( aMt ): The Manager outputs zMt ∈ R3Nmax .For each task i, a 3-D slice is Softmax-normalized for local/edge/cloud splitting: 
+
+aMi,t = αi βi γi
+
+⊤ = Softmax  zMi,t 
+
+ . (24)  
+
+> •
+
+Reward Function ( rMt ): Evaluated after all micro-slots based on on-time ( Nsucc ) and failed ( Nfail ) completions: 
+
+rMt = ρsucc Nsucc − ρfail Nfail . (25) 
+
+3) Micro-Level Worker Agent (Resource Scheduling): At micro-slot k (e.g., 50 ms), the Worker executes fine-grained resource allocation.  
+
+> •
+
+State Space ( sWk,j ): Each resource queue j is encoded as a Top-K vector (sorted by least-slack-time): sWk,j ∈ R2K ,comprising K pairs of normalized residual workload and urgency [ ˜Lm, ˜Um]. 
+
+> •
+
+Action Space ( aWk,j ): An MLP outputs aWk,j ∈ R2K . For tx, the segments represent bandwidth and power logits: 
+
+atx  
+
+> k,j
+
+= Softmax( zBk,j ) σ(zPk,j )⊤ . (26) To satisfy hardware limits, requested powers sharing a transmitter are rescaled: 
+
+˜pe[k] = preq  
+
+> e
+
+[k]max 
+
+
+
+1, P  
+
+> j∈E tx
+> n[k]
+
+preq  
+
+> j
+
+[k]
+
+ . (27) Computation queues apply Softmax directly for CPU-share weights.  
+
+> •
+
+Reward Function (rWt,k ): The worker adopts a dense micro-step progress reward: 
+
+rWt,k = X
+
+> j∈A tx (t,k )
+
+∆bj (t, k ) + X
+
+> j∈A comp (t,k )
+
+∆cj (t, k ). (28) 
+
+∆bj (t, k ) = min Rj (t, k )∆ k, b rem  
+
+> j
+
+(t, k ) , (29) 
+
+∆cj (t, k ) = min fj (t, k )∆ k, c rem  
+
+> j
+
+(t, k ) . (30) The training process of the hierarchical PPO framework is summarized in Algorithm 1. IV. S IMULATION RESULTS 
+
+A. Simulation Setup 
+
+We generate the random IOT devices uniformly distributed in a 600m width square, use k-means clustering for the UAVs deployment and set the HAPS position at the center of the square. We evaluate the proposed HPPO framework against three single-layer DRL baselines: PPO, DDPG, and SAC. All methods are tested in same SAGIN environment, with identical physical parameters, task generation process, and action con-straints. For fair comparison, all algorithms are trained with same interaction budget and evaluated with multi-seed testing. TABLE I: Simulation Parameters                                                            
+
+> Parameter Symbol Value
+> Network & Physical Parameters
+> Number of IoT devices/UAVs N/M100 / 4 UAV / HAPS altitude -100 m / 20 Km Carrier frequency fc2.0 GHz IoT-to-UAV bandwidth BU20 MHz UAV-to-HAPS bandwidth BH100 MHz Max transmit power of IoT PIoT
+> max 0.5 W Max transmit power of UAV PU AV
+> max 2.0 W Max CPU frequency of IoT FIoT
+> max 1 GHz Max CPU frequency of UAV FU AV
+> max 4 GHz Max CPU frequency of HAPS FHAP S
+> max 30 GHz
+> Task & Time Parameters
+> Task arrival rate (Poisson) λ300/350/400 tasks/min Micro-slot duration ∆k50 ms Macro-slot duration ∆t1 s Micro-slots per macro-slot K20 Task data size Di[100 ,600] MB Computation intensity Ci100 cycles/bit Task max latency Tmax
+> i[8 ,30] s
+> Training Hyperparameters
+> Manager Actor learning rate ηMa2×10 −4
+> Woker Actor learning rate ηWa3×10 −4
+> Discount factor γ0.99
+
+B. Convergence and Performance Comparison 
+
+All algorithms are trained for 1000 macro-step interactions. Fig. 3a shows the reward evolution at λ = 300 tasks/min. HPPO exhibits the fastest convergence: its smoothed reward increases sharply in the early stage (first ∼200 episodes), while PPO, DDPG, and SAC improve more slowly and with larger oscillations. By the end of training, HPPO stabilizes around a higher reward level (approximately 10.6), compared with PPO ( ∼9.9), DDPG ( ∼9.6), and SAC ( ∼8.6), indicating better sample efficiency and a more stable policy update trajectory. This behavior is consistent with hierarchical macro–micro de-composition, which improves long-horizon credit assignment. We then evaluate trained policies at λ ∈{300 , 350 , 400 } tasks/min over 10 independent 10-minute episodes. As shown in Fig. 3b, HPPO consistently achieves the highest success rate, with values of 95%, 85%, and 65% at 300/350/400 tasks/min, respectively. Using relative improvement ∆rel = (SHPPO − Sbaseline )/S baseline : HPPO outperforms PPO by about 8.0%, 14.9%, and 13.8% at 300/350/400; it outperforms DDPG by about 18.8%, 41.7%, and 44.4%; and outperforms SAC by about 86.3%, 102.4%, and 80.6%. Averaged over the three loads, HPPO provides roughly +11.4% improvement over PPO, +32.4% over DDPG, and +89.9% over SAC. Moreover, although all methods degrade as traffic increases, HPPO maintains the largest absolute success-rate margin under high load, highlighting better scalability under congestion. (a) Training Convergence (b) Success Rate (c) Average Completion Latency 
+
+Fig. 3: Performance Comparison in Single-Layer Scheduling Fig. 3c reports average completion latency under increasing traffic. HPPO remains the lowest-latency method across all loads (approximately 6 s, 9 s, and 19 s), while PPO is around 9 s, 14 s, and 25 s; DDPG around 12 s, 23 s, and 42 s; and SAC around 32 s, 48 s, and 60 s. In terms of latency reduc-tion ratio Rlat = ( Lbaseline − LHPPO )/L baseline , HPPO reduces latency by approximately 33.3%/35.7%/24.0% versus PPO, 50.0%/60.9%/54.8% versus DDPG, and 81.3%/81.3%/68.3% versus SAC at 300/350/400 tasks/min. These results jointly show that HPPO not only improves task success under heavy traffic, but also controls queueing delay more effectively, yielding a superior reliability–timeliness trade-off. V. C ONCLUSION 
+
+In this paper, we proposed HALO , a hierarchical auction-assisted learning framework for delay-aware task offloading and resource scheduling in three-tier SAGIN. By combining a UAV-centric auction mechanism for task association with a two-timescale HPPO-based resource allocation strategy, HALO effectively coordinates discrete and continuous decisions un-der dynamic network conditions. The proposed macro-micro slot model enables fine-grained tracking of transmission and computation progress, improving latency awareness and system responsiveness. Simulation results demonstrate that HALO consistently outperforms conventional DRL baselines in both task success rate and latency, while maintaining robust perfor-mance under increasing traffic loads. These results highlight the effectiveness of hierarchical learning in managing complex SA-GIN environments. Future work will explore graph-structured state modeling for larger-scale SAGIN scenarios. ACKNOWLEDGMENT 
+
+This work is supported in part by Natural Sciences and Engineering Research Council of Canada (NSERC) under the CREATE TRAVERSAL and NSERC DISCOVERY programs, and in part by the Ontario Research fund-Research Excellence (ORF-RE) program under project number RE12-024. REFERENCES [1] Y. Wang, C. Zhang, T. Ge, and M. Pan, “Computation Offloading via Multi-Agent Deep Reinforcement Learning in Aerial Hierarchical Edge Computing Systems,” IEEE Transactions on Network Science and Engineering , vol. 11, no. 6, pp. 5253–5266, Nov. 2024. [2] W. Wu, W. Feng, Y. Fang, Z. Lin, and X. Lu, “Multi-HAP-Assisted Computation Offloading in Space–Air–Ground–Sea Integrated Network,” 
+
+IEEE Internet of Things J. , vol. 12, no. 12, pp. 21 806–21 818, Jun. 2025. [3] Z. Jia, Q. Wu, C. Dong, C. Yuen, and Z. Han, “Hierarchical Aerial Computing for Internet of Things via Cooperation of HAPs and UAVs,” 
+
+IEEE Internet of Things J. , vol. 10, no. 7, pp. 5676–5688, Apr. 2023. [4] Y. Fan, Y. Bi, Y. Liu, D. Niyato, L. Zhao, Q. He, and A. Hawbani, “GATO: Global Transmission Optimization for SAGIN-Assisted IoRT Data Collection,” IEEE Transactions on Mobile Computing , vol. 24, no. 12, pp. 12 867–12 884, Dec. 2025. [5] A. Nabi and S. Moh, “Joint Offloading Decision, User Association, and Resource Allocation in Hierarchical Aerial Computing: Collaboration of UAVs and HAP,” IEEE Transactions on Mobile Computing , vol. 24, no. 8, pp. 7267–7282, Aug. 2025. [6] S. M. Waqas, A. Liang, X. Xue, F. Huang, W. Liu, J. Hu, M.-E. Wu, S. Raza, and F. Abbas, “Perception-Aware Offloading with Collaborative Ground-Space Beamforming for Resilient SAGIN Communications,” 
+
+IEEE Internet of Things Journal , pp. 1–1, 2025. [7] J. Yang, J. Shi, Y. Sun, and A. Men, “Task Prediction-Based Edge Computing Offloading of Satellite-HAP-Terrestrial Integrated Network,” 
+
+IEEE Networking Letters , vol. 7, no. 3, pp. 185–189, Sep. 2025. [8] W. Mao, Y. Lu, G. Pan, and B. Ai, “UAV-Assisted Communications in SAGIN-ISAC: Mobile User Tracking and Robust Beamforming,” IEEE Journal on Selected Areas in Communications , vol. 43, no. 1, pp. 186– 200, Jan. 2025. [9] K. Mashiko, Y. Kawamoto, N. Kato, K. Yoshida, and M. Ariyoshi, “Combined Control of Coverage Area and HAPS Deployment in Hybrid FSO/RF SAGIN,” IEEE Transactions on Vehicular Technology , vol. 74, no. 7, pp. 10 819–10 828, Jul. 2025. [10] X. Meng, N. Zhang, M. Jian, M. Kadoch, and D. Yang, “Channel Modeling and Estimation for Reconfigurable-Intelligent-Surface-Based 6G SAGIN IoT,” IEEE Internet of Things Journal , vol. 10, no. 11, pp. 9273–9282, Jun. 2023. [11] L.-H. Shen and J.-J. Huang, “Multifunctional RIS-Enabled in SAGIN for IoT: A Hybrid Deep Reinforcement Learning Approach With Com-pressed Twin-Models,” IEEE Internet of Things Journal , vol. 13, no. 5, pp. 9078–9095, Mar. 2026. [12] J. Tan, F. Tang, M. Zhao, and N. Kato, “Outage Probability, Performance, and Fairness Analysis of Space–Air–Ground Integrated Network (SA-GIN): UAV Altitude and Position Angle,” IEEE Transactions on Wireless Communications , vol. 24, no. 2, pp. 940–954, Feb. 2025. [13] F. Tang, C. Wen, L. Luo, M. Zhao, and N. Kato, “Blockchain-Based Trusted Traffic Offloading in Space-Air-Ground Integrated Networks (SAGIN): A Federated Reinforcement Learning Approach,” IEEE Jour-nal on Selected Areas in Communications , vol. 40, no. 12, pp. 3501–3516, Dec. 2022. [14] Y. Zhang, X. Wang, Y. Gang, H. Tian, and D. Niyato, “Evolutionary Game Resource Distribution Strategy for 6G SAGIN,” IEEE Transactions on Vehicular Technology , pp. 1–15, 2025. [15] H. H. Hoos and C. Boutilier, “Solving Combinatorial Auctions using Stochastic Local Search.”

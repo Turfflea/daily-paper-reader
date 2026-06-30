@@ -1,0 +1,2003 @@
+Title: Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data
+
+URL Source: https://arxiv.org/pdf/2606.11946v1
+
+Published Time: Thu, 11 Jun 2026 00:56:03 GMT
+
+Number of Pages: 37
+
+Markdown Content:
+# Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 
+
+ARIE SOETEMAN, ILLC, University of Amsterdam, Netherlands 
+
+BALDER TEN CATE, ILLC, University of Amsterdam, Netherlands 
+
+MAURICE FUNK, Leipzig University, Germany and ScaDS.AI Center Dresden/Leipzig, Germany 
+
+BENNY KIMELFELD, Technion, Israel and RelationalAI, United States 
+
+CARSTEN LUTZ, Leipzig University, Germany and ScaDS.AI Center Dresden/Leipzig, Germany 
+
+MORITZ SCHÖNHERR, Leipzig University, Germany and ScaDS.AI Center Dresden/Leipzig, Germany The conventional approach to deep learning over relational databases applies neural models, such as Graph Neural Networks (GNNs), to a graph representation of the database. Recent approaches instead operate on databases directly, associating tuples with embeddings and extending query mechanisms to jointly process embeddings and relational content. Inspired by these developments, we introduce Neuro-Relational Programs (NRPs), a declarative query language for relational databases whose facts carry numeric vector embeddings. NRPs extend Datalog-style rules with operations that combine, aggregate, and transform embeddings, thereby interleaving relational reasoning and learnable neural components within a single formalism. This yields a general approach to neural computation over relational data: an NRP can be read both as a query plan with trainable components and as a neural architecture with relational structure built in. Natural syntactic fragments of NRPs recover existing architectures and query formalisms. Zero-ary NRPs correspond to non-adaptive query algorithms; monadic NRPs generalize GNN-style message passing and precisely capture Deep Homomorphism Networks, a connection that we extend to frontier-guarded NRPs over databases with row-ids. We characterize the expressive power of unrestricted NRPs with ReLU -FFN transformations by FOCQ , an extension of first-order logic with counting interpreted over real-weighted structures, yielding a precise connection with uniform TC 0 over ordered databases. Together, these results establish NRPs as a broad declarative framework for querying and neural computation over relational data. CCS Concepts: • Theory of computation → Database query languages (principles) ; Logic and databases ;
+
+Machine learning theory .Additional Key Words and Phrases: Neural-Relational Learning, Descriptive Complexity 
+
+1 Introduction 
+
+Recent advances in graph-based deep learning have fundamentally affected the practice of applying machine learning to relational databases. The prevailing approach is to represent the database as a graph, where database records become nodes and foreign-key relationships become edges, and then deploy graph-learning architectures such as graph neural networks (GNNs) [ 17 , 46 , 56 ,64 ]. To capture relational schema information, these graph architectures have been extended to heterogeneous settings, where nodes and edges are associated with different types [ 54 , 63 ]. Consequently, designing a neural network over a relational database currently requires developers to work across two separate paradigms: relational query languages are used to define and export graph structures, while the predictive model itself is implemented imperatively using graph-learning frameworks such as PyTorch Geometric [18], DGL [53], and Scikit-network [8]. 
+
+Authors’ Contact Information: Arie Soeteman, a.w.soeteman@uva.nl, ILLC, University of Amsterdam, Amsterdam, Nether-lands; Balder ten Cate, b.d.tencate@uva.nl, ILLC, University of Amsterdam, Amsterdam, Netherlands; Maurice Funk, maurice.funk@uni-leipzig.de, Leipzig University, Leipzig, Germany and ScaDS.AI Center Dresden/Leipzig, Germany; Benny Kimelfeld, bennyk@cs.technion.ac.il, Technion, Haifa, Israel and RelationalAI, United States; Carsten Lutz, clu@informatik.uni-leipzig.de, Leipzig University, Leipzig, Germany and ScaDS.AI Center Dresden/Leipzig, Germany; Moritz Schönherr, schoenherr@informatik.uni-leipzig.de, Leipzig University, Leipzig, Germany and ScaDS.AI Center Dresden/Leipzig, Germany.  
+
+> arXiv:2606.11946v1 [cs.DB] 10 Jun 2026 2Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr
+
+We argue that this separation can be elegantly avoided. Traditional query languages naturally support the design of graph-learning architectures once the relational model is extended with tuple embeddings , where each tuple is associated with a numeric vector [ 10 , 39 , 52 ]. From this perspective, joins determine not only how tuples are combined, but also how their embeddings are composed, while projections determine how embeddings are aggregated, similarly to provenance propagation in semiring annotations [ 23 , 30 ]. This yields a unified declarative pipeline in which relational and neural computation are interleaved, allowing deep-learning architectures to be expressed directly over relational data. In this paper, we formalize this approach through the concept of a 
+
+Neuro-Relational Program (NRP). An NRP operates over an embedded database , where every fact is annotated with a numeric vector, its embedding. It consists of a sequence of (non-recursive) Datalog-style rules that derive new embedded relations from existing ones. Conceptually, an NRP defines a computation in which embeddings are propagated and manipulated via relational operations. More specifically, NRPs use three types of rules that correspond to basic ways the relational structure guides neural computation. Conjunction rules implement joins and projections: for every match of a rule body, they combine the embeddings of the participating facts and then aggregate all matches that yield the same head tuple. Disjunction rules implement unions, merging alterna-tive derivations of the same tuple by aggregating embeddings. Transformation rules update the embeddings of individual tuples using a differentiable map such as a feed-forward neural network. The central contribution of this paper is a characterization of the expressive power of NRPs and of their relationship to existing logical and neural formalisms. We show that several previously studied formalisms arise naturally as syntactic restrictions of NRPs. In particular, we establish that: 
+
+• The class of zero-ary NRPs exactly captures the formalism of non-adaptive query algorithms [ 12 ,50, 51, 57] (Section 4). 
+
+• The class of monadic NRPs exactly captures the formalism of deep homomorphism networks [ 40 ,47 ]; moreover, when tuples in the input database are associated with row identifiers, as is common in database systems, this correspondence extends to frontier guarded NRPs (Section 5). 
+
+• Restricted to common transformation functions, the class of NRPs corresponds exactly to the logic FOCQ , an extension of first-order logic with counting and arithmetic interpreted over real-weighted structures. FOCQ is a close relative of various other counting extensions of first-order logic that have recently been proposed as query languages for neural networks [ 26 , 27 ]. Over ordinary (unweighted) relational structures that include a linear order, FOCQ coincides with FO+C and captures the complexity class uniform TC 0 (Section 6). These results establish NRPs as a broad framework for combining relational querying and neural computation, which unifies existing approaches to deep learning over databases. 
+
+2 Related Work 
+
+We now highlight relevant literature and how it relates to this work. 
+
+Annotated databases. As mentioned above, the ideas of augmenting tuples with numerical in-formation, and maintaining the augmented tuples through queries, are established in databases through the notion of provenance [ 23 , 30 ] (also known as lineage and annotation ). In the provenance semiring framework, every tuple is annotated by an element of a commutative semiring; the mul-tiplication operation of the semiring is used for joining tuples, and the addition operation of the semiring is used for aggregating tuples on projection (and union) [ 23 ]. Special attention has been given to the case where the annotation is numerical, as in this work, but specifically targeting the case where this annotation is a probability [ 14 ]. Recent years have seen research advances in the Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 3
+
+context of Datalog, on both provenance [ 15 , 30 , 62 ] and probability annotation [ 1, 2 , 25 ] (with ties to probabilistic logic programming [ 45 ]). Unlike semiring provenance, the transformations and aggregations considered here are not restricted to fixed algebraic operations and are not required to satisfy semiring axioms. Moreover, our annotations are numerical vectors rather than scalar values. 
+
+Embedding database records. Considerable work has been devoted to tuple embeddings in a Euclidean space [ 9 , 10 , 13 , 34 , 39 , 43 , 52 ], where the goal is very different from the focus of our study: compute vector annotations such that semantic proximity is translated into geometrical closeness. This task is typically translated into an optimization problem of finding embeddings that allow for precise reconstruction (decoding) of semantic relationships (kernels). Our use of embedded tuples also differs from the intention of vector database approaches [ 44 ]; we treat embeddings as a complementary representation of the tuples—not as raw data for efficient retrieval. Unlike RAG-based systems [ 36 ], our framework uses vector representations to compose neural networks rather than driving similarity and context search. 
+
+Probabilistic logic. Our neuro-relational model is inspired by probabilistic-logic systems such as Scallop [ 37 ] and DeepProbLog [ 41 ], where every tuple is associated with a probability and inference rules use a neural-network formalism to state how the probability propagates to inferred tuples. In contrast, our annotation should be viewed more as an embedding in a multi-dimensional Euclidean space, detached from any probabilistic interpretation. 
+
+Query-language views of graph learning. A closely related line of work studies GNN-style compu-tation through database- and logic-inspired languages over graphs [ 3 , 19 , 20 ]. These works provide languages for reasoning about neural computation over graph-structured inputs. NRPs differ in taking relational databases, rather than graphs, as the primary abstraction: facts are annotated with embeddings, and relational operations such as joins, projections, and unions act simultaneously on relational facts and their embeddings. A further distinction is that these works primarily focus on non-uniform expressive-power analyses, whereas our results are uniform in nature. 
+
+Neuro-Symbolic Artificial Intelligence (NSAI). Our approach can also be viewed as an instantiation of NSAI, which applies to any computational paradigm that combines neural networks (“connection-ist” AI) and logical reasoning (“symbolic” AI, involving derivation by rules). (See, e.g., [ 7, 29 , 59 , 60 ]for recent surveys on NSAI.) This can be a formalism for deep learning enhanced by (soft) logical rules, towards improved expressiveness and reduced effort in data labeling [ 49 , 55 ], all the way to logical rules that incorporate neural-network inference in addition to logical inference [ 48 , 61 ]. Arguably, models of this type have the potential of being easy to program and considerably more explainable than pure deep-learning architectures. 
+
+3 Neuro-Relational Programs 
+
+In this section, we formally define the Neuro-Relational Program (NRP) framework, which unifies traditional database queries and deep neural networks. The underlying data model is an annotated relational database , where each fact is annotated with a numerical vector. Conceptually, the an-notation can be viewed as an embedding of the fact in a Euclidean space. We first adapt the concept of a database schema , and then that of its database instances .An extended arity is an expression 𝑘 ⟨𝑑 ⟩ for natural numbers 𝑘, 𝑑 ≥ 0, where 𝑘 is a relation’s 
+
+content arity , and 𝑑 its embedding dimension . A schema S is a finite set of expressions 𝑅 [𝑘 ]⟨ 𝑑 ⟩,where each 𝑅 is a unique relation symbol with extended arity arity (𝑅 ) = 𝑘 ⟨𝑑 ⟩. Let Consts be an infinite set of constants representing database elements. An embedded fact (e-fact for short) over 
+
+S is an expression of the form 𝑅 (c)⟨ e⟩ where 𝑅 is a relation symbol in S with arity (𝑅 ) = 𝑘 ⟨𝑑 ⟩,
+
+c ∈ Consts 𝑘 is the content tuple , and e ∈ R𝑑 is the embedding. 4 Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr 
+
+An embedded database (e-database for short) over S is a finite set 𝐷 of e-facts over S such that no two e-facts share the same relation symbol and content; that is, if 𝑅 (c)⟨ e⟩ and 𝑅 (c)⟨ e′⟩ belong to 𝐷 , then e = e′. We write 𝑅 (a) ∈ 𝐷 to denote that 𝑅 (a)⟨ e⟩ ∈ 𝐷 for some e ∈ R𝑑 . The active domain of an e-database 𝐷 , denoted adom (𝐷 ), is the set of all constants that occur in facts in the e-database 𝐷 . By an e-relation we refer to the subset of 𝐷 that consists of all e-facts 𝑅 (c)⟨ e⟩ with the same 𝑅 for some relation symbol 𝑅 . An e-relation is classical if its embedding dimension is zero (i.e., the e-facts consist of only content, as in ordinary databases). An e-database is classical if all its e-facts have embedding dimension zero. 
+
+NRP syntax. Fix a schema S. A rule Ψ over S maps e-relations over the relation symbols 𝑅 𝑖 of S
+
+to a new e-relation over a relation symbol 𝑅 with arity 𝑘 ⟨𝑑 ⟩ outside of S. We say that Ψ produces 
+
+𝑅 [𝑘 ]⟨ 𝑑 ⟩ from S. An NRP Π is a sequence of rules (Ψ1, . . . , Ψ𝑛 ), where each Ψ𝑖 produces 𝑅 𝑖 [𝑘 𝑖 ]⟨ 𝑑 𝑖 ⟩
+
+from schema S ∪ { 𝑅 𝑗 [𝑘 𝑗 ]⟨ 𝑑 𝑗 ⟩ | 1 ≤ 𝑗 < 𝑖 }. Let Bfin (R𝑑 ) denote the set of all finite multisets of 
+
+𝑑 -dimensional real-valued vectors. Let arity (𝑅 ) = 𝑘 ⟨𝑑 ⟩ and arity (𝑅 𝑖 ) = 𝑘 𝑖 ⟨𝑑 𝑖 ⟩. An NRP uses three types of rules: (1) A conjunction rule has the form 
+
+𝑅 (x)⟨ 𝛼 ⟩ ⇐ 𝑜 𝑅 1 (x1) ∧ · · · ∧ 𝑅 ℓ (xℓ )
+
+where every variable in x appears in at least one x𝑖 , 𝛼 : Bfin (R𝑑 ) → R𝑑 is an aggregation function and 𝑜 : R𝑑 1 × · · · × R𝑑 ℓ → R𝑑 is a combination function .(2) A disjunction rule has the form 
+
+𝑅 (x)⟨ 𝛼 ⟩ ⇐ 𝑅 1 (x) ∨ · · · ∨ 𝑅 ℓ (x)
+
+where 𝑑 1 = · · · = 𝑑 ℓ = 𝑑 and 𝛼 : Bfin (R𝑑 ) → R𝑑 is an aggregation function. (3) A transformation rule has the form 
+
+𝑅 (x)⟨ 𝜇 ⟩ ⇐ 𝑅 0 (x)
+
+where 𝜇 : R𝑑 0 → R𝑑 is a transformation function .In all cases, the expressions left and right of “ ⇐” are the rule’s head and body , respectively. Through-out this paper we fix element-wise sum (denoted sum ) as the aggregation function, where summing over an empty multiset yields the zero vector 0(𝑑 ) . We fix element-wise product (denoted ⊙) as the combination function, adjusted for variable-length inputs. To be precise, in conjunction rules of the form (1) above, we require that 𝑑 = max {𝑑 1, . . . , 𝑑 ℓ }, and we use the combination function 
+
+⊙ : R𝑑 1 × · · · × R𝑑 ℓ → R𝑑 where ⊙( e1, . . . , eℓ ) is the tuple e ∈ R𝑑 whose 𝑗 -th element (for 𝑗 ≤ 𝑑 ) is the product of the 𝑗 -th elements of all input tuples e𝑖 of length at least 𝑗 . Following conventional practice in the expressiveness analysis of graph neural networks [ 24 ], we typically use ReLU -FFNs (feedforward networks with ReLU activations) as transformation functions. However, some results involve other function classes such as the class F× of element-wise multiplications over subspaces. 1
+
+We assume classes of transformations are closed under composition. Following standard Datalog terminology, we call the initial relations of S EDBs (the extensional database ), and the relations produced by Π IDBs (the intensional database ). 
+
+NRP semantics. Let 𝐷 be an e-database. A homomorphism from a conjunction 𝑅 1 (x1) ∧ · · · ∧ 𝑅 ℓ (xℓ )
+
+to 𝐷 is a function that maps every variable in (x1, . . . , xℓ ) to a constant, so that for all 𝑖 = 1, . . . , ℓ 
+
+there is an e-fact 𝑅 𝑖 (ℎ(x𝑖 ))⟨ e⟩ in 𝐷 for some embedding e, which we denote by e𝑖,ℎ . Here, ℎ(x𝑖 )               
+
+> 1Specifically, F×contains functions 𝑓 :(𝑥 1, . . . , 𝑥 𝑛 )=Π𝑖 ∈𝑆 (𝑥 𝑖 )for subsets 𝑆 ⊆ { 1, . . . , 𝑛 }.Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 5
+
+denotes the tuple obtained by replacing every variable 𝑥 ∈ x𝑖 with ℎ(𝑥 ). A rule Ψ producing 
+
+𝑅 [𝑘 ]⟨ 𝑑 ⟩ derives a set Ψ(𝐷 ) of e-facts as follows: (1) If Ψ is a conjunction rule 𝑅 (x)⟨ 𝛼 ⟩ ⇐ 𝑜 𝑅 1 (x1) ∧· · ·∧ 𝑅 ℓ (xℓ ), let 𝐻 be the set of homomorphisms from 𝑅 1 (x1) ∧ · · · ∧ 𝑅 ℓ (xℓ ) to 𝐷 . Then 𝑅 (a) ∈ Ψ(𝐷 ) if and only if ℎ(x) = a for some ℎ ∈ 𝐻 .The embedding of 𝑅 (a) is 𝛼 ({ {𝑜 (e1,ℎ , . . . , eℓ,ℎ ) | ℎ ∈ 𝐻 and ℎ(x) = a}}) .(2) If Ψ is a disjunction rule 𝑅 (x)⟨ 𝛼 ⟩ ⇐ 𝑅 1 (x) ∨ · · · ∨ 𝑅 ℓ (x), then 𝑅 (a) ∈ Ψ(𝐷 ) if and only if 
+
+𝑅 𝑖 (a) ∈ 𝐷 for some 𝑖 = 1 . . . ℓ . The embedding of 𝑅 (a) is 𝛼 ({ {e | 1 ≤ 𝑖 ≤ ℓ and 𝑅 𝑖 (a)⟨ e⟩ ∈ 𝐷 }}) .(3) If Ψ is a transformation rule 𝑅 (x)⟨ 𝜇 ⟩ ⇐ 𝑅 0 (x), then 𝑅 (a)⟨ e⟩ ∈ Ψ(𝐷 ) if and only if 𝑅 0 (a)⟨ e0⟩ ∈ 
+
+𝐷 where e = 𝜇 (e0).The result of applying an NRP Π = (Ψ1, . . . , Ψ𝑛 ) to an e-database 𝐷 is defined as follows. Let 𝐷 0 = 𝐷 
+
+and, for 𝑖 = 1 . . . 𝑛 , let 𝐷 𝑖 = 𝐷 𝑖 −1 ∪ Ψ𝑖 (𝐷 𝑖 −1). Then Π(𝐷 ) = 𝐷 𝑛 .We provide concrete examples of NRPs later in the paper (e.g., Examples 4.3 and 5.12), which use shorthand notations introduced next. Additionally, Appendix A contains a detailed example illustrating how to model an end-to-end relational learning pipeline as an NRP. 
+
+Shorthand notations. We introduce several syntactic conveniences. In conjunction rules, when all body variables occur in the head the aggregation function is irrelevant, and when at most one atom in the body has a positive embedding dimension the combination function is irrelevant. In these cases the aggregation and combination functions may be omitted from the rule description. We let ‘Adom’ denote a 1⟨0⟩-ary relation containing all active domain elements, which is produced by a disjunction over all relations in the signature followed by a transformation that removes the embedding. Finally, for a real-valued 𝑘 -tuple e, we write True e () to denote a 0⟨𝑘 ⟩-ary fact with embedding e. It is produced by the pair of rules True () ⇐ (with an empty rule body) and True e ()⟨ 𝜇 e⟩ ⇐ True () , where 𝜇 e is the constant function returning e.
+
+Syntactic restrictions. A relation 𝑅 is zero-ary if arity (𝑅 ) = 0⟨𝑑 ⟩ and monadic if arity (𝑅 ) = 1⟨𝑑 ⟩
+
+for some 𝑑 ≥ 0. An NRP Π is zero-ary if all its IDBs are zero-ary and all bodies of rules in Π use zero-ary relations or relations with the extended arity 𝑘 ⟨0⟩. Similarly, Π is monadic if all its IDBs are zero-ary or monadic and all bodies use zero-ary or monadic relations or relations with arity 
+
+𝑘 ⟨0⟩. Π is frontier guarded if, for every rule Ψ, the variables in the head of Ψ co-occur in at least one body atom. Π is disjunction-free if it has no disjunction rules. 
+
+NRP queries. We study the expressiveness of NRPs as a query language over embedded databases. When all EDBs and IDBs have embedding dimension 0, NRPs compute unions of conjunctive queries (non-recursive Datalog). Their added expressive power stems from their ability to process embeddings. To formalize this, a 𝑘 ⟨𝑑 ⟩-ary embedded query Q over S is a function from e-databases over S to e-relations of arity 𝑘 ⟨𝑑 ⟩. When 𝑑 = 0, Q is a flat query , mapping e-databases over S to classical 𝑘 −ary relations Q ( 𝐷 ) ⊆ adom (𝐷 )𝑘 . If both 𝑑 = 0 and 𝑘 = 0, Q is a Boolean flat query .Let Π = (Ψ1, . . . , Ψ𝑛 ) be an NRP where Ψ𝑛 produces 𝑅 𝑛 . Then Π computes the embedded query 
+
+QΠ such that QΠ (𝐷 ) is the e-relation 𝑅 𝑛 in Π(𝐷 ). To compute flat queries we pair an NRP with a 𝑑 -ary acceptance policy 𝑃 : R𝑑 → { 0, 1}. If 𝑅 𝑛 is the 𝑘 ⟨𝑑 ⟩-ary relation produced by Π and 𝑃 is a 
+
+𝑑 -ary acceptance policy, the gated NRP (Π, 𝑃 ) computes the 𝑘 -ary flat query: 
+
+Q(Π,𝑃 ) (𝐷 ) = {a | ∃ e : 𝑅 𝑛 (a)⟨ e⟩ ∈ Π(𝐷 ) ∧ 𝑃 (e) = 1}
+
+The specific class of allowed acceptance policies is largely irrelevant to our results, except when discussed explicitly in Section 6. For concreteness, unless specified otherwise one may assume a fixed policy where 𝑃 (e) = 1 if the minimum element of e is strictly positive and 𝑃 (e) = 0 otherwise. 6 Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr 
+
+Comparing combination functions. We briefly justify fixing the element-wise product ⊙ as our combination function. While element-wise sum (sum ) and concatenation (⊕) are natural alterna-tives, both can be simulated using ⊙. Let Π2 be a relational expansion of Π1 if Π2 expands the set of IDBs of Π1 while perfectly preserving the e-relations Π1 computes for any input e-database. 
+
+Proposition 3.1. For every NRP Π1 using sum or ⊕ as its combination function, there exists a relational expansion Π2 using only ⊙ combination. Moreover: (1) If Π1 is zero-ary / monadic / frontier guarded / disjunction-free, the same holds for Π2;(2) For any function class F containing ReLU -FFNs , if Π1 uses only transformations from F , the same holds for Π2.
+
+In fact, Proposition 3.1 holds more generally for any function class F that includes affine transformations (i.e., transformations defined by a single linear feed-forward layer). We illustrate this proposition with an example. 
+
+Example 3.2. Consider the schema with the three relation symbols 𝑅 1, 𝑅 2, and 𝑅 3 having arity (𝑅 1) =
+
+arity (𝑅 2) = 1⟨2⟩ and arity (𝑅 3) = 2⟨0⟩. The rule: 
+
+𝑅 (𝑥 )⟨ sum ⟩ ⇐ ⊕ 𝑅 1 (𝑥 ) ∧ 𝑅 2 (𝑦 ) ∧ 𝑅 3 (𝑥, 𝑦 )
+
+can be simulated with three rules: 
+
+𝑅 ′ 
+
+> 1
+
+(𝑥 )⟨ 𝜇 1⟩ ⇐ 𝑅 1 (𝑥 ) 𝑅 ′ 
+
+> 2
+
+(𝑥 )⟨ 𝜇 2⟩ ⇐ 𝑅 2 (𝑥 ) 𝑅 (𝑥 )⟨ sum ⟩ ⇐ ⊙ 𝑅 ′ 
+
+> 1
+
+(𝑥 ) ∧ 𝑅 ′ 
+
+> 2
+
+(𝑦 ) ∧ 𝑅 3 (𝑥, 𝑦 )
+
+where 𝜇 1 : R2 → R4 maps vectors (𝑎 1, 𝑎 2) to (𝑎 1, 𝑎 2, 1, 1) and 𝜇 2 : R2 → R4 maps vectors (𝑎 1, 𝑎 2) to 
+
+(1, 1, 𝑎 1, 𝑎 2). Since in monadic programs body atoms with content arity larger than 1 have embedding dimension 0, this translation preserves monadicity. 
+
+Product as combination further suffices to simulate product transformation functions (F × ):
+
+Proposition 3.3. Let F be any function class containing ReLU -FFNs . For every NRP Π1 using transformations from F ∪ F × , there exists a relational expansion Π2 using ⊙ combination and transformations from F . Moreover, if Π1 is zero-ary / monadic / frontier guarded / disjunction-free, the same holds for Π2.
+
+We show in the appendix that ⊙ combination can conversely be simulated by ⊕ combination and 
+
+F× transformations, but monadicity and frontier guardedness are not preserved by this translation. 
+
+4 Zero-Ary Programs and Non-Adaptive Query Algorithms 
+
+In this section, we consider the special case of zero-ary NRPs where all IDBs have content arity 0. It turns out that these neatly correspond to an existing formalism: non-adaptive query algorithms .For a classical database schema (where all relations have embedding dimension 0), a non-adaptive left query algorithm over N (or simply, non-adaptive query algorithm ) is a pair 𝐴 = ({ 𝐹 1, . . . , 𝐹 𝑘 }, 𝑋 ),consisting of a finite set of databases and a set 𝑋 ⊆ N𝑘 . Such a query algorithm 𝐴 accepts a data-base 𝐷 if (| Hom (𝐹 1, 𝐷 )| , . . . , |Hom (𝐹 𝑘 , 𝐷 )|) ∈ 𝑋 , where Hom (𝐹, 𝐷 ) is the set of homomorphisms from 𝐹 to 𝐷 , i.e. the functions ℎ : adom (𝐹 ) → adom (𝐷 ) such that 𝑅 (𝑎 1, . . . , 𝑎 𝑘 ) ∈ 𝐹 implies 
+
+𝑅 (ℎ(𝑎 1), . . . , ℎ (𝑎 𝑘 )) ∈ 𝐷 . A class C of databases admits a non-adaptive query algorithm if there exists such an algorithm that accepts precisely the databases in C. The study of query algorithms was initiated by Chen et al. [ 12 ] for the special case of graphs, and subsequently generalized to arbitrary relational databases (as defined here) in [ 50 ]. The term is fitting because one can think of a query algorithm as a procedure for determining class membership: compute the homomorphism-count vector and verify whether it belongs to the set 𝑋 . However, it remains a somewhat abstract Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 7
+
+notion of an algorithm since it places no constraints on the effectiveness of 𝑋 . Various results were obtained in [ 12 , 50 , 51 , 57 ], such as the fact that every class defined by an alternation-free first-order sentence (i.e., Boolean combination of universal FO sentences) admits a query algorithm, whereas there is class defined by a FO sentence with the quantifier prefix ∃∀ , namely ∃𝑥 ∀𝑦 ¬𝐸 (𝑥, 𝑦 ), that does not admit a non-adaptive query algorithm [12]. We say a gated zero-ary NRP (Π, 𝑃 ) defines the class C if 𝐷 ∈ C if and only if QΠ,𝑃 (𝐷 ) ≠ ∅.We prove that gated zero-ary NRPs define precisely the classes that admit non-adaptive query algorithms. As a corollary we obtain results regarding the definability of first-order queries. The following statements apply to NRPs with arbitrary transformation functions. 
+
+Theorem 4.1. For all classes C of classical databases, 
+
+C admits a non-adaptive query algorithm iff C is defined by a gated zero-ary NRP. 
+
+Corollary 4.2. 
+
+(1) Every Boolean flat query defined by an alternation-free FO sentence is computed by a gated zero-ary NRP; (2) The Boolean flat query ∃𝑥 ∀𝑦 ¬𝑅 (𝑥, 𝑦 ) is not computed by a gated zero-ary NRP. 
+
+We illustrate the theorem with an example. 
+
+Example 4.3. Consider simple graphs (i.e., undirected graphs without loops), represented as databases over the schema S = {𝑉 [1]⟨ 0⟩, 𝐸 [2]⟨ 0⟩} . The non-adaptive query algorithm ({ 𝐶 3 }, 𝑋 ) where 𝐶 3 is the 3-cycle and 𝑋 = {12 𝑛 | 𝑛 ≥ 0} accepts precisely the graphs containing an even number of triangles. To see this, note that 𝐶 3 admits 6 homomorphisms to any given triangle. The same class of graphs is defined by the following NRP: Triangle ()⟨ sum ⟩ ⇐ 𝐸 (𝑥, 𝑦 ) ∧ 𝐸 (𝑦, 𝑧 ) ∧ 𝐸 (𝑥, 𝑧 ) ∧ True 1 () 
+
+TriangleOrZero ()⟨ sum ⟩ ⇐ Triangle () ∨ True 0 () 
+
+Ans ()⟨ 𝜇 ⟩ ⇐ TriangleOrZero () 
+
+where 𝜇 (𝑥 ) = 1 if 𝑥 is divisible by 12 and 𝜇 (𝑥 ) = 0 otherwise. Note that a Triangle e-fact is only derived if the graph contains a triangle. To handle graphs without triangles we perform a disjunction with True 0 () .
+
+Remark 4.4. In [ 50 ], the authors also study non-adaptive left query algorithms over the Boolean semiring B. Such algorithms query homomorphism existence rather than homomorphism counts. A straightforward variation of the proof of Theorem 4.1 establishes a similar connection between these query algorithms and zero-ary NRPs with max aggregation. 
+
+5 Monadic and Frontier Guarded Programs 
+
+In this section, we discuss two syntactic fragments of the class of NRPs, namely monadic and 
+
+frontier-guarded NRPs, focusing on their connections to deep homomorphism networks [40, 47]. 
+
+5.1 Monadic Programs and Deep Homomorphism Networks 
+
+Monadic NRPs generalize Graph Neural Networks (GNNs), where node embeddings are updated by summing over local or global neighborhoods. Given a graph 𝐺 with nodes 𝑉 (𝐺 ), edges 𝐸 (𝐺 ) ⊆ 
+
+𝑉 (𝐺 ) × 𝑉 (𝐺 ) and an embedding function 𝜆 𝑖 : 𝑉 (𝐺 ) → R𝑑 , a layer of local-sum aggregation in a GNN produces a new embedding function: 
+
+𝜆 𝑖 +1 (𝑢 ) = 𝜌 (𝜆 𝑖 (𝑢 ), sum {{𝜆 𝑖 (𝑣 ) | ( 𝑢, 𝑣 ) ∈ 𝐸 (𝐺 )} }) 8 Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr 
+
+where 𝜌 is usually a parametrized function such as a ReLU -FFN . The same computation is performed by the following monadic NRP, where arity (𝐸 ) = 2⟨0⟩, arity (𝜆 𝑖 ) = 1⟨𝑑 ⟩:AggrIsolated (𝑥 ) ⇐ Adom (𝑥 ) ∧ True 0 () 
+
+AggrConnected 𝑖 (𝑥 )⟨ sum ⟩ ⇐ 𝐸 (𝑥, 𝑦 ) ∧ 𝜆 𝑖 (𝑦 )
+
+Aggr 𝑖 (𝑥 )⟨ sum ⟩ ⇐ AggrConnected 𝑖 (𝑥 ) ∨ AggrIsolated (𝑥 )
+
+Concat 𝑖 (𝑥 ) ⇐⊕ 𝜆 𝑖 (𝑥 ) ∧ Aggr 𝑖 (𝑥 )
+
+𝜆 𝑖 +1 (𝑥 )⟨ 𝜌 ⟩ ⇐ Concat 𝑖 (𝑥 )
+
+Recall that concatenation (⊕) can be rewritten to product (⊙) using Proposition 3.1. We show in this section that monadic NRPs are more expressive than GNNs since they exactly capture the expressiveness of Deep Homomorphism Networks (DHN). DHNs are machine learning models that were originally defined on graphs with node embeddings, as an extension of GNNs [ 40 ]. They have recently been generalized to element-embedded databases [ 47 ] where all elements (as opposed to all facts) have a numeric embedding. An element-embedded database (𝐷, 𝜆 ) is a classical database with an embedding function 𝜆 : adom (𝐷 ) → R𝑑 , with 𝑑 ≥ 0. We use 𝐷 𝑎 and (𝐷 𝑎 , 𝜆 ) to denote pointed (element-embedded) databases with a distinguished element 𝑎 , or 𝐷 • without explicit reference to this element. For the remainder of this section, we fix an input schema S which for simplicity contains no zero-ary relations. We now define DHNs on databases as in [47]: 
+
+Definition 5.1 (Homomorphism Query) . A homomorphism ℎ ∈ Hom (𝐹, 𝐷 ) is a function ℎ :adom (𝐹 ) → adom (𝐷 ) such that 𝑅 (𝑎 1, . . . , 𝑎 𝑘 ) ∈ 𝐹 implies 𝑅 (ℎ(𝑎 1), . . . , ℎ (𝑎 𝑘 )) ∈ 𝐷 . A homomor-phism query is a pair (𝐹 •, 𝜇 ), where 𝐹 • is a pointed classical database, and 𝜇 = {𝜇 𝑦 : 𝑦 ∈ adom (𝐹 )} is a set of transformation functions 𝜇 𝑦 : R𝑑 → R𝑑 ′
+
+for some 𝑑, 𝑑 ′ ≥ 0. The result of evaluating (𝐹 •, 𝜇 ) on pointed element-embedded database (𝐷 𝑎 , 𝜆 ) with label dimension 𝑑 is the vector: 
+
+eval (( 𝐹 •, 𝜇 ), (𝐷 𝑎 , 𝜆 )) := sum  Ö  
+
+> 𝑦 ∈adom (𝐹 )
+
+𝜇 𝑦 (𝜆 (ℎ(𝑦 ))) | ℎ ∈ Hom (𝐹 •, 𝐷 𝑎 )
+
+Where sum and Î denote element-wise sum and product, and Hom (𝐹 •, 𝐷 𝑎 ) is the set of homomor-phisms from 𝐹 to 𝐷 that map the distinguished element of 𝐹 to 𝑎 .
+
+Definition 5.2 (DHN layer) . A Deep Homomorphism Network layer with input dimension 𝑑 ≥ 0
+
+and output dimension 𝑑 ′ ≥ 0 is a pair L = ((( 𝐹 • 
+
+> 1
+
+, 𝜇 1), . . . , (𝐹 •
+
+> 𝑚
+
+, 𝜇 𝑚 )) , 𝜌 ) where each (𝐹 • 
+
+> 𝑖
+
+, 𝜇 𝑖 ) is a homomorphism query with input dimension 𝑑 and output dimension 𝑑 𝑖 , and 𝜌 : R𝑑 1 × · · · × R𝑑 𝑚 → R𝑑 ′
+
+is a transformation function. Given an element-embedded database (𝐷, 𝜆 ), L produces an embedding function mapping each 𝑎 ∈ adom (𝐷 ) to: 
+
+L( 𝐷, 𝜆 )( 𝑎 ) = 𝜌 (
+
+Ê 
+
+> 1≤𝑖 ≤𝑚
+
+ eval (( 𝐹 • 
+
+> 𝑖
+
+, 𝜇 𝑖 ), (𝐷 𝑎 , 𝜆 )) )
+
+Definition 5.3 (DHN) . A Deep Homomorphism Network is a sequence N = (L 1, . . . , L𝑛 ) of DHN layers where for 𝑖 = 1, . . . , 𝑛 − 1 the output dimension of L𝑖 equals the input dimension of L𝑖 +1.Applying N to a labeled database (𝐷, 𝜆 ) produces the labeling (L 𝑛 ◦ · · · ◦ L 1)( 𝐷, 𝜆 ), where we write 
+
+(L ◦ L ′)( 𝐷, 𝜆 ) denoting L( 𝐷, L′ (𝐷, 𝜆 )) . The input and output dimensions of N are those of L1 and 
+
+L𝑛 , respectively. 
+
+Definition 5.4 (DHN classifier) . A DHN N with output dimension 𝑑 and a 𝑑 -ary acceptance policy 
+
+𝑃 : R𝑑 → { 0, 1} together define a binary node classifier (N , 𝑃 ). We call this a DHN classifier .
+
+DHNs generalize the standard message-passing over edges of GNNs to complex structural patterns. The practical value of this generalization is demonstrated in [ 33 ], where triangle-based message passing is used to outperform state-of-the-art heuristics for the multicut problem while maintaining feasible runtimes. The expressive power of DHNs was studied in [ 47 ], where, in Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 9
+
+particular, it was shown that DHNs are strictly more expressive than GNNs, even when the latter are augmented with homomorphism count as additional node features, as in [4]. We formalize how DHNs compute queries over e-databases. Let 𝑃 1, . . . , 𝑃 𝑛 be the monadic relations in S with arity (𝑃 𝑖 ) = 1⟨𝑑 𝑖 ⟩. Given an e-database 𝐷 , we define its element-embedded representation as 𝜀 (𝐷 ) = (𝐷 ′, 𝜆 ′). Here 𝐷 ′ is a classical database containing all facts in 𝐷 without their embeddings and the 1⟨0⟩-ary relation ‘ Adom ’ that contains all elements in the active domain. The embedding function 𝜆 ′ stores the embeddings of monadic relations in 𝐷 :
+
+𝜆 ′ (𝑎 ) =
+
+Ê 
+
+> 1≤𝑖 ≤𝑛
+
+(
+
+(1) ⊕ e if 𝑃 𝑖 (𝑎 )⟨ e⟩ ∈ 𝐷 
+
+(0) ⊕ 0(𝑑 𝑖 ) otherwise 
+
+N then computes the following unary embedded query: 
+
+QN (𝐷 ) = {( 𝑎 )⟨ e⟩ | N ( 𝜀 (𝐷 ))( 𝑎 ) = e}
+
+Similarly, a DHN classifier (N , 𝑃 ) computes the flat query Q( N ,𝑃 ) containing all elements of which the output embedding is accepted by 𝑃 . Since DHNs work on element-embedded databases they always compute an embedding for each element in the database. We call a 𝑘 ⟨𝑑 ⟩-ary embedded query 
+
+Q total if for every database 𝐷 and tuple a ∈ adom (𝐷 )𝑘 there is an e ∈ R𝑑 such that a⟨e⟩ ∈ Q ( 𝐷 ).
+
+Theorem 5.5. For every total unary embedded query Q,
+
+Q is computed by a DHN N iff Q is computed by a monadic NRP Π.Moreover, for each class of transformation functions F including ReLU -FFNs , N has transformations in F ∪ F × if and only if Π has transformations in F .
+
+Recall that F× contains element-wise multiplications over subspaces, and that we fix sum aggre-gation and ⊙ as combination, which can simulate concatenation (⊕) (Proposition 3.1). 
+
+Example 5.6. This example concerns R-labeled simple graphs (i.e., undirected graphs without loops and 1-dimensional embeddings associated to vertices), represented by e-databases over the schema 
+
+S = {𝑉 [1]⟨ 1⟩, 𝐸 [2]⟨ 0⟩} . Let Q△ be the embedded query of arity 1⟨1⟩ given by: 
+
+Q△ (𝐷 ) = {𝑢 ⟨𝑟 ⟩ | 𝑉 (𝑢 )⟨ 𝑟 1⟩ ∈ 𝐷, 𝑟 = sum {{𝑟 1 · 𝑟 2 · 𝑟 3 | { 𝑉 (𝑣 2)⟨ 𝑟 2⟩, 𝑉 (𝑣 3)⟨ 𝑟 3⟩, 𝐸 (𝑢, 𝑣 2), 𝐸 (𝑣 2, 𝑣 3), 𝐸 (𝑣 3, 𝑢 )} ⊆ 𝐷 }}
+
+Thus, Q△ takes the sum of products of embeddings for all triangles containing 𝑢 , yielding embedding 
+
+(0) if no such triangle exists. While Q△ is not computed by a GNN [ 42 ][ 58 ], it is computed by a single DHN layer that queries homomorphisms from the triangle, as well as by the following monadic NRP: Zero (𝑥 ) ⇐ Adom (𝑥 ) ∧ True 0 () 
+
+Triangle (𝑥 )⟨ sum ⟩ ⇐⊙ 𝐸 (𝑥, 𝑦 ) ∧ 𝐸 (𝑦, 𝑧 ) ∧ 𝐸 (𝑧, 𝑥 ) ∧ 𝑃 (𝑥 ) ∧ 𝑃 (𝑦 ) ∧ 𝑃 (𝑧 )Q△ (𝑥 ) ⇐ Triangle (𝑥 ) ∨ Zero (𝑥 )
+
+DHNs also represent non-total queries computed by monadic NRPs, using a designated Boolean: 
+
+Theorem 5.7. Let Q be an embedded query with arity 1⟨𝑑 ⟩ computed by a monadic NRP Π. Then there exists a DHN Nsuch that for each e-database 𝐷 and 𝑎 ∈ adom (𝐷 ):
+
+N ( 𝜀 (𝐷 ))( 𝑎 ) =
+
+(
+
+(1) ⊕ e if 𝑎 ⟨e⟩ ∈ Q ( 𝐷 )(0) ⊕ 0(𝑑 ) if for all e ∈ R𝑑 , 𝑎 ⟨e⟩ ∉ Q ( 𝐷 )
+
+If Π has transformations in F , including ReLU -FFNs , N has transformations in F ∪ F × .
+
+As a corollary of Theorems 5.5 and 5.7, the flat queries computed by DHN classifiers exactly match those computed by gated monadic NRPs: 10 Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr 
+
+Corollary 5.8. For every unary flat query Q,
+
+Q is computed by a DHN classifier iff Q is computed by a gated monadic NRP. Moreover, for each class of transformation functions F including ReLU -FFNs , the DHN has transfor-mations in F ∪ F × if and only if the NRP has transformations in F .
+
+Indeed, suppose a flat query is computed by DHN classifier (N , 𝑃 ). Then N computes a total query which, by Theorem 5.5 is also computed by a monadic NRP Π; thus (Π, 𝑃 ) computes the same flat query. Conversely, a flat query computed by gated monadic NRP (Π, 𝑃 ) is the result of selecting embeddings from an embedded query. By Theorem 5.7 there exists a DHN N that produces the same embeddings appended with the value 1. Thus, (N , 𝑃 ′) computes the same flat query, where 
+
+𝑃 ′ (e) = 1 if and only if the first value of e is positive and 𝑃 (e>1) = 1, where e>1 is obtained by removing the first value from e.It was shown in [ 47 ] that DHNs express all queries in the unary quantifier-alternation fragment (UQAFO) , which consists of first-order formulas 𝜑 ( ¯𝑥 ) generated by the following grammar: 
+
+𝜑 ( ¯𝑥 ) :: = 𝜑 ∃ ( ¯𝑥 ) | 𝜑 ∀ ( ¯𝑥 ) | 𝜑 ( ¯𝑥 ) ◦ 𝜑 ( ¯𝑥 )
+
+𝜑 ∃ ( ¯𝑥 ) :: = 𝑅 ( ¯𝑥 ) | ¬ 𝑅 ( ¯𝑥 ) | 𝜑 ∃ ( ¯𝑥 ) ◦ 𝜑 ∃ ( ¯𝑥 ) | 𝑥 𝑖 = 𝑥 𝑗 | 𝑥 𝑖 ≠ 𝑥 𝑗 | ∃ ¯𝑦 𝜑 ∃ ( ¯𝑥, ¯𝑦 ) | 𝜑 ∀ (𝑥 𝑖 )
+
+𝜑 ∀ ( ¯𝑥 ) :: = 𝑅 ( ¯𝑥 ) | ¬ 𝑅 ( ¯𝑥 ) | 𝜑 ∀ ( ¯𝑥 ) ◦ 𝜑 ∀ ( ¯𝑥 ) | 𝑥 𝑖 = 𝑥 𝑗 | 𝑥 𝑖 ≠ 𝑥 𝑗 | ∀ ¯𝑦 𝜑 ∀ ( ¯𝑥, ¯𝑦 ) | 𝜑 ∃ (𝑥 𝑖 )
+
+where ◦ ∈ {∨ , ∧} and 𝜑 ( ¯𝑥 ) only has free variables in ¯𝑥 . Note that quantifier alternation is only allowed when the quantified subformula has at most one free variable. For example, ∃𝑥 ∀𝑦 ¬𝐸 (𝑥, 𝑦 )
+
+is allowed because ∀𝑦 ¬𝐸 (𝑥, 𝑦 ) has a single free variable, but ∃𝑥 ∃𝑦 ∀𝑧 (𝐸 (𝑥, 𝑧 ) ∨ 𝐸 (𝑦, 𝑧 )) is not. It was shown in [ 47 , Theorem 12] that, for each UQAFO-formula 𝜑 (𝑥 ) in one free variable, there exists a DHN that derives element-embedding 0 when 𝜑 (𝑥 ) is false and 1 when 𝜑 (𝑥 ) is true. It was further shown that DHNs express first-order properties that lie outside UQAFO. Theorem 5.5 allows us to transfer these results about DHNs to NRPs. This yields: 2
+
+Corollary 5.9. The Boolean and unary flat queries computed by gated monadic NRPs strictly subsume those definable by UQAFO-formulas, with a separating example on classical databases. 
+
+Similarly, results in [40] and [47, Theorem 13], combined with Theorem 5.5, imply: 
+
+Corollary 5.10. The unary flat queries computed by gated monadic NRPs strictly subsume those computed by GNN-classifiers augmented by finitely many homomorphism-count features (as in [ 4 ]), with a separating example on unembedded simple graphs. 
+
+Here, simple graphs are undirected graphs without loops. Finally, recall from Section 4 that the Boolean flat query ∃𝑥 ∀𝑦 ¬𝐸 (𝑥, 𝑦 ) is not computed by a zero-ary NRP. Since this first-order sentence belongs to UQAFO, we get: 
+
+Corollary 5.11. The class of Boolean flat queries computed by gated monadic NRPs strictly subsumes those computed by gated zero-ary NRPs, with a separating example on unembedded simple graphs. 
+
+5.2 Moving Beyond Monadic: Frontier Guarded Programs 
+
+We extend the connection between NRPs and DHNs beyond monadic programs, showing that frontier guarded NRPs can be translated to DHNs, provided that the input database is suitably normalized to have row-ids. Recall that an NRP is frontier guarded if each conjunction rule has a guard atom in the body that contains all variables in the head. Frontier guarded NRPs are more       
+
+> 2The claim for Boolean flat queries follows from the one for unary flat queries: we treat an UQAFO-sentence 𝜑 as a formula with one (unused) free variable, and extend the resulting program with a final ReLU -FFN -transformation rule, followed by an aggregation rule of the form GlobalAns () ⟨ sum ⟩ ⇐ LocalAns (𝑥 ), and a disjunction rule for the empty domain case. Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 11
+
+expressive than monadic NRPs since they can define 𝑘 -ary flat queries with 𝑘 > 1. We provide examples to illustrate the usage of non-monadic aggregation, also for unary queries: 
+
+Example 5.12. Consider a schema S = {Supervises [2]⟨ 0⟩, PostDoc [1]⟨ 0⟩, PhD [1]⟨ 0⟩} , and consider the unary flat query: People 𝑥 supervising a PostDoc 𝑦 that co-supervises all (and at least one) PhD students of 𝑥 .This is computed by the following frontier guarded NRP with answer relation Ans [1]⟨ 1⟩ and the standard acceptance policy that checks the embedding is positive: SPD (𝑥, 𝑦 ) ⇐ Supervises (𝑥, 𝑦 ) ∧ PostDoc (𝑦 )
+
+JointPhDCount (𝑥, 𝑦 )⟨ sum ⟩ ⇐ SPD (𝑥, 𝑦 ) ∧ Supervises (𝑥, 𝑧 ) ∧ Supervises (𝑦, 𝑧 )∧ PhD (𝑧 ) ∧ True 1 () 
+
+MainPhDCount (𝑥, 𝑦 )⟨ sum ⟩ ⇐ SPD (𝑥, 𝑦 ) ∧ Supervises (𝑥, 𝑧 ) ∧ PhD (𝑧 ) ∧ True 1 () 
+
+CoSupStats (𝑥, 𝑦 ) ⇐⊕ JointPhDCount (𝑥, 𝑦 ) ∧ MainPhDCount (𝑥, 𝑦 )
+
+Good (𝑥, 𝑦 )⟨ 𝜇 ⟩ ⇐ CoSupStats (𝑥, 𝑦 ) where 𝜇 (𝑒, 𝑒 ′) = ReLU (1 − ( 𝑒 ′ − 𝑒 )) 
+
+Ans (𝑥 )⟨ sum ⟩ ⇐ Good (𝑥, 𝑦 )
+
+Indeed, Ans [1]⟨ 1⟩ includes any person 𝑥 supervising a postdoc that co-supervises at least one of 𝑥 ’s PhD students. The embedding of Ans (𝑥 ) is the number of 𝑥 ’s postdocs co-supervising all of 𝑥 ′s PhD students. The second rule performs an aggregation grouped by pairs, which monadic rules cannot do. 
+
+Example 5.13. GNNs as described in Section 5.1 only compute node embeddings. There are also GNN variants that compute both node and edge embeddings [ 6, 16 , 21 ]. Such architectures cannot be represented by monadic NRPs but they can be represented by frontier guarded NRPs. For instance, an edge-embedding update of the form 𝜆 ′ 
+
+> 𝑖 +1
+
+(( 𝑢, 𝑣 )) = 𝜌 (𝜆 𝑖 (𝑢 ), 𝜆 𝑖 (𝑣 ), 𝜆 ′ 
+
+> 𝑖
+
+(𝑢, 𝑣 )) translates to a pair of frontier guarded NRP rules: Concat 𝑖 (𝑥, 𝑦 ) ⇐ ⊕ 𝜆 𝑖 (𝑥 ) ∧ 𝜆 𝑖 (𝑦 ) ∧ 𝜆 ′ 
+
+> 𝑖
+
+(𝑥, 𝑦 ) 𝜆 ′ 
+
+> 𝑖 +1
+
+(𝑥, 𝑦 )⟨ 𝜌 ⟩ ⇐ Concat 𝑖 (𝑥, 𝑦 ).
+
+In the remainder of this section, we show that frontier guarded NRPs can be translated to monadic NRPs over databases equipped with linearly ordered row-ids. An e-database is row-id normalized 
+
+if (i) the first attribute of each relation is a unique unary key (row-id) not appearing elsewhere in the database, and (ii) all non-monadic relations in its schema have embedding dimension 0. 3
+
+Monadic NRPs are more powerful on row-id normalized e-databases since they can effectively store row embeddings in monadic IDBs via row-ids; in particular, they become as expressive as frontier guarded NRPs when equipped with a linear order. To state this equivalence precisely we recall a well-known fact about frontier guarded Datalog programs which also applies to frontier guarded NRPs, namely that every content tuple occurring in the output is a projection of a tuple occurring in one of the EDB relations. Let a 𝑘 -ary EDB-projection be a pair (𝑅, (𝑖 1, . . . , 𝑖 𝑘 )) where 𝑅 ∈ S has content arity 𝑚 and 𝑖 1, . . . , 𝑖 𝑘 ∈ { 1, . . . , 𝑚 }.
+
+Theorem 5.14. Let Π be a frontier guarded NRP over schema S with a 𝑘 ⟨𝑑 ⟩-ary IDB 𝑆 . There exists a monadic NRP Π′ over schema S ∪ { 𝑅 < [2]⟨ 0⟩} , that produces a 1⟨𝑑 ⟩-ary IDB 𝑆 𝜌 for each 𝑘 -ary EDB projection 𝜌 = (𝑅, (𝑖 1, . . . , 𝑖 𝑘 )) , so that on every row-id normalized e-database 𝐷 :
+
+{( 𝑎 )⟨ e⟩ | 𝑆 𝜌 (𝑎 )⟨ e⟩ ∈ Π′ (𝐷 <)} = {( 𝑎 1)⟨ e⟩ | 𝑅 (𝑎 1, . . . , 𝑎 𝑚 ) ∈ 𝐷 and 𝑆 (𝑎 𝑖 1 , . . . , 𝑎 𝑖 𝑘 )⟨ e⟩ ∈ Π(𝐷 )} 
+
+where 𝑚 is the content arity of 𝑅 and 𝐷 < is an expansion of 𝐷 with a linear order 𝑅 < on the row-id values. Moreover, if Π only uses transformations in F , including ReLU -FFNs , the same holds for Π′.  
+
+> 3Condition (ii) is important for the reduction from frontier guarded NRPs to monadic NRPs, since monadic NRPs only allow rule bodies to contain EDBs with embeddings if their content arity is at most 1.12 Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr
+
+Intuitively, Theorem 5.14 shows that frontier guarded NRPs can be compiled into monadic NRPs over row-id normalized databases. The linear order allows us to map each derived IDB fact to the row-id of the EDB tuple of which it is the projection, in a canonical way, thus preventing double counting during aggregation. It follows that embedded queries computed by frontier guarded NRPs are also computed by monadic NRPs after a canonical translation, and hence by DHNs using the results of Section 5.1. Given a schema S, let: 
+
+bS = {𝑅 data [𝑘 + 1]⟨ 0⟩ | 𝑅 [𝑘 ]⟨ 𝑑 ⟩ ∈ S} ∪ { 𝑅 emb [1]⟨ 𝑑 ⟩ | 𝑅 [𝑘 ]⟨ 𝑑 ⟩ ∈ S and 𝑑 > 0}
+
+For an e-database 𝐷 over S, its ordered row-id expansion b𝐷 over bS consists of the row-id normalized e-database that contains for each e-fact 𝑅 (𝑎 1, . . . , 𝑎 𝑘 )⟨ e⟩ ∈ 𝐷 the e-facts 𝑅 data (𝑟, 𝑎 1, . . . , 𝑎 𝑘 )⟨⟩ where 
+
+𝑟 is a fresh distinct value that serves as the row-id, and 𝑅 emb (𝑟 )⟨ e⟩ if 𝑑 > 0, with, in addition, a [2]⟨ 0⟩ ary order 𝑅 < on the row-id values. We obtain the following corollary of Theorems 5.7 and 5.14: 
+
+Corollary 5.15. Let 𝑄 be a 𝑘 ⟨𝑑 ⟩-ary embedded query computed by a frontier guarded NRP over an arbitrary schema S, and let 𝜌 = (𝑅, (𝑖 1, . . . , 𝑖 𝑘 )) , be a 𝑘 -ary EDB projection. There exists a DHN N
+
+computing the total 1⟨𝑑 + 1⟩-ary embedded query such that, for each e-database over S with ordered row-id expansion b𝐷 and each 𝑟 ∈ adom ( b𝐷 ), we have 𝑟 ⟨e⟩ ∈ Q N ( b𝐷 ) where: 
+
+e =
+
+(
+
+(1) ⊕ f if 𝑅 data (𝑟, 𝑎 1, . . . , 𝑎 𝑚 ) ∈ b𝐷 and (𝑎 𝑖 1 , . . . , 𝑎 𝑖 𝑘 )⟨ f⟩ ∈ Q ( 𝐷 )(0) ⊕ 0(𝑑 ) otherwise 
+
+Remark 5.16. The above reduction from frontier guarded NRPs to monadic NRPs is based on expanding each relation with a row-id column, and assuming a linear order on the row-ids. Another option is to use a graph encoding that assigns a vertex to every projection of each e-fact in the input database. This avoids the need for a linear order, at the expense of increasing the size of the input to the DHN. 
+
+6 Descriptive Complexity of ReLU -FFN-based NRPs 
+
+We next study the expressive power of arbitrary (not necessarily monadic or frontier guarded) NRPs. Specifically, we consider NRPs whose transformations are ReLU -FFNs with rational parameters (or 
+
+ReLU-FFN-based NRPs for short). As standard building blocks in machine learning, ReLU -FFNs are a natural class of transformations. It is essential for gradient-based optimization that they compute continuous almost everywhere differentiable functions. These properties naturally extend to NRPs: for a fixed input e-database, the computation performed by a ReLU -FFN -based NRP is continuous and almost everywhere differentiable with respect to its parameters. 4
+
+We give an exact logical characterization of the expressive power of ReLU -FFN -based NRPs in terms of FOCQ, an extension of first-order logic with real-valued counting terms. Using this characterization we show that the flat queries computed by gated ReLU -FFN -based NRPs are contained in uniform TC 0, and that, over ordered classical databases, they capture uniform TC 0.
+
+6.1 FOCQ 
+
+The extension of first-order logic with counting terms was first suggested by Immerman [ 31 ], and later made explicit by Grädel and Otto [ 22 ]. There exist various formalizations where counting terms range over natural numbers such as FOCN (P≤ ) [ 35 ] and FO+C [ 24 ], which all capture uniform TC 0
+
+over ordered structures. To represent the queries computed by NRPs we define FOCQ, a first-order logic with real-valued counting terms, which we interpret on real-weighted first-order structures. First-order logic with counting over real values has recently been proposed as a query language  
+
+> 4It suffices to observe that, for a fixed input, an NRP can be compiled into a large but finite FFN (with parameter sharing over tuples derived by the same transformation rule) where sum-aggregation is replaced by finitary addition. Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 13
+> Table 1. Semantics of FOCQ
+
+⟦𝑞 ⟧A = 𝑞 for 𝑞 ∈ Q
+
+⟦1𝑥 =𝑦 ⟧A (𝑎 1, 𝑎 2) = 1 if 𝑎 1 = 𝑎 2 and 0 otherwise 
+
+⟦𝑅 (𝑥 1, . . . , 𝑥 𝑛 )⟧ A (a) = 𝑅 A (a)⟦𝜃 + 𝜃 ′⟧A (a) = ⟦𝜃 ⟧A (a) + ⟦ 𝜃 ′⟧A (a)⟦𝜃 · 𝜃 ′⟧A (a) = ⟦𝜃 ⟧A (a) · ⟦ 𝜃 ′⟧A (a)⟦− 𝜃 ⟧A (a) = −⟦ 𝜃 ⟧A (a)⟦∑︁ (𝑥 1, . . . , 𝑥 𝑘 ).𝜃 ⟧A (a) = sum of ⟦𝜃 ⟧A (a′) where a′ extends a with interpretations for 𝑥 1, . . . , 𝑥 𝑘 
+
+⟦max (𝜃, 𝜃 ′)⟧ A (a) = max (⟦ 𝜃 ⟧A (a), ⟦𝜃 ′⟧A (a)) ⟦𝜃 > 𝜃 ′⟧A (a) = 1 if ⟦𝜃 ⟧A (a) > ⟦𝜃 ′⟧A (a), and 0 otherwise 
+
+⟦¬ 𝜙 ⟧A (a) = 1 − ⟦ 𝜙 ⟧A (a)⟦𝜙 ∧ 𝜓 ⟧A (a) = min (⟦ 𝜙 ⟧A (a), ⟦𝜓 ⟧A (a)) 
+
+for verification and interpretation of neural networks [ 26 , 27 ]. Crucial differences between this formalism and our logic are that FOCQ does not include division and does not allow for conditioning counting terms on formulas. 
+
+Weighted Structures. Given a signature 𝜎 with relation symbols 𝑅 1, . . . , 𝑅 𝑛 , a weighted 𝜎 -structure 
+
+A = (𝐴, 𝑅 A 
+
+> 1
+
+, . . . , 𝑅 A 
+
+> 𝑛
+
+) consists of a finite domain 𝐴 and a function 𝑅 A 
+
+> 𝑖
+
+: 𝐴 𝑘 → R for every relation symbol 𝑅 𝑖 of arity 𝑘 . A Boolean 𝜎 -structure is a weighted structure satisfying 𝑅 A 
+
+> 𝑖
+
+(a) ∈ { 0, 1} for each relation symbol 𝑅 𝑖 of arity 𝑘 and tuple a ∈ 𝐴 𝑘 .
+
+Syntax. The terms and formulas of FOCQ are given by the following grammar, where 𝑞 ∈ Q.Terms: 𝜃 :: = 𝑞 | 1𝑥 =𝑦 | 𝑅 (𝑥 1, . . . , 𝑥 𝑘 ) | 𝜃 + 𝜃 ′ | 𝜃 · 𝜃 ′ | − 𝜃 |∑︁ (𝑥 1, . . . , 𝑥 𝑘 ).𝜃 | max (𝜃, 𝜃 ′)
+
+Formulas: 𝜙 :: = 𝜃 > 𝜃 ′ | ¬ 𝜙 | 𝜙 ∧ 𝜓 
+
+Semantics. We define a real value ⟦𝜒 ⟧A (a) for every term or formula 𝜒 , weighted structure A
+
+and a ∈ 𝐴 𝑘 , where 𝑘 is the number of free variables of 𝜒 . If 𝜒 is a formula, ⟦𝜒 ⟧A (a) ∈ { 0, 1}, and if 
+
+𝜒 is a term, ⟦𝜒 ⟧A (a) ∈ R. The value ⟦𝜒 ⟧A (a) is defined by induction, cf. Table 1. FOCQ extends first-order logic over Boolean structures. To see this, note that every first-order formula 𝜙 can be inductively translated to a FOCQ -term 𝜃 𝜙 denoting its truth value: 𝜃 𝜙 ∧𝜓 := 𝜃 𝜙 · 𝜃 𝜓 , 𝜃 ¬𝜙 := 1 − 𝜃 𝜙 
+
+and ∃𝑥𝜙 (𝑥 ) := − max (− Í(𝑥 ).𝜃 𝜙 , −1). It follows that the FOCQ-formula 𝜃 𝜙 > 0 is equivalent to 
+
+𝜙 . In fact, over ordered Boolean structures FOCQ is equivalent to FO+C as defined in [ 24 ], as we show in Theorem 6.3. 
+
+6.2 Neuro-Relational Programs and FOCQ 
+
+Fix 𝜎 to the signature that, for every 𝑅 [𝑘 ]⟨ 𝑑 ⟩ ∈ S , contains 𝑘 -ary relations 𝑅 and 𝑅 1, . . . , 𝑅 𝑑 . An e-database 𝐷 over S is represented by a weighted 𝜎 -structure A𝐷 with domain 𝐴 = adom (𝐷 ) such that for all a ∈ 𝐴 𝑘 , ⟦𝑅 ⟧A𝐷 (a) is 1 if 𝑅 (a) ∈ 𝐷 and 0 otherwise, and for 𝑖 = 1, . . . , 𝑑 , ⟦𝑅 𝑖 ⟧A𝐷 (a) is the 𝑖 -th embedding value of 𝑅 (a) in 𝐷 , or 0 if 𝑅 (a) ∉ 𝐷 . An FOCQ formula 𝜙 with 𝑘 free variables then defines the 𝑘 -ary flat query: 
+
+Q𝜙 (𝐷 ) = {a | a ∈ adom (𝐷 )𝑘 and ⟦𝜙 ⟧A𝐷 (a) = 1}
+
+A simply-gated NRP is a gated NRP with a simple acceptance policy , that is, an acceptance policy 
+
+𝑃 : R𝑑 → { 0, 1} defined by a formula 𝜙 (𝑥 1, . . . , 𝑥 𝑑 ) that is a Boolean combination of inequalities 14 Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr 
+
+of the form 𝑥 𝑖 > 0. Because FOCQ is interpreted on real-valued input structures, and allows for constructing all rationals as variable-free terms, it can express ReLU -FFNs with rational parameters over e-databases. This yields the following equivalence: 
+
+Theorem 6.1. For every flat query Q:
+
+Q is defined in FOCQ iff Q is computed by a simply-gated ReLU -FFN -based NRP 
+
+The proof of Theorem 6.1 establishes a one-to-one correspondence between FOCQ terms and the embedding values computed by ReLU -FFN -based NRPs. The result then follows since FOCQ formulas express simple acceptance policies. 
+
+Remark 6.2. For non-gated NRPs, the proof of Theorem 6.1 implies an alternative characterization. A 
+
+𝑘 ⟨𝑑 ⟩-ary embedded query is computed by a ReLU -FFN -based NRP if and only if it can be represented by a tuple (𝑞, 𝜃 1, . . . , 𝜃 𝑑 ) where 𝑞 is a classical 𝑘 -ary union of conjunctive queries determining which facts are derived and 𝜃 1, . . . , 𝜃 𝑑 are 𝑘 -ary FOCQ terms representing the derived embeddings. 
+
+6.3 Relation to FO+C and TC 0
+
+The complexity class dlogtime-uniform TC 0 (henceforth simply uniform TC 0) contains all languages 
+
+𝐿 ⊆ { 0, 1}∗ computable by families C = (ℭ𝑛 )𝑛 ∈N>0 of polynomial size constant depth Boolean circuits with threshold gates, with the additional condition that there is a deterministic log-space Turing machine 𝑇 describing the family of circuits in the following sense: given the input length 𝑛 
+
+and a gate address, 𝑇 outputs the gate type and addresses of its input gates [ 5 ]. Intuitively, uniform TC 0 captures the computational power of constant-time parallel algorithms with threshold gates, which equip constant-depth circuits with the ability to perform basic arithmetic operations. A weighted structure is ordered if it includes a linear order on the domain. Ordered rational weighted structures admit canonical bitstring representations [ 32 ]. We encode a rational weight  
+
+> 𝑝 𝑞
+
+as a bitstring of length 𝑂 (log (| 𝑝 |) + log (𝑞 )) . For an ordered rational weighted structure A and a tuple of domain elements a, let 𝑠 (A , a) ∈ { 0, 1}∗ be the bitstring representation of A, followed by the binary positions of the elements of a in the order. We define flat queries on weighted structures analogously to database queries: as functions from weighted structures to classical relations. A 𝑘 -ary flat query Q over ordered rational weighted structures then has a representation as binary language: 
+
+𝐿 (Q) = {𝑠 (A , a) | a ∈ Q (A)} 
+
+A flat query Q is in TC 0 if 𝐿 (Q) ∈ TC 0. Over ordered Boolean structures the extension of first-order logic with counting quantifiers and number variables over a discrete domain (FO+C) captures uniform TC 0 [5]. We show this equivalence extends to FOCQ: 
+
+Theorem 6.3. For every flat query Q over ordered Boolean structures the following are equivalent: (1) Q is defined in FOCQ ;(2) Q is defined in FO+C (as in [24]); (3) Q is in uniform TC 0.
+
+Over rational weighted structures FOCQ remains contained in TC 0, although it is properly contained: 
+
+Theorem 6.4. Over ordered rational weighted structures, the flat queries definable in FOCQ are strictly contained in uniform TC 0.
+
+To prove Theorem 6.3 we use that inequalities between the rational terms that FOCQ constructs over Boolean structures are represented in FO+C. Conversely, FO+C number variables ranging over Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 15 
+
+N can be simulated using variables over the ordered domain. For the containment in Theorem 6.4, we encode weights 𝑝 𝑞 with 𝑝 ∈ Z, 𝑞 ∈ N by the concatenation of bitstring representations for 𝑝 and 
+
+𝑞 . The inclusion of Theorem 6.4 then follows from known results on arithmetic in uniform TC 0
+
+(see [ 5 , 11 ] and the result for iterated integer multiplication, and thus iterated rational addition, in [28]). As a separating property we query if the weight of a fact with relation 𝑅 is an even integer. 
+
+6.4 Putting everything together 
+
+The combination of Theorems 6.1, 6.3 and 6.4 characterizes the descriptive complexity of NRPs over embedded databases as follows: 
+
+Corollary 6.5. Over arbitrary e-databases: the flat queries computed by simply-gated ReLU -FFN -based NRPs are strictly contained in uniform TC 0.
+
+Corollary 6.6. Over ordered classical databases, for every flat query Q:
+
+Q is in uniform TC 0 iff Q is computed by a simply-gated ReLU -FFN -based NRP. 
+
+An interesting non-trivial consequence of Corollary 6.6 is that, over classical databases, gated 
+
+ReLU -FFN -based NRPs are closed under composition. Consequently, inserting discontinuous simple acceptance policies, or equivalently Heaviside activations, anywhere in the program as opposed to only at the end does not increase expressive power. 
+
+7 Conclusion 
+
+Neuro-Relational Programs provide a declarative framework that combines relational querying with neural computation over databases with fact embeddings. The syntactic fragments studied in this paper formally connect NRPs to non-adaptive query algorithms, deep homomorphism networks, the counting logic FOCQ and the complexity class TC 0. These connections position NRPs as a unifying formalism for understanding the expressive power of neural models over structured data, while retaining the compositional and declarative character of database query languages. While this paper focuses on the forward-pass expressiveness, the NRP framework naturally supports end-to-end gradient-based training, where the parameters in transformation functions 
+
+(𝜇 ) are the learnable weights. We complement the theoretical foundation in this paper with an implemented system [ 38 ] that translates NRPs into an embedding-aware extension of relational algebra (“Neuro-Relational Algebra”), and subsequently compiles them into physical plans over PyTorch, cuDF, and SQL. Our experimental results indicate that the resulting programs achieve performance comparable to state-of-the-art implementations while being substantially simpler to express. We view this as a promising direction for natively integrating deep learning models into relational query engines. 
+
+Acknowledgments 
+
+We thank Martin Grohe for valuable discussions that contributed to the development of this work. Carsten Lutz was supported by DFG project LU 1417/4-1. This work is partly supported by BMFTR (Federal Ministry of Research, Technology and Space) in DAAD project 57616814 (SECAI, School of Embedded Composite AI) as part of the program Konrad Zuse Schools of Excellence in Artificial Intelligence. 16 Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr 
+
+References 
+
+[1] Mario Alviano, Matthias Lanzinger, Michael Morak, and Andreas Pieris. 2023. Generative Datalog with Stable Negation. In PODS . ACM, 21–32. [2] Vince Bárány, Balder ten Cate, Benny Kimelfeld, Dan Olteanu, and Zografoula Vagena. 2017. Declarative Probabilistic Programming with Datalog. ACM Trans. Database Syst. 42, 4 (2017), 22:1–22:35. [3] Pablo Barceló, Floris Geerts, Matthias Lanzinger, Klara Pakhomenko, and Jan Van den Bussche. 2026. A Logical View of GNN-Style Computation and the Role of Activation Functions. Proc. ACM Manag. Data 4, 2, Article 118 (May 2026), 19 pages. [4] Pablo Barceló, Floris Geerts, Juan Reutter, and Maksimilian Ryschkov. 2021. Graph neural networks with local graph parameters. In Proc. of NeurIPS . 25280–25293. [5] David A Mix Barrington, Neil Immerman, and Howard Straubing. 1990. On uniformity within NC1. J. Comput. System Sci. 41, 3 (1990), 274–306. [6] Peter W. Battaglia, Jessica B. Hamrick, Victor Bapst, Alvaro Sanchez-Gonzalez, Vinícius Flores Zambaldi, Mateusz Malinowski, Andrea Tacchetti, David Raposo, Adam Santoro, Ryan Faulkner, Çaglar Gülçehre, H. Francis Song, Andrew J. Ballard, Justin Gilmer, George E. Dahl, Ashish Vaswani, Kelsey R. Allen, Charles Nash, Victoria Langston, Chris Dyer, Nicolas Heess, Daan Wierstra, Pushmeet Kohli, Matthew M. Botvinick, Oriol Vinyals, Yujia Li, and Razvan Pascanu. 2018. Relational inductive biases, deep learning, and graph networks. CoRR abs/1806.01261 (2018). arXiv:1806.01261 http://arxiv.org/abs/1806.01261 [7] Bikram Pratim Bhuyan, Amar Ramdane-Cherif, Ravi Tomar, and T. P. Singh. 2024. Neuro-symbolic artificial intelligence: a survey. Neural Comput. Appl. 36, 21 (2024), 12809–12844. doi:10.1007/s00521-024-09960-z [8] Thomas Bonald, Nathan de Lara, Quentin Lutz, and Bertrand Charpentier. 2020. Scikit-network: Graph Analysis in Python. J. Mach. Learn. Res. 21 (2020), 185:1–185:6. [9] Rajesh Bordawekar and Oded Shmueli. 2017. Using Word Embedding to Enable Semantic Queries in Relational Databases. In DEEM .[10] Riccardo Cappuzzo, Paolo Papotti, and Saravanan Thirumuruganathan. 2020. Creating Embeddings of Heterogeneous Relational Datasets for Data Integration Tasks. In Proceedings of the 2020 ACM SIGMOD International Conference on Management of Data . ACM, 1335–1349. [11] Ashok K Chandra, Larry Stockmeyer, and Uzi Vishkin. 1984. Constant depth reducibility. SIAM J. Comput. 13, 2 (1984), 423–439. [12] Yijia Chen, Jörg Flum, Mingjun Liu, and Zhiyang Xun. 2025. On algorithms based on finitely many homomorphism counts. Information and Computation 306 (2025), 105326. doi:10.1016/j.ic.2025.105326 [13] Alexis Cvetkov-Iliev, Alexandre Allauzen, and Gaël Varoquaux. 2023. Relational data embeddings for feature enrichment with background information. Mach. Learn. 112, 2 (2023), 687–720. [14] Nilesh N. Dalvi and Dan Suciu. 2004. Efficient Query Evaluation on Probabilistic Databases. In VLDB . 864–875. [15] Daniel Deutch, Amir Gilad, and Yuval Moskovitch. 2018. Efficient provenance tracking for Datalog using top-k queries. 
+
+VLDBJ 27, 2 (2018), 245–269. [16] Vijay Prakash Dwivedi and Xavier Bresson. 2021. A Generalization of Transformer Networks to Graphs. AAAI Workshop on Deep Learning on Graphs: Methods and Applications (2021). [17] Matthias Fey, Weihua Hu, Kexin Huang, Jan Eric Lenssen, Rishabh Ranjan, Joshua Robinson, Rex Ying, Jiaxuan You, and Jure Leskovec. 2024. Position: Relational Deep Learning - Graph Representation Learning on Relational Databases. In ICML (Proceedings of Machine Learning Research) . PMLR / OpenReview.net, 13592–13607. [18] Matthias Fey and Jan Eric Lenssen. 2019. Fast Graph Representation Learning with PyTorch Geometric. In ICLR 2019 Workshop on Representation Learning on Graphs and Manifolds .[19] Floris Geerts. 2023. A Query Language Perspective on Graph Learning. In PODS . ACM, 373–379. [20] Floris Geerts and Juan L. Reutter. 2022. Expressiveness and Approximation Properties of Graph Neural Networks. In 
+
+ICLR . OpenReview.net. [21] Justin Gilmer, Samuel S. Schoenholz, Patrick F. Riley, Oriol Vinyals, and George E. Dahl. 2017. Neural Message Passing for Quantum Chemistry. In Proc. of ICML . 1263–1272. http://proceedings.mlr.press/v70/gilmer17a.html [22] Erich Grädel and Martin Otto. 1992. Inductive definability with counting on finite structures. In International Workshop on Computer Science Logic . Springer, 231–247. [23] Todd J. Green, Gregory Karvounarakis, and Val Tannen. 2007. Provenance semirings. In PODS . ACM, 31–40. [24] Martin Grohe. 2024. The descriptive complexity of graph neural networks. TheoretiCS 3 (2024). [25] Martin Grohe, Benjamin Lucien Kaminski, Joost-Pieter Katoen, and Peter Lindner. 2020. Generative Datalog with Continuous Distributions. In PODS .[26] Martin Grohe, Christoph Standke, Juno Steegmans, and Jan Van den Bussche. 2025. Query Languages for Neural Networks. In ICDT (Leibniz International Proceedings in Informatics (LIPIcs), Vol. 328) , Sudeepa Roy and Ahmet Kara (Eds.). Schloss Dagstuhl – Leibniz-Zentrum für Informatik, Dagstuhl, Germany, 9:1–9:18. doi:10.4230/LIPIcs.ICDT. Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 17 
+
+2025.9 [27] Martin Grohe, Christoph Standke, Juno Steegmans, and Jan Van den Bussche. 2026. Recursive Querying of Neural Networks via Weighted Structures. Proc. ACM Manag. Data 4, 2, Article 115 (May 2026), 20 pages. doi:10.1145/3801911 [28] William Hesse, Eric Allender, and David A. Mix Barrington. 2002. Uniform constant-depth threshold circuits for division and iterated multiplication. J. Comput. System Sci. 65, 4 (2002), 695–716. doi:10.1016/S0022-0000(02)00025-9 Special Issue on Complexity 2001. [29] Pascal Hitzler and Md. Kamruzzaman Sarker (Eds.). 2021. Neuro-Symbolic Artificial Intelligence: The State of the Art .IOS Press. [30] Sungjin Im, Benjamin Moseley, Hung Q. Ngo, and Kirk Pruhs. 2024. Polynomial Time Convergence of the Iterative Evaluation of Datalogo Programs. Proc. ACM Manag. Data 2, 5 (2024), 221:1–221:19. [31] Neil Immerman. 1987. Expressibility as a complexity measure: results and directions . IEEE. [32] Neil Immerman. 1999. Descriptive complexity . Springer. doi:10.1007/978-1-4612-0539-5 [33] Jannik Irmai, Lucas Fabian Naumann, and Bjoern Andres. 2026. Graph Neural Networks with Triangle-Based Messages for the Multicut Problem. arXiv preprint arXiv:2605.13673 (2026). arXiv:2605.13673 [cs.LG] doi:10.48550/arXiv.2605.13673 [34] Myung Jun Kim, Léo Grinsztajn, and Gaël Varoquaux. 2024. CARTE: Pretraining and Transfer for Tabular Learning. In ICML .[35] Dietrich Kuske and Nicole Schweikardt. 2017. First-order logic with counting. In LICS . IEEE, 1–12. [36] Patrick Lewis et al. 2020. Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks. In NeurIPS .[37] Ziyang Li, Jiani Huang, and Mayur Naik. 2023. Scallop: A Language for Neurosymbolic Programming. Proc. ACM Program. Lang. 7 (2023), 1463–1487. [38] Yuval Lev Lubarsky, Dean Light, Boaz Berger, Shunit Agmon, and Benny Kimelfeld. 2026. Incorporating Deep Learning Design in Database Queries. arXiv preprint arXiv:2605.24207 (2026). [39] Yuval Lev Lubarsky, Jan Tönshoff, Martin Grohe, and Benny Kimelfeld. 2023. Selecting Walk Schemes for Database Embedding. In CIKM . ACM, 1677–1686. [40] Takanori Maehara and Hoang NT. 2024. Deep homomorphism networks. Advances in Neural Information Processing Systems 37 (2024), 56076–56107. [41] Robin Manhaeve, Sebastijan Dumancic, Angelika Kimmig, Thomas Demeester, and Luc De Raedt. 2018. DeepProbLog: Neural Probabilistic Logic Programming. In NeurIPS . 3753–3763. [42] Christopher Morris, Martin Ritzert, Matthias Fey, William L Hamilton, Jan Eric Lenssen, Gaurav Rattan, and Martin Grohe. 2019. Weisfeiler and Leman go neural: Higher-order graph neural networks. In Proc. of AAAI . 4602–4609. [43] Sidharth Mudgal, Han Li, Theodoros Rekatsinas, AnHai Doan, Youngchoon Park, Ganesh Krishnan, Rohit Deep, Esteban Arcaute, and Vijay Raghavendra. 2018. Deep Learning for Entity Matching: A Design Space Exploration. In 
+
+SIGMOD Conference . ACM, 19–34. [44] James Jie Pan, Jianguo Wang, and Guoliang Li. 2024. Survey of vector database management systems. VLDB J. 33, 5 (2024). [45] Luc De Raedt, Angelika Kimmig, and Hannu Toivonen. 2007. ProbLog: A Probabilistic Prolog and Its Application in Link Discovery. In IJCAI .[46] Joshua Robinson, Rishabh Ranjan, Weihua Hu, Kexin Huang, Jiaqi Han, Alejandro Dobles, Matthias Fey, Jan Eric Lenssen, Yiwen Yuan, Zecheng Zhang, Xinwei He, and Jure Leskovec. 2024. RelBench: A Bench-mark for Deep Learning on Relational Databases. In NeurIPS . http://papers.nips.cc/paper_files/paper/2024/hash/ 25cd345233c65fac1fec0ce61d0f7836-Abstract-Datasets_and_Benchmarks_Track.html [47] Moritz Schönherr, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Arie Soeteman. 2026. Expressive Power of Deep Homomorphism Networks over Relational Databases. arXiv:2605.22852 [cs.DB] https://arxiv.org/abs/ 2605.22852 [48] Ameesh Shah, Eric Zhan, Jennifer J. Sun, Abhinav Verma, Yisong Yue, and Swarat Chaudhuri. 2020. Learning Differentiable Programs with Admissible Neural Heuristics. In NeurIPS .[49] Andrew Silva and Matthew C. Gombolay. 2021. Encoding Human Domain Knowledge to Warm Start Reinforcement Learning. In AAAI . AAAI Press, 5042–5050. [50] Balder ten Cate, Victor Dalmau, Phokion G. Kolaitis, and Wei-Lin Wu. 2024. When Do Homomorphism Counts Help in Query Algorithms?. In ICDT (LIPIcs, Vol. 290) , Graham Cormode and Michael Shekelyan (Eds.). Schloss Dagstuhl -Leibniz-Zentrum für Informatik, 8:1–8:20. doi:10.4230/LIPIcs.ICDT.2024.8 [51] Balder ten Cate, Phokion G. Kolaitis, and Arnar Á. Kristjánsson. 2025. Adaptive Query Algorithms for Relational Structures Based on Homomorphism Counts. In MFCS (Leibniz International Proceedings in Informatics (LIPIcs), Vol. 345) , Paweł Gawrychowski, Filip Mazowiecki, and Michał Skrzypczak (Eds.). Schloss Dagstuhl – Leibniz-Zentrum für Informatik, Dagstuhl, Germany, 34:1–34:18. doi:10.4230/LIPIcs.MFCS.2025.34 [52] Jan Tönshoff, Neta Friedman, Martin Grohe, and Benny Kimelfeld. 2023. Stable Tuple Embeddings for Dynamic Databases. In ICDE . IEEE, 1286–1299. 18 Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr 
+
+[53] Minjie Wang et al . 2019. Deep Graph Library: Towards Efficient and Scalable Deep Learning on Graphs. CoRR 
+
+abs/1909.01315 (2019). [54] Xiao Wang, Houye Ji, Chuan Shi, Bai Wang, Yanfang Ye, Peng Cui, and Philip S. Yu. 2019. Heterogeneous Graph Attention Network. In WWW . ACM, 2022–2032. [55] Xiaolong Wang, Yufei Ye, and Abhinav Gupta. 2018. Zero-Shot Recognition via Semantic Embeddings and Knowledge Graphs. In CVPR . Computer Vision Foundation / IEEE Computer Society, 6857–6866. [56] Yanbo Wang, Xiyuan Wang, Quan Gan, Minjie Wang, Qibin Yang, David Wipf, and Muhan Zhang. 2025. Griffin: Towards a Graph-Centric Relational Database Foundation Model. In ICML (Proceedings of Machine Learning Research) .PMLR / OpenReview.net. [57] Wei-Lin Wu. 2023. A Study of the Expressive Power of Homomorphism Counts . Ph. D. Dissertation. University of California, Santa Cruz, USA. https://www.escholarship.org/uc/item/4647715d [58] Keyulu Xu, Weihua Hu, Jure Leskovec, and Stefanie Jegelka. 2019. How Powerful are Graph Neural Networks?. In 
+
+Proc. of ICLR . OpenReview.net. [59] Dongran Yu, Bo Yang, Dayou Liu, Hui Wang, and Shirui Pan. 2023. A survey on neural-symbolic learning systems. 
+
+Neural Networks 166 (2023), 105–126. [60] Xin Zhang and Victor S. Sheng. 2024. Neuro-Symbolic AI: Explainability, Challenges, and Future Trends. arXiv:2411.04383 [cs.AI] https://arxiv.org/abs/2411.04383 [61] Yuyu Zhang, Xinshi Chen, Yuan Yang, Arun Ramamurthy, Bo Li, Yuan Qi, and Le Song. 2020. Efficient Probabilistic Logic Reasoning with Graph Neural Networks. In ICLR . OpenReview.net. [62] Hangdong Zhao et al . 2024. Evaluating Datalog over Semirings: A Grounding-based Approach. Proc. ACM Manag. Data 2, 2 (2024), 90. [63] Jianan Zhao, Xiao Wang, Chuan Shi, Binbin Hu, Guojie Song, and Yanfang Ye. 2021. Heterogeneous Graph Structure Learning for Graph Neural Networks. In AAAI . AAAI Press, 4697–4705. [64] Jie Zhou, Ganqu Cui, Shengding Hu, Zhengyan Zhang, Cheng Yang, Zhiyuan Liu, Lifeng Wang, Changcheng Li, and Maosong Sun. 2020. Graph neural networks: A review of methods and applications. AI Open 1 (2020), 57–81. Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 19 
+
+A Example: relational graph construction and message passing. 
+
+In machine learning over relational data, a common strategy is to construct a graph representation of the data, with entities as nodes and relationships, often derived from foreign keys, as edges. Graph neural networks can then be used to learn from both the feature values associated with entities and the relational structure connecting them. Such a pipeline can be expressed end-to-end as an NRP: graph construction, initial feature construction, and message passing are all rules of the same program. We illustrate this with a stylized example. Suppose the input contains relations 
+
+Customer (𝑐𝑖𝑑, 𝑠 ), Product (𝑝𝑖𝑑, 𝑘 ), Order (𝑜𝑖𝑑, 𝑐𝑖𝑑, 𝑝𝑖𝑑, 𝑡, 𝑟 ),
+
+where 𝑠 is the customer segment, 𝑘 the product category, 𝑡 the country, and 𝑟 the order channel. We first construct a directed graph whose nodes are customers, products, and orders, and where the nodes are assigned initial embeddings. CNode (𝑐𝑖𝑑 )⟨ sum ⟩ ⇐ Customer (𝑐𝑖𝑑, 𝑠 ) ∧ SegEmb (𝑠 ),
+
+PNode (𝑝𝑖𝑑 )⟨ sum ⟩ ⇐ Product (𝑝𝑖𝑑, 𝑘 ) ∧ CatEmb (𝑘 ),
+
+ONode (𝑜𝑖𝑑 )⟨ sum ⟩ ⇐⊕ Order (𝑜𝑖𝑑, 𝑐𝑖𝑑, 𝑝𝑖𝑑, 𝑡, 𝑟 ) ∧ CountryEmb (𝑡 ) ∧ ChanEmb (𝑟 ),
+
+Node (𝑥 )⟨ sum ⟩ ⇐ CNode (𝑥 ) ∨ PNode (𝑥 ) ∨ ONode (𝑥 ),
+
+PlacedBy (𝑜𝑖𝑑, 𝑐𝑖𝑑 ) ⇐ Order (𝑜𝑖𝑑, 𝑐𝑖𝑑, 𝑝𝑖𝑑, 𝑡, 𝑟 ),
+
+Contains (𝑜𝑖𝑑, 𝑝𝑖𝑑 ) ⇐ Order (𝑜𝑖𝑑, 𝑐𝑖𝑑, 𝑝𝑖𝑑, 𝑡, 𝑟 ),
+
+Edge (𝑢, 𝑣 ) ⇐ PlacedBy (𝑢, 𝑣 ) ∨ Contains (𝑢, 𝑣 ).
+
+Here we assume that segments, categories, countries and channels have associated embeddings stored in embedding tables SegEmb (𝑠 ), CatEmb (𝑘 ), CountryEmb (𝑡 ), and ChanEmb (𝑟 ). The initial node embeddings, stored as annotations in the e-relation Node [1]⟨ 1⟩, are obtained by concatenating their feature embeddings. Note also that we omitted the aggregation function in the last three rules for readability, because all relations in question are unembedded. One layer of message passing over the derived graph is then: Aggr (𝑢 )⟨ sum ⟩ ⇐ Edge (𝑢, 𝑣 ) ∧ Node (𝑣 ),
+
+AggrZeroes (𝑢 )⟨ 𝜇 0⟩ ⇐ Node(u) AggrOrZeroes (𝑢 )⟨ sum ⟩ ⇐ Aggr (𝑢 ) ∨ AggrZeroes (𝑢 )
+
+Concat (𝑢 ) ⇐⊕ Node (𝑢 ) ∧ AggrOrZeroes (𝑢 )
+
+Node ′ (𝑢 )⟨ 𝜌 ⟩ ⇐ Concat (𝑢 )
+
+where 𝜇 0 is the constant function returning an all-zeroes vector. The relation AggrOrZeroes aggre-gates messages from the neighbors of 𝑢 and its embedding is the zero vector if 𝑢 does not have any neighbors. The trainable transformation 𝜌 computes the updated embedding. Repeating this block yields a multi-layer GNN over the graph derived from the relational input. 
+
+B Proofs for section 3 
+
+Proposition 3.1. For every NRP Π1 using sum or ⊕ as its combination function, there exists a relational expansion Π2 using only ⊙ combination. Moreover: (1) If Π1 is zero-ary / monadic / frontier guarded / disjunction-free, the same holds for Π2;(2) For any function class F containing ReLU -FFNs , if Π1 uses only transformations from F , the same holds for Π2.20 Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr 
+
+Proof. We substitute a conjunction rule with sum combination in Π1 by a conjunction rule with 
+
+⊕ combination and a transformation rule. Let Ψ ∈ Π1 with arity (𝑅 ) = 𝑘 ⟨𝑑 ⟩, arity (𝑅 𝑖 ) = 𝑘 𝑖 ⟨𝑑 𝑖 ⟩:
+
+𝑅 (x)⟨ sum ⟩ ⇐ sum 𝑅 1 (x1) ∧ · · · ∧ 𝑅 ℓ (xℓ )
+
+We substitute in: 
+
+𝑅 ′ (x)⟨ sum ⟩ ⇐ ⊕ 𝑅 1 (x1) ∧ · · · ∧ 𝑅 ℓ (xℓ ) 𝑅 (x)⟨ 𝜇 ⟩ ⇐ 𝑅 ′ (x)
+
+where 𝜇 is a ReLU -FFN that applies element-wise sum. Now similarly we substitute Ψ ∈ Π1 with ⊕
+
+combination by a rule with ⊙ combination and several transformation rules. Let Ψ:
+
+𝑅 (x)⟨ sum ⟩ ⇐ ⊕ 𝑅 1 (x1) ∧ · · · ∧ 𝑅 ℓ (xℓ )
+
+Assume w.l.o.g. that for some 𝑚 , 𝑑 1, . . . , 𝑑 𝑚 > 0 while 𝑑 𝑚 +1, . . . , 𝑑 ℓ = 0. We substitute in: for 1 ≤ 𝑖 ≤ 𝑚 : 𝑅 ′ 
+
+> 𝑖
+
+(x𝑖 )⟨ 𝜇 𝑖 ⟩ ⇐ 𝑅 𝑖 (x𝑖 )
+
+𝑅 (x)⟨ sum ⟩ ⇐⊙ 𝑅 ′ 
+
+> 1
+
+(x1) ∧ · · · ∧ 𝑅 ′ 
+
+> 𝑚
+
+(x𝑚 ) ∧ 𝑅 𝑚 +1 (x𝑚 +1) ∧ · · · ∧ 𝑅 ℓ (xℓ )
+
+where: 𝜇 𝑖 (𝑓 ) = 1(Í𝑖 −1    
+
+> 𝑗 =1𝑑 𝑗 )
+
+⊕ 𝑓 ⊕ 1(Íℓ𝑗 =𝑖 +1 𝑑 𝑗 ) . The derived embeddings for 𝑅 are the same since for embeddings e𝑖 ∈ R𝑑 1 , . . . , e𝑚 ∈ R𝑑 𝑚 : Ê 
+
+> 1≤𝑖 ≤𝑚
+
+(e𝑖 ) =
+
+È 
+
+> 1≤𝑖 ≤𝑚
+
+(𝜇 𝑖 (e𝑖 )) 
+
+Note that if Π1 is disjunction-free, so is Π2. If Π1 is zero-ary, then by definition, all body atoms in 𝑟 
+
+are zero-ary or have arity 𝑘 ⟨0⟩, so that the heads of added transformation rules are zero-ary, thus 
+
+Π2 is zero-ary. Monadicity is preserved for the same reason. If Π1 is frontier guarded, so is Π2. □
+
+Proposition 3.3. Let F be any function class containing ReLU -FFNs . For every NRP Π1 using transformations from F ∪ F × , there exists a relational expansion Π2 using ⊙ combination and transformations from F . Moreover, if Π1 is zero-ary / monadic / frontier guarded / disjunction-free, the same holds for Π2.
+
+Proof. Let rule Ψ1 in Π1:
+
+𝑅 (x)⟨ 𝜇 𝑆 ⟩ ⇐ 𝑅 0 (x)
+
+where arity (𝑅 ) = 𝑘 ⟨1⟩, arity (𝑅 0) = 𝑘 ⟨𝑑 0⟩ and 𝜇 𝑆 (𝑥 1, . . . , 𝑥 𝑑 ) = Î𝑖 ∈𝑆 𝑥 𝑖 for some non-empty 𝑆 ⊆{1, . . . , 𝑛 }. Substitute in |𝑆 | transformation rules where for each 𝑖 ∈ 𝑆 , Ψ𝑖 is: 
+
+𝑅 𝑖 (x)⟨ 𝜇 𝑖 ⟩ ⇐ 𝑅 0 (x) where 𝜇 𝑖 selects the 𝑖 -th element and the conjunction rule: 
+
+𝑅 (x) ⇐ ⊙
+
+Û 
+
+> 𝑖 ∈𝑆
+
+𝑅 𝑖 (x)
+
+Note that if Π1 is zero-ary, monadic, frontier guarded or disjunction-free, the same holds for Π2. □
+
+If the transformations include element-wise product, ⊕ combination can also simulate ⊙ combi-nation, although with weaker structural guarantees: 
+
+Proposition B.1. For every NRP Π1 with ⊙ combination there exists a relational expansion Π2 with only ⊕ combination. Moreover: (1) If Π1 is disjunction-free the same holds for Π2;(2) For any function class F containing ReLU -FFNs , if Π1 only uses transformations from F then 
+
+Π2 uses transformations from F ∪ F × .Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 21 
+
+Proof. Let Ψ in Π1:
+
+𝑅 (x)⟨ sum ⟩ ⇐ ⊙ 𝑅 1 (x1) ∧ · · · ∧ 𝑅 ℓ (xℓ )
+
+Substitute in the following rules: 
+
+𝑅 ′ (x1, . . . , xℓ ) ⇐⊕ 𝑅 1 (x1) ∧ · · · ∧ 𝑅 ℓ (xℓ )
+
+𝑅 ′′ (x1, . . . , xℓ )⟨ 𝜇 ⟩ ⇐ 𝑅 ′ (x1, . . . , xℓ )
+
+𝑅 (x)⟨ sum ⟩ ⇐ 𝑅 ′′ (x1, . . . , xℓ )
+
+where 𝜇 applies element-wise multiplication over the concatenation of vectors by multiplying subsets of the embedding with transformations in F× and possibly using affine transformations to obtain embeddings of the right size. Note that if Π1 is disjunction-free, so is Π2. However, if Π1 is zero-ary, monadic or frontier guarded the same does not necessarily hold for Π2. □
+
+C Proofs for Section 4 
+
+Theorem 4.1. For all classes C of classical databases, 
+
+C admits a non-adaptive query algorithm iff C is defined by a gated zero-ary NRP. 
+
+Proof. [only if]: Let ({ 𝐹 1, . . . , 𝐹 𝑘 }, 𝑋 ) be a non-adaptive query algorithm for C. We construct a corresponding NRP Π. In the definition of Π below, we make use of ⊕ as combination function. However, by Proposition 3.1, the program can be rewritten to only use ⊙.The NRP Π uses IDBs 𝑆 𝑖 [0]⟨ 1⟩ and 𝑅 𝑖 [0]⟨ 1⟩ for each 𝑖 ≤ 𝑘 , as well as IDBs 𝑅 𝑎𝑙𝑙 [0]⟨ 𝑘 ⟩ and Ans [0]⟨ 1⟩. As rules, it contains: 
+
+• for each 𝑖 ≤ 𝑘 , a conjunction rule of the form 
+
+𝑆 𝑖 ()⟨ sum ⟩ ⇐ ©«Û    
+
+> 𝑅 (𝑎 1, . . . , 𝑎 𝑛 )a fact of 𝐹 𝑖
+
+𝑅 (𝑥 1, . . . , 𝑥 𝑛 )ª®¬
+
+∧ True 1 () ,
+
+• A disjunction rule 𝑅 𝑖 ()⟨ sum ⟩ ⇐ 𝑆 𝑖 () ∨ True 0 () ,
+
+• a rule 𝑅 𝑎𝑙𝑙 () ⇐ ⊕ 𝑅 1 () ∧ · · · ∧ 𝑅 𝑘 () ,
+
+• a rule Ans ()⟨ 𝜇 ⟩ ⇐ 𝑅 𝑎𝑙𝑙 () , where 𝜇 is the indicator function of 𝑋 , i.e., 𝜇 (x) = 1 for x ∈ 𝑋 and 
+
+𝜇 (x) = 0 for x ∉ 𝑋 .By construction, an 𝑅 all () fact is derived on every input database 𝐷 , and its embedding vector is the homomorphism count vector (| Hom (𝐹 1, 𝐷 )| , . . . , |Hom (𝐹 𝑘 , 𝐷 )|) . Note that the disjunctive rules ensure that an 𝑅 𝑖 -fact is derived even when |Hom (𝐹 𝑖 , 𝐷 )| = 0. It follows that, with answer IDB Ans and the default acceptance policy ( 𝑥 > 0), Π accepts the same databases as the non-adaptive query algorithm. [if]: Suppose C is defined by a gated zero-ary NRP Π = (Ψ1, . . . , Ψ𝑛 ). Let 𝐹 1, . . . , 𝐹 𝑘 be the distinct canonical databases obtained as follows: for each conjunctive rule of Π, collect the EDB-atoms occurring in its body and take their canonical database. We show that there exists a set 𝑋 ⊆ N𝑘 
+
+such that, for every input database 𝐷 , 𝐷 ∈ C iff (| Hom (𝐹 1, 𝐷 )| , . . . , |Hom (𝐹 𝑘 , 𝐷 )|) ∈ 𝑋 .We will in fact prove a stronger claim. For a database 𝐷 , let: 
+
+h(𝐷 ) := (| Hom (𝐹 1, 𝐷 )| , . . . , |Hom (𝐹 𝑘 , 𝐷 )|) 
+
+we then prove, by induction along the rule order of Π:22 Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr 
+
+Claim. For every IDB 𝑅 of Π of arity 0⟨𝑑 𝑅 ⟩, there exists a function 𝑔 𝑅 : N𝑘 → {⊥} ∪ R𝑑 𝑅 such that for every input database 𝐷 and e ∈ R𝑑 𝑅 ,
+
+𝑅 ()⟨ e⟩ ∈ Π(𝐷 ) ⇐⇒ 𝑔 𝑅 (h(𝐷 )) = e.
+
+Note that, since 𝑅 has content arity 0, its e-relation is either empty or consists of the single e-fact 
+
+𝑅 ()⟨ e⟩. Thus, the above claim says that both the existence of 𝑅 () and, if present, its embedding are determined by h(𝐷 ). The proof is by induction over the rules Ψ𝑖 , with cases corresponding to each of the three rule types. If Ψ𝑖 is a disjunctive rule 𝑅 ()⟨ 𝛼 ⟩ ⇐ 𝑅 1 () ∨ · · · ∨ 𝑅 ℓ () , then all 𝑅 𝑗 
+
+with 1 ≤ 𝑗 ≤ ℓ must be IDBs, and 𝑔 𝑅 can be obtained using 𝛼 and the functions 𝑔 𝑅 1 , . . . , 𝑔 𝑅 ℓ which exist by the induction hypothesis. A similar argument applies if Ψ𝑖 is a transformation rule. Now suppose that Ψ𝑖 is a conjunction rule of the form 
+
+𝑅 ()⟨ 𝛼 ⟩ ⇐ 𝑜 𝛽 1 ∧ · · · ∧ 𝛽 𝑚 ∧ 𝐵 1 () ∧ · · · ∧ 𝐵 𝑡 () ,
+
+where 𝛽 1, . . . , 𝛽 𝑚 are the EDB-atoms in the body and 𝐵 1 () , . . . , 𝐵 𝑡 () are the zero-ary IDB-atoms in the body. Let 𝐹 Ψ be the canonical database of the EDB-atoms 𝛽 1, . . . , 𝛽 𝑚 . By construction, 𝐹 Ψ is one of 𝐹 1, . . . , 𝐹 𝑘 , and by the induction hypothesis, the claim holds for 𝐵 1, . . . , 𝐵 𝑡 .For any input database 𝐷 , whether an 𝑅 () fact is derived is determined by whether the facts 
+
+𝐵 1 () , . . . , 𝐵 𝑡 () are present and whether there is a homomorphism from 𝐹 Ψ to 𝐷 . The former, by induction hypothesis, is determined by h(𝐷 ), while the latter is determined by h(𝐷 ) because 𝐹 Ψ is among 𝐹 1, . . . , 𝐹 𝑘 . Suppose now that all 𝐵 1 () , . . . , 𝐵 𝑡 () are present and there is a homomorphism from 𝐹 Ψ to 𝐷 . Then the number of homomorphisms from the body of Ψ𝑖 is exactly |Hom (𝐹 Ψ, 𝐷 )| .Moreover, each such homomorphism contributes the same vector 𝑐 to the aggregation, which, moreover, is determined by h(𝐷 ): the EDB-atoms have embedding dimension 0, so they contribute only the unique 0-dimensional vectors, while each 𝐵 𝑗 () contributes its fixed embedding e𝐵 𝑗 , which is determined by h(𝐷 ) by the induction hypothesis. Therefore, if 𝑅 () is derived, its embedding is 
+
+𝛼 ({ { 𝑐, . . . , 𝑐 
+
+| {z }  
+
+> |Hom (𝐹 Ψ,𝐷 ) | times
+
+}}) .
+
+which is determined by h(𝐷 ). □
+
+D Proofs for Section 5.1 D.1 Translation from DHN to Monadic NRP 
+
+We show that embeddings produced by homomorphism-queries, DHN layers and DHNs are also computed by monadic NRPs. Recall from Section 5.1 that 𝜀 (𝐷 𝑎 ) is the element-embedded database 
+
+(𝐷 ′𝑎 , 𝜆 ′) consisting of a classical database 𝐷 ′ that contains all facts in 𝐷 without their embeddings, a monadic relation ‘Adom’ that contains all elements in the active domain of 𝐷 and an embedding function such that for monadic relations 𝑃 1, . . . , 𝑃 𝑛 and arity (𝑃 𝑖 ) = 1⟨𝑑 𝑖 ⟩:
+
+𝜆 ′ (𝑎 ) =
+
+Ê 
+
+> 1≤𝑖 ≤𝑛
+
+(
+
+(1) ⊕ e if 𝑃 𝑖 (𝑎 )⟨ e⟩ ∈ 𝐷 
+
+(0) ⊕ 0(𝑑 𝑖 ) otherwise 
+
+Lemma D.1. Let (𝐹 𝑥 , 𝜇 ) be a homomorphism query. There exists a monadic NRP Π with monadic relation 𝑅 such that for each e-database 𝐷 and 𝑎 ∈ adom (𝐷 ):
+
+𝑅 (𝑎 )⟨ e⟩ ∈ Π(𝐷 ) iff eval (( 𝐹 𝑥 , 𝜇 ), 𝜀 (𝐷 𝑎 )) = e
+
+Moreover, if 𝜇 has functions in class F , including affine transformations, Π has transformations in F .Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 23 
+
+Proof. Let 𝜇 = {𝜇 𝑦 | 𝑦 ∈ adom (𝐹 )} . We construct disjunction rules and a conjunction rule to obtain the element-embedding as a single embedding in the e-database: for 𝑖 = 1, . . . , 𝑛 : Zero 𝑖 (𝑥 ) ⇐ Adom (𝑥 ) ∧ True 0(𝑑 𝑖 +1) () 
+
+for 𝑖 = 1, . . . , 𝑛 : 𝑃 ′ 
+
+> 𝑖
+
+(𝑥 )⟨ sum ⟩ ⇐ 𝑃 𝑖 (𝑥 ) ∨ Zero 𝑖 (𝑥 )
+
+𝑅 𝜆 (𝑥 ) ⇐⊕ 𝑃 ′ 
+
+> 1
+
+(𝑥 ) ∧ · · · ∧ 𝑃 ′ 
+
+> 𝑛
+
+(𝑥 )
+
+Where True 0(𝑑 𝑖 +1) () has an all-zero embedding of size 𝑑 𝑖 + 1, and where ⊕ combination is simulated with ⊙ combination and affine transformations using Proposition 3.1. For each 𝑦 ∈ adom (𝐹 ) add a transformation rule: 
+
+𝑃 𝑦 (𝑥 )⟨ 𝜇 𝑦 ⟩ ⇐ 𝑅 𝜆 (𝑥 )
+
+We add a conjunction rule: 
+
+𝑃 (𝑥 )⟨ sum ⟩ ⇐ ⊙
+
+Û  
+
+> 𝑦 ∈adom (𝐹 )
+
+𝑃 𝑦 (𝑦 ) ∧ 
+
+Û 
+
+> 𝑅 (y) ∈ 𝐹
+
+𝑅 (y)
+
+Now if there is a homomorphism from 𝐹 𝑥 to 𝐷 𝑎 then 𝑃 (𝑎 ) has embedding: 
+
+sum  Ö  
+
+> 𝑦 ∈adom (𝐹 )
+
+𝜇 𝑦 (𝜆 (ℎ(𝑦 ))) | ℎ ∈ Hom (𝐹 𝑥 , 𝐷 𝑎 ) = eval (( 𝐹 𝑥 , 𝜇 ), 𝜀 (𝐷 𝑎 )) 
+
+However, if there is no homomorphism then eval (( 𝐹 𝑥 , 𝜇 ), 𝜀 (𝐷 𝑎 )) is an all-zero embedding 0(𝑑 ′ ) for some 𝑑 ′ ≥ 0, while 𝑃 (𝑎 ) is not derived. We thus add the rules: Zero 0 (𝑥 ) ⇐ True 0 () ∧ Adom (𝑥 )
+
+𝑅 (𝑥 )⟨ sum ⟩ ⇐ 𝑃 (𝑥 ) ∨ Zero 0 (𝑥 )
+
+Then the embedding of 𝑅 is the output of (𝐹 𝑥 , 𝜇 ). □
+
+Lemma D.2. Let L = ((( 𝐹 • 
+
+> 1
+
+, 𝜇 1), . . . , (𝐹 •
+
+> 𝑚
+
+, 𝜇 𝑚 )) , 𝜌 ) be a DHN layer. There exists a monadic NRP Π
+
+with monadic relation 𝑅 such that for each e-database 𝐷 and 𝑎 ∈ adom (𝐷 ):
+
+L( 𝜀 (𝐷 ))( 𝑎 ) = e iff 𝑅 (𝑎 )⟨ e⟩ ∈ Π(𝐷 )
+
+Moreover, if the transformations in L are in function class F , including affine transformations, Π has transformations in F .
+
+Proof. By Lemma D.1 there exist NRPs Π1, . . . , Π𝑚 producing relations 𝑃 1, . . . , 𝑃 𝑚 computing the 𝑚 homomorphism queries in L. We let Π contain all rules in Π1, . . . , Π𝑚 and add a conjunction rule and transformation rule: 
+
+𝑃 (𝑥 ) ⇐ ⊕ 𝑃 1 (𝑥 ) ∧ · · · ∧ 𝑃 𝑚 (𝑥 ) 𝑅 (𝑥 )⟨ 𝜌 ⟩ ⇐ 𝑃 (𝑥 )
+
+where ⊕ combination is simulated with ⊙ combination and affine transformations using Proposi-tion 3.1. □
+
+Lemma D.3. Let N = (L 1, . . . , L𝑛 ) be a DHN. There exists a monadic NRP Π with monadic relation 
+
+𝑅 such that for each e-database 𝐷 and 𝑎 ∈ adom (𝐷 ):
+
+N ( 𝜀 (𝐷 ))( 𝑎 ) = e iff 𝑅 (𝑎 )⟨ e⟩ ∈ Π(𝐷 )
+
+Moreover, if N has transformations and combination functions in class F , including affine transfor-mations, Π has transformations in F .24 Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr 
+
+Proof. By Lemma D.2 there exists an NRP Π1 so that the embedding of 𝑃 1 in Π1 (𝐷 ) is L1 (𝜀 (𝐷 )) .We now apply induction over the sequence of layers. Suppose the embedding of 𝑃 𝑖 in Π𝑖 (𝐷 ) is 
+
+L𝑖 ◦ · · · ◦ L 1 (𝜀 (𝐷 )) , where we write (L ◦ L ′)( 𝐷, 𝜆 ) denoting L( 𝐷, L′ (𝐷, 𝜆 )) . Then: 
+
+L′ 
+
+> 𝑖 +1
+
+(𝜀 (Π𝑖 (𝐷 ))) = L𝑖 +1 ◦ · · · ◦ L 1 (𝜀 (𝐷 )) 
+
+where L′ 
+
+> 𝑖 +1
+
+applies L𝑖 +1 to the part of the element-embedding representing 𝑃 𝑖 , and ignores the rest of the element-embedding. By Lemma D.2 there is a program Π′ 
+
+> 𝑖 +1
+
+so that for every e-database 𝐷 ,the embedding of 𝑃 𝑖 +1 in Π′ 
+
+> 𝑖 +1
+
+(𝐷 ) is L′ 
+
+> 𝑖 +1
+
+(𝜀 (𝐷 )) . Then if Π𝑖 +1 contains all rules in Π′ 
+
+> 𝑖 +1
+
+and Π𝑖 :
+
+𝑃 𝑖 +1 (𝑎 )⟨ e⟩ ∈ Π𝑖 +1 (𝐷 ) iff 𝑃 𝑖 +1 (𝑎 )⟨ e⟩ ∈ Π′ 
+
+> 𝑖 +1
+
+(Π𝑖 (𝐷 )) 
+
+iff L′ 
+
+> 𝑖 +1
+
+(𝜀 (Π𝑖 (𝐷 )))( 𝑎 ) = e
+
+iff L𝑖 +1 ◦ · · · ◦ L 1 (𝜀 (𝐷 ))( 𝑎 ) = e
+
+We then let Π = Π𝑛 and 𝑅 = 𝑃 𝑛 . □
+
+Lemma D.3 shows that every total unary query computed by a DHN with transformations in 
+
+F , including affine transformations, is computed by a monadic NRP with transformations in F . If a DHN has transformations in F ∪ F × , then since element-wise product transformations can be simulated with ⊙ combination, using Proposition 3.3, there exists a monadic NRP that computes the same query and only uses transformations in F . This proves one direction of Theorem 5.5. 
+
+D.2 Translation from Monadic NRP to DHN 
+
+Monadic NRPs have IDBs with content arity 0 or 1, and body atoms with arity 0⟨𝑑 ⟩, 1⟨𝑑 ⟩ or 𝑘 ⟨0⟩ for any 𝑑, 𝑘 ≥ 0. We first show that unary queries computed by monadic NRPs can also be computed without using zero-ary relations. In this section we assume for simplicity that the input relational schema S does not contain zero-ary relations. 
+
+Lemma D.4. Let Q be a unary embedded query computed by a monadic NRP over input schema S
+
+without zero-ary relations, then Q is computed by a monadic NRP where all IDBs are monadic, and all body atoms are monadic or have embedding dimension 0.
+
+Proof. Let Π1 be a monadic NRP. We construct monadic NRP Π2 that computes the same monadic relations without zero-ary IDBs and without zero-ary body atoms with embedding dimension > 0.In every disjunction or transformation rule in Π1, we substitute each zero-ary atom 𝑅 () by monadic atom 𝑅 (𝑥 ). In a conjunction rule in Π1, if the head is monadic with variable 𝑥 , substitute all zero-ary body atoms 𝑅 () by 𝑅 (𝑥 ) matching the head variable. If the head is zero-ary substitute each zero-ary atom in the body or head 𝑅 () by a monadic atom 𝑅 (𝑥 ), where 𝑥 is a single new variable used in all these monadic atoms. Finally, in every rule that is now unsafe since 𝑥 occurs in the head but not in the body, add a body atom adom (𝑥 ) where arity (adom ) = 1⟨0⟩, and adom (𝑎 ) is derived for every 
+
+𝑎 ∈ adom (𝐷 ). We show by induction that for every e-database 𝐷 :(1) For every monadic 𝑅 and 𝑎 ∈ adom (𝐷 ), 𝑅 (𝑎 )⟨® 𝑒 ⟩ ∈ Π1 (𝐷 ) iff 𝑅 (𝑎 )⟨® 𝑒 ⟩ ∈ Π2 (𝐷 ).(2) For every zero-ary 𝑅 , 𝑅 ()⟨® 𝑒 ⟩ ∈ Π1 (𝐷 ) iff 𝑅 (𝑎 )⟨® 𝑒 ⟩ ∈ Π2 (𝐷 ) for every 𝑎 ∈ adom (𝐷 ).Let 𝑅 𝑖 be derived by rule Ψ𝑖 in Π1 such that (1) and (2) hold for all relations in the body. If Ψ𝑖 is a disjunction rule: 
+
+𝑅 𝑖 (x)⟨ sum ⟩ ⇐ 𝑅 1 (x) ∨ · · · ∨ 𝑅 ℓ (x)
+
+then note that if 𝑅 𝑖 is zero-ary or monadic, the same holds for all relations in the body of Ψ𝑖 , so that applying either (1) or (2) to the relations in the body, (1) and (2) are preserved. The same argument Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 25 
+
+applies if Ψ𝑖 is a transformation rule. Now suppose Ψ𝑖 is a conjunction rule: 
+
+𝑅 𝑖 (x)⟨ sum ⟩ ⇐ ⊙ 𝑅 1 (x1) ∧ · · · ∧ 𝑅 ℓ (xℓ )
+
+If 𝑅 𝑖 is monadic with variable 𝑥 we replaced every zero-ary body atom 𝑅 𝑗 () by an atom 𝑅 𝑗 (𝑥 ).Since these atoms have the same embeddings by (2), (1) is preserved. If 𝑅 𝑖 is zero-ary, then we replaced the head by 𝑅 𝑖 (𝑥 ) and all zero-ary atoms 𝑅 𝑗 () by 𝑅 𝑗 (𝑥 ). Since by (2) for every element 
+
+𝑎 ∈ adom (𝐷 ), the embedding of 𝑅 𝑗 () in Π1 (𝐷 ) equals the embedding of 𝑅 𝑗 (𝑎 ) in Π2 (𝐷 ), the same holds for 𝑅 𝑖 .By (1), Π1 and Π2 compute the same unary embedded queries. □
+
+We now show that the embeddings produced by conjunction rules, disjunction rules and trans-formation rules of monadic NRPs are also computed by DHNs, where the DHN outputs an extra Boolean to indicate whether a database relation is derived. Using Lemma D.4 we only translate rules with monadic IDBs and body atoms that are monadic or have embedding dimension 0.
+
+Lemma D.5. Let Ψ be a conjunction rule that derives 𝑅 with arity (𝑅 ) = 1⟨𝑑 ⟩ and has body atoms that are monadic or have embedding dimension 0. There exists a DHN layer L so that for each e-database 
+
+𝐷 and 𝑎 ∈ adom (𝐷 ):
+
+L( 𝜀 (𝐷 ))( 𝑎 ) =
+
+(
+
+(1) ⊕ e if 𝑅 (𝑎 )⟨ e⟩ ∈ Ψ(𝐷 )(0) ⊕ 0(𝑑 ) if 𝑅 (𝑎 ) ∉ Ψ(𝐷 )
+
+Moreover, L has ReLU -FFNs and F× as transformations, and the only monadic relation in patterns of homomorphism queries of L is ‘Adom’. 
+
+Proof. Let Ψ:
+
+𝑅 (𝑥 )⟨ sum ⟩ ⇐ ⊙ 𝑅 1 (𝑥 ) ∧ · · · ∧ 𝑅 𝑚 (𝑥 𝑚 ) ∧ 𝑅 𝑚 +1 (x𝑚 +1) ∧ · · · ∧ 𝑅 𝑚 +ℓ (x𝑚 +ℓ )
+
+where 𝑅 1, . . . , 𝑅 𝑚 are monadic and 𝑅 𝑚 +1, . . . 𝑅 𝑚 +ℓ have embedding dimension 0. For 𝑖 = 1, . . . , 𝑚 let 
+
+arity (𝑅 𝑖 ) = 1⟨𝑑 𝑖 ⟩. Suppose w.l.o.g. that 𝑅 1, . . . 𝑅 𝑚 are the first 𝑚 monadic relations in the signature, i.e. in 𝜀 (𝐷 ) the first Í1≤𝑖 ≤𝑚 (1 + 𝑑 𝑖 ) values of the element-embedding 𝜆 (𝑎 ) are 𝜆 1 (𝑎 ) ⊕ · · · ⊕ 𝜆 𝑚 (𝑎 ),where 𝜆 𝑖 (𝑎 ) is (1) ⊕ e if 𝑅 𝑖 (𝑎 )⟨ e⟩ ∈ 𝐷 and (0) ⊕ 0(𝑑 𝑖 ) if 𝑅 𝑖 (𝑎 ) ∉ 𝐷 . Let body (Ψ) be the set of body atoms of Ψ. Let 𝐹 𝑥 be the pointed database with a fact ‘ Adom (𝑦 )’ for every body variable 𝑦 , and the non-monadic atoms in body (Ψ) as facts without embeddings. Let 𝜇 = {𝜇 𝑦 : 𝑦 ∈ adom (𝐹 𝑥 )} where: 
+
+𝜇 𝑦 (𝜆 (𝑣 )) =
+
+Ö  
+
+> 𝑅 𝑗 (𝑦 ) ∈ body (Ψ)
+
+𝜆 𝑗 (𝑣 )
+
+so that 𝜇 𝑦 performs element-wise product over the embeddings of monadic body atoms with variable 
+
+𝑦 . Here embeddings of different dimensions are handled in the same way as by ⊙ combination in NRPs, using affine transformations and element-wise multiplications over subspaces to produce an embedding of size 𝑑 , where if one of the embeddings 𝜆 𝑗 (𝑣 ) starts with 0 the whole product is 0(𝑑 ) .Let 𝐻 𝑎 be the set of homomorphisms from the body of Ψ to 𝐷 𝑎 . Then the output of homomorphism query (𝐹 𝑥 , 𝜇 ) is: 
+
+eval (( 𝐹 𝑥 , 𝜇 ), 𝜀 (𝐷 ))( 𝑎 ) =∑︁     
+
+> 𝜋 ∈Hom (𝐹 𝑥 ,𝐷 𝑎 )
+
+Ö  
+
+> 𝑦 ∈adom (𝐹 )
+
+𝜇 𝑦 (𝜆 (𝜋 (𝑦 ))) 
+
+= |𝐻 𝑎 |,∑︁  
+
+> 𝜋 ∈𝐻 𝑎
+
+Ö
+
+{{e𝜋,𝑖 | 1 = 1, . . . 𝑚 and 𝑅 𝑖 (𝜋 (𝑥 𝑖 ))⟨ e𝜋,𝑖 ⟩ ∈ 𝜀 (𝐷 )} }
+
+!
+
+Note that the first value of the output is obtained by summing over homomorphisms in Hom (𝐹 𝑥 , 𝐷 𝑎 ),which are maps from body variables to elements in 𝐷 preserving all non-monadic body atoms in Ψ,26 Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr 
+
+and for each such map counting 1 if it preserves all monadic atoms and 0 otherwise, yielding a total sum |𝐻 𝑎 |. The remaining values are obtained by summing over the products of embeddings for each homomorphism in 𝐻 𝑎 , since homomorphisms in Hom (𝐹 𝑥 , 𝐷 𝑎 ) \ 𝐻 𝑎 that do not preserve all monadic body atoms yield product 0(𝑑 ) . Applying a ReLU -FFN 𝜌 that bounds the first value to a maximum 1, the DHN layer L = (( 𝐹 𝑥 , 𝜇 ), 𝜌 ) derives (1) ⊕ e if 𝑅 (𝑎 )⟨ e⟩ ∈ Ψ(𝐷 ) and (0) ⊕ 0(𝑑 ) if 
+
+𝑅 (𝑎 ) ∉ Ψ(𝐷 ). □
+
+Lemma D.6. Let Ψ be a disjunction rule that derives 𝑅 with arity 1⟨𝑑 ⟩. There exists a DHN layer L
+
+so that for each e-database 𝐷 and 𝑎 ∈ adom (𝐷 ):
+
+L( 𝜀 (𝐷 ))( 𝑎 ) =
+
+(
+
+(1) ⊕ e if 𝑅 (𝑎 )⟨ e⟩ ∈ Ψ(𝐷 )(0) ⊕ 0(𝑑 ) if 𝑅 (𝑎 ) ∉ Ψ(𝐷 )
+
+Moreover, L has ReLU -FFNs as transformations, and the only monadic relation in patterns of homo-morphism queries of L is ‘Adom’. 
+
+Proof. Let Ψ:
+
+𝑅 (𝑥 )⟨ sum ⟩ ⇐ 𝑅 1 (𝑥 ) ∨ · · · ∨ 𝑅 𝑚 (𝑥 )
+
+As in the lemma above suppose 𝑅 1, . . . , 𝑅 𝑚 with arity (𝑅 𝑖 ) = 1⟨𝑑 𝑖 ⟩ are the first 𝑚 monadic relations in the signature so that in the element-embedding 𝜆 of 𝜀 (𝐷 ) the first Í1≤𝑖 ≤𝑚 (1 + 𝑑 𝑖 ) values are 
+
+𝜆 1 (𝑎 ) ⊕ · · · ⊕ 𝜆 𝑚 (𝑎 ), where 𝜆 𝑖 (𝑎 ) is (1) ⊕ e if 𝑅 𝑖 (𝑎 )⟨ e⟩ ∈ 𝐷 and (0) ⊕ 0(𝑑 𝑖 ) if 𝑅 𝑖 (𝑎 ) ∉ 𝐷 .Let 𝐹 𝑥 = {Adom (𝑥 )} , let 𝜇 𝑥 take the element-wise sum over the 𝜆 𝑖 and then upper bound the first value at 1. The DHN layer L = (( 𝐹 𝑥 , {𝜇 𝑥 }) , 𝐼 ) where 𝐼 is the identity transformation then derives (1) ⊕ e if 𝑅 (𝑎 )⟨ e⟩ ∈ Ψ(𝐷 ) and (0) ⊕ 0(𝑑 ) if 𝑅 (𝑎 ) ∉ Ψ(𝐷 ). □
+
+Lemma D.7. Let Ψ be a transformation rule that derives 𝑅 with arity 1⟨𝑑 ⟩. There exists a DHN layer 
+
+L so that for each e-database 𝐷 and 𝑎 ∈ adom (𝐷 ):
+
+L( 𝜀 (𝐷 ))( 𝑎 ) =
+
+(
+
+(1) ⊕ e if 𝑅 (𝑎 )⟨ e⟩ ∈ Ψ(𝐷 )(0) ⊕ 0(𝑑 ) if 𝑅 (𝑎 ) ∉ Ψ(𝐷 )
+
+Moreover, if the transformation function of Ψ is in a class F , including ReLU -FFNs , then L has transformations in F . Further, the only monadic relation in patterns of homomorphism queries of L is ‘Adom’. 
+
+Proof. Let Ψ:
+
+𝑅 (𝑥 )⟨ 𝜇 ⟩ ⇐ 𝑅 ′ (𝑥 )
+
+Let arity (𝑅 ′) = 1⟨𝑑 ′⟩ and suppose w.l.o.g. that 𝑅 ′ is the first monadic relation in the signature, so that the first 1 + 𝑑 ′ values in the element-embedding 𝜆 (𝑎 ) of 𝜀 (𝐷 ) are 𝜆 1 (𝑎 ), which is (1) ⊕ e
+
+if 𝑅 ′ (𝑎 )⟨ e⟩ ∈ 𝐷 and (0) ⊕ 0(𝑑 ′ ) if 𝑅 ′ (𝑎 ) ∉ 𝐷 . Let L = (( 𝐹 𝑥 , {𝜇 𝑥 })) where 𝐹 𝑥 = {Adom (𝑥 )} 
+
+and 𝜇 𝑥 (( 1) ⊕ e) = (1) ⊕ 𝜇 (e) and 𝜇 𝑥 (( 0) ⊕ 0(𝑑 ′ ) ) = (0) ⊕ 0(𝑑 ) . Then L( 𝜀 (𝐷 ))( 𝑎 ) is (1) ⊕ e if 
+
+𝑅 (𝑎 )⟨ e⟩ ∈ Ψ(𝐷 ) and (0) ⊕ 0(𝑑 ) if 𝑅 (𝑎 ) ∉ Ψ(𝐷 ). □
+
+Lemma D.8. Let N1, . . . N𝑛 be DHNs with input dimension 𝑑 and output dimension 𝑑 𝑖 . There exists a DHN N ⊕ with input dimension 𝑑 and output dimension Í1≤𝑖 ≤𝑛 𝑑 𝑖 such that for each element-embedded database (𝐷, 𝜆 ) and 𝑎 ∈ adom (𝐷 ):
+
+N ⊕ (𝐷, 𝜆 )( 𝑎 ) =
+
+Ê 
+
+> 1≤𝑖 ≤𝑛
+
+N𝑖 (𝐷, 𝜆 )( 𝑎 )Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 27 
+
+Proof. The first layer of N ⊕ copies the input embedding of each node 𝑛 times. Then, given DHN layers L𝑖 = (F 𝑖 , 𝜌 𝑖 ) for each N𝑖 , N ⊕ has a DHN layer (L , 𝜌 ) where L has all homomorphism queries of the F𝑖 ordered by 𝑖 , and 𝜌 applies each 𝜌 𝑖 to the feature space corresponding to the output of N𝑖 . □
+
+We can now prove Theorem 5.7: 
+
+Theorem 5.7. Let Q be an embedded query with arity 1⟨𝑑 ⟩ computed by a monadic NRP Π. Then there exists a DHN Nsuch that for each e-database 𝐷 and 𝑎 ∈ adom (𝐷 ):
+
+N ( 𝜀 (𝐷 ))( 𝑎 ) =
+
+(
+
+(1) ⊕ e if 𝑎 ⟨e⟩ ∈ Q ( 𝐷 )(0) ⊕ 0(𝑑 ) if for all e ∈ R𝑑 , 𝑎 ⟨e⟩ ∉ Q ( 𝐷 )
+
+If Π has transformations in F , including ReLU -FFNs , N has transformations in F ∪ F × .
+
+Proof. Let Q be computed by a monadic NRP. By Lemma D.4 Q is computed by a monadic NRP 
+
+Π where all IDBs are monadic, and all body atoms are monadic or have embedding dimension 0.Let Π = (Ψ1, . . . , Ψ𝑛 ), let each Ψ𝑖 derive 𝑅 𝑖 with arity 1⟨𝑑 𝑖 ⟩ and given e-database 𝐷 let 𝐷 0 = 𝐷 and for 𝑖 = 1, . . . , 𝑛 , 𝐷 𝑖 = 𝐷 𝑖 −1 ∪ Ψ𝑖 (𝐷 𝑖 −1). We show that for each 𝑖 = 1, . . . , 𝑛 there exists a DHN N𝑖 
+
+so that N𝑖 (𝜀 (𝐷 )) is the element-embedding of 𝐷 𝑖 . By Lemmas D.5, D.6 and D.7, there is a DHN layer L1 so that L1 (𝜀 (𝐷 ))( 𝑎 ) is (1) ⊕ e if 𝑅 1 (𝑎 )⟨ e⟩ ∈ Ψ1 (𝐷 ) and (0) ⊕ 0(𝑑 1 ) if 𝑅 1 (𝑎 ) ∉ Ψ1 (𝐷 ). By Lemma D.8 there then exists a DHN N1 so that N1 (𝜀 (𝐷 )) is the element-embedding of 𝜀 (𝐷 1).Now let 𝑖 < 𝑛 and suppose N𝑖 (𝜀 (𝐷 )) is the element-embedding of 𝜀 (𝐷 𝑖 ). By Lemmas D.5, D.6 and D.7, there exists a DHN layer L𝑖 +1 so that L𝑖 +1 (𝜀 (𝐷 𝑖 ))( 𝑎 ) is (1) ⊕ e if 𝑅 𝑖 +1 (𝑎 )⟨ e⟩ ∈ Ψ𝑖 +1 (𝐷 𝑖 )
+
+and (0) ⊕ 0(𝑑 𝑖 ) if 𝑅 𝑖 +1 (𝑎 ) ∉ Ψ𝑖 +1 (𝐷 𝑖 ). Since the only monadic relation in patterns of homomorphism queries in L𝑖 +1 is ‘Adom’ (so that all relations used in patterns of homomorphism queries to 𝜀 (𝐷 𝑖 )
+
+are also in 𝐷 ), and since N𝑖 (𝜀 (𝐷 )) is the element-embedding of 𝜀 (𝐷 𝑖 ):
+
+L𝑖 +1 (𝜀 (𝐷 𝑖 )) = L𝑖 +1 (𝐷, N𝑖 (𝜀 (𝐷 ))) 
+
+Thus, L𝑖 +1 ◦ N 𝑖 (𝜀 (𝐷 ))( 𝑎 ) is (1) ⊕ e if 𝑅 𝑖 +1 (𝑎 )⟨ e⟩ ∈ Ψ𝑖 +1 (𝐷 𝑖 ) and (0) ⊕ 0(𝑑 𝑖 +1 ) if 𝑅 𝑖 +1 (𝑎 ) ∉ Ψ𝑖 +1 (𝐷 𝑖 ).Again using Lemma D.8, there exists a DHN N𝑖 +1 so that N𝑖 +1 (𝜀 (𝐷 )) is the element-embedding of 
+
+𝐷 𝑖 +1. After N𝑛 we add a final layer that selects the part of the element-embedding representing the output relation of Π. □
+
+Theorem 5.7 also shows that for every total unary embedded query Q computed by a monadic NRP with transformations in F , there exists a DHN with transformations in F ∪ F × that computes 
+
+Q. One simply removes the first value of the element-embedding. Together with the results of section D.1, this proves Theorem 5.5. 
+
+E Proofs for Section 5.2 
+
+Theorem 5.14. Let Π be a frontier guarded NRP over schema S with a 𝑘 ⟨𝑑 ⟩-ary IDB 𝑆 . There exists a monadic NRP Π′ over schema S ∪ { 𝑅 < [2]⟨ 0⟩} , that produces a 1⟨𝑑 ⟩-ary IDB 𝑆 𝜌 for each 𝑘 -ary EDB projection 𝜌 = (𝑅, (𝑖 1, . . . , 𝑖 𝑘 )) , so that on every row-id normalized e-database 𝐷 :
+
+{( 𝑎 )⟨ e⟩ | 𝑆 𝜌 (𝑎 )⟨ e⟩ ∈ Π′ (𝐷 <)} = {( 𝑎 1)⟨ e⟩ | 𝑅 (𝑎 1, . . . , 𝑎 𝑚 ) ∈ 𝐷 and 𝑆 (𝑎 𝑖 1 , . . . , 𝑎 𝑖 𝑘 )⟨ e⟩ ∈ Π(𝐷 )} 
+
+where 𝑚 is the content arity of 𝑅 and 𝐷 < is an expansion of 𝐷 with a linear order 𝑅 < on the row-id values. Moreover, if Π only uses transformations in F , including ReLU -FFNs , the same holds for Π′.
+
+Proof. Let Π = (Ψ1, . . . , Ψ𝑛 ) be a frontier guarded NRP, and let 𝑁 be the maximum content arity of the EDB relations of Π. It follows from Π being frontier guarded, by a straightforward inductive argument, that Π can only derive IDB e-facts whose content tuple is a projection of an EDB relation. The idea behind the construction of Π′ below is that we will represent each output 28 Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr 
+
+tuple by the row-id of a corresponding EDB e-fact. This will allow us to simulate the rules of Π
+
+by monadic rules that operate on row-ids. To make this work, we must furthermore ensure that the representation of output tuples by row-ids is canonical. This is to avoid over-counting when aggregate functions are applied. For every 𝑘 ≤ 𝑁 , let 𝑃 𝑘 be the finite set of all 𝑘 -ary EDB-projections 𝜌 = (𝑅, (𝑖 1, . . . , 𝑖 𝑘 )) ,where 𝑅 is an EDB relation of content arity 𝑚 and 𝑖 1, . . . , 𝑖 𝑘 ∈ { 1, . . . , 𝑚 }. Fix an arbitrary linear order ≺ on every 𝑃 𝑘 . We start with the following rules, for all 𝜌 = (𝑅, (𝑖 1, . . . , 𝑖 𝑘 )) ∈ 𝑃 𝑘 and 
+
+𝜌 ′ = (𝑄, ( 𝑗 1, . . . , 𝑗 𝑘 )) ∈ 𝑃 𝑘 with 𝜌 ′ ≺ 𝜌 :
+
+RowIDs 𝜌 (𝑥 1)⟨ 𝜇 0⟩ ⇐ 𝑅 (𝑥 1, . . . , 𝑥 𝑚 )
+
+SeenEarlier 𝜌 (𝑥 1)⟨ 𝜇 1⟩ ⇐ 𝑅 (𝑥 1, . . . , 𝑥 𝑚 ) ∧ 𝑅 (𝑦 1, . . . , 𝑦 𝑚 ) ∧ 𝑦 1 < 𝑥 1
+
+Match 𝜌,𝜌 ′ (𝑥 1)⟨ 𝜇 1⟩ ⇐ 𝑅 (𝑥 1, . . . , 𝑥 𝑚 ) ∧ 𝑄 (𝑦 1, . . . , 𝑦 𝑚 ′ )
+
+Earlier 𝜌 (𝑥 )⟨ sum ⟩ ⇐ RowIDs 𝜌 (𝑥 ) ∨ SeenEarlier 𝜌 (𝑥 ) ∨ Ô𝜌 ′ ≺𝜌 Match 𝜌,𝜌 ′ (𝑥 )
+
+Least 𝜌 (𝑥 )⟨ 𝜇 ⟩ ⇐ Earlier 𝜌 (𝑥 ) where 𝜇 (𝑒 ) = ReLU (1 − 𝑒 )
+
+where, in the rule producing SeenEarlier the variables in the body are identified so that (𝑥 𝑖 1 , . . . , 𝑥 𝑖 𝑘 ) =
+
+(𝑦 𝑖 1 , . . . , 𝑦 𝑖 𝑘 ), and in the rule producing Match rules, the variables in the body are identified so that 
+
+(𝑥 𝑖 1 , . . . , 𝑥 𝑖 𝑘 ) = (𝑦 𝑗 1 , . . . , 𝑦 𝑗 𝑘 ). Here, 𝜇 0 is the constant map with value 0 and 𝜇 1 is the constant map with value 1. Here, we only use the facts about sum that sum ({ {0, . . . , 0}}) = 0 and sum (𝑋 ) ≥ 1 for any multi-set 𝑋 consisting of zeroes and ones and containing at least one 1. We note that the first three rules above are each shorthand for a pair of rules (namely a conjunctive rule followed by a transformation rule), in the obvious way. Note that each of the IDBs defined by the above rules is of arity 1⟨1⟩. Furthermore, it follows from the construction of these rules that, for 𝜌 = (𝑅, (𝑖 1, . . . , 𝑖 𝑘 )) , Least 𝜌 contains all row-ids of 𝑅 ,and that the associated embedding is either 0 or 1, with it being 1 precisely if the 𝜌 -projection of the row in question is not the 𝜌 -projection of another row of 𝑅 with a smaller row-id, and also is not the 𝜌 ′-projection of any EDB-fact for any projection type 𝜌 ′ ≺ 𝜌 . Thus, when Least 𝜌 (𝑎 )⟨ 1⟩
+
+holds and 𝜌 -projection of the row with row-id 𝑎 is (𝑎 1, . . . , 𝑎 𝑘 ), then we can use 𝑎 as a canonical reference to the tuple (𝑎 1, . . . , 𝑎 𝑘 ).Let 𝑑 max be the maximum embedding dimension of the IDBs of Π. For each IDB Least 𝜌 as defined above and for each 𝑑 ≤ 𝑑 max , it will be convenient to create an additional auxiliary IDB Least (𝑑 )
+
+> 𝜌
+
+given by the transformation rule 
+
+Least (𝑑 ) 
+
+> 𝜌
+
+(𝑥 )⟨ 𝜇 ⟩ ⇐ Least 𝜌 (𝑥 )
+
+where 𝜇 : R → R𝑑 simply maps 𝑟 to ⟨𝑟, . . . , 𝑟 ⟩.We now construct, for each 𝑘 ⟨𝑑 ⟩-ary IDB 𝑇 of Π and for each 𝑘 -ary projection 𝜌 = (𝑅, (𝑖 1, . . . , 𝑖 𝑘 )) ,a 1⟨𝑑 ⟩-ary IDB 𝑇 𝜌 , maintaining the following invariant (over all databases 𝐷 ): 
+
+{( 𝑎 )⟨ e⟩ | 𝑇 𝜌 (𝑎 )⟨ e⟩ ∈ Π′ (𝐷 )} = {𝑎 1 ⟨e⟩ | 𝑅 (𝑎 1, . . . , 𝑎 𝑚 ) ∈ 𝐷 and 𝑇 (𝑎 𝑖 1 , . . . , 𝑎 𝑖 𝑘 )⟨ e⟩ ∈ Π(𝐷 )} (*) In particular, for 𝑇 = 𝑆 , this then implies the statement of the theorem. The remaining rules of Π′ are constructed following the order of the rules Ψ1, . . . , Ψ𝑛 of Π. Let 
+
+𝑖 ≤ 𝑛 . If Ψ𝑗 is a disjunction rule 
+
+𝑇 (z)⟨ 𝛼 ⟩ ⇐ 𝑈 1 (z) ∨ · · · ∨ 𝑈 ℓ (z),
+
+then, for each 𝜌 ∈ 𝑃 𝑘 , where 𝑘 is the content arity of 𝑇 , it suffices to add 
+
+𝑇 𝜌 (𝑥 )⟨ 𝛼 ⟩ ⇐ 𝑈 1,𝜌 (𝑥 ) ∨ · · · ∨ 𝑈 ℓ,𝜌 (𝑥 ).
+
+Similarly, if Ψ𝑗 is a transformation rule 
+
+𝑇 (z)⟨ 𝜇 ⟩ ⇐ 𝑈 (z),Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 29 
+
+then, for every 𝜌 ∈ 𝑃 𝑘 , where 𝑘 is the content arity of 𝑇 , it suffices to add 
+
+𝑇 𝜌 (𝑥 )⟨ 𝜇 ⟩ ⇐ 𝑈 𝜌 (𝑥 ).
+
+It remains to consider conjunction rules. Let 
+
+Ψ𝑗 : 𝑇 (z)⟨ sum ⟩ ⇐ ⊙ 𝐴 1 (u1) ∧ · · · ∧ 𝐴 𝑡 (u𝑡 ) ∧ 𝜙 
+
+where each 𝐴 𝑖 is an IDB and where 𝜙 is a conjunction of EDB atoms. Let 𝑘 ⟨𝑑 ⟩ be the arity of 𝑇 . For all 𝑘 -ary target projections 𝜌 = (𝑅, (𝑖 1, . . . , 𝑖 𝑘 )) ∈ 𝑃 𝑘 , if there exists an 𝑅 -atom 𝑅 (𝑥 1, . . . , 𝑥 𝑚 ) whose 
+
+𝜌 -projection (𝑥 𝑖 1 , . . . , 𝑥 𝑖 𝑘 ) equals z, fix any such 𝑅 -atom. We now add rules to represent derivation of 𝑇 by derivation of a monadic relation 𝑇 𝜌 . For each 𝑠 ≤ 𝑡 , let 𝑘 𝑠 be the content arity of 𝐴 𝑠 and let 
+
+𝜌 𝑠 = (𝑄 𝑠 , ( 𝑗 𝑠 
+
+> 1
+
+, . . . , 𝑗 𝑠 𝑘 𝑠 )) range over 𝑃 𝑘 𝑠 . For each such choice ¯𝜌 = (𝜌 1, . . . , 𝜌 𝑡 ), define: 
+
+T𝜌, ¯𝜌 (𝑥 1)⟨ sum ⟩ ⇐ ⊙ 𝑅 (𝑥 1, . . . , 𝑥 𝑚 ) ∧ ( 
+
+Û
+
+> 𝑠 =1...𝑡
+
+𝜓 𝑠 ) ∧ 𝜙 
+
+where 𝜓 𝑠 = 𝑄 𝑠 (𝑦 𝑠 
+
+> 1
+
+, . . . , 𝑦 𝑠 𝑚 𝑠 ) ∧ Least (𝑑 ) 
+
+> 𝜌 𝑠
+
+(𝑦 𝑠 
+
+> 1
+
+) ∧ ( 𝐴 𝑠 )𝜌 𝑠 (𝑦 𝑠 
+
+> 1
+
+) with the variables additionally identified so that u𝑠 equals the projection (𝑦 𝑠 𝑗 𝑠 
+
+> 1
+
+, . . . , 𝑦 𝑠 𝑗 𝑠 𝑘𝑠 
+
+). In case one or more of the relations 𝑅 and 𝑄 𝑠 are monadic EDBs with a positive embedding dimension, we replace them by 1⟨0⟩-ary relations 𝑅 ◦ or 
+
+𝑄 ◦ 
+
+> 𝑠
+
+, respectively, adding suitable transformation rules of the form 𝑅 ◦ (𝑥 )⟨ 𝜇 ⟩ ⇐ 𝑅 (𝑥 ), in order to ensure that these atoms in the above rule body don’t contribute an embedding. Finally, we add the disjunctive rule 
+
+𝑇 𝜌 (𝑥 )⟨ sum ⟩ ⇐ 
+
+Ü
+
+> ¯𝜌
+
+T𝜌, ¯𝜌 (𝑥 ).
+
+We claim that, in this way, the invariant (*) is preserved. By the induction hypothesis, each IDB e-fact 𝐴 𝑠 (c)⟨ e𝑠 ⟩ occurring in Π(𝐷 ) is represented in 
+
+Π′ (𝐷 ) by all row-ids of e-facts whose relevant projection is c, with the same embedding e𝑠 . Among these representatives, exactly one is canonical: the least row-id for the first projection type, in the fixed order on projection types, that realizes c. By construction, 𝐿𝑒𝑎𝑠𝑡 𝜌 𝑠 has embedding 1𝑑 on this canonical representative and embedding 0𝑑 on all other representatives. Thus every homomorphism from the body of Ψ𝑗 to Π(𝐷 ) with head value ¯𝑏 gives rise to exactly one non-zero contribution to some 𝑇 𝜌, ¯𝜌 (𝑟 ), namely by choosing the canonical representative for each IDB body atom. Conversely, every non-zero contribution to some 𝑇 𝜌, ¯𝜌 (𝑟 ) determines such a homomorphism of the original rule. The auxiliary atoms 𝑅 (◦) and 𝑄 (◦)  
+
+> 𝑠
+
+added to the rule body do not affect the combined embedding, since they have embedding dimension zero. Non-canonical representatives may still satisfy the translated body, but their contribution is zero because the product includes a 𝐿𝑒𝑎𝑠𝑡 𝜌 𝑠 -embedding equal to 0.Consequently, the multiset of contributions summed into 𝑇 𝜌 (𝑟 ) in Π′ (𝐷 ) is the same as the multiset of contributions summed into 𝑇 ( ¯𝑏 ) in Π(𝐷 ), up to additional zero vectors. Since 
+
+sum ({ {𝑥, 0, . . . , 0}}) = 𝑥, 
+
+the two resulting embeddings are equal. The final disjunction over all choices of ¯𝜌 merely ranges over the possible canonical projection types for the IDB body atoms, so these contributions are neither lost nor counted twice. Here we use associativity of sum, in the sense that summing first within the relations 𝑇 𝜌, ¯𝜌 and then summing over ¯𝜌 gives the same result as summing over the union of all corresponding contribution multisets. □30 Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr 
+
+F Proofs for Section 6.2 
+
+The proofs in this section establish a one-to-one correspondence between values in embeddings produced by NRPs with rational ReLU -FFN transformations and terms in FOCQ , to prove the equivalence for flat queries of Theorem 6.1. 
+
+F.1 Translation from NRP to FOCQ 
+
+Recall that an e-database 𝐷 over signature S is represented by a weighted structure A𝐷 over signature 𝜎 , where for every 𝑅 [𝑘 ]⟨ 𝑑 ⟩ ∈ S there are 𝑘 -ary 𝑅, 𝑅 1, . . . , 𝑅 𝑑 in 𝜎 . For all a ∈ 𝐴 𝑘 ,
+
+⟦𝑅 ⟧A𝐷 (a) is 1 if 𝑅 (a) ∈ 𝐷 and 0 otherwise, and for 𝑖 = 1, . . . , 𝑑 , ⟦𝑅 𝑖 ⟧A𝐷 (a) is the 𝑖 -th embedding value of 𝑅 (a) in 𝐷 , or 0 if 𝑅 (a) ∉ 𝐷 . We show that under this translation, the embeddings produced by NRP rules applied to database 𝐷 are represented by FOCQ terms interpreted on A𝐷 .
+
+Definition F.1. Let 𝑅 with arity 𝑘 ⟨𝑑 ⟩ be produced by NRP Π. We say a tuple (𝜃 𝑅 , 𝜃 𝑅  
+
+> 1
+
+, . . . , 𝜃 𝑅 𝑑 ) of 
+
+FOCQ terms represents 𝑅 if for all e-databases 𝐷 and a ∈ adom (𝐷 )𝑘 :(1) If 𝑅 (a)⟨ e⟩ ∈ Π(𝐷 ) then 
+
+
+
+⟦𝜃 𝑅 ⟧A𝐷 (a), ⟦𝜃 𝑅  
+
+> 1
+
+⟧A𝐷 (a), . . . , ⟦𝜃 𝑅 𝑑 )⟧ A𝐷 (a)
+
+
+
+= (1) ⊕ e;(2) If 𝑅 (a) ∉ Π(𝐷 ) then 
+
+
+
+⟦𝜃 𝑅 ⟧A𝐷 (a), ⟦𝜃 𝑅  
+
+> 1
+
+⟧A𝐷 (a), . . . , ⟦𝜃 𝑅 𝑑 )⟧ A𝐷 (a)
+
+
+
+= (0) ⊕ 0(𝑑 ) .
+
+Lemma F.2. Let 𝔉 be a ReLU -FFN with rational parameters, input dimension 𝑝 and output dimension 
+
+𝑞 . Let 𝜃 1, . . . 𝜃 𝑝 be FOCQ terms over k variables x. Then there exist FOCQ terms 𝜃 ′
+
+> 1
+
+, . . . , 𝜃 ′ 
+
+> 𝑞
+
+such that for each weighted structure A and a ∈ 𝐴 𝑘 :
+
+𝔉 (⟦ 𝜃 1⟧A (a), . . . , ⟦𝜃 𝑝 ⟧A (a)) = (⟦ 𝜃 ′
+
+> 1
+
+⟧A (a), . . . , ⟦𝜃 ′ 
+
+> 𝑞
+
+⟧A (a)) 
+
+Proof. Multiplication and addition with rational constants, as well as sums over a fixed number of terms, are available in FOCQ. Further, ReLU (⟦ 𝜃 ⟧A (a)) equals ⟦max (𝜃, 0)⟧ A (a). □
+
+Lemma F.3. Let Ψ be a transformation rule, with 𝜇 a rational parameter ReLU -FFN :
+
+𝑅 (x)⟨ 𝜇 ⟩ ⇐ 𝑅 ′ (x)
+
+If 𝑅 ′ is represented in FOCQ , the same holds for 𝑅 .
+
+Proof. Let (𝜃 𝑅 ′
+
+, 𝜃 𝑅 ′ 
+
+> 1
+
+, . . . , 𝜃 𝑅 ′ 
+
+> 𝑑 ′
+
+) represent 𝑅 ′. By Lemma F.2 there are terms 𝜃 1, . . . , 𝜃 𝑑 giving the output of 𝜇 . Thus (𝜃 𝑅 ′
+
+, 𝜃 1 · 𝜃 𝑅 ′
+
+, . . . , 𝜃 𝑑 · 𝜃 𝑅 ′
+
+) represents 𝑅 . □
+
+Lemma F.4. Let Ψ be a conjunction rule: 
+
+𝑅 (x)⟨ sum ⟩ ⇐ ⊙ 𝑅 1 (x1) ∧ · · · ∧ 𝑅 𝑚 (x𝑚 )
+
+If 𝑅 1, . . . , 𝑅 𝑚 are represented in FOCQ , the same holds for 𝑅 .
+
+Proof. Let each 𝑅 𝑖 with arity 𝑘 𝑖 ⟨𝑑 𝑖 ⟩ be represented by (𝜃 𝑅 𝑖 , 𝜃 𝑅 𝑖  
+
+> 1
+
+, . . . , 𝜃 𝑅 𝑖  
+
+> 𝑑 𝑖
+
+). Let Ð1≤𝑖 ≤𝑚 x𝑖 be the tuple of all body variables and let (Ð1≤𝑖 ≤𝑚 x𝑖 ) \ x be the tuple of variables that are only in the body. Then 
+
+𝜃 𝑅 (x) = min  ∑︁ (( 
+
+Ø 
+
+> 1≤𝑖 ≤𝑚
+
+x𝑖 ) \ x).(
+
+Ö 
+
+> 1≤𝑖 ≤𝑚
+
+𝜃 𝑅 𝑖 (x𝑖 )) , 1
+
+!
+
+where min (𝜃, 1) = − max (− 𝜃, −1). For each index 𝑗 of the output embedding such that 𝑗 ≤ 𝑑 𝑖 for each 𝑖 = 1 . . . 𝑚 :
+
+𝜃 𝑅 𝑗 (x) =∑︁ (( 
+
+Ø 
+
+> 1≤𝑖 ≤𝑚
+
+x𝑖 ) \ x).(
+
+Ö 
+
+> 1≤𝑖 ≤𝑚
+
+𝜃 𝑅 𝑖  
+
+> 𝑗
+
+(x𝑖 )) Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 31 
+
+If 𝑗 > 𝑑 𝑖 for some 𝑖 , the corresponding 𝜃 𝑅 𝑖  
+
+> 𝑗
+
+is substituted by 𝜃 𝑅 𝑖 , so that if 𝑅 𝑖 (x𝑖 ) holds the associated embedding doesn’t impact the product, while if 𝑅 𝑖 (x𝑖 ) does not hold the product is 0. □
+
+Lemma F.5. Let Ψ be a disjunction rule: 
+
+𝑅 (x)⟨ sum ⟩ ⇐ 𝑅 1 (x) ∨ · · · ∨ 𝑅 𝑚 (x)
+
+If 𝑅 1, . . . , 𝑅 𝑚 are represented in FOCQ , the same holds for 𝑅 .
+
+Proof. 
+
+𝜃 𝑅 (x) = min (𝜃 𝑅 1 (x) + · · · + 𝜃 𝑅 𝑚 (x), 1)
+
+And for each index 𝑗 of the output embedding: 
+
+𝜃 𝑅 𝑗 (x) = 𝜃 𝑅 1 
+
+> 𝑗
+
+(x) + · · · + 𝜃 𝑅 𝑚  
+
+> 𝑗
+
+(x)
+
+□
+
+This yields one direction of Theorem 6.1: every flat query Q computed by a simply-gated 
+
+ReLU -FFN-based NRP is defined in FOCQ. 
+
+Proof. Let (Π, 𝑃 ) compute Q with Π = (Ψ1, . . . , Ψ𝑛 ) and 𝑃 : R𝑑 → { 0, 1} being a 𝑑 -ary accep-tance policy that maps e ∈ R𝑑 to 0 or 1 with a Boolean combination of inequalities of the form 
+
+𝑥 𝑖 > 0 with 𝑖 = 1, . . . , 𝑑 . Assume that Ψ𝑛 produces the IDB 𝑅 . Now, by definition, a ∈ Q ( 𝐷 ) if and only if for some e ∈ R𝑑 , 𝑅 (a)⟨ e⟩ ∈ Π(𝐷 ) and 𝑃 (e) = 1.Also by definition, each EDB 𝑆 ∈ S with arity 𝑘 𝑖 ⟨𝑑 𝑖 ⟩ is represented by relations (𝑆, 𝑆 1, . . . , 𝑆 𝑑 𝑖 )
+
+over 𝜎 . Applying Lemmas F.3, F.4 and F.5 each IDB relation produced by a rule Ψ𝑖 is also represented in FOCQ. Thus, if arity (𝑅 ) = 𝑘 ⟨𝑑 ⟩ there exists a tuple of 𝑘 -ary terms (𝜃 𝑅 , 𝜃 𝑅  
+
+> 1
+
+, . . . , 𝜃 𝑅 𝑑 ) that represents 
+
+𝑅 . Let 𝜙 = 𝜃 𝑅 > 0 ∧ 𝜙 𝑃 , where 𝜙 𝑃 is the Boolean combination of 𝑃 with 𝜃 𝑅 𝑖 > 0 substituted for 
+
+𝑥 𝑖 > 0. Then 𝜙 defines Q. □
+
+F.2 Translation from FOCQ to NRP 
+
+We show that for every FOCQ term 𝜃 , there exists an NRP that computes the interpretation of 𝜃 as embedding. 
+
+Lemma F.6. Let 𝜃 be an FOCQ term. There exists an NRP Π with rational ReLU -FFN transformations producing relation 𝑅 𝜃 so that, if 𝜃 has 𝑘 ≥ 0 free variables, for each e-database 𝐷 and a ∈ adom (𝐷 )𝑘 :
+
+𝑅 𝜃 (a)⟨⟦ 𝜃 ⟧A𝐷 (a)⟩ ∈ Π(𝐷 )
+
+Proof. We perform induction over term construction. In the induction start, 𝜃 is of the form 
+
+𝑞 for some 𝑞 ∈ Q, or 𝑅 (x) or 1𝑥 =𝑦 . If 𝜃 is a rational 𝑞 ∈ Q , Π produces 0⟨1⟩-ary relation True 𝑞 
+
+(as described in Section 3). Recall that every 𝑅 [𝑘 ]⟨ 𝑑 ⟩ ∈ S is represented over 𝜎 by (𝑅, 𝑅 1, . . . , 𝑅 𝑑 )
+
+following Definition F.1. Let 𝜃 be 𝑘 -ary with free variables x = (𝑥 1, . . . , 𝑥 𝑘 ). Now if 𝜃 (x) = 𝑅 (x) let 
+
+Π be: Zero 𝑘 (x) ⇐ Adom (𝑥 1) ∧ · · · ∧ Adom (𝑥 𝑘 ) ∧ True 0 () 
+
+𝑃 (x)⟨ 𝜇 1⟩ ⇐ 𝑅 (x)
+
+𝑅 𝜃 (x)⟨ sum ⟩ ⇐ 𝑃 (x) ∨ Zero 𝑘 (x)32 Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr 
+
+Here True 0 () has embedding (0), and 𝜇 1 produces constant embedding (1). Similarly, if 𝜃 (x) is a 
+
+𝑘 -ary relation 𝑅 𝑗 that encodes the 𝑗 -th embedding value of database relation 𝑅 , let Π be: Zero 𝑘 (x) ⇐ Adom (𝑥 1) ∧ · · · ∧ Adom (𝑥 𝑘 ) ∧ True 0 () 
+
+𝑃 (x)⟨ 𝜇 ⟩ ⇐ 𝑅 (x)
+
+𝑅 𝜃 (x)⟨ sum ⟩ ⇐ 𝑃 (x) ∨ Zero 𝑘 (x)
+
+where now 𝜇 selects the 𝑗 -th value of the embedding. If 𝜃 is 1𝑥 =𝑦 , let Π be: Zero 2 (𝑥, 𝑦 ) ⇐ Adom (𝑥 ) ∧ Adom (𝑦 ) ∧ True 0 () 
+
+Eq (𝑥, 𝑥 )⟨ sum ⟩ ⇐ Adom (𝑥 ) ∧ True 1 () 
+
+𝑅 𝜃 (𝑥, 𝑦 )⟨ sum ⟩ ⇐ Eq (𝑥, 𝑦 ) ∨ Zero 2 (𝑥, 𝑦 )
+
+For the induction step, suppose the embeddings of relation 𝑅 𝜃 1 , 𝑅 𝜃 2 produced by Π are the interpretations of terms 𝜃 1, 𝜃 2. If 𝜃 (x) is 𝜃 1 (x1) + 𝜃 2 (x2), we add the following conjunction rule and transformation rule to Π:
+
+𝑅 ′𝜃 (x) ⇐ ⊕ 𝑅 𝜃 1 (x1) ∧ 𝑅 𝜃 2 (x2) 𝑅 𝜃 (x)⟨ 𝜇 ⟩ ⇐ 𝑅 ′𝜃 (x)
+
+where 𝜇 sums the two indices of the embedding. If 𝜃 (x) is 𝜃 1 (x1) · 𝜃 2 (x2) we add a single conjunction rule with product combination: 
+
+𝑅 𝜃 (x) ⇐ ⊙ 𝑅 𝜃 1 (x1) ∧ 𝑅 𝜃 2 (x2)
+
+If 𝜃 (x) is −𝜃 1 (x) we add a single transformation rule that multiplies the embedding by −1. If 𝜃 (x)
+
+is a summing term Í(x1).𝜃 2 (x2) we add the following conjunction rule: 
+
+𝑅 𝜃 (x)⟨ sum ⟩ ⇐ 𝑅 𝜃 2 (x2)
+
+Û 
+
+> 𝑥 ∈x1\x2
+
+Adom (𝑥 )
+
+Finally, if 𝜃 (x) is max (𝜃 1 (x1), 𝜃 2 (x2)) we add a conjunction and transformation rule: 
+
+𝑅 ′ 
+
+> 𝜃
+
+(x) ⇐ ⊕ 𝑅 𝜃 1 (x1) ∧ 𝑅 𝜃 2 (x2) 𝑅 𝜃 (x)⟨ 𝜇 ⟩ ⇐ 𝑅 ′ 
+
+> 𝜃
+
+(x)
+
+Where 𝜇 (( 𝑒 1, 𝑒 2)) = max (𝑒 1, 𝑒 2) = 𝑒 1 + ReLU (𝑒 2 − 𝑒 1). □
+
+Lemma F.6 yields the second direction of Theorem 6.1: every flat query defined in FOCQ is computed by a simply-gated ReLU -FFN-based NRP. 
+
+Proof. Let Q be a 𝑘 -ary flat query defined by 𝜙 (x), which is a combination of inequalities 𝜃 𝑖 > 𝜃 𝑗 
+
+using negation and conjunction. Let 𝜃 1, . . . , 𝜃 𝑚 be the terms in inequalities of 𝜙 . Using Lemma F.6 there exists for each term 𝜃 𝑖 in 𝜙 a relation 𝑅 𝑖 computed by a simply-gated ReLU -FFN -based NRP 
+
+Π𝑖 so that for each e-database 𝐷 and a ∈ adom (𝐷 )𝑘 , 𝑅 𝑖 (a)⟨⟦ 𝜃 𝑖 ⟧A𝐷 (a)⟩ ∈ Π𝑖 (𝐷 ).Let Π be the union of these programs Π𝑖 , together with the following conjunction and transfor-mation rules: 
+
+𝑅 ′ (x) ⇐ ⊕ 𝑅 1 (x) ∧ · · · ∧ 𝑅 𝑚 (x),𝑅 (x)⟨ 𝜇 ⟩ ⇐ 𝑅 ′ (x).
+
+Here, 𝜇 : R𝑚 → R𝑚 2
+
+maps e = (𝑒 1, . . . , 𝑒 𝑚 ) to the vector containing all pairwise differences 𝑒 𝑖 − 𝑒 𝑗 
+
+for 1 ≤ 𝑖, 𝑗 ≤ 𝑚 . Let 𝑃 be the acceptance policy obtained from 𝜙 by replacing each inequality 𝜃 𝑖 > 𝜃 𝑗 
+
+with the corresponding value inequality 𝑒 𝑖 − 𝑒 𝑗 > 0. Then (Π, 𝑃 ) computes Q. □Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 33 
+
+G Proofs for Section 6.3 G.1 First-order Logic with Counting 
+
+We recall the syntax and semantics of FO+C as defined in [ 24 ]. FO+C has element variables 𝑥, 𝑥 ′, 𝑥 1
+
+and number variables 𝑦, 𝑦 ′, 𝑦 1.
+
+Syntax. 
+
+Terms: 𝜃 :: = 0 | 1 | 𝑦 | 𝜃 + 𝜃 ′ | 𝜃 · 𝜃 ′ | #(𝑥 1, . . . , 𝑥 𝑘 , 𝑦 1 < 𝜃 1, . . . , 𝑦 ℓ < 𝜃 ℓ ).𝜙 
+
+Formulas: 𝜙 :: = 𝑅 (𝑥 1, . . . , 𝑥 𝑘 ) | 𝑥 1 = 𝑥 2 | ¬ 𝜙 | 𝜙 ∧ 𝜓 | 𝜃 ≤ 𝜃 ′
+
+Here, in #(𝑥 1, . . . , 𝑥 𝑘 , 𝑦 1 < 𝜃 1, . . . , 𝑦 ℓ < 𝜃 ℓ ).𝜙 the bounding terms 𝜃 𝑖 only depend on variables 
+
+𝑥 1, . . . , 𝑥 𝑘 and 𝑦 𝑗 with 𝑗 < 𝑖 .
+
+Semantics. FO+C is interpreted over Boolean (unweighted) 𝜎 -structures A together with the non-negative integers as numerical domain N. We define values ⟦𝜙 ⟧A (a, b) ∈ { 0, 1} and ⟦𝜃 ⟧A (a, b) ∈ N
+
+for formulas 𝜙 and terms 𝜃 , where a ∈ 𝐴 𝑘 and b ∈ N𝑘 ′
+
+if the formula or term has 𝑘 free structure variables and 𝑘 ′ free number variables. 
+
+• ⟦ 0⟧A = 0, ⟦1⟧A = 1 and ⟦𝑦 ⟧A (𝑏 ) = 𝑏 .
+
+• ⟦ 𝜃 + 𝜃 ′⟧A (a, b) = ⟦𝜃 ⟧A (a, b) + ⟦ 𝜃 ′⟧A (a, b).
+
+• ⟦ 𝜃 · 𝜃 ′⟧A (a, b) = ⟦𝜃 ⟧A (a, b) · ⟦ 𝜃 ′⟧A (a, b).
+
+• ⟦ #(𝑥 1, . . . , 𝑥 𝑘 , 𝑦 1 < 𝜃 1, . . . , 𝑦 ℓ < 𝜃 ℓ ).𝜙 ⟧A (a, b) is the number of tuples: (a′, b′) ∈ 𝐴 𝑘 × Nℓ such that ⟦𝜙 ⟧A (a, a′, b, b′) = 1 and for 𝑖 = 1, . . . , ℓ , with b′ 
+
+> <𝑖
+
+containing the first 𝑖 − 1 elements and 
+
+𝑏 ′ 
+
+> 𝑖
+
+being the 𝑖 -th element of b′: 𝑏 ′ 
+
+> 𝑖
+
+< ⟦𝜃 𝑖 ⟧A (a, a′, b, b′ 
+
+> <𝑖
+
+).
+
+• ⟦ 𝑅 ⟧A (a) = 𝑅 A (a).
+
+• ⟦ 𝑥 1 = 𝑥 2⟧A (𝑎 1, 𝑎 2) is 1 if 𝑎 1 = 𝑎 2 and 0 otherwise. 
+
+• ⟦¬ 𝜙 ⟧A (a, b) = 1 − ⟦ 𝜙 ⟧A (a, b), and ⟦𝜙 ∧ 𝜓 ⟧A (a, b) = ⟦𝜙 ⟧A (a, b) · ⟦ 𝜓 ⟧A (a, b).
+
+• ⟦ 𝜃 ≤ 𝜃 ′⟧A (a, b) is 1 if ⟦𝜃 ⟧A (a, b) ≤ ⟦ 𝜃 ′⟧A (a, b) and 0 otherwise. 
+
+G.2 Proof of Theorems 6.3 and 6.4 
+
+An ordered (weighted) 𝜎 -structure is a 𝜎 ∪ {≤} -structure A where ≤A is a linear order on the domain of A. Over ordered structures, number variables can be represented by element variables. We give an explicit proof. 
+
+Lemma G.1. Every FO+C -formula without free number variables is equivalent, over ordered Boolean structures, to a FO+C -formula without number variables 
+
+Proof. For a FO+C -formula 𝜙 without free number variables and a univariate polynomial 𝑝 ,we will say that 𝜙 (x) is uniformly 𝑝 -bounded if for every Boolean structure A and a ∈ 𝐴 |x| , all numerical variables are bounded by 𝑝 (| 𝐴 |) . As a first step, we will show that every FO+C-formula without free number variables is equivalent, over Boolean structures, to a uniformly 𝑝 -bounded formula. Let 𝜙 be a FO+C-formula without free number variables. We may assume without loss of generality that each number variable is only bound by one # binder (by renaming variables as needed). We can then associate to each number variable 𝑦 a unique corresponding bounding term 
+
+𝜃 𝑦 . Consider the directed graph whose nodes are the number variables and with an edge 𝑦 → 𝑦 ′
+
+if 𝑦 ′ occurs in the bounding term 𝜃 𝑦 . It follows from the definition of FO+C that this graph has no cycles. We can thus associate a rank to each variable, where the leaves of the graph have the 34 Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr 
+
+lowest rank. We now compute by induction on the rank, for each number variable 𝑦 a polynomial 
+
+𝑝 𝜃 𝑦 (𝑧 ) so that 𝑝 𝜃 𝑦 (| 𝐴 |) bounds the interpretations of 𝜃 𝑦 for each structure A.
+
+• 𝑝 0 (𝑧 ) = 0,
+
+• 𝑝 1 (𝑧 ) = 1,
+
+• 𝑝 𝑦 (𝑧 ) = 𝑝 𝜃 𝑦 (𝑧 )• 𝑝 𝜃 +𝜃 ′ (𝑧 ) = 𝑝 𝜃 (𝑧 ) + 𝑝 𝜃 ′ (𝑧 ) and 𝑝 𝜃 ·𝜃 ′ (𝑧 ) = 𝑝 𝜃 (𝑧 ) · 𝑝 𝜃 ′ (𝑧 )• 𝑝 #(𝑥 1,...,𝑥 𝑘 ,𝑦 1 ≤𝜃 1,...,𝑦 ℓ <𝜃 ℓ ).𝜙 (𝑧 ) = 𝑧 𝑘 · 𝑝 𝜃 1 (𝑧 ) · . . . · 𝑝 𝜃 ℓ (𝑧 ).Let 𝑝 be a polynomial that dominates 𝑝 𝜃 𝑦 for each number variable 𝑦 occurring in 𝜙 . Let 𝜙 𝑝 be obtained from 𝜙 as follows, by induction, where ‘ ord ’ is an abbreviation of #𝑥 .𝑥 = 𝑥 , representing object domain size: 
+
+• ( 𝜓 )𝑝 = 𝜓 for all atomic formulas and terms, 
+
+• (·) 𝑝 commutes with all operators except #.
+
+• ( #(𝑥 1, . . . , 𝑥 𝑘 , 𝑦 1 ≤ 𝜃 1, . . . , 𝑦 ℓ < 𝜃 ℓ ).𝜓 )𝑝 = #(𝑥 1, . . . , 𝑥 𝑘 , 𝑦 1 ≤ 𝑝 (ord ), . . . , 𝑦 ℓ < 𝑝 (ord )) .(𝑦 1 ≤
+
+𝜃 1 ∧ · · · ∧ 𝑦 ℓ < 𝜃 ℓ ∧ 𝜓 𝑝 )
+
+Then 𝜙 is equivalent to 𝜙 𝑝 over all Boolean structures, and 𝜙 𝑝 is uniformly 𝑝 -bounded. Now, we prove the main statement. Let 𝜙 be an FO+C-formula without free number variables. By the above, we may assume that 𝜙 is uniformly 𝑝 -bounded for some univariate polynomial 𝑝 . Let us first restrict attention to structures with domain size at least two. We can then assume without loss of generality that 𝑝 (𝑥 ) = 𝑥 𝑁 − 1 for some 𝑁 ∈ N. We simulate number variables by length-𝑁 tuples of element variables. Formally, for each number variable 𝑦 𝑖 , let x𝑖 = 𝑥 𝑖 
+
+> 1
+
+, . . . , 𝑥 𝑖 𝑁 be corresponding fresh element variables. We write x𝑖 <lex x𝑗 for 
+
+Ü
+
+> 𝑘 =1,...,𝑁
+
+
+
+𝑥 𝑖 𝑘 < 𝑥 𝑗 𝑘 ∧
+
+Û 
+
+> 𝑘 ′<𝑘
+
+𝑥 𝑖 𝑘 ′ = 𝑥 𝑗 𝑘 ′
+
+
+
+We now inductively translate 𝜙 to an equivalent (𝜙 )† without number variables as follows, where 
+
+x′ is another 𝑁 -tuple of fresh element variables: 
+
+• ( 𝑦 𝑖 )† = #(x′)( x′ <lex x𝑖 ),
+
+• ( 𝜒 )† = 𝜒 for all other atomic formulas/terms, 
+
+• (·) † commutes with all operators other than #,
+
+•  #(𝑥 1, . . . , 𝑥 𝑛 , 𝑦 𝑖 1 < 𝑝 (ord ), . . . , 𝑦 𝑖 ℓ < 𝑝 (ord )) .𝜙 † = #(𝑥 1, . . . , 𝑥 𝑛 , x𝑖 1 , . . . , x𝑖 ℓ ).(𝜙 )†
+
+This argument assumed that we restrict attention to structures of domain size at least two. Over structures of domain size 1, it is trivial that 𝜙 is equivalent to a formula without number variables, since there are only finitely many isomorphism types of such structures. Furthermore, we can test with a FO+C-formula whether the domain size of a structure is at least two. □
+
+Corollary G.2. Every FO+C formula is equivalent over ordered Boolean structures to an FOCQ 
+
+formula. 
+
+Proof. Lemma G.1 states that every formula or term in FO+C is equivalent to a formula or term without number variables on ordered structures. We show by induction on formula construction that for every formula or term 𝜒 in FO+C without number variables there exists an equivalent term 
+
+(𝜒 )† in FOCQ. The cases where 𝜒 is a relational atom, equality, 0 or 1 are immediate. Further: Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 35 
+
+• (·) † commutes with addition and multiplication; 
+
+• (¬ 𝜙 )† = 1 − ( 𝜙 )†;
+
+• ( 𝜙 ∧ 𝜓 )† = (𝜙 )† · ( 𝜓 )†;
+
+• ( 𝜃 ≤ 𝜃 ′)† = min (max (( 𝜃 ′)† + 1 − ( 𝜃 )†, 0), 1);
+
+• ( #(𝑥 1, . . . , 𝑥 𝑛 ).𝜙 )† = Í(𝑥 1, . . . , 𝑥 𝑛 ).(𝜙 )†
+
+where min (𝜃, 𝜃 ′) := − max (− 𝜃, −𝜃 ′). Every FO+C formula 𝜙 is then equivalent over ordered Boolean structures to the FOCQ formula (𝜙 )† > 0. □
+
+Lemma G.3. Every FOCQ formula is equivalent over Boolean structures to an FO+C formula. 
+
+Proof. We prove by simultaneous induction on formulas and terms that, over ordered Boolean structures, (1) For every FOCQ formula 𝜙 there is an equivalent FO+C formula (𝜙 )†;(2) For every FOCQ term 𝜃 there is a triple (𝜃 )† = (𝑓 (𝜃 ), 𝑡 (𝜃 ), 𝑟 (𝜃 )) where 𝑓 (𝜃 ) is an FO+C formula, 𝑡 (𝜃 ) is an FO+C term and 𝑟 (𝜃 ) is a non-negative rational so that: 
+
+⟦𝜃 ⟧ = (− 1)1+⟦ 𝑓 (𝜃 )⟧ · ⟦ 𝑡 (𝜃 )⟧ · 𝑟 (𝜃 )
+
+We use 1𝜙 to abbreviate #() .𝜙 .
+
+• For 𝑞 ∈ Q, if 𝑞 ≥ 0 then (𝑞 )† = (⊤ , 1, 𝑞 ), else (𝑞 )† = (⊥ , 1, −𝑞 )• ( 1𝑥 =𝑥 ′ )† = (⊤ , 1𝑥 =𝑥 ′ , 1);
+
+• ( 𝑅 (𝑥 1, . . . , 𝑥 𝑘 )) † = (⊤ , 1𝑅 (𝑥 1,...,𝑥 𝑘 ) , 1)†;
+
+• (·) † commutes with negation and conjunction; 
+
+• (− 𝜃 )† = (¬ 𝑓 (𝜃 ), 𝑡 (𝜃 ), 𝑟 (𝜃 )) .
+
+• ( 𝜃 1 · 𝜃 2)† = (𝑓 (𝜃 1) ↔ 𝑓 (𝜃 2), 𝑡 (𝜃 1) · 𝑡 (𝜃 2), 𝑟 (𝜃 1) · 𝑟 (𝜃 2)) 
+
+The remaining cases are addition, max, iterated sum and inequality. Given FOCQ terms 𝜃 1, 𝜃 2, let 
+
+𝑓 (𝜃 1) = 𝜙 1, 𝑓 (𝜃 2) = 𝜙 2 and let 𝑝 1, 𝑝 2, 𝑞 1, 𝑞 2 ∈ N so that 𝑟 (𝜃 1) = 𝑝 1 
+
+> 𝑞 1
+
+, 𝑟 (𝜃 2) = 𝑝 2 
+
+> 𝑞 2
+
+. Let 𝑝 ′ 
+
+> 1
+
+= 𝑝 1 · 𝑞 2, and 
+
+𝑝 ′ 
+
+> 2
+
+= 𝑝 2 · 𝑞 1. Then: 
+
+⟦𝜃 1⟧ = (− 1)1+⟦ 𝜙 1⟧ · ⟦ 𝑡 (𝜃 1)⟧ · 𝑝 ′
+
+> 1
+
+𝑞 1 · 𝑞 2
+
+⟦𝜃 2⟧ = (− 1)1+⟦ 𝜙 2⟧ · ⟦ 𝑡 (𝜃 2)⟧ · 𝑝 ′
+
+> 2
+
+𝑞 1 · 𝑞 2
+
+• If 𝜃 is 𝜃 1 + 𝜃 2, then: 
+
+𝑓 (𝜃 ) =
+
+
+
+𝜙 1 ∧
+
+
+
+(𝑝 ′ 
+
+> 1
+
+· 𝑡 (𝜃 1)) ≥ ( 𝑝 ′ 
+
+> 2
+
+· 𝑡 (𝜃 2)) 
+
+ 
+
+∨
+
+
+
+𝜙 2 ∧
+
+
+
+(𝑝 ′ 
+
+> 2
+
+· 𝑡 (𝜃 2)) ≥ ( 𝑝 ′ 
+
+> 1
+
+· 𝑡 (𝜃 1)) 
+
+ 
+
+𝑡 (𝜃 ) = (2 · 1𝜙 1 − 1) · 𝑝 ′ 
+
+> 1
+
+· 𝑡 (𝜃 1) + ( 2 · 1𝜙 2 − 1) · 𝑝 ′ 
+
+> 2
+
+· 𝑡 (𝜃 2)
+
+𝑟 (𝜃 ) = 1
+
+𝑞 1 · 𝑞 236 Arie Soeteman, Balder ten Cate, Maurice Funk, Benny Kimelfeld, Carsten Lutz, and Moritz Schönherr 
+
+• If 𝜃 is max (𝜃 1, 𝜃 2), then: 
+
+𝑓 (𝜃 ) = 𝜙 1 ∨ 𝜙 2
+
+𝑡 (𝜃 ) =
+
+
+
+1(𝜙 1∧¬ 𝜙 2 ) · 𝑝 ′ 
+
+> 1
+
+· 𝑡 (𝜃 1)
+
+
+
++
+
+
+
+1(𝜙 2∧¬ 𝜙 1 ) · 𝑝 ′ 
+
+> 2
+
+· 𝑡 (𝜃 2)
+
+
+
++
+
+
+
+1𝜙 1∧𝜙 2 ·
+
+
+
+1𝑝 ′       
+
+> 1·𝑡 (𝜃 1) ≥ 𝑝 ′
+> 2·𝑡 (𝜃 2)
+
+· 𝑝 ′ 
+
+> 1
+
+· 𝑡 (𝜃 1) + 1𝑝 ′       
+
+> 1·𝑡 (𝜃 1)<𝑝 ′
+> 2·𝑡 (𝜃 2)
+
+· 𝑝 ′ 
+
+> 2
+
+· 𝑡 (𝜃 2)
+
+ 
+
++
+
+
+
+1¬𝜙 1∧¬ 𝜙 2 ·
+
+
+
+1𝑝 ′       
+
+> 1·𝑡 (𝜃 1) ≥ 𝑝 ′
+> 2·𝑡 (𝜃 2)
+
+· 𝑝 ′ 
+
+> 2
+
+· 𝑡 (𝜃 2) + 1𝑝 ′       
+
+> 1·𝑡 (𝜃 1)<𝑝 ′
+> 2·𝑡 (𝜃 2)
+
+· 𝑝 ′ 
+
+> 1
+
+· 𝑡 (𝜃 1)
+
+ 
+
+𝑟 (𝜃 ) = 1
+
+𝑞 1 · 𝑞 2
+
+• If 𝜃 is Í(𝑥 1, . . . , 𝑥 𝑛 ).𝜃 1, then with 𝜃 1 −𝑡 𝜃 2 abbreviating #(𝑦 ≤ 𝜃 1).(𝑦 > 𝜃 2):
+
+𝑓 (𝜃 ) =
+
+
+
+#(𝑥 1, . . . , 𝑥 𝑛 , 𝑦 ≤ 𝑝 1 · 𝑡 (𝜃 1)) .𝜙 1
+
+
+
+≥
+
+
+
+#(𝑥 1, . . . , 𝑥 𝑛 , 𝑦 ≤ 𝑝 1 · 𝑡 (𝜃 1)) .(¬ 𝜙 1)
+
+
+
+𝑡 (𝜃 ) =
+
+
+
+#(𝑥 1, . . . , 𝑥 𝑛 , 𝑦 ≤ 𝑝 1 · 𝑡 (𝜃 1)) .𝜙 1
+
+
+
+−𝑡 
+
+
+
+#(𝑥 1, . . . , 𝑥 𝑛 , 𝑦 ≤ 𝑝 1 · 𝑡 (𝜃 1)) .(¬ 𝜙 1)
+
+
+
++
+
+
+
+#(𝑥 1, . . . , 𝑥 𝑛 , 𝑦 ≤ 𝑝 1 · 𝑡 (𝜃 1)) .(¬ 𝜙 1)
+
+
+
+−𝑡 
+
+
+
+#(𝑥 1, . . . , 𝑥 𝑛 , 𝑦 ≤ 𝑝 1 · 𝑡 (𝜃 1)) .𝜙 1
+
+
+
+𝑟 (𝜃 ) = 𝑟 (𝜃 1)• Finally, if 𝜙 is 𝜃 1 > 𝜃 2, then: 
+
+(𝜙 )† =
+
+
+
+𝜙 1 ∧ 𝜙 2 ∧ 𝑝 ′ 
+
+> 1
+
+· 𝑡 (𝜃 1) > 𝑝 ′ 
+
+> 2
+
+· 𝑡 (𝜃 2)
+
+
+
+∨
+
+
+
+¬𝜙 1 ∧ ¬ 𝜙 2 ∧ 𝑝 ′ 
+
+> 1
+
+· 𝑡 (𝜃 1) < 𝑝 ′ 
+
+> 2
+
+· 𝑡 (𝜃 2)
+
+
+
+∨
+
+
+
+𝜙 1 ∧ ¬ 𝜙 2 ∧ ( 𝑝 ′ 
+
+> 1
+
+· 𝑡 (𝜃 1) > 0 ∨ 𝑝 ′ 
+
+> 2
+
+· 𝑡 (𝜃 2) > 0)
+
+
+
+□
+
+Theorem 6.3. For every flat query Q over ordered Boolean structures the following are equivalent: (1) Q is defined in FOCQ ;(2) Q is defined in FO+C (as in [24]); (3) Q is in uniform TC 0.
+
+Proof. The equivalence between (2) and (3) is well known [ 5]. The equivalence between (1) and (2) follows from Corollary G.2 and Lemma G.3. □
+
+Theorem 6.4. Over ordered rational weighted structures, the flat queries definable in FOCQ are strictly contained in uniform TC 0.
+
+Proof. Given 𝑚 ≥ 1, represent a rational 𝑝 𝑞 ∈ Q with 𝑝 ∈ Z, 𝑞 ∈ N as a binary string of length 2𝑚 by concatenating the first 𝑚 bits of the binary representations of 𝑝 and of 𝑞 . We assume that 𝑝 𝑞 is reduced. For an ordered rational weighted structure A and a ∈ 𝐴 𝑘 for some 𝑘 ≥ 0, let 
+
+𝑠 (A , a) ∈ { 0, 1}∗ be as follows. Start with 1|𝐴 | 01 𝑚 0 where 2𝑚 is the size of the largest exact bit representation of a rational weight in A. Then the weights of A follow as bitstrings of size 2𝑚 in order of the signature and the domain 𝐴 . The final 𝑘 · log (| 𝐴 |) bits encode a, yielding a string of length: 
+
+|| 𝑠 (A , a)|| = 𝑂 (| 𝐴 | + ∑︁  
+
+> 𝑅 ∈𝜎
+
+∑︁ a∈𝐴 arity (𝑅 )
+
+2𝑚 )Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data 37 
+
+The inclusion follows from known results on arithmetic in uniform TC 0. The representation of addition, multiplication and iterated addition over integers in non-uniform TC 0 goes back to [ 11 ]. It is not hard to see that the arguments can be adapted to uniform TC 0 (see [ 5]). Iterated addition over rationals requires iterated multiplication over integers, since one multiplies the denominators of summed rationals. It was shown in [28] that this is also available in uniform TC 0.For strictness, we give a separating example over structures with integer weights. Let 𝑎 ∈ Q (A) 
+
+if and only if ⟦𝑅 ⟧A (𝑎 ) is an even integer. To compute this in TC 0, let 𝑛 = || 𝑠 (A , 𝑎 )|| for rational weighted A and 𝑎 ∈ 𝐴 . The circuit 𝐶 𝑛 selects the weight 𝑝 𝑖  
+
+> 𝑞 𝑖
+
+, where 𝑖 is the position of 𝑎 in the order, represented by the last log (| 𝐴 |) bits. Then verify that 𝑞 𝑖 is 1, and the last bit of 𝑝 𝑖 is 0. Now consider structures A𝑟 consisting of a single element 𝑎 and a weight 𝑟 for 𝑅 (𝑎 ). Any FOCQ formula that expresses Q is equivalent to a boolean combination over finitely many inequality checks 𝜃 𝑖 > 𝜃 𝑗 .Substitute each such check by the equivalent 𝜃 𝑖 − 𝜃 𝑗 > 0. Since the truth value alternates infinitely for 𝑟 ∈ { 1, 2, 3, . . . } at least one of these inequality checks must alternate infinitely many times. However, each 𝜃 𝑖 −𝜃 𝑗 defines a univariate piecewise polynomial with finitely many pieces in 𝑟 , since 
+
+𝑟 is the only weight in A𝑟 and 𝜃 𝑖 is constructed from 𝑟 and constants with addition, multiplication an max. Since each contributing polynomial has a number of roots bounded by its degree, 𝜃 𝑖 − 𝜃 𝑗 
+
+cannot iterate between > 0 and ≤ 0 infinitely many times. Hence Q is not defined in FOCQ. □
