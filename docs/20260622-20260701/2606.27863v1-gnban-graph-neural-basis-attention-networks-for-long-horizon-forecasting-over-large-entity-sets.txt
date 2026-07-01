@@ -1,0 +1,559 @@
+Title: GNBAN: Graph Neural Basis Attention Networks for Long-Horizon Forecasting over Large Entity Sets
+
+URL Source: https://arxiv.org/pdf/2606.27863v1
+
+Published Time: Mon, 29 Jun 2026 00:36:09 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# GNBAN: G RAPH NEURAL BASIS ATTENTION NETWORKS FOR 
+
+# LONG -H ORIZON FORECASTING OVER LARGE ENTITY SETS 
+
+Janak M. Patel ∗
+
+Phi Labs, Quantiphi Marlborough, MA 01752, USA 
+
+Anirudh Deodhar 
+
+Phi Labs, Quantiphi Marlborough, MA 01752, USA 
+
+Dagnachew Birru 
+
+Phi Labs, Quantiphi Marlborough, MA 01752, USA June 29, 2026 
+
+## ABSTRACT 
+
+Demand forecasting at the lowest level of a retail hierarchy requires simultaneously predicting tens of thousands of correlated long-horizon time series across products, stores, and regions. This creates a fundamental challenge for modern forecasting systems: models must scale across massive retail catalogs while capturing shared demand dynamics and producing forecasts that practitioners can interpret and trust. Classical statistical methods require maintaining separate models for each series, making them difficult to manage at production scale. Deep auto-regressive architectures struggle as the joint forecasting state grows to tens of thousands of dimensions. More recently, graph-based deep forecasting architectures have shown promise in modeling dependencies across entities and time. However, many existing approaches remain difficult to scale for long-horizon forecasting and often generate opaque forecasts that provide limited insight into underlying demand patterns. To address these challenges, we propose GNBAN (Graph Neural Basis Attention Network) , an end-to-end forecasting architecture that combines heterogeneous graph representation learning with an interpretable basis-decomposition forecasting head. Retail data are represented directly as a heterogeneous graph derived from the underlying relational database schema, allowing a single model to learn across the entire catalog. Instead of predicting forecast horizons directly, GNBAN decomposes each forecast into three semantically meaningful components: trend, seasonal, and generic. The key innovation is a per-basis attention mechanism in which each basis function maintains its own learnable query and retrieves information independently from the historical neighborhood of the forecast entity. This enables different bases to specialize to distinct temporal patterns while preserving interpretability. We evaluate GNBAN on two large-scale retail forecasting benchmarks, M5 Walmart and Favorita Grocery Sales, under matched experimental protocols. Compared with a baseline graph forecasting model, GNBAN improves volume-weighted WRMSSE by approximately 4–5% across both datasets. Qualitative analysis further shows that the learned decomposition produces interpretable forecasts that expose trend, seasonal, and residual demand drivers without requiring post-hoc explanation methods. These results demonstrate that scalable relational forecasting and interpretable forecast decomposition can be achieved simultaneously within a unified graph-based forecasting framework. 
+
+## 1 Introduction 
+
+Retail demand forecasting at the lowest level of the merchandising hierarchy, where future demand must be predicted for every SKU at every store across multi-week horizons, is one of the most challenging problems in large-scale time-series forecasting. Modern retailers such as Corporación Favorita and Walmart must simultaneously forecast tens of thousands of correlated product-store series within a single operational pipeline [ 1, 2 ]. These forecasting systems must satisfy four competing requirements: they must scale across massive catalogs, capture shared demand dynamics across products and stores, support long-horizon forecasting, and remain interpretable enough for operational decision-making. 
+
+> ∗
+
+Corresponding Author: janak.patel@quantiphi.com 
+
+> arXiv:2606.27863v1 [cs.LG] 26 Jun 2026
+
+A PREPRINT - J UNE 29, 2026 Existing forecasting paradigms satisfy only subsets of these requirements. Classical statistical methods such as Error-Trend-Seasonality (ETS) and ARIMA provide interpretable forecasts, but typically require maintaining separate models for every series, making deployment and monitoring difficult at catalog scale [ 3]. Deep autoregressive architectures such as DeepAR and Temporal Fusion Transformers replace thousands of local models with a single global network [ 4, 5 ], enabling parameter sharing across series. However, they do not explicitly model relational dependencies between entities such as products, stores, and categories when forecasting large retail panels. Gradient-boosted tree approaches, which dominated the M5 competition [ 1 ], improve scalability and predictive accuracy through extensive feature engineering, yet often flatten temporal and cross-entity relationships into tabular representations, limiting their ability to naturally capture interactions across the retail ecosystem. More recently, graph-based forecasting methods and relational deep learning approaches [ 6, 7] have emerged as a promising direction for large-scale retail forecasting. By representing products, stores, categories, and temporal events as nodes in a heterogeneous graph, these approaches naturally capture cross-entity dependencies through message passing. However, existing graph forecasting architectures typically attach a simple multi-layer perceptron forecasting head to the learned graph embeddings, directly mapping latent representations to forecast vectors. While effective for representation learning, these forecasting heads remain poorly suited for long-horizon retail forecasting: they often produce opaque forecasts, provide little insight into trend or seasonal structure, and degrade as forecasting horizons grow longer. In parallel, long-horizon forecasting research has shown that decomposition-based architectures can significantly improve forecasting stability and interpretability by explicitly modeling low-frequency structures such as trend and seasonality [ 8, 9 , 10 ]. However, these methods are primarily designed for independent time series and do not leverage the rich relational structure present in large retail systems. This work addresses the gap between scalable graph-based forecasting and accurate, interpretable long-horizon forecasting. We propose GNBAN (Graph Neural Basis Attention Network) , a single global forecasting architecture that combines graph-based representation learning with interpretable basis-style forecast decomposition. GNBAN couples a heterogeneous graph neural network backbone with a basis-attention forecasting head that decomposes each forecast into three semantically meaningful components: a smooth trend component, a periodic seasonal component, and a residual generic component. Each component is generated using a dedicated learnable attention query over the entity’s historical neighborhood, enabling the model to capture shared demand dynamics while improving long-horizon forecasting performance and exposing the underlying structure of the forecast. A single trained GNBAN model serves the entire retail catalog, eliminating the need for thousands of independently maintained forecasting models while simultaneously supporting scalable forecasting, interpretable forecast decomposition, and long-horizon prediction within a unified end-to-end framework. Our contributions are summarized as follows: 1. We introduce GNBAN, a single global forecasting architecture for large-scale retail demand forecasting that combines graph-based representation learning with basis-style forecast decomposition. 2. We propose a basis-attention forecasting head that decomposes forecasts into interpretable trend, seasonal, and residual components while improving long-horizon forecasting performance. 3. We demonstrate that a single trained model can simultaneously achieve scalable forecasting, improved predictive accuracy, and interpretable forecast decomposition across large retail forecasting benchmarks. 
+
+## 2 Related Work 
+
+Large-scale retail demand forecasting. Retail forecasting has been extensively studied through the M-series forecasting competitions, particularly M5, which focuses on hierarchical retail demand forecasting across thousands of product-store combinations [ 1 , 11 ]. Classical statistical methods such as ARIMA, ETS, and Theta remain competitive for individual time series due to their simplicity and interpretability [ 3]. However, maintaining separate models for tens of thousands of retail series becomes operationally challenging on a catalog scale. Consequently, recent state-of-the-art solutions increasingly rely on global learning approaches that share information across related series. 
+
+Global forecasting models. Global forecasting architectures learn a single model across all time series in a dataset. DeepAR [ 4], DeepFactors [ 12 ], and Temporal Fusion Transformers [ 5] demonstrated that parameter sharing can significantly improve forecasting performance while reducing maintenance overhead. More recently, long-horizon forecasting architectures such as Informer [ 13 ], Autoformer [ 10 ], PatchTST [ 14 ], and TimesNet [ 15 ] have improved the modeling of long-range temporal dependencies. However, these approaches primarily focus on temporal dynamics and do not explicitly model relationships among products, stores, and other entities present in retail systems. 
+
+Graph-based forecasting. Graph neural networks provide a natural mechanism for modeling dependencies across related entities. Existing graph forecasting approaches such as STGCN [ 16 ], Graph WaveNet [ 17 ], MTGNN [ 18 ], and 2A PREPRINT - J UNE 29, 2026 AGCRN [ 19 ] learn graph structures directly from correlated time series and have shown strong performance on traffic and sensor forecasting tasks. More recently, graph-based learning on relational databases has emerged as a promising framework for enterprise forecasting applications [ 6 , 7], where products, stores, categories, and transactions can be represented as nodes connected through natural business relationships. While these approaches effectively capture cross-entity dependencies, forecasting is typically performed using simple MLP-based prediction heads that directly map learned representations to future values. 
+
+Forecast decomposition and interpretability. Forecast decomposition has proven highly effective for long-horizon forecasting. N-BEATS [ 8] introduced interpretable trend and seasonality bases, while N-HiTS [ 9] extended this idea through hierarchical interpolation. Similarly, decomposition-based transformer architectures such as Autoformer [10] explicitly separate trend and seasonal patterns to improve long-range forecasting performance. Despite their success, these methods are primarily designed for independent time series and do not leverage the relational structure commonly found in large retail systems. 
+
+Positioning of GNBAN. GNBAN bridges these research directions by combining graph-based forecasting with basis-style forecast decomposition. Unlike existing graph forecasting models that rely on black-box prediction heads, GNBAN introduces a basis-attention forecasting head that decomposes forecasts into interpretable trend, seasonal, and residual components while leveraging graph-based representations to capture cross-entity demand dynamics. 
+
+## 3 Method 
+
+GNBAN ( Graph Neural Basis Attention Network) is a single global forecasting architecture designed for large-scale retail demand forecasting. The model combines a heterogeneous graph encoder that captures dependencies among retail entities with a basis-attention forecasting head that produces interpretable long-horizon forecasts. Figure 1 provides an overview of the architecture. The workflow consists of four stages. First, the retail database is represented as a heterogeneous graph derived from the underlying relational schema. Second, a heterogeneous graph neural network encodes each forecast entity and its historical context into latent representations. Third, a basis-attention forecasting head generates the forecast as an additive combination of trend, seasonal, and residual components. Finally, the entire architecture is trained end-to-end using a normalized forecasting objective. 
+
+3.1 Graph Representation 
+
+We represent the retail dataset as a heterogeneous graph constructed directly from the underlying relational schema. The graph contains two node types: • itemstore : one node for each SKU-store forecasting entity. • sales : one node for each historical observation associated with an entity. Item-store nodes contain static attributes such as product category, department, store identifier, and geographic information. Sales nodes contain historical demand values and time-varying covariates including price, promotions, holidays, and calendar features. Edges follow the natural foreign-key relationship between sales observations and their corresponding item-store entity. For each forecast entity, we sample its historical sales neighborhood prior to the forecast origin, ensuring that no future information is available during training or inference. 
+
+3.2 Heterogeneous Graph Encoder 
+
+Given a target item-store entity v and its sampled neighborhood N (v), a heterogeneous GraphSAGE encoder aggregates information from neighboring sales observations to produce contextual representations. Let xv denote the feature vector of entity v and xu denote the feature vector of neighboring sales node u. The encoder computes 
+
+zv = σ  Wself xv + Mean u∈N (v)Wnbr xu
+
+ (1) where σ(·) denotes a non-linear transformation followed by layer normalization. The resulting embedding zv ∈ Rd
+
+captures both entity-specific information and historical demand context. In addition to the target embedding, the encoder produces contextual embeddings 3A PREPRINT - J UNE 29, 2026 Trend Block          
+
+> Multi-Query
+> Cross-Attention Linear θ_T ·
+> Seasonal Block
+> Multi-Query
+> Cross-Attention Linear θ_S ·
+> Generic Block
+> Multi-Query
+> Cross-Attention Linear θ_G ·
+
++
+
+> residual
+
++ residual 
+
++ 
+
+> residual
+> Polynomial
+> Sine & Cosine
+> Learnble
+> Anchor node (where prediction
+> happens)
+> Feature Encoder
+> Temporal Encoder
+> GNN
+> Z
+> C
+> Q
+> K
+> V
+> LQ
+> Q
+> K
+> V
+> LQ
+> Δ_T
+> Δ_S
+> Neighbourhood
+> Embedding
+> Anchor
+> Embedding
+> Q
+> K
+> V
+> LQ
+> Δ_G Forecast
+
+Figure 1: Overview of GNBAN. The retail database is represented as a heterogeneous graph where each forecast entity is connected to its historical sales observations. A heterogeneous GraphSAGE produces an entity embedding and contextual neighborhood representations. The basis-attention forecasting head then generates three additive forecast components: trend, seasonal, and generic using dedicated learnable queries that attend to the historical neighborhood. These components are combined to produce the final long-horizon forecast. 
+
+Cv = [ h1, . . . , hN ] ∈ RN ×d
+
+where N is the number of neighboring sales nodes and d is the hidden dimension. 
+
+3.3 Basis-Attention Forecasting Head 
+
+The basis-attention forecasting head is the key contribution of GNBAN. Rather than directly mapping latent repre-sentations to an H-step forecast vector through a multilayer perceptron, GNBAN represents forecasts as a weighted combination of interpretable basis functions. 
+
+3.3.1 Forecast Decomposition 
+
+The forecasting horizon is represented using three groups of basis functions: • Trend basis : polynomial functions capturing long-term demand evolution. • Seasonal basis : sinusoidal functions capturing recurring demand cycles. • Generic basis : learnable basis functions capturing residual structure. Let 
+
+B =
+
+h
+
+B(T ), B(S), B(G)i
+
+(2) denote the complete basis dictionary defined over the forecasting horizon. The final forecast is decomposed as 
+
+ˆyv = ˆ y(T )
+
+v + ˆ y(S)
+
+v + ˆ y(G)
+
+v (3) where the three terms correspond to trend, seasonal, and generic contributions, respectively. 4A PREPRINT - J UNE 29, 2026 
+
+3.3.2 Per-Basis Attention 
+
+Unlike conventional attention mechanisms that use a shared query representation, GNBAN assigns a dedicated learnable query to each basis function. This allows different basis functions to retrieve different aspects of the historical signal. Let qk ∈ Rd denote the learnable query associated with basis k. To adapt the behavior of each basis to a specific forecast entity, the queries are conditioned on the entity embedding zv produced by the graph encoder: 
+
+C(q) 
+
+> v
+
+= reshape ( Wcond zv ) ∈ RK×d (4) where row k corresponds to the conditioning vector cv,k . The basis-specific query is then 
+
+˜qv,k = qk + cv,k (5) Keys and values are generated from the neighborhood embeddings produced by the graph encoder: 
+
+Kv = Cv WK , Vv = Cv WV (6) The attention weights for basis k are computed as 
+
+αv,k = softmax ˜q⊤
+
+> v,k
+
+K⊤
+
+> v
+
+√d
+
+!
+
+(7) where αv,k ∈ RN assigns importance to each historical observation in the neighborhood. The retrieved context vector is 
+
+rv,k = αv,k Vv (8) A scalar coefficient for basis k is then obtained as 
+
+βv,k = w⊤ 
+
+> k
+
+LayerNorm( rv,k ) + bk (9) Because each basis maintains its own query, different basis functions can attend to different regions of the historical neighborhood. Trend bases can focus on long-term demand evolution, seasonal bases can attend to phase-aligned historical observations, and generic bases can specialize to short-term residual behavior. 
+
+3.3.3 Forecast Reconstruction 
+
+The coefficients generated by the attention mechanism weight their corresponding basis functions to produce horizon-level forecasts: 
+
+ˆy(T ) 
+
+> v
+
+= X
+
+> k∈T
+
+βv,k bk (10) 
+
+ˆy(S) 
+
+> v
+
+= X
+
+> k∈S
+
+βv,k bk (11) 
+
+ˆy(G) 
+
+> v
+
+= X
+
+> k∈G
+
+βv,k bk (12) The final forecast is obtained by applying a softplus activation to ensure non-negative predictions: 
+
+ˆyv = softplus 
+
+
+
+ˆy(T ) 
+
+> v
+
++ ˆ y(S) 
+
+> v
+
++ ˆ y(G)
+
+> v
+
+
+
+. (13) This decomposition provides a direct interpretation of how trend, seasonality, and residual demand dynamics contribute to the prediction. 5A PREPRINT - J UNE 29, 2026 
+
+## 4 Experiments 
+
+4.1 Datasets 
+
+We evaluate GNBAN on two widely used retail demand forecasting benchmarks that differ substantially in scale, demand characteristics, and forecasting horizon. Together, they provide complementary evaluation scenarios spanning intermittent count-based demand and continuous, heavy-tailed sales distributions. 
+
+M5 Walmart Accuracy [20 , 1] contains 30,490 item-store time series collected from 10 Walmart stores across three U.S. states, spanning 1,941 days from January 2011 to June 2016. The dataset exhibits highly intermittent demand, with a large fraction of zero-sales observations and daily sales ranging from 0 to approximately 700 units. In addition to historical sales, M5 provides a 12-level product hierarchy, SNAP eligibility indicators, event calendars, and weekly selling prices. We use data from 2014-01-01 onward ( ≈26.6M rows after filtering) and evaluate 28-day forecasts at the item-store level using the full set of 30,490 series following the official public leaderboard protocol. 
+
+Favorita Grocery Sales [ 2] contains sales records from 54 Corporación Favorita stores in Ecuador spanning approxi-mately 1,680 days from January 2013 to August 2017. Unlike M5, sales are continuous and span a substantially wider dynamic range, reaching approximately 44,000 units per day. The dataset includes rich exogenous information such as promotions, holidays, crude oil prices, store transaction counts, and product metadata. We use data from 2016-01-01 onward ( ≈25.9M rows) and retain the 50,000 highest-volume item-store pairs after applying a minimum cumulative sales threshold. We evaluate a 16-day forecasting horizon. The two datasets differ not only in scale and horizon length, but also in their underlying demand distributions and exogenous drivers, providing a rigorous test of model robustness across diverse retail forecasting environments. 
+
+4.2 Evaluation Protocol and Metrics 4.2.1 Forecast Origins and Data Splits M5. We follow the official M5 public leaderboard protocol, using 2016-04-24 as the forecast origin and generating forecasts for the subsequent 28 days. Evaluation is performed at the bottom level of the hierarchy (item-store pairs) using the complete set of 30,490 series. Training forecast origins are sampled weekly prior to the validation and test periods, while preserving temporal ordering. 
+
+Favorita. Since the original competition provides labels for only a single forecasting window, we construct a reproducible evaluation protocol using the final 32 days of available data. Weekly forecast origins are used for training, while non-overlapping validation and test windows are created from the final two 16-day periods. This setup preserves the original forecasting horizon while enabling reliable model selection and evaluation. All baselines are trained and evaluated using identical data splits, preprocessing procedures, and forecasting horizons. Consequently, performance differences reflect architectural choices rather than variations in experimental setup. 
+
+4.2.2 Preprocessing 
+
+Retail demand spans several orders of magnitude across products and stores. To stabilize optimization, all sales-related numerical features are transformed using a log1p normalization prior to graph construction. Model predictions are converted back to the original sales scale using the inverse transformation before evaluation. Following common practice in large-scale retail forecasting, training samples whose target windows contain more than 50% zero observations are removed to reduce the influence of extremely sparse demand patterns. 
+
+4.2.3 Evaluation Metrics 
+
+We report the Weighted Root Mean Squared Scaled Error (WRMSSE), the primary M5 competition metric. For series i
+
+with historical observations yi, 1, . . . , y i,T and H-step forecasts ˆyi, 1, . . . , ˆyi,H , the per-series scaled error is 
+
+RMSSE i =
+
+vuuuuuuuut
+
+1
+
+H
+
+> H
+
+X
+
+> t=1
+
+(yi,t − ˆyi,t )2
+
+1
+
+T − 1
+
+> T
+
+X
+
+> t=2
+
+(yi,t − yi,t −1)2
+
+(14) 6A PREPRINT - J UNE 29, 2026 where the denominator is the mean squared one-step naïve forecast error computed on the pretest period, serving as a scale normaliser across series with different sales magnitudes. RMSSE i < 1 indicates the model outperforms the naïve last-observed-value baseline. Our primary metric is the volume-weighted aggregate 
+
+WRMSSE vol =
+
+> N
+
+X
+
+> i=1
+
+wi RMSSE i,
+
+> N
+
+X
+
+> i=1
+
+wi = 1 , (15) where wi is proportional to series i’s total pretest sales volume, giving higher weight to economically significant high-volume items. We additionally report an unweighted mean 
+
+WRMSSE uw = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+RMSSE i (16) which gives equal weight to every series and is therefore sensitive to performance on low-volume and intermittent-demand items. Both metrics are computed in original sales units after reversing any training-time normalisation; lower values indicate better performance, and 1.0 corresponds to the naïve last-day baseline by construction. 
+
+4.3 Baselines 
+
+Our primary baseline is a heterogeneous graph neural network forecaster, referred to throughout the paper as Base Graph . Base Graph uses the same graph construction, node features, neighborhood sampling strategy, GraphSAGE backbone, and training procedure as GNBAN. The only difference is the forecasting head: the proposed basis-attention module is replaced by a multi-layer perceptron (MLP) that directly predicts the H-step forecast vector. This controlled comparison isolates the contribution of the proposed basis-attention forecasting head while keeping all other components identical. 
+
+4.4 Implementation Details 
+
+All numerical sales features and forecasting targets are transformed using log(1 + x) prior to training and inverted using exp( x) − 1 during evaluation. This normalization improves numerical stability and allows a single training configuration to generalize across datasets with widely different sales scales. Following common practice in retail forecasting, training windows containing more than 50% zero-valued targets are excluded to reduce the impact of highly sparse demand patterns. The graph encoder consists of a single-layer heterogeneous GraphSAGE backbone with mean aggregation, hidden dimension d = 64 , and LayerNorm applied after message passing. For each forecast entity, temporal neighborhood sampling retrieves up to K = 256 historical sales nodes from the one-hop neighborhood. The forecasting head contains 22 basis functions: 4 polynomial trend bases, 10 sinusoidal seasonal bases corresponding to retail-relevant periods, and 8 learnable generic bases. Each basis is associated with an independent learnable attention query. Models are trained end-to-end using the Huber loss with δ = 1 .0 on log-transformed targets. Optimization is performed using Adam with gradient clipping at ∥g∥2 ≤ 1.0 and early stopping based on validation loss with a patience of 10 epochs. The batch size is fixed at 128 for both datasets, while the learning rate is set to 10 −3 for M5 and 10 −4 for Favorita. All experiments are conducted on a single NVIDIA V100 GPU (16 GB). The heterogeneous graph is stored in CPU memory and sampled on-the-fly, with only the sampled mini-batch subgraphs transferred to the GPU during training. 
+
+4.5 Forecasting Performance 
+
+Table 1 reports the forecasting performance of GNBAN and the matched Base Graph baseline on the M5 and Favorita benchmarks. The Base Graph model uses the same relational graph construction, node features, neighborhood sampling strategy, heterogeneous GraphSAGE backbone, and training procedure as GNBAN; the only difference is that the basis-attention forecasting head is replaced with a standard multi-layer perceptron that directly predicts the forecast horizon. GNBAN improves volume-weighted WRMSSE consistently across both datasets. On Favorita, GNBAN reduces 
+
+WRMSSE vol from 0.6741 to 0.6474 ( −4.0% ) and WRMSSE uw from 0.7026 to 0.6695 ( −4.7% ). On M5, GNBAN improves WRMSSE vol from 0.8689 to 0.8372 ( −3.6% ); the unweighted metric shows no improvement (0.9053 vs. 0.9152), as the basis-attention head redistributes model capacity toward high-volume items that dominate the volume-weighted objective. These improvements are particularly noteworthy because they arise solely from the forecasting head. 7A PREPRINT - J UNE 29, 2026 Table 1: Bottom-level forecasting performance on the M5 and Favorita benchmarks. WRMSSE vol denotes the volume-weighted Weighted Root Mean Squared Scaled Error, while WRMSSE uw denotes the unweighted mean RMSSE across all item-store series. Both models share identical graph construction, neighborhood sampling, node features, GNN backbone, and training procedure; only the forecasting head differs. Lower values indicate better performance; best results per dataset in bold. †GNBAN vol-WRMSSE improves on M5; UW-WRMSSE does not. Dataset Model WRMSSE vol WRMSSE uw 
+
+Favorita Base graph 0.6741 0.7026 (16-day, 50K) GNBAN (ours) 0.6474 0.6695 
+
+M5 Base graph 0.8689 0.9053 
+
+(28-day, 30,490) GNBAN (ours) 0.8372 0.9152 †
+
+Both models share the same graph representation, message-passing architecture, optimization procedure, and input features. Consequently, the performance gains can be attributed directly to the proposed basis-attention decomposition mechanism rather than increased model capacity or additional information. The results suggest that decomposing forecasts into trend, seasonal, and generic components enables more effective utilization of the historical information encoded by the graph backbone. Rather than predicting the entire forecast horizon through a single latent representation, GNBAN allows different basis functions to retrieve specialized information from the historical neighborhood through independent attention queries, leading to improved long-horizon forecasting performance. 
+
+4.6 Interpretability Analysis 
+
+A key advantage of GNBAN is that interpretability is built directly into the forecasting architecture. Rather than producing a forecast through a black-box latent representation, the model explicitly decomposes each prediction into trend, seasonal, and generic components. These components are generated during the forward pass and therefore provide an intrinsic explanation of the forecast without requiring post-hoc interpretation methods such as SHAP or LIME. Figure 2 presents forecasting results for three representative item-store pairs from the Favorita dataset. The top row compares the actual demand trajectory with the forecast generated by GNBAN over the 16-day prediction horizon. The model accurately captures both the overall demand level and the temporal evolution of each series despite substantial differences in sales magnitude and variability across items. The bottom row shows the corresponding forecast decomposition obtained directly from the basis-attention head: 
+
+Tv = θ(t) 
+
+> v
+
+B(t), Sv = θ(s) 
+
+> v
+
+B(s), Gv = θ(g) 
+
+> v
+
+B(g). (17) where Tv , Sv , and Gv denote the trend, seasonal, and generic forecast components, respectively. Several observations emerge. First, the trend component captures the long-term demand trajectory and explains the majority of the forecast magnitude. Second, the seasonal component clearly isolates recurring weekly demand patterns, with both amplitude and phase varying across items. Finally, the generic component captures localized residual effects that cannot be explained by smooth trend or periodic seasonality, such as promotions, short-lived demand spikes, or inventory-related fluctuations. To quantify the relative importance of these components, Figure 3 reports their average contribution magnitudes. Across all three examples, the trend component contributes approximately 63–64% of the total forecast magnitude, the seasonal component contributes 20–21%, and the generic component contributes roughly 16%. The consistency of these proportions across different products suggests that the model learns a stable and transferable decomposition of retail demand rather than relying on item-specific memorization. From an operational perspective, the decomposition provides actionable insights in addition to accurate forecasts. Trend components can support inventory planning and replenishment decisions, seasonal components reveal recurring demand cycles relevant for staffing and logistics, and generic components highlight unusual demand behavior that may warrant further investigation. Consequently, GNBAN offers both improved forecasting performance and a transparent representation of the underlying factors driving each prediction. 
+
+4.7 Ablation Studies 
+
+To isolate the contribution of the per-basis attention mechanism, we compare GNBAN against a simplified variant that uses a single attention query per forecast block (trend, seasonal, generic) rather than one per basis function. All other components remain identical. Table 2 summarizes the results. 8A PREPRINT - J UNE 29, 2026 3.8 
+
+> 4.0
+> 4.2
+> 4.4
+> log(1 + sales)
+> item_557256_store_3
+> Actual
+> Predicted
+> 3.8
+> 4.0
+> 4.2
+> 4.4
+> 4.6
+> item_1473394_store_3
+> 4.2
+> 4.4
+> 4.6
+> 4.8
+> item_1473474_store_2
+> 07-31
+> 08-02
+> 08-04
+> 08-06
+> 08-08
+> 08-10
+> 08-12
+> 08-14
+> Date
+> −2
+> 0
+> 2
+> 4
+> Component value  Trend
+> Seasonal
+> Generic
+> 07-31
+> 08-02
+> 08-04
+> 08-06
+> 08-08
+> 08-10
+> 08-12
+> 08-14
+> Date
+> −2
+> 0
+> 2
+> 4
+> 07-31
+> 08-02
+> 08-04
+> 08-06
+> 08-08
+> 08-10
+> 08-12
+> 08-14
+> Date
+> −2
+> 0
+> 2
+> 4
+> 6
+
+Figure 2: Forecast decomposition for three representative Favorita item-store pairs. Top: Actual demand (black) and GNBAN forecast (orange) in log1p space over the 16-day forecasting horizon. The close agreement between the two curves illustrates the forecasting accuracy of the model on these examples. Bottom: Decomposition of the forecast into trend, seasonal, and generic components generated by the basis-attention head. The trend component captures long-term demand evolution, the seasonal component captures recurring weekly patterns, and the generic component models residual effects not explained by trend or seasonality. The decomposition is produced directly by the model and requires no post-hoc explanation method. item_557256_store_3 
+
+> item_1473394_store_3
+> item_1473474_store_2
+
+0
+
+1
+
+2
+
+3
+
+4
+
+5
+
+> Mean absolute contribution
+> (avg per forecast day)
+> Trend
+> Seasonal
+> Generic
+> item_557256_store_3
+> item_1473394_store_3
+> item_1473474_store_2
+
+0
+
+20 
+
+40 
+
+60 
+
+80 
+
+100 
+
+> Share of total contribution (%)
+> 64%
+> 20%
+> 16%
+> 63%
+> 21%
+> 16%
+> 63%
+> 21%
+> 16%
+
+Figure 3: Per-item component contribution magnitudes. Left: Mean absolute contribution per forecast day (log1p units). Right: Percentage share of total contribution. The trend block contributes 63–64% across all three items; seasonal 20–21%; generic 16%. The near-identical proportions across distinct items indicate the model learned a stable, transferable demand structure rather than item-specific noise. The single-query variant performs substantially worse than the full GNBAN architecture and is even worse than the MLP baseline on both metrics, with WRMSSE uw = 1 .2411 > 1.0 indicating failure on intermittent-demand items. These results demonstrate that the performance gains are not due to the use of attention alone, but specifically to the ability of individual basis functions to retrieve specialized historical context through independent queries. When all bases within a block share the same query, the retrieved context becomes a single averaged representation, reducing the model’s capacity to disentangle long-term trends, recurring seasonal patterns, and residual demand fluctuations independently. 9A PREPRINT - J UNE 29, 2026 Table 2: Ablation on M5: effect of query granularity. Variant WRMSSE vol WRMSSE uw 
+
+Base graph (MLP head) 0.8689 0.9053 
+
+Single query per block (3Q) ∗ 0.9173 1.2411 
+
+GNBAN (per-basis, 22Q) 0.8372 0.9152 
+
+## 5 Conclusion 
+
+This paper introduces GNBAN (Graph Neural Basis Attention Network) , a forecasting architecture for large-scale retail demand forecasting that combines heterogeneous graph representation learning with interpretable basis-based forecast decomposition. GNBAN represents retail data as a heterogeneous graph and generates forecasts through a basis-attention head that explicitly decomposes predictions into trend, seasonal, and generic components. Experiments on the M5 Walmart and Favorita retail forecasting benchmarks demonstrate that GNBAN consistently improves forecasting accuracy over a matched graph-based baseline while providing intrinsic interpretability. The proposed per-basis attention mechanism enables different forecast components to retrieve specialized information from historical observations, leading to improved long-horizon forecasting performance. Furthermore, the resulting decomposition provides a transparent view of the factors contributing to each prediction, eliminating the need for post-hoc explanation methods. Overall, our results show that accurate forecasting and interpretability need not be competing objectives. By combining graph-based representation learning with basis decomposition, GNBAN provides a unified framework capable of modeling complex retail demand dynamics while producing forecasts that remain understandable to practitioners. Future work will explore larger-scale evaluations against strong forecasting baselines, extensions to additional long-horizon forecasting domains, and transfer-learning settings where models are pre-trained on one retail catalog and adapted to another. 
+
+## References 
+
+[1] Spyros Makridakis, Evangelos Spiliotis, and Vassilios Assimakopoulos. M5 accuracy competition: Results, findings, and conclusions. International Journal of Forecasting , 38(4):1346–1364, 2022. [2] Corporación Favorita and Kaggle. Corporación favorita grocery sales forecasting. Kaggle competition, 2018. [3] Rob J. Hyndman and George Athanasopoulos. Forecasting: Principles and Practice . OTexts, 3rd edition, 2021. [4] David Salinas, Valentin Flunkert, Jan Gasthaus, and Tim Januschowski. DeepAR: Probabilistic forecasting with autoregressive recurrent networks. International Journal of Forecasting , 36(3):1181–1191, 2020. [5] Bryan Lim, Sercan Ö. Arık, Nicolas Loeff, and Tomas Pfister. Temporal fusion transformers for interpretable multi-horizon time series forecasting. International Journal of Forecasting , 37(4):1748–1764, 2021. [6] Matthias Fey, Weihua Hu, Kexin Huang, Jan Eric Lenssen, Rishabh Ranjan, Joshua Robinson, Rex Ying, Jiaxuan You, and Jure Leskovec. Relational deep learning: Graph representation learning on relational tables. arXiv preprint arXiv:2312.04615 , 2023. [7] Joshua Robinson, Rishabh Ranjan, Weihua Hu, Kexin Huang, Jiaqi Han, Alejandro Dobles, Matthias Fey, Jan Eric Lenssen, Yiwen Yuan, Zecheng Zhang, Xinwei He, and Jure Leskovec. RelBench: A benchmark for deep learning on relational databases. In Advances in Neural Information Processing Systems (NeurIPS) Datasets and Benchmarks Track , 2024. [8] Boris N. Oreshkin, Dmitri Carpov, Nicolas Chapados, and Yoshua Bengio. N-BEATS: Neural basis expansion analysis for interpretable time series forecasting. In International Conference on Learning Representations (ICLR) ,2020. [9] Cristian Challu, Kin G. Olivares, Boris N. Oreshkin, Federico Garza, Max Mergenthaler, and Artur Dubrawski. N-HiTS: Neural hierarchical interpolation for time series forecasting. In Proceedings of the AAAI Conference on Artificial Intelligence , 2023. [10] Haixu Wu, Jiehui Xu, Jianmin Wang, and Mingsheng Long. Autoformer: Decomposition transformers with auto-correlation for long-term series forecasting. In Advances in Neural Information Processing Systems (NeurIPS) ,2021. [11] Spyros Makridakis, Evangelos Spiliotis, and Vassilios Assimakopoulos. The M4 competition: 100,000 time series and 61 forecasting methods. International Journal of Forecasting , 36(1):54–74, 2020. 10 A PREPRINT - J UNE 29, 2026 [12] Yuyang Wang, Alex Smola, Danielle Maddix, Jan Gasthaus, Dean Foster, and Tim Januschowski. Deep factors for forecasting. In International Conference on Machine Learning (ICML) , 2019. [13] Haoyi Zhou, Shanghang Zhang, Jieqi Peng, Shuai Zhang, Jianxin Li, Hui Xiong, and Wancai Zhang. Informer: Beyond efficient transformer for long sequence time-series forecasting. In Proceedings of the AAAI Conference on Artificial Intelligence , 2021. [14] Yuqi Nie, Nam H. Nguyen, Phanwadee Sinthong, and Jayant Kalagnanam. A time series is worth 64 words: Long-term forecasting with transformers. In International Conference on Learning Representations (ICLR) , 2023. [15] Haixu Wu, Tengge Hu, Yong Liu, Hang Zhou, Jianmin Wang, and Mingsheng Long. TimesNet: Temporal 2D-variation modeling for general time series analysis. In International Conference on Learning Representations (ICLR) , 2022. [16] Bing Yu, Haoteng Yin, and Zhanxing Zhu. Spatio-temporal graph convolutional networks: A deep learning framework for traffic forecasting. In International Joint Conference on Artificial Intelligence (IJCAI) , 2018. [17] Zonghan Wu, Shirui Pan, Guodong Long, Jing Jiang, and Chengqi Zhang. Graph wavenet for deep spatial-temporal graph modeling. In International Joint Conference on Artificial Intelligence (IJCAI) , 2019. [18] Zonghan Wu, Shirui Pan, Guodong Long, Jing Jiang, Xiaojun Chang, and Chengqi Zhang. Connecting the dots: Multivariate time series forecasting with graph neural networks. In Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (KDD) , 2020. [19] Lei Bai, Lina Yao, Can Li, Xianzhi Wang, and Can Wang. Adaptive graph convolutional recurrent network for traffic forecasting. In Advances in Neural Information Processing Systems (NeurIPS) , 2020. [20] Walmart, University of Nicosia, and Kaggle. M5 Forecasting – Accuracy: Estimate the unit sales of walmart retail goods. Kaggle competition, 2020. 
+
+## A Full Hyperparameters 
+
+Table 3 lists all architecture, training, sampling, and preprocessing hyperparameters used in the reported experiments. Unless otherwise noted, the same configuration is used for both M5 and Favorita. 11 A PREPRINT - J UNE 29, 2026 Table 3: Full hyperparameter specification for all reported runs. 
+
+Component Value 
+
+Graph construction 
+
+Node types itemstore (forecast entity), sales 
+
+Edge type PK/FK relation: sales → itemstore 
+
+Reverse edges Added automatically Cross-store same-SKU edges Not included (reduced WRMSSE in ablations) Cluster nodes Not included (reduced WRMSSE in ablations) 
+
+Feature encoding 
+
+Categorical itemstore attributes Per-column embedding tables Numerical sales attributes Linear encoder with Z-score normalization Multi-categorical event features MultiCategoricalEmbedding Temporal encoding PyG PositionalEncoding on relative day index 
+
+Neighborhood sampling 
+
+Sampler PyG NeighborLoader 
+
+Number of hops 1Fanout K = 256 
+
+Temporal strategy Most-recent-first ( last )Future leakage Blocked via time < seed_time constraint 
+
+GNN backbone 
+
+Operator Heterogeneous GraphSAGE Layers 1Aggregation Mean Normalization LayerNorm Activation ReLU Hidden dimension d = 64 
+
+Basis-attention forecasting head 
+
+Trend bases 4 polynomial bases (t/H )k , k ∈ { 0, 1, 2, 3}
+
+Seasonal bases 10 sine/cosine bases with periods {7, 7/2, 7/3, 14 , 28 } days Generic bases 8 learnable basis vectors Total basis queries 22 (one query per basis function) Item conditioning Per-basis linear shift derived from seed embedding zv
+
+Attention scaling 1/√d
+
+Empty-neighborhood handling nan_to_num(0) 
+
+Output activation Softplus 
+
+Target normalization and loss 
+
+Target transform log(1 + x)
+
+Inverse transform exp( x) − 1
+
+WRMSSE denominator Raw pretest sales series in original scale Loss Huber loss ( δ = 1 .0)NaN protection Non-finite batches skipped 
+
+Training-table generation 
+
+Forecast origins Weekly Mondays Forecast horizon M5: 28 days; Favorita: 16 days Sparse-window filter Remove windows with > 50% zero targets 
+
+Optimization 
+
+Optimizer Adam ( β1 = 0 .9, β 2 = 0 .999 )Learning rate 10 −3 (M5), 10 −4 (Favorita) Gradient clipping ∥g∥2 ≤ 1.0
+
+Batch size 128 Maximum epochs 50 Early stopping Patience = 10 (validation loss) Random seed 42 
+
+Hardware 
+
+GPU 1× NVIDIA V100-SXM2 (16 GB) Graph storage CPU; sampled mini-batches transferred to GPU 
+
+12

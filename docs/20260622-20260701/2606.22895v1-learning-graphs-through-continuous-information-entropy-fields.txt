@@ -1,0 +1,948 @@
+Title: Learning Graphs through Continuous Information Entropy Fields
+
+URL Source: https://arxiv.org/pdf/2606.22895v1
+
+Published Time: Tue, 23 Jun 2026 03:15:09 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+# Learning Graphs through Continuous Information Entropy Fields 
+
+Hui Cong 1 Bo Sun 1 Yaxian Wang 1 Ziheng Jiao 2 Yisheng An 1
+
+# Abstract 
+
+Graph theory is inherently descriptive, captur-ing what relationships exist but not why they arise, because it treats edges as primitive con-structs. This paper proposes a new explanatory framework for graph learning, where relationships emerge from latent continuous information en-tropy fields, and a graph becomes a discrete instan-tiation of an underlying field. To formalize this field, we introduce the Field-informed Graph Net-work (FGN). It learns a scalar field from node fea-tures and leverages it to modulate message pass-ing. The information-theoretic objective balances structural fidelity with field smoothness, forming a self-reinforcing loop. In this loop, the field modulates information diffusion through field-modulated weighting, and the updated node repre-sentations iteratively refine the field. As a result, FGN learns by simulating its own co-evolution. Extensive experiments on node classification and graph classification benchmarks demonstrate su-perior performance, robustness to perturbations, and structurally coherent field representations. 
+
+# 1. Introduction 
+
+Graphs serve as a foundational language for modeling re-lational systems, from social interactions to biological net-works. The central aim of Graph Representation Learning (GRL) is to map these high-dimensional, non-Euclidean structures into low-dimensional, informative embeddings (Kipf & Welling, 2017). While Graph Neural Networks (GNNs) have achieved significant success (Liang et al., 2025; Zhang et al., 2024), the prevailing approach remains largely descriptive. It excels at answering “what is the structure” but offers limited insight into the probabilistic mechanisms of “why it forms”, leaving the explanation of connection origins an open question (Lin et al., 2021). The explanatory gap stems from treating relationships as 
+
+> 1
+
+School of Information Engineering, Chang’an University, Shaanxi, Xi’an, China 2AUTHORERR: Missing \icmlaffiliation. 
+
+. Correspondence to: Yisheng An <aysm@chd.edu.cn >.
+
+Preprint. June 23, 2026. 
+
+(a) Karate Club network. (b) Network with field. 
+
+Figure 1. Discrete projection diagram of the information field (b) inferred from the Karate Club network (a). Node colors denote the relational field of each node, with warmer colors indicating the higher and cooler colors the lower . The field exhibits smooth variation within communities and sharp transitions at boundaries, demonstrating how graph structure can emerge from an underlying continuous field. 
+
+primitive elements. In reality, relational ties emerge from latent continuous fields, such as social influence potentials, biomolecular gradients, or information landscapes (Shao & Li, 2024; Sun et al., 2022). Consequently, a graph can be understood as a discrete sampling of an underlying field, an observable imprint left by continuous dynamical processes (Yan et al., 2025). Despite remarkable advances in graph representation learn-ing, most existing methods remain constrained by discrete analysis (Liang et al., 2025; Bianchi et al., 2022). Descrip-tive methods (Mustafa & Burkholz, 2024; He et al., 2024; Scholkemper et al., 2025) treat edges as given, capturing what connections exist but not why. Probabilistic models, including latent variable models and graph variational au-toencoders, often assume edges arise from continuous latent spaces. However, they typically treat the latent variables as static summaries and do not use them to actively modu-late message passing during task learning. This perspective is illustrated in Fig. 1, which visualizes an entropic field inferred from the Karate Club network. The field exhibits smoothness within communities and sharp boundaries be-tween them, illustrating how a continuous latent field can relate to discrete graph structure (Sandryhaila & Moura, 2013). In real-world relational systems, information exchange evolves over time, which implies that the underlying contin-1
+
+> arXiv:2606.22895v1 [cs.LG] 22 Jun 2026 Submission and Formatting Instructions for ICML 2026
+
+uous field is not static either. As a result, the correspondence between the graph and the field must also possess dynamic characteristics. A key challenge then is to model the co-evolution between the discrete graph and its continuously adapting field. The field influences the likelihood of con-nections, and the observed structure in turn reshapes the field (Zecevic et al., 2021). If graphs are emergent from continuous fields, a model should capture this bidirectional relationship. However, prevailing GNN architectures are not designed for this co-evolutionary modeling. Their reliance on local message passing and unidirectional field coupling creates an informational asymmetry. Graph topology dominates the learning process, while any latent field is relegated to a passive prior (Mustafa & Burkholz, 2024; Nakayama & Onizuka, 2025). To bridge this gap, we propose a new framework for graph learning. Specifically, we introduce the Field-informed Graph Network (FGN). Its core is an information-theoretic objective that balances fidelity to the observed graph topol-ogy with smoothness of the latent field, leading the system toward a stable equilibrium. In FGN, the latent field is constructed as an explanatory substrate rather than merely serving as attention coefficients. This objective induces a self-reinforcing dynamical process, consisting of entropy-aware message passing modulated by field coherence and an adaptive field evolution step where graph signals refine the field. The closed-loop architecture actively co-evolves the field as an integral component. Our main contributions are as follows: • To bridge the explanatory gap in graph learning, we introduce a field-theoretic framework. This framework views graphs not as collections of primitive edges, but as discrete samples of an underlying continuous field, thereby establishing the association between the latent information entropy field and the discrete relations. • To operationalize the co-evolution of graphs and fields, we propose FGN, centered on an information-theoretic objective that balances structural fidelity with field regularity. Its realization integrates entropy-aware mes-sage passing and adaptive field evolution into a unified, closed-loop dynamical system. • Extensive experiments on node classification and graph classification benchmarks show that FGN achieves strong performance, improved robustness to pertur-bations, and learns structurally meaningful field repre-sentations. 
+
+# 2. Related Works 
+
+2.1. Descriptive and Probabilistic Models 
+
+Research in graph representation learning has largely fol-lowed two directions: descriptive modeling and probabilistic modeling. The descriptive direction, dominated by GNNs, treats graph topology as a fixed structure for predictive tasks. By propagating information along edges through message passing (Kipf & Welling, 2017; Velikovi et al., 2018), these models learn representations that correlate node features with target variables (Li, 2024). While successful for node classification and link prediction, this approach describes what connections exist but does not explain why they formed (Kelesis et al., 2025; Scholkemper et al., 2025). The graph structure remains an input, not a phenomenon to be ex-plained. The probabilistic direction models the distribution from which graphs are sampled. Approaches include autore-gressive edge models, latent variable models such as graph variational autoencoders, and diffusion-based processes (Vi-gnac et al., 2023). Many of these methods assume edges arise from continuous latent spaces, which aligns with our perspective. However, they typically treat the latent vari-ables as static summaries inferred via maximum likelihood. They do not use these latent variables to actively modulate message passing during task learning. This distinction moti-vates our approach, where the learned field directly guides information flow and co-evolves with the graph. Classic proximity-based embedding methods like node2vec (Grover & Leskovec, 2016) and DeepWalk (Perozzi et al., 2014) also learn a continuous latent space, but they share the same limitation of static representations without task-aware mod-ulation. 
+
+2.2. Field-Based and Physics-Inspired Methods 
+
+Beyond probabilistic models, another line of research ex-plicitly incorporates field or physics concepts. The idea that discrete relations stem from continuous dynamics has moti-vated research incorporating field or physics concepts (Xie et al., 2022). One line uses continuous representations to describe graph properties (Fuchsgruber et al., 2024). Exam-ples include hyperbolic embeddings and neural differential equations over nodes (Yang et al., 2024; Li et al., 2024). In these methods, continuity is a property of the representation space, while the graph topology remains static. Another line introduces physical or probabilistic fields as inductive biases. Classical work models networks with attractive and repulsive forces. Modern approaches include energy-based models that define connection likelihoods via latent kernels, and formulations that cast message passing as a diffusion process on the graph (Zhuo et al., 2025; Zhou et al., 2025). A common limitation of these methods is that the field is often prescribed rather than learned from task objectives. It serves as a fixed prior, for example a Gaussian kernel, or a 2Submission and Formatting Instructions for ICML 2026 
+
+simplified mechanistic analogy such as spring forces. The field remains subordinate to the graph, a passive tool rather than a latent variable that co-evolves with the structure. In contrast, our framework learns an explicit, globally smooth entropy field that directly modulates message pass-ing and is refined by the graph representations under an information-theoretic objective. This is fundamentally dif-ferent from GAT, whose attention weights are purely lo-cal and derived from node features without any underlying field structure, and from diffusion-based models such as GRAND, which rely on feature similarities and do not main-tain a learnable, globally coherent field. By jointly evolving the continuous explanatory field and the discrete graph struc-ture in a closed feedback loop, our approach goes beyond existing field-inspired or physics-inspired models, where the field typically remains a static prior or a passive by-product. 
+
+# 3. Methodology 
+
+3.1. A Continuous Field Formalism for Graph Modeling The Field Formalism. Underlying our framework is a core hypothesis. A graph is not a fundamental construct, but an observable imprint of a latent continuous entropy field. Let G = ( V, E) be a graph where each node i ∈ V has an associated feature vector xi ∈ X ⊆ RF . We view X as a feature space that may possess intrinsic manifold structure. Let M be a latent manifold representing the space of re-lational potentials, and let ϕ∗ : M → Rd be an unknown continuous entropy field defined over this manifold. Each node i is associated with a latent position zi ∈ M , though these positions are generally unobserved. We summarize the other notations in Appendix A. The fundamental assumption is that edge formation proba-bilities depend solely on distances in this field space: 
+
+P (Aij = 1 | ϕ∗) = σ
+
+
+
+− dM(ϕ∗(zi), ϕ ∗(zj )) 2
+
+τ
+
+
+
+, (1) where dM is a distance metric on the manifold M, σ(·)
+
+is the logistic sigmoid function σ(z) = 1 /(1 + e−z ), and 
+
+τ > 0 is a temperature parameter controlling the sharpness of the probability distribution. This formulation captures the intuitive notion that nodes with coherent field values are more likely to be connected. The observed graph G is then a discrete sample from this Bernoulli distribution over all node pairs: 
+
+P (G | ϕ∗) = Y
+
+> (i,j )∈E
+
+Pij 
+
+Y 
+
+> (i,j )/∈E
+
+(1 − Pij ), (2) with Pij ≡ P (Aij = 1 | ϕ∗). In this model, ϕ∗ is the explanatory substrate. Edges emerge from the continuous field rather than being primitive. This formulation establishes ϕ∗ as the explanatory substrate of the graph topology. Edges are not primitives but emerge from the continuous field of relational potential. The temper-ature τ has a natural interpretation: as τ → 0, the sigmoid approaches a step function, making connections determin-istic; as τ → ∞ , edge formation becomes random and independent of the field. 
+
+Theorem 3.1 (Approximation Consistency) . Let ϕ∗ : M → 
+
+Rd be L-Lipschitz continuous. Suppose there exists a map-ping ι : X → M that relates the feature space to the latent manifold with bounded distortion, i.e., there is a constant 
+
+κ ≥ 1 such that 
+
+1
+
+κ ∥x−x′∥ ≤ dM(ι(x), ι (x′)) ≤ κ∥x−x′∥, ∀x, x ′ ∈ X .
+
+(3) 
+
+Let ϕθ : X → Rd be a learned field with uniform approx-imation error ϵ = sup x∈X ∥ϕθ (x) − ϕ∗(ι(x)) ∥. Denote by D = max x,x ′∈X ∥x − x′∥ the diameter of the feature space. If ϵ ≤ LκD , then the total variation distance be-tween the graph distributions induced by ϕθ and by the true composition ϕ∗ ◦ ι satisfies 
+
+DTV 
+
+ P (G | ϕθ ), P (G | ϕ∗ ◦ ι) ≤ 3LκD 
+
+2τ ϵ. (4) 
+
+In particular, the bound can be written as CLκ τ ϵ where C
+
+depends polynomially on the feature space diameter D and the number of nodes N .Remark 3.2 . The bounded distortion condition is signifi-cantly weaker than an isometric embedding; it only requires that distances in feature space and on the latent manifold are comparable up to a constant factor κ. In practice, the mapping ι is not constructed explicitly. Instead, the neural network ϕθ learns the composition ϕ∗ ◦ ι end-to-end, implic-itly absorbing the distortion κ into the effective smoothness of the learned field. Even when the condition holds only ap-proximately, the same functional form of the bound remains valid with κ replaced by an effective distortion constant, and the total variation distance degrades gracefully as the deviation from bi-Lipschitz increases. 
+
+Variational Inference of Latent Fields. While the gen-eral formalism involves a d-dimensional field on a latent manifold, we observe that for many relational inference tasks, the essential explanatory factor can be captured by a scalar field representing the relational potential or energy of a node. FGN naturally accommodates this by setting 
+
+d = 1 , which simplifies implementation while preserving the core intuition. This reduction not only simplifies im-plementation and improves interpretability, but also aligns with the intuition that a single energy or potential value can succinctly capture the propensity of a node to form relation-ships. This scalar choice is sufficient for many real-world graphs, particularly those exhibiting homophily. Higher-dimensional fields may benefit more complex scenarios 3Submission and Formatting Instructions for ICML 2026 
+
+such as heterophilic or multi-relational graphs, which we leave for future work. The subsequent derivations hold for general d, but FGN focuses on the scalar case for clarity and efficiency. The generative model in Eq. (1) presents a fundamental inference challenge: the true entropy field ϕ∗ : M → Rd
+
+and the latent manifold positions {zi} are unobservable. We only have access to the discrete graph G and node features 
+
+X = {xi}ni=1 ⊂ X , where each xi ∈ RF is a feature vector. As established in Theorem 3.1, if there exists a mapping 
+
+ι : X → M associating features to manifold positions, we can learn an approximation to the composition ϕ∗ ◦ ι.The mapping ι postulated in the theorem is not known a priori; rather, we learn a parameterized field ϕθ : X → Rd
+
+that directly approximates ϕ∗ ◦ ι, with the neural network architecture implicitly encoding both ι and ϕ∗.Following the approximation framework, we implement ϕθ
+
+as a neural network (for simplicity, we denote it as gθ ): 
+
+ϕθ (xi) = gθ (xi), ∀i ∈ V , (5) where ϕθ (xi) directly approximates ϕ∗(ι(xi)) ∈ Rd. In the scalar case ( d = 1 ), gθ reduces to the field network MLP θE
+
+defined later in Eq. (13) . The network gθ implicitly learns both the manifold mapping ι through its early layers and the field structure ϕ∗.The theoretical generative model in Eq. (1) defines prob-abilities via manifold geometry. For our practical imple-mentation with learned field ϕθ : X → Rd, we adopt the Euclidean surrogate: 
+
+Pij (ϕθ ) = σ
+
+
+
+− ∥ϕθ (xi) − ϕθ (xj )∥2
+
+τ
+
+
+
+, (6) which approximates Pij (ϕ∗ ◦ ι) =
+
+σ(−dM(ϕ∗(ι(xi)) , ϕ ∗(ι(xj ))) 2/τ ). This Euclidean approximation is justified when ϕ∗(M) is approximately isometric to a subset of Rd, or when ι maps to charts where 
+
+dM is well-approximated by Euclidean distance. Formally, we aim to infer the latent composition ϕ∗ ◦ ι.The marginal likelihood of the observed graph can be lower bounded via the Evidence Lower Bound (ELBO): 
+
+log P (G | X) = log 
+
+Z
+
+P (G | ϕ ◦ ι, X )P (ϕ)P (ι)dϕdι 
+
+≥ E(ϕ,ι )∼Q[log P (G | ϕ ◦ ι, X )] 
+
+− KL (Q(ϕ, ι )∥P (ϕ, ι )) , (7) where Q(ϕ, ι ) is a variational distribution over fields and mappings. In practice, we adopt a point estimate approxima-tion: Q(ϕ, ι ) = δ(ϕ − ϕθ )δ(ι − ιθ ), where ιθ is implicitly defined by ϕθ .The regularizer R(ϕθ ) in the following objective can be viewed as imposing a specific prior P (ϕ, ι ) that favors field smoothness and coherence over the graph structure. This provides a direct link between the variational framework and our practical loss. 
+
+From ELBO to a Practical Objective. To obtain a tractable objective, we follow common variational prac-tice: the ELBO is approximated with point estimates, and the KL divergence is replaced by an explicit regularizer 
+
+R(ϕθ ) that promotes field coherence, discriminability, and mutual information with the representations. This yields the regularized loss: 
+
+L(θ) = − 1
+
+|E| 
+
+X
+
+> (i,j )∈E
+
+log Pij (ϕθ ) + λR(ϕθ ), (8) where the exact form of R(ϕθ ) is instantiated in Section 3.2 and a detailed derivation is provided in Appendix B.5. 
+
+Dynamical Co-Evolution Implementation. The varia-tional framework naturally induces a dynamical system that operationalizes the co-evolution between graph representa-tions and the learned field ϕθ . This section describes the iterative algorithm that alternates between field-guided mes-sage passing and structure-driven field refinement, realizing the co-evolutionary process motivated above. At iteration t, given the current field estimate ϕ(t) 
+
+> θ
+
+: X → 
+
+Rd, information propagation through the graph is modulated by field coherence. For a node i with feature xi ∈ X , the weight from neighbor j ∈ N (i) is computed as: 
+
+w(t) 
+
+> ij
+
+= exp 
+
+
+
+−ξ∥ϕ(t) 
+
+> θ
+
+(xi) − ϕ(t) 
+
+> θ
+
+(xj )∥2
+
+, (9) where ξ > 0 is a learnable inverse temperature parameter. The node representation update follows: 
+
+h(t+1)  
+
+> i
+
+= f
+
+h(t) 
+
+> i
+
+, X 
+
+> j∈N (i)
+
+w(t) 
+
+> ij
+
+· ψ(h(t) 
+
+> j
+
+)
+
+ , (10) with learnable functions f and ψ. This implements an entropy-aware message passing where information flow is attenuated between nodes with dissimilar field values, reinforcing the principle that edges correspond to field simi-larity. In our FGN implementation, we adopt the standard message-passing update from GraphSAGE (Hamilton et al., 2017): 
+
+ψ is a linear layer, and f performs concatenation followed by a ReLU activation. Specifically, h(t+1)  
+
+> i
+
+= ReLU  W ·
+
+[h(t) 
+
+> i
+
+∥ P  
+
+> j∈N (i)
+
+wij Wmsg h(t) 
+
+> j
+
+], where W and Wmsg are learnable matrices. 4Submission and Formatting Instructions for ICML 2026 
+
+After obtaining updated node representations H(t+1) =
+
+{h(t+1)  
+
+> i
+
+}ni=1 , the field parameters are refined to better ex-plain the observed graph structure. Using the field regu-larization loss Lfield defined in Eq. (8) and instantiated in Section 3.2, we perform a gradient step: 
+
+θ(t+1) = θ(t) − η∇θ Lfield (ϕ(t) 
+
+> θ
+
+, G), (11) where η is the learning rate. This update encourages ϕθ to become more coherent with the current graph representation, specifically promoting alignment between connected nodes as measured by cosine similarity. For brevity, denote the scalar field value at node i as Ei =
+
+ϕθ (xi) ∈ R.
+
+Proposition 3.3 (Noise suppression via approximate field coherence) . Under a relaxed community separation con-dition where at least a fraction 1 − η of intra-community edges satisfy |Eu − Ev | ≤ δ and a fraction 1 − η of inter-community edges satisfy |Ex − Ey | ≥ ∆ (with δ < ∆,
+
+η ∈ [0 , 1) ), the field-modulated weights in Eq. (9) expo-nentially favor intra-community propagation by a factor 
+
+eξ(∆ 2−δ2) − O(η).
+
+Theorem 3.4 (Propagation Advantage) . Under the con-ditions of Proposition 3.3, FGN achieves a strictly tighter misclassification upper bound than standard GCN: 
+
+PFGN (error) ≤ ρ(η) PGCN (error) with ρ(η) < 1 for small 
+
+η, and ρ(0) = e−2ξ(∆ 2−δ2) < 1. Full statements and proofs are in Appendix B.2. 
+
+Convergence intuition. The alternating updates consti-tute a block coordinate descent on J (H, θ ) = Ltask (H) + 
+
+λLfield (ϕθ , H), converging to a stationary point under mild contractivity and smoothness conditions (see Ap-pendix B.3). FGN’s field-modulated weights differ from standard atten-tion (e.g., GAT (Velikovi et al., 2018)) as a globally shared quantity with an independent training objective (see Appen-dices C and ablation in Sec. 4.4). 
+
+3.2. FGN: A Practical Instantiation 
+
+Building upon the theoretical foundations above, we present FGN, an architecture designed to efficiently approximate the co-evolutionary equilibrium between the graph and its latent field, as formalized by the variational objective. FGN instantiates the theoretical framework with two key practical choices: (1) modeling a scalar energy field, and (2) encapsulating the iterative co-evolution dynamics into a single forward pass that directly targets the equilibrium state. The core architecture computes node representations 
+
+H as: 
+
+H = MPNN (X, A ⊙ W ) , (12) where MPNN (·) denotes a message-passing neural net-work implementing the field-modulated propagation mech-anism from Eq. (10) , X ∈ RN ×F is the feature matrix, 
+
+A ∈ { 0, 1}N ×N the adjacency matrix, E ∈ RN the learned scalar energy field, and W = {wij } ∈ RN ×N is the field-modulated matrix as defined in Eq. (14). FGN implements the parameterized field ϕθ (Eq. (5) ) for the case d = 1 . We denote this scalar field as E to emphasize its interpretation as a node-wise energy. In the following, we learn E as a practical surrogate for the information entropy field, since relative differences in energy directly govern structural uncertainty: 
+
+E = σ(MLP θE (X)) ∈ (0 , 1) N , (13) where σ is the sigmoid function. This directly corresponds to setting ϕθ (xi) = Ei in the variational framework. Since only relative differences between field values matter for the induced similarity ordering, and the sigmoid is strictly monotonic, this normalization does not alter which node pairs are deemed more or less likely to connect; it merely provides numerical stability and a bounded range for the learned field. The scalar field captures the essential re-lational potential while offering parameter efficiency and interpretability. The message passing in FGN instantiates the entropy-aware mechanism from Eq. (9) . The weight wij , which modulates the influence of neighbor j on node i, is computed based on field coherence: 
+
+wij = exp  −ξ∥Ei − Ej ∥2 , (14) where ξ > 0 is a learnable inverse temperature parameter. This implements the field-guided propagation principle: in-formation flows more freely between nodes with coherent field values, reinforcing the intuition that edges correspond to regions of field alignment. 
+
+Field-Regularized Training Objective. Training FGN involves optimizing parameters to minimize a loss that re-flects the variational objective L (Sun et al., 2020; Wu et al., 2020). For node classification tasks, the reconstruction term 
+
+Lrecon is naturally replaced by a task loss Ltask (for example cross-entropy). The field regularization term Lfield is im-plemented through a combination of complementary losses that enforce the desired properties of the energy field E. In our implementation, we adopt the Jensen-Shannon mutual information estimator from (Belghazi et al., 2018). This directly instantiates the regularizer R(ϕθ ) from Eq. (8) ,promoting alignment between connected nodes: 
+
+Lcoh = 1
+
+|E| 
+
+X
+
+> (i,j )∈E
+
+(Ei − Ej )2. (15) 5Submission and Formatting Instructions for ICML 2026 
+
+We use squared difference for simplicity and stability, which aligns with the Euclidean approximation in Eq. (6) and effec-tively encourages connected nodes to have similar energies. To prevent the trivial solution where all nodes converge to the same energy value, we encourage the field to have sufficient variance: 
+
+Lsep = −Var (E) = − 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+(Ei − ¯E)2, (16) where ¯E is the mean field value. This loss helps maintain a discriminative energy landscape. To further strengthen the mutual dependence between the field E and the node representations H, we can introduce an information-theoretic regularizer that encourages high mutual information: 
+
+Lsym = bI(H; E), (17) where bI(·) denotes an estimate of mutual information. The full training objective for FGN is a weighted combina-tion of the above terms: 
+
+L = Ltask + αLcoh + βLsep + γLsym , (18) where α, β, γ ≥ 0 are hyperparameters controlling the strength of each regularization term. This objective can be seen as a practical realization of the variational principle 
+
+L = Lrecon + λLfield from Eq. (8) , where Lfield is decom-posed into coherent, separation, and mutual information components to effectively guide the co-evolution. 
+
+# 4. Experiments 
+
+4.1. Node Classification 
+
+To thoroughly evaluate the proposed method, we con-duct node classification experiments on nine benchmarks spanning homophilic graphs Cora, CiteSeer, PubMed, het-erophilic graphs Chameleon, Texas, Cornell, and large-scale graphs ogb-arxiv, Computers, Photo. We compare against a range of baselines including non-neural graph embed-ding methods DeepWalk, Node2Vec, Label Propagation, GCN, GraphSAGE, GAT, SGC, and recent graph learning architectures. The reported accuracies are taken from their respective original papers. Dataset statistics are provided in Appendix D. All baselines are compared under a fair protocol, with dataset statistics given in Table 5. For each baseline, we performed a grid search over its recommended hyperparameter ranges (e.g., learning rate, dropout, hid-den dimension). The final hyperparameters are reported in Table 6. The results in Table 1 demonstrate that FGN achieves strong performance across nine diverse benchmark datasets. FGN attains top-ranked accuracy on the majority of datasets, while maintaining competitive performance on the remain-ing benchmarks. This consistent superiority validates the ability to capture fundamental relational patterns. The ap-proach proves more expressive than methods treating edges as discrete primitives, with particular advantages on het-erophilic graphs, where field-modulated message passing captures structural relationships beyond mere label simi-larity. Notably, FGN exhibits balanced excellence across different graph families: it performs robustly on both ho-mophilic and heterophilic structures, scales effectively to large-scale graphs, and generalizes across domains from academic citations to e-commerce relations. To gain intuitive insight into the learned representations, we perform qualitative visualization using t-SNE on the Cora dataset. This technique is widely adopted in the graph representation learning community for illustrating embed-ding properties. Detailed t-SNE projections of node embed-dings from FGN and several baseline methods, including GCN, GAT, MOGCN, FTCP, and others, are provided in Appendix I. As shown in the appendix, FGN produces tight, well-separated clusters aligned with class labels, whereas baseline methods exhibit more inter-class mixing and less coherent clustering. This observation supports our theo-retical claim that the continuous entropy field regularizes the representation space toward geometric and semantic coherence, and that field-graph co-evolution promotes em-beddings where geometric proximity reflects semantic simi-larity. 
+
+4.2. Graph Classification 
+
+To evaluate the generalization of FGN to graph-level tasks, we conduct experiments on two standard graph classifica-tion benchmarks, MNIST and CIFAR10. Following the superpixel graph construction protocol of previous work, we convert each image into a graph where nodes represent superpixels and edges encode spatial adjacency. We com-pare FGN against several baselines including MLP, GCN, GAT, GraphSAGE, GatedGCN, and LoGoGNN. Table 2 reports the mean accuracy and standard deviation over five runs. FGN achieves the best performance on both datasets. On MNIST, it surpasses LoGoGNN by 0.1% and GCN by 7.5%. On CIFAR10, the gain over LoGoGNN is 2.0% and over GAT and GraphSAGE is about 4-5%. The larger improve-ment on CIFAR10 suggests that the continuous field for-mulation provides robustness on more challenging tasks. These results confirm that the framework generalizes to graph-level tasks requiring global structure understanding. 6Submission and Formatting Instructions for ICML 2026 
+
+Table 1. Node classification accuracy (%). 
+
+Homophilic Heterophilic Large-scale 
+
+Method Cora CiteSeer PubMed Chameleon Texas Cornell ogb-arxiv Computers Photo Label Propagation (Zhu et al., 2003) 68.0 ±0.4 45.3 ±0.5 63.0 ±0.4 40.0 ±0.3 50.0 ±1.0 50.0 ±1.0 61.0 ±0.2 65.0 ±0.3 68.0 ±0.3 
+
+DeepWalk (Perozzi et al., 2014) 67.2 ±0.4 43.2 ±0.6 65.3 ±0.3 37.5 ±0.4 87.6 ±0.5 89.2 ±0.5 65.0 ±0.2 71.0 ±0.4 70.5 ±0.3 
+
+Node2Vec (Grover & Leskovec, 2016) 67.2 ±0.2 43.2 ±0.3 65.3 ±0.2 41.4 ±0.3 94.8 ±0.4 90.5 ±0.4 70.1 ±0.1 70.0 ±0.3 72.0 ±0.3 
+
+GCN (Kipf & Welling, 2017) 81.5 ±0.4 70.4 ±0.6 79.0 ±0.3 59.9 ±1.2 72.2 ±1.5 76.0 ±1.2 71.7 ±0.2 81.6 ±0.6 90.4 ±0.4 
+
+GraphSAGE (Hamilton et al., 2017) 82.4 ±0.3 71.9 ±0.5 79.4 ±0.2 55.8 ±1.3 71.5 ±1.4 76.5 ±1.3 71.4 ±0.2 79.9 ±0.7 90.4 ±0.5 
+
+GAT (Velikovi et al., 2018) 83.2 ±0.5 72.6 ±0.4 79.0 ±0.3 60.8 ±1.3 70.4 ±1.5 74.9 ±1.5 71.9 ±0.1 78.0 ±0.8 85.7 ±0.7 
+
+SGC (Wu et al., 2019) 81.0 ±0.2 71.9 ±0.3 78.9 ±0.2 58.5 ±1.1 67.8 ±1.4 62.7 ±1.5 70.5 ±0.2 80.3 ±0.6 89.1 ±0.6 
+
+GRAND-GCN (Feng et al., 2020) 84.5 ±0.3 74.2 ±0.3 80.0 ±0.2 57.3 ±1.2 73.1 ±1.4 75.4 ±1.3 71.1 ±0.2 82.1 ±0.5 90.6 ±0.4 
+
+MOGCN (Wang et al., 2021) 82.4 ±0.4 72.4 ±0.4 79.2 ±0.3 67.7 ±1.0 75.5 ±1.2 78.5 ±1.1 71.8 ±0.1 83.1 ±0.5 91.5 ±0.3 
+
+MAGCN (Yao et al., 2022) 84.5 ±0.2 73.3 ±0.3 80.6 ±0.2 66.9 ±1.0 82.5 ±1.1 85.3 ±0.9 72.0 ±0.1 84.7 ±0.4 92.3 ±0.3 
+
+DGCN (Jin et al., 2022) 84.1 ±0.3 73.3 ±0.3 80.2 ±0.2 58.9 ±1.1 73.2 ±1.3 76.5 ±1.2 71.7 ±0.1 82.8 ±0.5 91.0 ±0.4 
+
+GloGNN (Li et al., 2022) 82.7 ±0.4 71.3 ±0.5 79.9 ±0.2 68.8 ±0.9 84.3 ±0.9 83.5 ±0.9 72.3 ±0.1 83.8 ±0.4 91.8 ±0.3 
+
+HGRN (He et al., 2023a) 82.7 ±0.3 72.6 ±0.4 80.4 ±0.2 61.8 ±1.1 77.8 ±1.2 79.5 ±1.2 72.0 ±0.1 83.5 ±0.4 91.2 ±0.4 
+
+GCN-IED (He et al., 2023b) 85.2 ±0.2 73.1 ±0.3 81.2 ±0.2 73.3 ±1.0 84.9 ±0.9 86.8 ±0.8 72.1 ±0.1 84.2 ±0.4 92.7 ±0.3 
+
+SGFormer (Wu et al., 2023) 84.5 ±0.2 72.6 ±0.3 80.3 ±0.2 69.8 ±0.9 75.9 ±1.3 77.2 ±1.2 72.5 ±0.1 84.0 ±0.4 92.1 ±0.3 
+
+PAGCN (Guo et al., 2024) 83.6 ±0.3 70.4 ±0.6 79.3 ±0.3 61.0 ±1.2 74.9 ±1.3 79.3 ±1.2 71.9 ±0.2 81.3 ±0.6 88.7 ±0.7 
+
+BAGCN (Zhang et al., 2024) 83.7 ±0.3 73.0 ±0.4 78.6 ±0.3 52.7 ±1.3 75.1 ±1.3 77.9 ±1.3 70.2 ±0.2 79.6 ±0.7 91.3 ±0.4 
+
+PGBSF (Cong et al., 2024) 84.0 ±0.3 72.8 ±0.4 81.1 ±0.2 62.3 ±1.1 79.5 ±1.0 76.9 ±1.3 70.9 ±0.2 81.4 ±0.6 88.5 ±0.7 
+
+LoGoGNN (Guo et al., 2025b) 84.6 ±0.2 73.4 ±0.3 81.6 ±0.2 62.9 ±1.0 75.5 ±1.3 78.2 ±1.2 72.1 ±0.1 81.8 ±0.5 90.4 ±0.5 
+
+GInterNet (Guo et al., 2025a) 84.7 ±0.2 73.9 ±0.3 81.8 ±0.1 71.9 ±0.9 82.2 ±0.9 85.3 ±0.8 72.9 ±0.1 84.5 ±0.3 92.5 ±0.3 
+
+ELU-GCN (Huang et al., 2025) 84.3 ±0.2 74.2 ±0.3 80.5 ±0.2 70.9 ±0.9 79.3 ±1.1 80.4 ±1.0 71.5 ±0.1 83.7 ±0.4 90.8 ±0.4 
+
+FTCP (Cong et al., 2025) 84.2 ±0.2 73.2 ±0.3 81.9 ±0.2 63.4 ±1.0 82.4 ±0.9 80.8 ±1.0 69.8 ±0.2 80.9 ±0.6 89.5 ±0.6 
+
+FGN 85.3 ±0.1 73.6 ±0.2 82.1 ±0.1 72.8 ±0.8 86.2 ±0.7 87.1 ±0.8 73.2 ±0.1 85.1 ±0.3 92.0 ±0.2 
+
+Table 2. Graph classification accuracy (%). Method MNIST CIFAR10 MLP 95.3 ±0.2 56.3 ±0.4 
+
+GatedGCN 97.3 ±0.1 67.3 ±0.2 
+
+GCN (Kipf & Welling, 2017) 90.1 ±0.3 54.1 ±0.5 
+
+GraphSAGE (Hamilton et al., 2017) 97.3 ±0.1 65.7 ±0.3 
+
+GAT (Velikovi et al., 2018) 95.5 ±0.2 64.2 ±0.3 
+
+LoGoGNN (Guo et al., 2025b) 97.5 ±0.1 67.3 ±0.2 
+
+FGN 97.6 ±0.1 69.3 ±0.2 
+
+4.3. Robustness Analysis 
+
+We evaluate the robustness of FGN under feature and struc-tural perturbations on the Cora dataset. Four scenarios are considered: feature dropping, feature attack, edge removal, and edge addition. Detailed perturbation protocols (fea-ture dropping ratios, noise levels for feature attack, edge removal/addition ratios, and random seed settings) are pro-vided in Appendix H. As shown in Fig. 2, FGN demonstrates superior robustness across all perturbations. Under feature corruption, FGN degrades more gracefully; with 90% of features masked, it maintains 55.6% accuracy versus GCN which achieves 36.7%. This indicates that the learned continuous field captures relational semantics robust to feature noise. FGN shows particular strength against structural perturbations. Under edge removal, the performance gap widens as edges are deleted. At 60% removal, FGN achieves 58.0% accuracy compared to GCN at 35.7%. The field provides a smooth prior to infer missing connections. While models degrade gracefully under edge addition, FGN maintains a consis-tent advantage, filtering noise while preserving meaningful information. This robustness aligns with our theoretical foundation. By treating edges as emergent from a continuous field rather than discrete primitives, FGN inherently regularizes against perturbations. Discrete changes translate to smooth field variations, with the field acting as a stabilizing buffer. This explains the smoother degradation curves and superior per-formance retention of FGN across all perturbation scenarios. 
+
+Table 3. Component ablation study on three benchmark datasets, showing cumulative accuracy gains. Each row adds one new com-ponent to the model from the previous row. Model Variant (cumulative addition) Cora CiteSeer PubMed GCN (baseline) 81.5 70.4 79.0 + Static field 82.6 71.2 79.8 + Field-modulated diffusion 84.2 72.5 81.2 + Dynamic co-evolution 85.1 73.1 81.8 + Entropy balance 85.2 73.3 82.0 + Hierarchical constraints 85.3 73.4 82.1 FGN (full model) 85.3 73.4 82.1 
+
+7Submission and Formatting Instructions for ICML 2026        
+
+> (a) Feature dropping (b) Feature attack
+> (c) Edge removal (d) Edge addition
+> Figure 2. Robustness analysis under different perturbations.
+
+4.4. Ablation Study 
+
+We conduct a systematic ablation study by progressively integrating each component into a GCN backbone. Table 3 reports cumulative accuracy gains on Cora, CiteSeer, and PubMed. A static field (+1.1%, +0.8%, +0.8%) already improves upon GCN, confirming that even a frozen relational prior is beneficial. Allowing the field to be trained via Lcoh (+1.6%, +1.3%, +1.4%) more than doubles this gain, but the field still operates in an open loop. Enabling dynamic co-evolution (+0.9%, +0.6%, +0.6%), where field parameters are updated based on evolving node representations (Eq. 11), yields a further consistent improvement on top of the already train-able field. The separation loss and mutual information term (+0.1–0.2% each) provide modest but consistent regulariza-tion, preventing field collapse and aligning the field with representations. Overall, FGN achieves cumulative improvements of 3.8%, 3.2%, and 3.1% over GCN. The key insight is the contrast between the static field and dynamic co-evolution: the for-mer amounts to a fixed attention scheme and brings only a fraction of the total gain, while the latter accounts for the majority of the performance uplift. This confirms that the field is not merely an alternative weighting function, but a continuously evolving substrate whose co-adaptation with the graph is essential for the observed accuracy and robustness. Full definitions of each variant are provided in Appendix G. 
+
+4.5. Empirical Validation of Co-evolution Dynamics 
+
+To empirically validate the co-evolutionary dynamics cen-tral to our theoretical framework, we monitor information-theoretic quantities during the training process of FGN. Specifically, we track the conditional entropy between node representations H and the energy field E, as well as the balance between their bidirectional information flows.  
+
+> Figure 3. Bidirectional conditional entropy evolution on Cora.
+
+Fig. 3 presents the evolution of conditional entropy through-out training. The entropy exhibits a clear monotonic de-crease, converging to a stable low value after approximately 300 epochs. This trajectory indicates that the mutual infor-mation between the graph representations and the energy field increases systematically during optimization, eventu-ally reaching a state of high interdependence. The conver-gence to low entropy provides direct empirical evidence that FGN successfully establishes the bidirectional struc-tural alignment posited by our theoretical framework, where the discrete graph structure and continuous structural field become mutually informative.  
+
+> Figure 4. Convergence of the graph-field entropy ratio.
+
+Further insight comes from Fig. 4, which shows the evolu-tion of the ratio between bidirectional conditional entropies. This ratio converges rapidly toward 1.0, stabilizing within a narrow band around unity during the latter stages of training. 8Submission and Formatting Instructions for ICML 2026 
+
+The convergence to a balanced ratio near 1.0 demonstrates that FGN effectively eliminates informational asymmetry between the graph and field representations. Neither com-ponent dominates the other; instead, they achieve a state of balanced co-evolution characterized by symmetric infor-mation exchange. The monotonically decreasing entropy confirms that the system moves toward a state of high mu-tual information, while the balanced entropy ratio verifies that this state is achieved through symmetric cooperation rather than hierarchical dominance. Together, these results substantiate the core mechanism of explicit optimization for a synergistic and balanced partnership between discrete graph structure and continuous structural field. 
+
+# 5. Conclusion 
+
+To bridge the explanatory gap in graph learning, a new framework FGN is introduced in this paper as a field-theoretic framework that explicitly connects discrete graphs to the underlying continuous information entropy field. Specifically, FGN treats graphs not as collections of prim-itive edges, but as discrete samples drawn from that field. Furthermore, FGN models the bidirectional co-evolution be-tween graph structure and the field through field-modulated message passing and dynamic field adaptation. Extensive experiments demonstrate that FGN achieves strong perfor-mance while learning structurally coherent fields that re-flect the underlying relational structure. It exhibits superior robustness to graph perturbations, and empirical analysis confirms the convergence of its co-evolutionary dynamics. 
+
+# Impact Statement 
+
+This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none which we feel must be specifically highlighted here. 
+
+# References 
+
+Belghazi, M. I., Baratin, A., Rajeshwar, S., Ozair, S., Ben-gio, Y., Courville, A., and Hjelm, D. Mutual information neural estimation. In Proceedings of the 35th Interna-tional Conference on Machine Learning , volume 80 of 
+
+Proceedings of Machine Learning Research , pp. 531–540. PMLR, 2018. Bianchi, F. M., Grattarola, D., Livi, L., and Alippi, C. Graph neural networks with convolutional ARMA filters. IEEE Transactions on Pattern Analysis and Machine Intelli-gence , 44(7):3496–3507, 2022. Cong, H., Sun, Q., Yang, X., Liu, K., and Qian, Y. En-hancing graph convolutional networks with progressive granular ball sampling fusion: A novel approach to effi-cient and accurate GCN training. Information Sciences ,676:120831, 2024. Cong, H., Yang, X., Liu, K., and Guo, Q. Feature-topology cascade perturbation for graph neural network. Engineer-ing Applications of Artificial Intelligence , 152:110657, 2025. Feng, W., Zhang, J., Dong, Y., Han, Y., Luan, H., Xu, Q., Yang, Q., Kharlamov, E., and Tang, J. Graph random neural networks for semi-supervised learning on graphs. In Proceedings of the Conference on Neural Information Processing Systems , 2020. Fuchsgruber, D., Wollschl ¨ager, T., and G ¨unnemann, S. Energy-based epistemic uncertainty for graph neural net-works. In Proceedings of the Conference on Neural In-formation Processing Systems , 2024. Grover, A. and Leskovec, J. node2vec: Scalable fea-ture learning for networks. In Proceedings of the ACM SIGKDD International Conference on Knowledge Dis-covery and Data Mining , pp. 855–864, 2016. ISBN 9781450342322. Guo, Q., Yang, X., Zhang, F., and Xu, T. Perturbation-augmented graph convolutional networks: A graph con-trastive learning architecture for effective node classifica-tion tasks. Engineering Applications of Artificial Intelli-gence , 129:107616, 2024. Guo, Q., Yang, X., Ding, W., and Qian, Y. Cross-graph interaction networks. IEEE Transactions on Knowledge and Data Engineering , 37(5):2341–2355, 2025a. Guo, Q., Yang, X., Li, M., and Qian, Y. Collaborative graph neural networks for augmented graphs: A local-to-global perspective. Pattern Recognition , 158:111020, 2025b. Hamilton, W. L., Ying, Z., and Leskovec, J. Inductive repre-sentation learning on large graphs. In Proceedings of the Conference on Neural Information Processing Systems ,pp. 1024–1034, 2017. He, L., Bai, L., Yang, X., Du, H., and Liang, J. High-order graph attention network. Information Sciences , 630: 222–234, 2023a. He, L., Bai, L., Yang, X., Liang, Z., and Liang, J. Explor-ing the role of edge distribution in graph convolutional networks. Neural Networks , 168:459–470, 2023b. He, T., Liu, Y., Ong, Y., Wu, X., and Luo, X. Polarized message-passing in graph neural networks. Artificial Intelligence , 331:104129, 2024. Huang, J., Mo, Y., Shi, X., Feng, L., and Zhu, X. Enhancing the influence of labels on unlabeled nodes in graph con-volutional networks. In Proceedings of the International Conference on Machine Learning , 2025. 9Submission and Formatting Instructions for ICML 2026 
+
+Jin, T., Dai, H., Cao, L., Zhang, B., Huang, F., Gao, Y., and Ji, R. Deepwalk-aware graph convolutional networks. 
+
+Science China Information Sciences , 65(5):1–15, 2022. Kelesis, D., Fotakis, D., and Paliouras, G. Analyzing the effect of residual connections to oversmoothing in graph neural networks. Machine Learning , 114(8):184, 2025. Kipf, T. N. and Welling, M. Semi-supervised classification with graph convolutional networks. In Proceedings of the International Conference on Learning Representations ,pp. 2713–2726, 2017. Li, H., Zhang, S., Tang, L., Bauchy, M., and Sun, Y. Predict-ing and interpreting energy barriers of metallic glasses with graph neural networks. In Proceedings of the Inter-national Conference on Machine Learning , 2024. Li, X. Positive-incentive noise. IEEE Transactions on Neu-ral Networks and Learning systems , 35(6):8708–8714, 2024. Li, X., Zhu, R., Cheng, Y., Shan, C., Luo, S., Li, D., and Qian, W. Finding global homophily in graph neural net-works when meeting heterophily. In Proceedings of the International Conference on Machine Learning , volume 162, pp. 13242–13256, 2022. Liang, Z., Bai, L., Yang, X., and Liang, J. Multi-channel dis-entangled graph neural networks with different types of self-constraints. IEEE Transactions on Pattern Analysis and Machine Intelligence , 47(9):8001–8012, 2025. Lin, W., Lan, H., and Li, B. Generative causal explanations for graph neural networks. In Proceedings of the Interna-tional Conference on Machine Learning , pp. 6666–6679, 2021. Mustafa, N. and Burkholz, R. Dynamic rescaling for train-ing gnns. In Proceedings of the Conference on Neural Information Processing Systems , 2024. Nakayama, I. and Onizuka, M. NAAM: node-aware at-tention mechanism for distilling gnns-to-mlp (student abstract). In Proceedings of the AAAI Conference on Artificial Intelligence , pp. 29433–29435, 2025. Perozzi, B., Al-Rfou, R., and Skiena, S. Deepwalk: online learning of social representations. In Proceedings of the ACM SIGKDD International Conference on Knowledge Discovery and Data Mining , pp. 701–710, 2014. Sandryhaila, A. and Moura, J. M. F. Discrete signal process-ing on graphs. IEEE Transactions on Signal Processing ,61(7):1644–1656, 2013. Scholkemper, M., Wu, X., Jadbabaie, A., and Schaub, M. T. Residual connections and normalization can provably prevent oversmoothing in gnns. In Proceedings of the International Conference on Learning Representations ,2025. Shao, J. and Li, X. AI flow at the network edge. CoRR ,2024. doi: 10.48550/ARXIV.2411.12469. URL https: //doi.org/10.48550/arXiv.2411.12469 .Sun, F., Hoffmann, J., Verma, V., and Tang, J. InfoGraph: Unsupervised and semi-supervised graph-level represen-tation learning via mutual information maximization. In 
+
+Proceedings of the International Conference on Learning Representations , 2020. Sun, Q., Li, J., Peng, H., Wu, J., Fu, X., Ji, C., and Yu, P. S. Graph structure learning with variational information bottleneck. In Proceedings of the AAAI Conference on Artificial Intelligence , pp. 4165–4174, 2022. Velikovi, P., Cucurull, G., Casanova, A., Romero, A., Li, P., and Bengio, Y. Graph attention networks. In Pro-ceedings of the International Conference on Learning Representations , pp. 2920–2931, 2018. Vignac, C., Krawczuk, I., Siraudin, A., Wang, B., Cevher, V., and Frossard, P. DiGress: discrete denoising diffusion for graph generation. In Proceedings of the International Conference on Learning Representations , 2023. Wang, J., Liang, J., Cui, J., and Liang, J. Semi-supervised learning with mixed-order graph convolutional networks. 
+
+Information Sciences , 573:171–181, 2021. Wu, F., Jr., A. H. S., Zhang, T., Fifty, C., Yu, T., and Wein-berger, K. Q. Simplifying graph convolutional networks. In Proceedings of the International Conference on Ma-chine Learning , pp. 6861–6871, 2019. Wu, Q., Zhao, W., Yang, C., Zhang, H., Nie, F., Jiang, H., Bian, Y., and Yan, J. Simplifying and empowering transformers for large-graph representations. In Proceed-ings of the Conference on Neural Information Processing Systems , 2023. Wu, T., Ren, H., Li, P., and Leskovec, J. Graph information bottleneck. In Proceedings of the Conference on Neural Information Processing Systems , 2020. Xie, Y., Takikawa, T., Saito, S., Litany, O., Yan, S., Khan, N., Tombari, F., Tompkin, J., Sitzmann, V., and Sridhar, S. Neural fields in visual computing and beyond. Computer Graphics Forum , 41(2):641–676, 2022. Yan, F., Wang, C., Wang, Z., Shen, Y., and Yang, C. Sengraph: A self-learning evolutionary and node-aware graph network for soft sensing in industrial processes. 
+
+IEEE Transactions on Neural Networks and learning sys-tems , 36(7):12284–12298, 2025. 10 Submission and Formatting Instructions for ICML 2026 
+
+Yang, S., Liang, B., Liu, A., Gui, L., Yao, X., and Zhang, X. Bounded and uniform energy-based out-of-distribution detection for graphs. In Proceedings of the International Conference on Machine Learning , 2024. Yao, K., Liang, J., Liang, J., Li, M., and Cao, F. Multi-view graph convolutional networks with attention mechanism. 
+
+Artificial Intelligence , 307:103708, 2022. Zecevic, M., Dhami, D. S., Velickovic, P., and Kersting, K. Relating graph neural networks to structural causal models. CoRR , abs/2109.04173, 2021. URL https: //arxiv.org/abs/2109.04173 .Zhang, A., Huang, J., Li, P., and Zhang, K. Building short-cuts between distant nodes with biaffine mapping for graph convolutional networks. IEEE Transactions on Knowledge and Data Engineering , 18(6):139:1–139:21, 2024. Zhou, X., Zheng, X., Shu, T., Liang, W., Wang, K. I., Qi, L., Shimizu, S., and Jin, Q. Information theoretic learning-enhanced dual-generative adversarial networks with causal representation for robust OOD generalization. 
+
+IEEE Transactions on Neural Networks and Learning Systems , 36(2):2066–2079, 2025. Zhu, X., Ghahramani, Z., and Lafferty, J. D. Semi-supervised learning using gaussian fields and harmonic functions. In Proceedings of the International conference on Machine learning , pp. 912–919, 2003. Zhuo, W., Yu, H., Tan, G., and Li, X. Commute graph neural networks. In Proceedings of the International Conference on Machine Learning , 2025. 11 Submission and Formatting Instructions for ICML 2026 
+
+# A. Notation 
+
+Table 4 provides a comprehensive summary of the mathematical notation used throughout the paper.  
+
+> Table 4. Summary of Key Notations
+
+Symbol Description 
+
+G = ( V, E) Graph with vertex set V and edge set E
+
+n = |V| Number of nodes 
+
+m = |E| Number of edges 
+
+A ∈ { 0, 1}n×n Adjacency matrix 
+
+X ∈ Rn×F Node feature matrix with F -dimensional features 
+
+xi ∈ RF Feature vector of node i
+
+M Latent manifold space of relational potentials 
+
+ϕ∗ : M → R True scalar entropy field defined on the manifold 
+
+ι : X → M Mapping from feature space to manifold positions 
+
+gθ : RF → R Field network implementing ϕθ = gθ
+
+ϕθ : X → R Learned scalar field 
+
+E ∈ Rn Scalar energy field 
+
+zi ∈ M Latent position of node i on manifold M
+
+dM(·, ·) Distance metric on manifold M
+
+τ > 0 Temperature parameter in edge probability Pij 
+
+σ(·) Logistic sigmoid function 
+
+Pij Edge probability 
+
+h(t) 
+
+> i
+
+∈ Rdh Node representation at iteration t with hidden dimension dh
+
+N (i) Set of neighbors of node iwij Field-modulated weight 
+
+ξ > 0 Inverse temperature parameter 
+
+f, ψ Learnable functions in message passing 
+
+Ltask Task loss, for example cross-entropy for node classification 
+
+Lrecon Reconstruction loss for graph structure 
+
+Lcoh Field coherence loss 
+
+Lsep Field separation loss 
+
+Lsym Mutual information loss between field and representations 
+
+λ > 0 Regularization weight balancing reconstruction and field losses 
+
+α, β, γ ≥ 0 Loss weights in FGN objective 
+
+η Learning rate for field parameter update 
+
+# B. Theoretical Proofs and Derivations 
+
+B.1. Proof of Theorem 1: Approximation Consistency 
+
+Proof. Let Pij (ψ) = σ(−∥ ψ(xi) − ψ(xj )∥2/τ ) be the edge probability under a field ψ. The total variation distance between two graph distributions factorizes over edges as 
+
+DTV (P, Q ) ≤ 12
+
+X
+
+> i<j
+
+|Pij − Qij |, (19) because the graph likelihood in (2) is a product of independent Bernoulli variables (conditionally on the field). For any pair (i, j ), set ψ = ϕθ and ˜ψ = ϕ∗ ◦ ι. Using the fact that the sigmoid function σ is 1/4-Lipschitz, we obtain 
+
+|Pij (ϕθ ) − Pij (ϕ∗ ◦ ι)| ≤ 14τ ∥ϕθ (xi) − ϕθ (xj )∥2 − ∥ ϕ∗(ι(xi)) − ϕ∗(ι(xj )) ∥2
+
+= 14τ (a − b)⊤(a + b) , (20) 12 Submission and Formatting Instructions for ICML 2026 
+
+where a = ϕθ (xi) − ϕθ (xj ) and b = ϕ∗(ι(xi)) − ϕ∗(ι(xj )) .By the triangle inequality, 
+
+∥a − b∥ ≤ ∥ ϕθ (xi) − ϕ∗(ι(xi)) ∥ + ∥ϕθ (xj ) − ϕ∗(ι(xj )) ∥ ≤ 2ϵ. (21) For the second factor, we bound ∥a + b∥ ≤ ∥ a∥ + ∥b∥. The term ∥b∥ is controlled by the Lipschitz constant L of ϕ∗ and the bounded distortion of ι:
+
+∥b∥ = ∥ϕ∗(ι(xi)) − ϕ∗(ι(xj )) ∥ ≤ L d M(ι(xi), ι (xj )) ≤ Lκ ∥xi − xj ∥ ≤ LκD, (22) where D = max x,x ′ ∥x − x′∥ is the diameter of the feature space. Moreover, ∥a∥ ≤ ∥ b∥ + ∥a − b∥ ≤ LκD + 2 ϵ.Hence 
+
+∥a + b∥ ≤ (LκD ) + ( LκD + 2 ϵ) = 2 LκD + 2 ϵ. (23) Substituting these estimates into (20) gives 
+
+|Pij (ϕθ ) − Pij (ϕ∗ ◦ ι)| ≤ 14τ · 2ϵ · (2 LκD + 2 ϵ) = ϵ(LκD + ϵ)
+
+τ . (24) To obtain a bound that separates the dominant linear term from a higher-order correction, we observe that ϵ ≤ LκD by hypothesis. Consequently, 
+
+LκD + ϵ ≤ 2LκD and ϵ(LκD + ϵ)
+
+τ ≤ 2LκD τ ϵ. (25) A slightly tighter constant (the one given in the theorem statement) is obtained by noting 2LκD + 2 ϵ ≤ 3LκD directly in the product 2ϵ · (2 LκD + 2 ϵ), leading to 
+
+|Pij (ϕθ ) − Pij (ϕ∗ ◦ ι)| ≤ 3LκD 
+
+2τ ϵ. (26) Summing over all N (N − 1) /2 node pairs and applying the union bound yields 
+
+DTV 
+
+ P (G | ϕθ ), P (G | ϕ∗ ◦ ι) ≤ N (N − 1) 4 · 3LκD 
+
+2τ ϵ. (27) For fixed graph size N , the factor 34 N (N − 1) can be absorbed into the constant C, resulting in the form CLκϵ/τ as stated in the theorem. In the main text we report the essential scaling and keep the constant symbolic for simplicity; the explicit calculation above shows that C depends polynomially on the feature space diameter and the number of nodes. 
+
+B.2. Proof of Theorem 2: Propagation Advantage 
+
+We prove that the field-modulated propagation in FGN yields a strictly tighter upper bound on the misclassification probability compared to standard GCN, under the approximate community separation condition stated in Proposition 3.3. The proof proceeds in two stages: first assuming perfect separation ( η = 0 ) to establish the clean exponential improvement, and then extending the argument to small η > 0 where the advantage degrades gracefully. 
+
+Setup and assumptions Let the graph be partitioned into communities C1, . . . , CK such that for any node i, its label yi is constant on Cyi . The learned scalar field E satisfies the following approximate separation property for some δ < ∆ and a small violation fraction η ∈ [0 , 1) :• For at least a fraction 1 − η of intra-community edges (u, v ), |Eu − Ev | ≤ δ;• For at least a fraction 1 − η of inter-community edges (x, y ), |Ex − Ey | ≥ ∆.We first prove the result for the ideal case η = 0 , i.e., perfect separation 
+
+∀u, v ∈ C k : |Eu − Ev | ≤ δ, ∀x ∈ C k, y ∈ C ℓ, k ̸ = ℓ : |Ex − Ey | ≥ ∆, (28) 13 Submission and Formatting Instructions for ICML 2026 
+
+with ∆ > δ > 0. Define R = e−ξ(∆ 2−δ2) ∈ (0 , 1) .For a fixed node i, the one-layer aggregated representation is 
+
+hi = X 
+
+> j∈N (i)
+
+αij Wh (0)  
+
+> j
+
+, (29) where αij = 1 /pdidj for GCN and αij = wij = exp( −ξ∥Ei − Ej ∥2) for FGN. We also assume a linear classifier Wc with bounded norm ∥Wc∥2 ≤ B and a margin γ > 0:
+
+∀i, ∀ℓ̸ = yi : (Wc)yi,:hi − (Wc)ℓ, :hi ≥ γ. (30) PROOF FOR PERFECT SEPARATION (η = 0 )
+
+Step 1. Signal–noise decomposition. Write hi = si + ni where 
+
+si = X 
+
+> j∈N (i)∩C yi
+
+αij Wh (0)  
+
+> j
+
+, (31) 
+
+ni = X 
+
+> k̸=yi
+
+X 
+
+> j∈N (i)∩C k
+
+αij Wh (0)  
+
+> j
+
+. (32) 
+
+si is the intra-community signal, ni the inter-community noise. 
+
+Step 2. Noise suppression factor. From the perfect separation bounds (28) , for any intra-community neighbor jin and inter-community neighbor jout , wij out 
+
+wij in 
+
+≤ e−ξ(∆ 2−δ2) = R. (33) Summing over all neighbors gives 
+
+∥nFGN  
+
+> i
+
+∥ ≤ R ∥nGCN  
+
+> i
+
+∥. (34) A lower bound on the signal magnitude follows from the fact that intra-community weights are at least e−ξδ 2
+
+and that each node receives at least min k |C k| intra-community messages (up to a constant factor depending on degrees). Specifically, 
+
+∥sFGN  
+
+> i
+
+∥ ≥ cin ∥sGCN  
+
+> i
+
+∥, cin = e−ξδ 2 min k |C k|
+
+max i di
+
+> 0. (35) 
+
+Derivation note: The constant cin is obtained under a worst-case assumption where the intra-community signals from different neighbors are aligned in the same direction. In practice, due to the alignment of feature vectors within a community, the actual signal strength ratio is often larger. This lower bound suffices for establishing the theoretical advantage. Consequently, the signal-to-noise ratio (SNR) satisfies 
+
+∥sFGN  
+
+> i
+
+∥∥nFGN  
+
+> i
+
+∥ ≥ cin 
+
+R · ∥sGCN  
+
+> i
+
+∥∥nGCN  
+
+> i
+
+∥ . (36) 
+
+Step 3. From SNR to classification error. Using the margin assumption Eq. (30) , a sufficient condition for correct classification is ∥ni∥2 ≤ γ/ (4 B). Hence, 
+
+P(ˆ yi̸ = yi) ≤ P
+
+
+
+∥ni∥2 > γ
+
+4B
+
+
+
+. (37) By Chebyshev’s inequality, 
+
+P (∥ni∥2 > t ) ≤ E[∥ni∥22]
+
+t2 . (38) From ∥nFGN  
+
+> i
+
+∥ ≤ R∥nGCN  
+
+> i
+
+∥ we have E[∥nFGN  
+
+> i
+
+∥2] ≤ R2 E[∥nGCN  
+
+> i
+
+∥2]. Therefore, 
+
+PFGN ≤ R2 · E[∥nGCN  
+
+> i
+
+∥2](γ/ (4 B)) 2 = R2 PGCN . (39) Since R < 1, we obtain PFGN < PGCN . This completes the proof for the perfect separation case. 14 Submission and Formatting Instructions for ICML 2026 
+
+EXTENSION TO APPROXIMATE SEPARATION (η > 0)Now consider the realistic setting where a small fraction η of edges violate the separation thresholds. In this case, the worst-case weight bounds are slightly weakened: • For an intra-community edge, the weight is at least e−ξδ 2
+
+with probability 1 − η, but could be smaller (bounded below by e−ξ(max i Ei−min i Ei)2
+
+≥ e−ξ ) for the violating fraction. • For an inter-community edge, the weight is at most e−ξ∆2
+
+with probability 1 − η, but could be as large as 1 for the violating fraction. Using the average-case bounds from Proposition 3.3, the effective noise amplification becomes 
+
+∥nFGN  
+
+> i
+
+∥ ≤ ˜R ∥nGCN  
+
+> i
+
+∥, (40) where ˜R = e−ξ(∆ 2−δ2) + C1η = R + C1η, and C1 depends polynomially on the maximum degree and the weight extrema. Similarly, the signal lower bound becomes cin − C2η for some C2 > 0.Repeating the Chebyshev argument with these modified constants yields 
+
+PFGN ≤ ( ˜R)2
+
+(cin − C2η)2 · PGCN ≡ ρ(η) PGCN , (41) where ρ(0) = R2 < 1. Because ρ(η) is continuous in η, there exists a non-empty interval [0 , η max ) such that ρ(η) < 1 for all η ∈ [0 , η max ). Thus, under the approximate separation condition, field-modulated propagation still guarantees a strictly tighter misclassification upper bound, and the advantage degrades gracefully as the field deviates from perfect community alignment. This completes the proof. □
+
+B.3. Analysis of Co-evolution Dynamics 
+
+We examine the discrete-time dynamical system formed by the alternation 
+
+(H(t+1) = Mϕ(t)
+
+> θ
+
+(H(t), A ),θ(t+1) = θ(t) − η∇θ Lfield (ϕ(t) 
+
+> θ
+
+, H(t+1) ), (42) where Mϕ denotes the field-modulated message passing defined in Eq. (10) . We are interested in the convergence of this coupled iteration to a stationary point of the joint objective J (H, θ ) = Ltask (H) + λLfield (ϕθ , H).
+
+Message passing as a contraction. Consider the propagation operator Mϕ for a fixed field ϕ. With bounded, non-negative weights wij ∈ (0 , 1] and typical choices of f and ψ (e.g., ReLU activations and layer-normalized linear transforma-tions), Mϕ is non-expansive and often contractive in practice. In particular, if f and ψ are Lf - and Lψ -Lipschitz with 
+
+Lf Lψ max i
+
+P 
+
+> j
+
+wij < 1, then Mϕ is a contraction, implying the existence of a unique fixed point H∗(ϕ) that depends continuously on ϕ. Even when the contraction constant is only guaranteed to be ≤ 1 (non-expansive), the iteration tends to approach a well-defined limit under mild conditions. 
+
+Field optimization. Given the current representations H(t+1) , the field parameters θ are updated via gradient descent on 
+
+Lfield . Under the smoothness of the field network gθ and the coherence/separation regularizers, Lfield is Lg -smooth in θ.With a learning rate η < 2/L g , the gradient step guarantees monotonic descent of the field objective, driving θ toward a stationary point. 
+
+Coupled system. Viewing the alternation as block coordinate descent on J (H, θ ), we have: • The H-subproblem (field fixed) seeks a representation that minimizes the task loss under the current field-modulated graph; • The θ-subproblem (representation fixed) refines the field to better match the observed graph structure and the current representation. 15 Submission and Formatting Instructions for ICML 2026 
+
+When both subproblems are strictly convex in their respective variables (or at least satisfy the Kurdyka– Łojasiewicz property), the overall scheme converges to a critical point of J . At this equilibrium, the field ϕθ∗ coherently explains the graph topology embedded in H∗, and H∗ incorporates the relational prior dictated by the field — a symmetric partnership that embodies the field-graph co-evolution principle. 
+
+Remarks on practical convergence. In our experiments, the coupled dynamics stabilize within a few hundred epochs (see Fig. 3–4), corroborating the theoretical intuition. The regularizers Lcoh , Lsep , and Lsym further promote well-conditioning by discouraging pathological field configurations. Thus, while the formal contraction and convexity conditions may not be strictly met in every deep network, FGN’s design consistently induces convergent behavior in practice. 
+
+B.4. Derivation of the Practical Objective 
+
+Starting from the evidence lower bound (ELBO) for the marginal likelihood: 
+
+log P (G | X) ≥ E(ϕ,ι )∼Q[log P (G | ϕ ◦ ι, X )] − KL (Q(ϕ, ι )∥P (ϕ, ι )) , (43) we adopt a practical approximation strategy. Rather than maintaining full distributions over ϕ and ι, we use point estimates: 
+
+Q(ϕ, ι ) = δ(ϕ − ϕθ )δ(ι − ιθ ), where ιθ is implicitly encoded within the parameterization of ϕθ . This simplification reduces the ELBO to: 
+
+log P (G | ϕθ ◦ ιθ , X ) − KL (δ∥P ). (44) The KL divergence term is replaced by an explicit regularization term R(ϕθ ) that encodes desired properties of the learned field. This leads to the regularized maximum likelihood objective: 
+
+L(θ) = − 1
+
+|E| 
+
+X
+
+> (i,j )∈E
+
+log Pij (ϕθ ) + λR(ϕθ ), (45) where the first term corresponds to negative log-likelihood of observed edges, and the second term enforces field regularity. The design of R(ϕθ ) incorporates several inductive biases. First, we encourage field coherence by promoting similarity between connected nodes, implemented through Lcoh in Eq. (15) . Second, to prevent trivial solutions where all nodes converge to identical field values, we include a separation loss Lsep from Eq. (16) that encourages field variance. Third, to operationalize the co-evolutionary principle, we introduce a mutual information loss Lsym from Eq. (17) . These components are combined with task-specific loss Ltask to form the complete FGN objective in Eq. (18). 
+
+B.5. Detailed Derivation of the Practical Objective 
+
+Starting from the evidence lower bound (ELBO) for the marginal likelihood: 
+
+log P (G | X) ≥ E(ϕ,ι )∼Q[log P (G | ϕ ◦ ι, X )] − KL( Q(ϕ, ι )∥P (ϕ, ι )) . (46) We adopt a mean-field factorization Q(ϕ, ι ) = Qϕ(ϕ)Qι(ι) and further restrict to point estimates: 
+
+Qϕ(ϕ) = δ(ϕ − ϕθ ), Qι(ι) = δ(ι − ιθ ), (47) where ϕθ is a neural network parameterized by θ, and ιθ is implicitly defined through the same network. Under this Dirac approximation, the expectation term simplifies to log P (G | ϕθ ◦ ιθ , X ), and the KL divergence becomes: 
+
+KL( δ(ϕ − ϕθ )δ(ι − ιθ )∥P (ϕ, ι )) = − log P (ϕθ , ι θ ) + const . (48) Assuming a prior that factorizes as P (ϕ, ι ) = P (ϕ)P (ι) and that P (ι) is uniform, we have − log P (ϕθ , ι θ ) = − log P (ϕθ )+ 
+
+const . A common choice for P (ϕ) is a Gaussian process prior that enforces smoothness, which leads to a regularizer of the form R(ϕθ ) = 12 ∥∇ ϕθ ∥2 in the continuous limit. In our discrete graph setting, we approximate this with graph-based smoothness penalties: 
+
+− log P (ϕθ ) ≈ λ1
+
+X
+
+> (i,j )∈E
+
+(Ei − Ej )2 + λ2 · (−Var( E)) + λ3 · (−bI(H; E)) , (49) where Ei = ϕθ (xi), and the three terms correspond to coherence, separation, and mutual information regularization, respectively. Thus the objective in Eq. (8) emerges naturally, with λ absorbing the prior scales. 16 Submission and Formatting Instructions for ICML 2026 
+
+# C. Relation to Standard Graph Attention 
+
+FGN’s field-modulated message passing bears a superficial resemblance to standard graph attention mechanisms such as GAT (Velikovi et al., 2018), where the influence of neighbor j on node i is computed as αij = softmax j (eij ) with eij being a function of the two node features. It is therefore important to clarify the conceptual and architectural distinctions that set the proposed method apart. 1. Global vs. local computation. In GAT, attention coefficients αij are computed independently per layer and per node, based purely on the current-layer representations h(ℓ) 
+
+> i
+
+and h(ℓ) 
+
+> j
+
+. There is no notion of a persistent, globally coherent quantity that links the scores across different neighborhoods or layers. In contrast, FGN’s weights wij are derived from a single scalar field E = σ(MLP θE (X)) that is shared across the entire graph and across all message-passing layers. This field is a standalone object with its own state and parameters θE , rather than an ephemeral by-product of the node features at a particular layer. 2. Field evolution vs. static attention. GAT’s attention function is trained purely via the downstream task loss (e.g., cross-entropy), without any explicit objective that encourages structural coherence of the attention patterns themselves. In FGN, the field E is learned through a dedicated, information-theoretic objective Lfield that combines coherence, separation, and mutual information terms (Eq. 18). This objective drives E to become a geometrically consistent landscape over the graph, a property that is not required of standard attention scores. The ablation study in Table 3 provides direct evidence: adding a static field (“+ Static field”) to a GCN backbone improves performance, but the largest gain is obtained when the field is allowed to co-evolve with the representations (“+ Dynamic co-evolution”). This confirms that the field’s continuous evolution, not merely the use of node-wise gating, is responsible for the observed improvements. 3. Interpretability. Because the field E is a single, globally defined scalar function, it can be visualized and queried to inspect the “relational potential” of any node, independent of the specific neighborhood or layer. This yields a degree of interpretability that is absent in standard multi-head attention, where the scores are high-dimensional, layer-specific, and difficult to aggregate into a unified picture. As shown in the main experiments, the field values naturally correlate with community structures and structural roles, providing a continuous substrate that explains the discrete connectivity. In summary, while the mathematical form of wij = exp( −ξ∥Ei − Ej ∥2) is reminiscent of an attention weight, FGN fundamentally departs from attention-based GNNs by promoting the field to a first-class citizen that participates in its own co-evolutionary loop. The ablation results substantiate that this reification of the latent field, rather than the specific weighting formula, is the key factor behind the method’s performance and robustness. 
+
+# D. Experimental Datasets Description 
+
+This appendix provides detailed information about the benchmark datasets used in all experiments throughout this paper. Table 5 presents the basic statistical characteristics of the nine datasets used in this study.                                                           
+
+> Table 5. Statistics of the Experimental Datasets Dataset Nodes Edges Features Classes Train Test Cora 2,708 5,429 1,433 7140 1,000 CiteSeer 3,327 4,732 3,703 6120 1,000 PubMed 19,717 44,338 500 360 1,000 Chameleon 2,277 31,421 2,325 51,092 455 ogb-arxiv 169,343 1,166,243 128 40 90,941 48,603 Computers 13,752 245,861 767 10 200 1,000 Photo 7,650 119,081 745 8160 1,000 Texas 183 309 1,703 587 150 Cornell 183 295 1,703 587 150
+
+Cora Dataset The Cora dataset is a classic citation network consisting of 2,708 academic papers in the field of machine learning. These papers are divided into 7 categories, for example Case-Based Reasoning and Genetic Algorithms. Each paper is represented as a node, and the 5,429 directed edges between nodes indicate citation relationships. Each paper is 17 Submission and Formatting Instructions for ICML 2026 
+
+described by a 1,433-dimensional binary word vector, indicating the presence or absence of corresponding words from a dictionary. 
+
+CiteSeer Dataset The CiteSeer dataset is a citation network collected from the CiteSeer digital library, containing 3,327 computer science papers categorized into 6 classes. The dataset includes 4,732 citation edges. Node features are 3,703-dimensional binary word vectors, similarly indicating the inclusion of specific words. 
+
+PubMed Dataset The PubMed dataset comprises 19,717 medical research papers in the field of diabetes, categorized into 3 classes. This dataset is relatively large-scale, containing 44,338 citation edges. Unlike the other two datasets, PubMed uses 500-dimensional TF-IDF feature vectors to represent each paper. 
+
+Chameleon Dataset The Chameleon dataset is a webpage network collected from Wikipedia, containing 2,277 webpages categorized into 5 classes, for example Health and Politics. The dataset includes 31,421 hyperlink edges between webpages. Each webpage is represented by a 2,325-dimensional feature vector encoding informative nouns from the page content, capturing topical information for node classification. 
+
+ogb-arxiv Dataset The ogb-arxiv dataset is a large-scale citation network from the Open Graph Benchmark, containing 169,343 computer science papers from arXiv categorized into 40 subject areas. The dataset includes 1,166,243 citation edges, making it a challenging large-scale benchmark. Each paper is represented by a 128-dimensional feature vector obtained by averaging the embeddings of words in the title and abstract. 
+
+Computers Dataset The Computers dataset is a product co-purchase network from Amazon, containing 13,752 computers and computer accessories categorized into 10 product types. The dataset includes 245,861 edges representing frequent co-purchases between products. Each product is represented by a 767-dimensional feature vector derived from product reviews, capturing semantic information about the items. 
+
+Photo Dataset The Photo dataset is another Amazon product co-purchase network, containing 7,650 photography-related products categorized into 8 types. The dataset includes 119,081 co-purchase edges. Similar to the Computers dataset, each product is represented by a 745-dimensional feature vector based on review information, enabling product category classification. 
+
+Texas Dataset The Texas dataset is a small-scale webpage network from the WebKB collection, containing 183 webpages from the University of Texas website categorized into 5 classes. The dataset includes 309 hyperlink edges between webpages. Each webpage is represented by a 1,703-dimensional feature vector encoding the presence of specific words, with this dataset known for its heterophilic structure where connected pages often belong to different categories. 
+
+Cornell Dataset The Cornell dataset is another WebKB webpage network, containing 183 webpages from the website of Cornell University categorized into 5 classes. The dataset includes 295 hyperlink edges. Similar to the Texas dataset, it uses 1,703-dimensional binary word vectors as features and exhibits heterophilic characteristics, making it a challenging benchmark for graph neural networks. 
+
+# E. Algorithm Pseudocode 
+
+Algorithm 1 presents the complete training procedure of the FGN. 
+
+# F. Experimental Configuration 
+
+F.1. Computational Environment 
+
+All experiments were conducted on a dedicated computing server equipped with an Intel Xeon Gold 6348 processor operating at 2.60GHz, 251GB of DDR4 RAM, and dual NVIDIA GeForce RTX 4090 GPUs providing a total of 48GB VRAM. The software environment utilized Python 3.8.20 with PyTorch 2.4.1 and CUDA 12.1. 
+
+F.2. Hyperparameter Settings 
+
+The hyperparameter configurations are summarized in Table 6. In our experiments, we found FGN to be relatively stable to the choice of regularization weights. The default values with 
+
+α = 0 .5, β = 0 .1, γ = 0 .05 worked well across all datasets. Performance variations remained within ±0.5% when α and β
+
+18 Submission and Formatting Instructions for ICML 2026 
+
+Algorithm 1 Field-informed Graph Network Training 
+
+Require: Graph G = ( V, E) with adjacency A and node features X, Number of layers L
+
+Ensure: Learned node representations H
+
+1: Initialize parameters 
+
+2: Compute energy field E with Eq. (13) 
+
+3: H(0) ← X
+
+4: for ℓ = 1 to L do 
+
+5: for each node i ∈ V do 
+
+6: Compute weights wij for j ∈ N (i) with Eq. (14) 
+
+7: Aggregate messages and update h(ℓ) 
+
+> i
+
+with Eq. (10) 
+
+8: end for 
+
+9: end for 
+
+10: H ← H(L)
+
+11: Compute predictions ˆY ← Classifier (H)
+
+12: Compute total loss L using Eq. (18) 
+
+13: Compute gradients 
+
+14: Update parameters 
+
+15: RETURN H
+
+Table 6. Hyperparameter settings for the experimental datasets. Dataset Learning rate Weight decay Epochs Dropout Hidden dim Cora 0.01 5 × 10 −4 200 0.5 16 CiteSeer 0.01 5 × 10 −4 200 0.5 16 PubMed 0.005 5 × 10 −5 500 0.5 32 Chameleon 0.01 5 × 10 −5 400 0.5 32 ogb-arxiv 0.01 3 × 10 −4 500 0.5 128 Computers 0.005 5 × 10 −5 500 0.5 32 Photo 0.005 5 × 10 −5 500 0.5 32 Texas 0.01 3 × 10 −5 200 0.5 16 Cornell 0.01 5 × 10 −5 200 0.5 16 
+
+19 Submission and Formatting Instructions for ICML 2026 
+
+varied in the range [0 .1, 1.0] and γ in [0 .01 , 0.1] on Cora. 
+
+F.3. Complexity Analysis 
+
+FGN achieves computational complexity O(L · (|E| d2 + N F d h)) , where L is the number of message passing layers, |E| 
+
+is the number of edges, d is the hidden dimension, N is the number of nodes, F is the input feature dimension, and dh is the field network width. The term O(|E| d2) corresponds to the field-modulated message passing operations per layer, and 
+
+O(N F d h) corresponds to computing the scalar energy field E via the MLP in Eq. (13). Since L is typically a small constant (2–3 layers) and real-world graphs are sparse with |E| ∼ O(N ), FGN maintains linear scalability. Moreover, dh ≪ d makes the overhead from the field computation negligible. 
+
+# G. Ablation Study Details 
+
+We define each cumulative variant in Table 3 as follows: • GCN (baseline) : Standard two-layer GCN without any field modulation. • + Static field : A scalar energy field E = σ(MLP (X)) is computed from node features and used to compute weights 
+
+wij = exp( −ξ∥Ei − Ej ∥2) as in Eq. (14), with frozen field parameters. • + Field-modulated diffusion : The field E is jointly trained via Lcoh (Eq. (15) ), but without bidirectional co-evolution. • + Dynamic co-evolution : Full iterative coupling enabled via Eq. (11). • + Entropy balance : Separation loss Lsep (Eq. (16)) added. • + Hierarchical constraints : Mutual information loss Lsym (Eq. (17)) added. 
+
+# H. Robustness Experiment Details 
+
+All robustness experiments are conducted on the Cora dataset. Results are averaged over 10 independent random seeds. 
+
+Feature dropping. For a given drop ratio p ∈ { 0, 0.2, 0.4, 0.6, 0.8, 0.9}, we randomly mask a fraction p of the feature dimensions to zero independently for each node. 
+
+Feature attack (Gaussian noise). We add i.i.d. Gaussian noise: ˜xi,j = xi,j + ϵi,j , where ϵi,j ∼ N (0 , σ 2 · Var( X·,j )) ,with σ ∈ { 0.1, 0.2, 0.5, 1.0}.
+
+Edge removal. We randomly delete a fraction q ∈ { 0, 0.2, 0.4, 0.6} of existing edges. No connectivity restoration is applied. 
+
+Edge addition. We randomly add a fraction r ∈ { 0, 0.2, 0.4, 0.6} of non-edges from the complement graph. 
+
+# I. Visualization Details 
+
+This appendix provides the t-SNE visualizations of node embeddings on the Cora dataset for FGN and several baseline methods. All visualizations use the same hyperparameters for fair comparison. Fig. 5 shows that FGN forms tight, well-separated clusters aligned with class labels, while baseline methods exhibit more inter-class mixing. This qualitative evidence supports the effectiveness of our proposed field-graph co-evolution mechanism. 20 Submission and Formatting Instructions for ICML 2026 
+
+(a) FGN (b) GCN (c) GAT (d) PGBSF 
+
+(e) ELU-GCN (f) FTCP (g) MOGCN (h) HGRN 
+
+Figure 5. t-SNE visualization comparison on Cora dataset. 
+
+21

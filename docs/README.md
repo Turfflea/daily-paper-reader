@@ -6,208 +6,128 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-01 ~ 2026-06-30
-- 运行时间：2026-06-30 14:33:11 UTC
+- 最新运行日期：2026-06-22 ~ 2026-07-01
+- 运行时间：2026-07-01 01:11:18 UTC
 - 运行状态：成功
-- 本次总论文数：62
-- 精读区：51
+- 本次总论文数：35
+- 精读区：24
 - 速读区：11
 
 ### 今日简报（AI）
-6月精读62篇前沿论文，聚焦时序预测符号注意力与高维表格基础模型两大满分突破。  
-值得关注的是签名双注意力机制对时序依赖的精准捕捉，以及GOTabPFN用紧凑分词让表格模型迈向高维高效。  
-建议读者从这两篇满分论文入手，快速把握时序与表格AI的范式跃迁。
-- 详情：[/20260601-20260630/README](/20260601-20260630/README)
+- 今日共生成 35 篇推荐（精读 24 篇，速读 11 篇）
+- 精读：《Interpretable Kolmogorov-Arnold Network with Feature-Isolated Temporal Attention Mechanism for Electricity Load Forecasting》（10.0/10）, 《SkyChain Intelligence: A Blockchain-Secured Multi-Agent DRL Framework for Low-Altitude Embodied Artificial Intelligence》（10.0/10）
+- 速读：《Autoencoder based optimized SSL representations: Complexity Minimization and improved Dysarthric ASR》（8.0/10）, 《Holographic Memory for Zero-Shot Compositional Reasoning in Knowledge Graphs: A Mechanistic Study of Where and Why It Fails》（8.0/10）, 《Convex--Concave Quadratic Spectral Filtering for Graph Neural Networks》（8.0/10）
+- 这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。
+- 详情：[/20260622-20260701/README](/20260622-20260701/README)
 
 ### 精读区论文标签
-1. [Signed Dual Attention: Capturing Signed Dependencies in Time Series Forecasting](/20260601-20260630/2606.04833v1-signed-dual-attention-capturing-signed-dependencies-in-time-series-forecasting)  
+1. [Interpretable Kolmogorov-Arnold Network with Feature-Isolated Temporal Attention Mechanism for Electricity Load Forecasting](/20260622-20260701/2606.23425v1-interpretable-kolmogorov-arnold-network-with-feature-isolated-temporal-attention-mechanism-for-electricity-load-forecasting)  
    标签：评分：10.0/10、query:mt
-   evidence：提出用于时间序列预测的符号双重注意力。
-2. [GOTabPFN: From Feature Ordering to Compact Tokenization for Tabular Foundation Models on High-Dimensional Data](/20260601-20260630/2606.05441v2-gotabpfn-from-feature-ordering-to-compact-tokenization-for-tabular-foundation-models-on-high-dimensional-data)  
+   evidence：用于电力负荷预测的新型可解释深度学习模型
+2. [SkyChain Intelligence: A Blockchain-Secured Multi-Agent DRL Framework for Low-Altitude Embodied Artificial Intelligence](/20260622-20260701/2606.24193v1-skychain-intelligence-a-blockchain-secured-multi-agent-drl-framework-for-low-altitude-embodied-artificial-intelligence)  
    标签：评分：10.0/10、query:mt
-   evidence：针对高维低样本量数据的表格深度学习预测方法
-3. [Constrained Deep Reinforcement Learning for Cognitive Radar Resource Management](/20260601-20260630/2606.05526v1-constrained-deep-reinforcement-learning-for-cognitive-radar-resource-management)  
+   evidence：多智能体深度强化学习框架,用于低空网络优化中的资源分配
+3. [Graph Neural Networks Applications Across Domains: All Insights You Need](/20260622-20260701/2606.27202v1-graph-neural-networks-applications-across-domains-all-insights-you-need)  
    标签：评分：10.0/10、query:mt
-   evidence：约束深度强化学习解决雷达时间分配问题
-4. [Trio: Learning Time-Series Forecasting with Temporal-Spatial-Sample Attention and Structural Causal Priors](/20260601-20260630/2606.07291v1-trio-learning-time-series-forecasting-with-temporal-spatial-sample-attention-and-structural-causal-priors)  
-   标签：评分：10.0/10、query:mt
-   evidence：提出Trio架构，结合时间-空间-样本注意力进行多元时间序列预测。
-5. [S$^2$COPE: Self-Supervised Concept Discovery via Preference Learning](/20260601-20260630/2606.14586v1-s2cope-self-supervised-concept-discovery-via-preference-learning)  
-   标签：评分：10.0/10、query:mt
-   evidence：无标签自监督概念发现通过偏好优化
-6. [Distribution-Aware Diffusion-LLM for Robust Ultra-Long-Term Time Series Forecasting](/20260601-20260630/2606.23391v1-distribution-aware-diffusion-llm-for-robust-ultra-long-term-time-series-forecasting)  
-   标签：评分：10.0/10、query:mt
-   evidence：将条件扩散模型集成到LLM用于时间序列预测
-7. [Selective Time Series Forecasting via Metalearning](/20260601-20260630/2606.23448v1-selective-time-series-forecasting-via-metalearning)  
-   标签：评分：10.0/10、query:mt
-   evidence：基于深度学习与元学习的时序预测选择性框架，建模误差分位数
-8. [Do Larger Models Really Win in Drug Discovery?A Benchmark Assessment of Model Scaling in AI-Driven Molecular Property and Activity Prediction](/20260601-20260630/biorxiv-10-64898-2026-04-29-721568-v3-do-larger-models-really-win-in-drug-discoverya-benchmark-assessment-of-model-scaling-in-ai-driven-molecular-property-and-activity-prediction)  
-   标签：评分：10.0/10、query:mt
-   evidence：在药物发现中基准测试图神经网络和分子基础模型用于分子性质预测
-9. [Do Larger Models Really Win in Drug Discovery?A Benchmark Assessment of Model Scaling in AI-Driven Molecular Property and Activity Prediction](/20260601-20260630/biorxiv-10-64898-2026-04-29-721568-v4-do-larger-models-really-win-in-drug-discoverya-benchmark-assessment-of-model-scaling-in-ai-driven-molecular-property-and-activity-prediction)  
-   标签：评分：10.0/10、query:mt
-   evidence：基准测试图神经网络与大模型在分子性质预测中的表现，直接针对GNN用于分子性质预测及可迁移性。
-10. [Predicting P-glycoprotein Substrate Status Using a Pretrained Graph Neural Network: A TDC Benchmark Study](/20260601-20260630/biorxiv-10-64898-2026-06-01-729343-v1-predicting-p-glycoprotein-substrate-status-using-a-pretrained-graph-neural-network-a-tdc-benchmark-study)  
-   标签：评分：10.0/10、query:mt
-   evidence：自监督属性掩码预训练图神经网络用于分子性质预测
-11. [Nonlinear influence of reward volatility on arbitration between multiple learning strategies reflects cost-benefit optimization](/20260601-20260630/biorxiv-10-64898-2026-06-15-732293-v1-nonlinear-influence-of-reward-volatility-on-arbitration-between-multiple-learning-strategies-reflects-cost-benefit-optimization)  
-   标签：评分：10.0/10、query:mt
-   evidence：研究无模型与基于模型强化学习的仲裁。
-12. [Coordination Graphs for Constrained Multi-Agent Reinforcement Learning](/20260601-20260630/2606.02337v1-coordination-graphs-for-constrained-multi-agent-reinforcement-learning)  
+   evidence：关于图神经网络跨领域关系数据建模的综合综述
+4. [Learning Graphs through Continuous Information Entropy Fields](/20260622-20260701/2606.22895v1-learning-graphs-through-continuous-information-entropy-fields)  
    标签：评分：9.0/10、query:mt
-   evidence：协调图与拉格朗日对偶结合用于约束多智能体强化学习
-13. [IdEst: Assessing Self-Supervised Learning Representations via Intrinsic Dimension](/20260601-20260630/2606.03338v1-idest-assessing-self-supervised-learning-representations-via-intrinsic-dimension)  
+   evidence：提出基于信息熵场的图网络用于图学习
+5. [Training-free Cross-domain Few-shot Segmentation via Robust Semantic Representation and Matching](/20260622-20260701/2606.24297v1-training-free-cross-domain-few-shot-segmentation-via-robust-semantic-representation-and-matching)  
    标签：评分：9.0/10、query:mt
-   evidence：内在维度估计无标签评估自监督表征质量
-14. [Topology-Aware Gaussian Graph Repair for Robust Graph Neural Networks](/20260601-20260630/2606.03462v1-topology-aware-gaussian-graph-repair-for-robust-graph-neural-networks)  
+   evidence：自监督表示用于小样本分割
+6. [Towards Scalable Multi-Task Reinforcement Learning with Large Decision Models](/20260622-20260701/2606.24962v1-towards-scalable-multi-task-reinforcement-learning-with-large-decision-models)  
    标签：评分：9.0/10、query:mt
-   evidence：提出图修复框架处理噪声和缺失边，增强GNN消息传递的鲁棒性
-15. [GOTabPFN: From Feature Ordering to Compact Tokenization for Tabular Foundation Models on High-Dimensional Data](/20260601-20260630/2606.05441v1-gotabpfn-from-feature-ordering-to-compact-tokenization-for-tabular-foundation-models-on-high-dimensional-data)  
+   evidence：在数千个强化学习环境上训练统一转换器策略以实现可扩展多任务决策
+7. [Frequency-Aware Self-Supervised Music Representation Learning](/20260622-20260701/2606.25713v2-frequency-aware-self-supervised-music-representation-learning)  
    标签：评分：9.0/10、query:mt
-   evidence：基于图引导特征排序和压缩的表格基础模型用于高维预测。
-16. [SMI: Efficient Self-Supervised Learning via Mutual-Information-Inspired Dependency Optimization](/20260601-20260630/2606.08332v1-smi-efficient-self-supervised-learning-via-mutual-information-inspired-dependency-optimization)  
+   evidence：利用时频结构的自监督音乐表示学习
+8. [MiniOpt: Reasoning to Model and Solve General Optimization Problems with Limited Resources](/20260622-20260701/2606.25832v1-miniopt-reasoning-to-model-and-solve-general-optimization-problems-with-limited-resources)  
    标签：评分：9.0/10、query:mt
-   evidence：提出一种轻量级自监督学习目标，无需标签进行表征学习
-17. [What Makes a Desired Graph for Relational Deep Learning?](/20260601-20260630/2606.08491v1-what-makes-a-desired-graph-for-relational-deep-learning)  
+   evidence：强化学习框架，通过推理-建模-求解范式学习解决优化问题
+9. [MiniOpt: Reasoning to Model and Solve General Optimization Problems with Limited Resources](/20260622-20260701/2606.25832v2-miniopt-reasoning-to-model-and-solve-general-optimization-problems-with-limited-resources)  
    标签：评分：9.0/10、query:mt
-   evidence：研究从关系数据库构建适合图神经网络关系推理的图结构，直接相关于关系数据建模
-18. [InA-Probe: Instruction-Aware Active Probing for Time Series Forecasting with LLMs](/20260601-20260630/2606.08601v1-ina-probe-instruction-aware-active-probing-for-time-series-forecasting-with-llms)  
+   evidence：利用强化学习在有限资源下求解优化问题
+10. [Hierarchical Reinforcement Learning for Neural Network Compression (HiReLC): Pruning and Quantization](/20260622-20260701/2606.26002v1-hierarchical-reinforcement-learning-for-neural-network-compression-hirelc-pruning-and-quantization)  
    标签：评分：9.0/10、query:mt
-   evidence：通过指令感知主动探测推进基于大语言模型的时间序列预测
-19. [Neuro-Relational Programs: Unifying Queries and Neural Computation over Structured Data](/20260601-20260630/2606.11946v1-neuro-relational-programs-unifying-queries-and-neural-computation-over-structured-data)  
+   evidence：层次强化学习用于神经网络压缩自动优化的序列决策
+11. [ReaORE: Reasoning-Guided Progressive Open Relation Extraction Empowered by Large Reasoning Models](/20260622-20260701/2606.26986v1-reaore-reasoning-guided-progressive-open-relation-extraction-empowered-by-large-reasoning-models)  
    标签：评分：9.0/10、query:mt
-   evidence：通过神经关系程序统一图神经计算与关系数据库查询
-20. [Generalized Linear Graph Representation: A Compact Operator Space for Graph Signal Processing and Graph Neural Networks](/20260601-20260630/2606.14107v1-generalized-linear-graph-representation-a-compact-operator-space-for-graph-signal-processing-and-graph-neural-networks)  
+   evidence：自然语言处理用于文本关系抽取
+12. [GNBAN: Graph Neural Basis Attention Networks for Long-Horizon Forecasting over Large Entity Sets](/20260622-20260701/2606.27863v1-gnban-graph-neural-basis-attention-networks-for-long-horizon-forecasting-over-large-entity-sets)  
    标签：评分：9.0/10、query:mt
-   evidence：提出新型紧凑双参数算子族用于图表示，改善GNN和图信号处理的关系数据建模。
-21. [Performance-Driven Environment Abstraction with Multi-Timescale Learning](/20260601-20260630/2606.17377v1-performance-driven-environment-abstraction-with-multi-timescale-learning)  
+   evidence：图神经网络用于大规模实体集的长期需求预测
+13. [Compact deep learning pipeline for particle track reconstruction in the pCT detector system](/20260622-20260701/2606.30158v1-compact-deep-learning-pipeline-for-particle-track-reconstruction-in-the-pct-detector-system)  
    标签：评分：9.0/10、query:mt
-   evidence：面向大MDP的性能驱动环境抽象的多时间尺度强化学习
-22. [MMGNN: Multi-level, multi-color graph neural networks for molecular property prediction](/20260601-20260630/2606.20906v1-mmgnn-multi-level-multi-color-graph-neural-networks-for-molecular-property-prediction)  
+   evidence：深度学习模型预测质子CT中的粒子击中位置和动能
+14. [PromptGNN-sim: Deep Fusion and Alignment of GNN and LLMs for Text-Attributed Graph Learning](/20260622-20260701/2606.30291v1-promptgnn-sim-deep-fusion-and-alignment-of-gnn-and-llms-for-text-attributed-graph-learning)  
    标签：评分：9.0/10、query:mt
-   evidence：分层多色图神经网络将分子图分解为子图进行性质预测。
-23. [SLeDGe: Semi-Supervised Learning on Data Streams with Graph Structure Learning](/20260601-20260630/2606.21096v1-sledge-semi-supervised-learning-on-data-streams-with-graph-structure-learning)  
+   evidence：PromptGNN-sim结合GNN和LLM进行文本属性图学习的结构-语义融合，属于关系数据建模。
+15. [FlexTab: A Flexible Encoder-Decoder Architecture for In-Context Learning Across Diverse Tabular Tasks](/20260622-20260701/2606.30336v1-flextab-a-flexible-encoder-decoder-architecture-for-in-context-learning-across-diverse-tabular-tasks)  
    标签：评分：9.0/10、query:mt
-   evidence：数据流上半监督学习，联合学习自适应图结构。
-24. [Universal Encoders for Modular Relational Deep Learning](/20260601-20260630/2606.21434v1-universal-encoders-for-modular-relational-deep-learning)  
+   evidence：面向表格数据的上下文学习编码器-解码器架构，可处理分类、回归、异常检测和关系任务。
+16. [Scaling SMILES-Based Chemical Language Models for Therapeutic Peptide Engineering](/20260622-20260701/biorxiv-10-64898-2026-01-06-697994-v5-scaling-smiles-based-chemical-language-models-for-therapeutic-peptide-engineering)  
    标签：评分：9.0/10、query:mt
-   evidence：模块化关系深度学习通过通用编码器解耦行编码与图消息传递。
-25. [Radial Basis Function Networks as Projection Heads in Self-Supervised Learning](/20260601-20260630/2606.21590v1-radial-basis-function-networks-as-projection-heads-in-self-supervised-learning)  
+   evidence：在大规模分子数据集上自监督学习化学语言模型,实现无标签的表示学习
+17. [scVIP: personalized modeling of single-cell transcriptomes for developmental and disease phenotypes](/20260622-20260701/biorxiv-10-64898-2026-04-20-717759-v2-scvip-personalized-modeling-of-single-cell-transcriptomes-for-developmental-and-disease-phenotypes)  
    标签：评分：9.0/10、query:mt
-   evidence：径向基函数网络作为自监督学习投影头，配合无标签质量度量
-26. [TaLK: Text-attributed Graph Dataset Distillation via Coupling Language Model with Graph-Aware Kernel](/20260601-20260630/2606.22975v1-talk-text-attributed-graph-dataset-distillation-via-coupling-language-model-with-graph-aware-kernel)  
+   evidence：利用深度生成模型从单细胞转录组学预测表型
+18. [LNGCN: a distance-aware continuous-time graph protocol for prioritizing protein-protein interaction candidates](/20260622-20260701/biorxiv-10-64898-2026-04-30-721835-v2-lngcn-a-distance-aware-continuous-time-graph-protocol-for-prioritizing-protein-protein-interaction-candidates)  
    标签：评分：9.0/10、query:mt
-   evidence：使用语言模型和图神经网络对文本属性图进行数据集蒸馏。
-27. [Interpretable Material Spatial Intelligence for Discovery of Governing Microstructural Features](/20260601-20260630/2606.23729v1-interpretable-material-spatial-intelligence-for-discovery-of-governing-microstructural-features)  
+   evidence：图神经网络（LNGCN）通过距离感知连续时间图协议进行分子性质预测（蛋白相互作用）。
+19. [Optimal Practice Schedules in a Dual-Rate Model of Motor Adaptation, and Their Recovery by Reinforcement Learning](/20260622-20260701/biorxiv-10-64898-2026-06-17-732970-v1-optimal-practice-schedules-in-a-dual-rate-model-of-motor-adaptation-and-their-recovery-by-reinforcement-learning)  
    标签：评分：9.0/10、query:mt
-   evidence：从多模态空间观测学习共享潜在表征；材料知识表示
-28. [3D Masked Autoencoders are Robust Learners of Volumetric and Multimodal Cellular Representations for Microscopy](/20260601-20260630/2606.23964v1-3d-masked-autoencoders-are-robust-learners-of-volumetric-and-multimodal-cellular-representations-for-microscopy)  
+   evidence：用强化学习优化练习时间表（顺序决策）
+20. [Development of Deep-Learning Models that Predict Quantitative Protein-Ligand Interactions in Glycobiology as a part of a Capstone Course](/20260622-20260701/biorxiv-10-64898-2026-06-19-733466-v2-development-of-deep-learning-models-that-predict-quantitative-protein-ligand-interactions-in-glycobiology-as-a-part-of-a-capstone-course)  
    标签：评分：9.0/10、query:mt
-   evidence：使用3D掩码自编码器在体积显微镜数据上进行自监督表示学习，优于2D方法
-29. [SURGELLM: Rethinking Multi-Task Evaluation through Task-Aware Feature Gating with Class-Balanced Normalization](/20260601-20260630/2606.24259v1-surgellm-rethinking-multi-task-evaluation-through-task-aware-feature-gating-with-class-balanced-normalization)  
+   evidence：深度学习模型从蛋白质序列和聚糖SMILES预测结合强度
+21. [Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings](/20260622-20260701/biorxiv-10-64898-2026-06-23-734145-v1-learning-perturbation-effects-through-contrastive-alignment-of-multimodal-biological-embeddings)  
    标签：评分：9.0/10、query:mt
-   evidence：面向多任务NLP的统一Transformer框架，具备任务感知特征门控和类别平衡归一化
-30. [Compositional Behavioral Semantics for State Abstraction in Reinforcement Learning](/20260601-20260630/2606.25357v1-compositional-behavioral-semantics-for-state-abstraction-in-reinforcement-learning)  
+   evidence：CLIP式多模态框架用于生物扰动的自监督表征学习。
+22. [Computational reconstruction of hierarchical cis-regulatory networks reveals synergistic transcription control and disease-associated rewiring](/20260622-20260701/biorxiv-10-64898-2026-06-24-734159-v1-computational-reconstruction-of-hierarchical-cis-regulatory-networks-reveals-synergistic-transcription-control-and-disease-associated-rewiring)  
    标签：评分：9.0/10、query:mt
-   evidence：提出强化学习中行为语义的统一组合框架
-31. [A General Framework for Learning Algebraic Properties from Cayley Graphs using Graph Neural Networks](/20260601-20260630/2606.26212v1-a-general-framework-for-learning-algebraic-properties-from-cayley-graphs-using-graph-neural-networks)  
+   evidence：深度学习框架将顺式调控建模作为潜在图推理任务,用于关系数据建模
+23. [Incorporating Surfaced-Induced Dissociation Mass Spectrometry Data into an AlphaFold-derived deep learning network improves protein structure prediction](/20260622-20260701/biorxiv-10-64898-2026-06-26-734850-v1-incorporating-surfaced-induced-dissociation-mass-spectrometry-data-into-an-alphafold-derived-deep-learning-network-improves-protein-structure-prediction)  
    标签：评分：9.0/10、query:mt
-   evidence：图神经网络从凯莱图学习代数性质
-32. [HALO: Hierarchical Auction-assisted Learning for Offloading in SAGIN](/20260601-20260630/2606.26293v1-halo-hierarchical-auction-assisted-learning-for-offloading-in-sagin)  
+   evidence：整合实验质谱数据的深度学习网络用于蛋白质结构预测
+24. [Prot2Prop: Structure-informed multitask protein property prediction](/20260622-20260701/biorxiv-10-64898-2026-06-28-735009-v1-prot2prop-structure-informed-multitask-protein-property-prediction)  
    标签：评分：9.0/10、query:mt
-   evidence：分层拍卖辅助强化学习用于SAGIN中的时延感知任务卸载与资源分配
-33. [Regularized Reward-Punishment Reinforcement Learning](/20260601-20260630/2606.28152v1-regularized-reward-punishment-reinforcement-learning)  
-   标签：评分：9.0/10、query:mt
-   evidence：用于奖励-惩罚强化学习的KL耦合策略正则化方法
-34. [mCGCNN: A Dual-Stream Crystal Graph Convolutional Neural Network for the Efficient Prediction of Magnetic Properties of Crystalline Materials](/20260601-20260630/2606.28458v1-mcgcnn-a-dual-stream-crystal-graph-convolutional-neural-network-for-the-efficient-prediction-of-magnetic-properties-of-crystalline-materials)  
-   标签：评分：9.0/10、query:mt
-   evidence：图神经网络用于晶体材料磁性预测，具有磁性感知架构
-35. [Latent Bridges for Multi-Table Question Answering](/20260601-20260630/2606.28916v1-latent-bridges-for-multi-table-question-answering)  
-   标签：评分：9.0/10、query:mt
-   evidence：应用异构图神经网络进行多表关系型数据库的问答
-36. [Microbial Named Entity Recognition and Normalisation for AI-assisted Literature Review and Meta-Analysis](/20260601-20260630/biorxiv-10-1101-2025-08-29-671515-v2-microbial-named-entity-recognition-and-normalisation-for-ai-assisted-literature-review-and-meta-analysis)  
-   标签：评分：9.0/10、query:mt
-   evidence：深度学习算法用于微生物组文献的命名实体识别与标准化
-37. [VaxjoGNN: A Graph Neural Network for Ontology-Grounded Vaccine Adjuvant Recommendation](/20260601-20260630/biorxiv-10-1101-2025-11-27-690985-v3-vaxjognn-a-graph-neural-network-for-ontology-grounded-vaccine-adjuvant-recommendation)  
-   标签：评分：9.0/10、query:mt
-   evidence：使用图神经网络在异构知识图谱上进行疾病-佐剂推荐
-38. [Unsupervised Representation Learning Reveals Individualized Neurophysiological Profiles](/20260601-20260630/biorxiv-10-64898-2026-02-10-705127-v2-unsupervised-representation-learning-reveals-individualized-neurophysiological-profiles)  
-   标签：评分：9.0/10、query:mt
-   evidence：使用无条件的自编码器进行无监督表示学习，从MEG数据中学习神经生理特征，无需标签，符合自监督学习。
-39. [Efficient Learning of Predictive Maps for Flexible Planning](/20260601-20260630/biorxiv-10-64898-2026-02-11-705395-v2-efficient-learning-of-predictive-maps-for-flexible-planning)  
-   标签：评分：9.0/10、query:mt
-   evidence：带重要性采样的TD学习构建策略无关的预测图用于规划。
-40. [MolDeBERTa: Foundational Model for Physicochemical and Substructure-Informed Molecular Representation Learning](/20260601-20260630/biorxiv-10-64898-2026-02-15-706011-v2-moldeberta-foundational-model-for-physicochemical-and-substructure-informed-molecular-representation-learning)  
-   标签：评分：9.0/10、query:mt
-   evidence：在未标记分子上预训练的自监督分子编码器，用于无标签的属性预测
-41. [Topology-aware reconstruction of cellular state landscapes from microscopy using self-supervised learning](/20260601-20260630/biorxiv-10-64898-2026-05-30-728966-v1-topology-aware-reconstruction-of-cellular-state-landscapes-from-microscopy-using-self-supervised-learning)  
-   标签：评分：9.0/10、query:mt
-   evidence：在显微图像上进行无标签的自监督学习。
-42. [ORIGAMI: Orientation-Aware Graph Neural Network for Assessing Multimeric Interfaces of Protein Complex Structures](/20260601-20260630/biorxiv-10-64898-2026-05-31-729128-v1-origami-orientation-aware-graph-neural-network-for-assessing-multimeric-interfaces-of-protein-complex-structures)  
-   标签：评分：9.0/10、query:mt
-   evidence：方向感知的GNN利用标量和向量特征评估蛋白质多聚体界面。
-43. [Learning residue-level context for modeling protein-protein interactions](/20260601-20260630/biorxiv-10-64898-2026-06-01-729118-v1-learning-residue-level-context-for-modeling-protein-protein-interactions)  
-   标签：评分：9.0/10、query:mt
-   evidence：基于Transformer的深度学习框架预测蛋白质相互作用扰动
-44. [Self-supervised Internal Learning Enhances Isotropic Resolution for Three-dimensional Fluorescence Microscopy](/20260601-20260630/biorxiv-10-64898-2026-06-04-717237-v1-self-supervised-internal-learning-enhances-isotropic-resolution-for-three-dimensional-fluorescence-microscopy)  
-   标签：评分：9.0/10、query:mt
-   evidence：自监督内部学习用于显微镜图像恢复
-45. [APOSM: Pairwise preference learning improves generative small-molecule design](/20260601-20260630/biorxiv-10-64898-2026-06-06-730554-v1-aposm-pairwise-preference-learning-improves-generative-small-molecule-design)  
-   标签：评分：9.0/10、query:mt
-   evidence：消息传递图神经网络用于分子属性预测；成对偏好学习
-46. [TaxoFormer: Hierarchical Transformer for Predicting the Full Taxonomic Lineage of Protein Sequences](/20260601-20260630/biorxiv-10-64898-2026-06-06-730618-v1-taxoformer-hierarchical-transformer-for-predicting-the-full-taxonomic-lineage-of-protein-sequences)  
-   标签：评分：9.0/10、query:mt
-   evidence：使用层次transformer进行蛋白质分类谱系预测，属于非管理领域的深度学习预测建模。
-47. [Untrained Convolutional Neural Networks as Feature Extractors for Structural MRI](/20260601-20260630/biorxiv-10-64898-2026-06-07-730652-v1-untrained-convolutional-neural-networks-as-feature-extractors-for-structural-mri)  
-   标签：评分：9.0/10、query:mt
-   evidence：未经训练的CNN作为特征提取器在MRI任务上取得预测性能。
-48. [Breaking the bottleneck: self-supervised deep learning framework for fully automated fossil CT segmentation](/20260601-20260630/biorxiv-10-64898-2026-06-07-730692-v1-breaking-the-bottleneck-self-supervised-deep-learning-framework-for-fully-automated-fossil-ct-segmentation)  
-   标签：评分：9.0/10、query:mt
-   evidence：自监督SimCLR对比预训练与U-Net用于无人工标注的化石CT分割
-49. [MAE-UNETR++: Masked Autoencoder Pretraining for 3-D Lung Nodule Segmentation](/20260601-20260630/biorxiv-10-64898-2026-06-17-733000-v1-mae-unetr-masked-autoencoder-pretraining-for-3-d-lung-nodule-segmentation)  
-   标签：评分：9.0/10、query:mt
-   evidence：掩码自编码器预训练用于自监督三维医学图像分割
-50. [CellOS: Learning a World Model of Cellular State through Joint Embedding Prediction](/20260601-20260630/biorxiv-10-64898-2026-06-18-733163-v1-cellos-learning-a-world-model-of-cellular-state-through-joint-embedding-prediction)  
-   标签：评分：9.0/10、query:mt
-   evidence：多视图基础模型从配对视图无标签学习细胞状态表示。
-51. [Inverse reinforcement learning reveals action-oriented value signals in naturalistic decision making](/20260601-20260630/biorxiv-10-64898-2026-06-24-733779-v1-inverse-reinforcement-learning-reveals-action-oriented-value-signals-in-naturalistic-decision-making)  
-   标签：评分：9.0/10、query:mt
-   evidence：应用逆向强化学习从驾驶任务中的序列决策推断价值，符合用于序列决策和优化的强化学习。
+   evidence：多任务深度学习模型联合预测蛋白质的六项性质
 
 ### 速读区论文标签
-1. [A Systematic Analysis of Linguistic Features in AI-Generated Text Detection Across Domains and Models](/20260601-20260630/2606.04177v1-a-systematic-analysis-of-linguistic-features-in-ai-generated-text-detection-across-domains-and-models)  
+1. [Autoencoder based optimized SSL representations: Complexity Minimization and improved Dysarthric ASR](/20260622-20260701/2606.24088v1-autoencoder-based-optimized-ssl-representations-complexity-minimization-and-improved-dysarthric-asr)  
    标签：评分：8.0/10、query:mt
-   evidence：分析语言特征以检测AI生成文本
-2. [Information Entropy Based Crystal Structure Prediction of Chemically Disordered Alloys via Graph Convolutional Neural Networks](/20260601-20260630/2606.08686v1-information-entropy-based-crystal-structure-prediction-of-chemically-disordered-alloys-via-graph-convolutional-neural-networks)  
+   evidence：基于自编码器的自监督语音表征优化以提升效率
+2. [Holographic Memory for Zero-Shot Compositional Reasoning in Knowledge Graphs: A Mechanistic Study of Where and Why It Fails](/20260622-20260701/2606.24948v1-holographic-memory-for-zero-shot-compositional-reasoning-in-knowledge-graphs-a-mechanistic-study-of-where-and-why-it-fails)  
    标签：评分：8.0/10、query:mt
-   evidence：图卷积神经网络建模原子关系用于无序合金的晶体结构预测
-3. [FlowRAG: Synergizing Explicit Reasoning via Frequency-Aware Multi-Granularity Graph Flow](/20260601-20260630/2606.17856v1-flowrag-synergizing-explicit-reasoning-via-frequency-aware-multi-granularity-graph-flow)  
+   evidence：利用全息记忆进行知识图谱嵌入以实现多跳关系推理
+3. [Convex--Concave Quadratic Spectral Filtering for Graph Neural Networks](/20260622-20260701/2606.24956v1-convex--concave-quadratic-spectral-filtering-for-graph-neural-networks)  
    标签：评分：8.0/10、query:mt
-   evidence：基于多粒度图流的图检索增强生成框架用于推理。
-4. [Sparse Point-Guided Fusion of Supervised and Self-Supervised Learning Model for Seaweed Segmentation](/20260601-20260630/2606.21026v1-sparse-point-guided-fusion-of-supervised-and-self-supervised-learning-model-for-seaweed-segmentation)  
+   evidence：DCQ-GNN采用凸凹二次谱滤波器提升图神经网络的频率选择性
+4. [BitNet Text Embeddings](/20260622-20260701/2606.25674v1-bitnet-text-embeddings)  
    标签：评分：8.0/10、query:mt
-   evidence：监督与自监督学习融合用于海藻分割
-5. [HiSE: A Lightweight Hierarchical Semantic Explainer for Heterogeneous Graph Neural Networks](/20260601-20260630/2606.03495v1-hise-a-lightweight-hierarchical-semantic-explainer-for-heterogeneous-graph-neural-networks)  
+   evidence：极低位宽LLM文本嵌入框架，实现高效自监督文本表示学习
+5. [KaLM-Reranker-V1: Fast but Not Late Interaction for Compressed Document Reranking](/20260622-20260701/2606.22807v1-kalm-reranker-v1-fast-but-not-late-interaction-for-compressed-document-reranking)  
    标签：评分：7.0/10、query:mt
-   evidence：为异质图神经网络提供轻量级解释器，增强关系数据建模的可解释性
-6. [Text-attributed Graph Condensation via Text Selection and Attribute Matching](/20260601-20260630/2606.03839v1-text-attributed-graph-condensation-via-text-selection-and-attribute-matching)  
+   evidence：基于编解码器解耦查询与文档计算的快速文档重排序模型
+6. [Neural Operator Processes for Probabilistic Operator Learning under Partial Observations](/20260622-20260701/2606.22946v1-neural-operator-processes-for-probabilistic-operator-learning-under-partial-observations)  
    标签：评分：7.0/10、query:mt
-   evidence：图神经网络用于文本属性图压缩；节点文本描述
-7. [Beyond Vector Similarity: A Structural Analysis of Graph-Augmented Retrieval for Industrial Knowledge Graphs](/20260601-20260630/2606.06003v1-beyond-vector-similarity-a-structural-analysis-of-graph-augmented-retrieval-for-industrial-knowledge-graphs)  
+   evidence：神经算子过程从稀疏观测预测完整场，是一种深度预测模型
+7. [Generative Retrieval via Diffusion Transformer with Metric-Ordered Sequence Training and Hybrid-Policy Preference Optimization](/20260622-20260701/2606.26899v1-generative-retrieval-via-diffusion-transformer-with-metric-ordered-sequence-training-and-hybrid-policy-preference-optimization)  
    标签：评分：7.0/10、query:mt
-   evidence：提出使用图遍历原语的LLM查询规划器进行工业知识图谱的结构化推理检索
-8. [Robust Active Learning for Few-Shot Example Selection in Text-to-SQL](/20260601-20260630/2606.10125v1-robust-active-learning-for-few-shot-example-selection-in-text-to-sql)  
+   evidence：基于扩散变压器的生成式检索实现模式保持的属性检索
+8. [Listwise Explanation of Embedding-Based Rankings via Semantic Chunk Grouping](/20260622-20260701/2606.27980v1-listwise-explanation-of-embedding-based-rankings-via-semantic-chunk-grouping)  
    标签：评分：7.0/10、query:mt
-   evidence：基于语义嵌入主动学习的少样本文本到SQL示例选择。
-9. [Finsler Geometry, Graph Neural Networks, and You](/20260601-20260630/2606.17185v1-finsler-geometry-graph-neural-networks-and-you)  
+   evidence：使用语义块分组的列表级Shapley方法解释密集检索排序
+9. [Predicate Importance Estimation and Decoupled Rationale-Score Distillation for Entity Alignment](/20260622-20260701/2606.22992v1-predicate-importance-estimation-and-decoupled-rationale-score-distillation-for-entity-alignment)  
    标签：评分：6.0/10、query:mt
-   evidence：提出Finsler几何图神经网络以替代基于拉普拉斯算子的GNN
-10. [Scaling SMILES-Based Chemical Language Models for Therapeutic Peptide Engineering](/20260601-20260630/biorxiv-10-64898-2026-01-06-697994-v4-scaling-smiles-based-chemical-language-models-for-therapeutic-peptide-engineering)  
+   evidence：基于嵌入的知识图谱实体对齐方法
+10. [Sublinearly Structured Deep Neural Networks Achieve Feature Learning Consistency for Compositional Functions](/20260622-20260701/2606.23477v1-sublinearly-structured-deep-neural-networks-achieve-feature-learning-consistency-for-compositional-functions)  
    标签：评分：6.0/10、query:mt
-   evidence：使用深度化学语言模型进行药物发现中的肽工程
-11. [HyperNiche: Learning Heterophilic Cellular Niches with Hypergraph Neural Networks](/20260601-20260630/biorxiv-10-64898-2026-05-30-728986-v1-hyperniche-learning-heterophilic-cellular-niches-with-hypergraph-neural-networks)  
+   evidence：对次线性结构深度神经网络在组合函数上的特征学习一致性提供理论保证，支持深度预测建模
+11. [Universal Guideline-Driven Image Clustering via a Hybrid LLM Agent](/20260622-20260701/2606.24094v1-universal-guideline-driven-image-clustering-via-a-hybrid-llm-agent)  
    标签：评分：6.0/10、query:mt
-   evidence：利用超图神经网络建模空间转录组中的高阶细胞关系，扩展图方法于关系数据
+   evidence：利用文本指南和LLM推理的通用图像聚类框架，可迁移至管理任务如客户细分
 
 
 <div class="dpr-home-promo-card">

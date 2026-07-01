@@ -1,0 +1,1437 @@
+Title: Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+URL Source: https://www.biorxiv.org/content/10.64898/2026.06.23.734145v1.full.pdf
+
+Number of Pages: 35
+
+Markdown Content:
+# Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings 
+
+Wenxin Long 1,* , Tianyu Liu 2,* , Artur Szałata 3,* , Fabian J. Theis 3, †, Lingzhou Xue 1, †, Hongyu Zhao 4, †
+
+> 1
+
+Department of Statistics, The Pennsylvania State University, University Park, PA 16802, USA 
+
+> 2
+
+Program of Computational Biology and Bioinformatics, Yale University, New Haven, CT 06511, USA 
+
+> 3
+
+Institute of Computational Biology, Helmholtz Center Munich, 85764 Oberschleissheim, Germany 
+
+> 4
+
+Department of Biostatistics, Yale University, New Haven, CT 06511, USA 
+
+wbl5283@psu.edu , tianyu.liu@yale.edu , artur.szalata@helmholtz-munich.de ,
+
+fabian.theis@helmholtz-munich.de , lzxue@psu.edu , hongyu.zhao@yale.edu 
+
+> *
+
+These authors contributed equally. 
+
+> †
+
+Corresponding authors. 
+
+Multimodal single-cell perturbation screens offer a scalable approach for characterizing the effects of genetic and chemical interventions on cellular state. However, most existing representation-learning methods are tailored to a single perturbation modality and fail to explicitly incorporate external se-mantic knowledge, which limits their ability to generalize across datasets and perturbation types. Here, we introduce PertOmni, a CLIP-style multimodal representation-learning framework that aligns tran-scriptomic perturbation signatures with text-derived embeddings of curated genes and compound de-scriptions, as well as image-derived embeddings from cell paintings. PertOmni jointly trains a shared transcriptomic encoder and dataset-specific text encoders using a masked contrastive objective that emphasizes within–cell-type discrimination while mitigating confounding effects arising from cell-type heterogeneity. We evaluate the produced joint embedding space on bi-directional retrieval, drug–gene interaction inference, and perturbation prediction across both small-molecule and CRISPRi perturba-tion datasets, and demonstrate consistent improvements over strong baseline methods. 
+
+Keywords: Perturb-seq, contrastive learning, multi-modality, large language model 1
+
+1. Introduction 2
+
+Numerous perturbation experiments have been developed to systematically quantify cellular changes 3
+
+under varying conditions (1–4), enabling the study of how cells respond to interventions. Recent ad-4
+
+vances in single-cell RNA sequencing enable these responses to be profiled at single-cell resolution, 5
+
+yielding control and perturbed transcriptomic readouts across many perturbations (2, 5, 6). Broadly 6
+
+speaking, such perturbations can be grouped into three major categories based on the perturbation 7
+
+used. Genetic perturbations, such as CRISPR-based ones (2), leverage targeted genome editing to 8
+
+disrupt or modulate gene function, thereby altering the expression of the perturbed gene and its 9
+
+associated regulatory network. Small-molecule perturbations (7, 8), in contrast, use chemical com-10 
+
+pounds that typically act on protein products such as enzymes or receptors, indirectly reshaping the 11 
+
+transcriptional landscape of affected pathways. Biologics form another category and include, for ex-12 
+
+ample, extracellular ligand stimulation with cytokines. Together, these experimental strategies have 13 
+
+become important tools for understanding cellular circuitry, providing insights into fundamental 14 
+
+biology and enabling the discovery of therapeutic targets. 15 
+
+> Contact: wbl5283@psu.edu
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+Analyzing gene expression profiles from perturbation experiments remains challenging. Histori-16 
+
+cally, the high cost of such experiments limited the availability of large-scale, genome-wide, or 17 
+
+atlas-level datasets (6). Although several institutes and companies have released single-cell per-18 
+
+turbation datasets with multiple replicates and experimental conditions (8–11), data quality and 19 
+
+noise remain persistent concerns. Perturbations can trigger stress or cell-death programs; moreover, 20 
+
+nuclease-based genetic perturbations can induce complex DNA damage such as chromothripsis (12), 21 
+
+and perturbation efficacy can be heterogeneous across cells (13). In addition, single-cell RNA-seq 22 
+
+measurements are prone to technical artifacts and batch effects (14, 15). These challenges present 23 
+
+as obstacles in analyzing perturbation effects rigorously. 24 
+
+In addition to transcriptomic profiling, image-based perturbation assays such as Cell Painting pro-25 
+
+vide a complementary strategy for measuring cellular responses (16). Cell Painting uses multiplexed 26 
+
+fluorescence microscopy to capture high-content morphological profiles across multiple cellular com-27 
+
+partments, enabling large-scale phenotypic screening of genetic or chemical perturbations (17, 18). 28 
+
+Compared with single-cell RNA-seq, Cell Painting offers a different view of perturbation effects by di-29 
+
+rectly measuring cellular morphology and subcellular organization. However, linking image-derived 30 
+
+phenotypes with textual biological knowledge and transcriptomic perturbation effects remains un-31 
+
+derexplored, especially in settings involving both genetic and small-molecule perturbations. 32 
+
+A range of computational methods for denoising, normalizing, and modeling perturbation responses 33 
+
+has been proposed to address these challenges, including (19–26). These methods typically use 34 
+
+as input a representation of the perturbation and the transcriptomic profile of the control cells of 35 
+
+interest. More recently, several single-cell foundation models such as (27–30) have also claimed to 36 
+
+support perturbation response prediction, but benchmarking studies such as (10, 31, 32) suggest that 37 
+
+their generalization remains limited. scGen (33) aims to predict single-cell perturbation responses 38 
+
+by learning a latent representation and transferring perturbation effects via latent-space arithmetic, 39 
+
+while GPerturb (34) estimates gene-level perturbation effects with calibrated uncertainty. Despite 40 
+
+these advances, two major gaps remain. First, most approaches overlook the integration of external 41 
+
+biological knowledge expressed in natural language, such as functional annotations of genes and 42 
+
+drugs, which could improve interpretability and predictive accuracy. Second, few frameworks model 43 
+
+both genetic and chemical perturbations. Such integration would enable the inference of drug–target 44 
+
+relationships. 45 
+
+Therefore, we introduce PertOmni, a unified framework for modeling and bridging perturbation 46 
+
+data across diverse perturbations and technologies. PertOmni learns a shared embedding space by 47 
+
+contrastively aligning LLM-derived perturbation text embeddings with transcriptomic perturbation-48 
+
+effect embeddings across genetic and small-molecule screens. Specifically, we embed curated gene 49 
+
+and drug descriptions, such as from NCBI (35), and jointly train text and transcriptome encoders so 50 
+
+that matched perturbations and expression readout are close in the latent space. We evaluate Per-51 
+
+tOmni on (i) bi-directional perturbation retrieval (text to transcriptome and transcriptome to text) 52 
+
+and (ii) downstream applications, including drug–gene interaction inference and retrieval-based per-53 
+
+turbation prediction, demonstrating improved alignment and utility compared to strong baselines. 54 
+
+Codes of PertOmni can be found here 1.55  
+
+> 1Codebase:
+
+https://anonymous.4open.science/r/PertOmni-D728/ 
+
+> 2
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint
+
+Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings 
+
+2. Results 56 𝑬 𝟏 𝑻 𝟏  …           
+
+> 𝑬 𝟐 𝑻 𝟐 …
+> 𝑬 𝟑 𝑻 𝟑 …
+> …
+> …
+> …
+> …
+> …𝑬 𝒏 𝑻 𝒏
+> 𝐸 1
+> 𝐸 2
+> 𝐸 3
+> 𝐸 …
+> 𝐸 𝑛
+> 𝑇 1𝑇 2𝑇 3𝑇 …𝑇 𝑛
+> EXP
+> Encoder
+> Text
+> Encoder
+> LLM
+> 𝑀 1𝑀 2𝑀 3𝑀 …𝑀 m
+> Visual
+> Encoder FM
+> …
+
+LmCLIP    
+
+> 𝑬 𝒎
+> ’𝑴 𝒎
+> 𝑬 𝟏
+> ’𝑴 𝟏
+> 𝑬 𝟐
+> ’𝑴 𝟐
+> Cell painting…
+> Chemical/Gene
+> information…
+
+# a b
+
+# c
+
+Genetic perturbation retrieval 
+
+> PertOmni
+
+Chemical perturbation retrieval 
+
+> PertOmni
+
+Overview of PertOmni 
+
+Perturbation prediction 
+
+> PertOmni
+
+Drug -gene interaction mapping                                      
+
+> PertOmni
+> 𝐸 1
+> ’
+> 𝐸 2
+> ’
+> 𝐸 m
+> ’
+> 1-1-1
+> -11-1
+> -1-11
+> 1-1
+> -11
+> 1-1-1-1
+> -11-1-1
+> -1-11-1
+> -1-1-11
+> LmCLIP =−1
+> n෍
+> i,j
+> log σ(Yij ∙⟨Ei,Tj⟩/𝑡 )−1
+> m෍
+> i′,j′
+> log σ(Yi′,j′
+> ′∙⟨Ei′
+> ′,Mj′⟩/𝑡 )
+> ABC
+> A
+> B
+> C
+
+cell line 
+
+True label  Y =
+
+> Drug -perturbation
+> dataset
+> Gene -perturbation
+> dataset
+
+Cell Painting image retrieval 
+
+> PertOmni
+
+Figure 1: Overview of PertOmni. (a) The illustration of the model architecture. We leverage con-trastive learning and modality-specific encoders to build PertOmni. (b) The illustration of masked contrastive learning. We modify the CLIP loss, 𝐿 mCLIP , to leverage multimodal and masked informa-tion during training. (c) Task illustration of downstream applications. 
+
+Method overview. Figure 1 summarizes PertOmni, which learns a joint embedding space aligning (i) 57 
+
+perturbed transcriptomic profiles and (ii) perturbation identities across genetic and small-molecule 58 
+
+screens. PertOmni uses a shared transcriptome encoder and perturbation-type–specific text encoders 59 
+
+(gene vs compound) that map LLM-initialized textual descriptions into the same latent space. Train-60 
+
+ing uses a masked contrastive objective that forms negatives only within the same cell line, reducing 61 
+
+confounding from cross–cell-line heterogeneity while preserving fine-grained within-context discrim-62 
+
+ination. 63 
+
+We evaluate the learned embeddings on four downstream applications: (i) drug–gene interaction 64 
+
+inference (36) via fine-tuning the text encoders on DGIdb labels (Figure 2), (ii) retrieval-based per-65 
+
+turbation effect prediction using nearest neighbors in the learned space (Figure 3), (iii) bi-directional 66 
+
+cross-modality retrieval between text and transcriptome embeddings (Figure 4), and (iv) bi-directional 67 
+
+3
+
+.CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings 
+
+cross-modality retrieval between text and image embeddings (Figure 5). Additional ablations on 68 
+
+transcriptome embedding choices are shown in Supplementary Figure 1. 69 
+
+Predicting drug–gene interaction with PertOmni. We fine-tune PertOmni for drug–gene interac-70 
+
+tion inference by optimizing a retrieval-style objective that increases similarity for annotated DGIdb 71 
+
+drug–gene pairs while leaving unannotated pairs untreated (positive–unlabeled setting). We split 72 
+
+drugs and genes so that test drugs/genes are unseen during training, and evaluate two settings: 73 
+
+Drug2Gene (rank genes for a drug) and Gene2Drug (rank drugs for a gene). Baselines include 74 
+
+similarity-based matching (37), and an SNN classifier trained on Vision Scores (38) or PertOmni 75 
+
+text, transcriptome, or text+transcriptome embeddings. 76 
+
+As shown in Figure 2(a–d), PertOmni_ft+text achieves the best performance across both tasks, im-77 
+
+proving AUROC and AUPRC over all similarity-based baselines and over the SNN classifier. Supple-78 
+
+mentary Figure 2 shows that fine-tuning substantially improves over the zero-shot variant, indicating 79 
+
+that aligning embeddings with interaction supervision is important beyond generic retrieval align-80 
+
+ment. 81 
+
+Figure 2: Results of drug-gene pair prediction. Details of choices are summarized in the legend. Tahoe blog baseline first computes differential Vision Scores relative to control cells, and then predicts drug-gene matching using cosine similarity between differential Vision Scores of drugs and genes. (a) AUROC comparison for the Drug2Gene task. (b) AUPRC comparison for the Drug2Gene task. (c) AUROC comparison for the Gene2Drug task. (d) AUPRC comparison for the Gene2Drug task. Because DGIdb annotations are sparse, we report AUPRC alongside the task positive rate and inter-82 
+
+pret gains relative to this baseline. Drug2Gene is consistently harder than Gene2Drug, consistent 83 
+
+with the many-to-many nature of drug targeting and incomplete interaction annotations: a single 84 
+
+> 4
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+compound can have multiple true targets, and many true targets may be unlabeled. 85 
+
+Predicting perturbation effects with PertOmni. We evaluate retrieval-based perturbation predic-86 
+
+tion by querying the learned embedding space for nearest-neighbor perturbations and aggregating 87 
+
+their observed expression profiles to predict the held-out perturbation response. Unlike LLM-only ap-88 
+
+proaches such as LangPert (39), PertOmni provides an explicit, data-grounded neighborhood over 89 
+
+perturbations that can be used directly for kNN prediction and for defining gene sets. 90 
+
+Figure 3: Perturbation prediction via retrieval. Details of methods are summarized in the legend. Performance is measured as the Pearson correlation between predicted and observed gene expres-sion. (a) All genes, RPE1. (b) Top-20 DEGs, RPE1. (c) All genes, HepG2. (d) Top-20 DEGs, HepG2. (e) All genes, Jurkat. (f) Top-20 DEGs, Jurkat. Figure 3(a–f) reports Pearson correlation between predicted and observed expression across three 91 
+
+perturb-seq datasets (RPE1 (9), HepG2, Jurkat (40)), evaluated on either all genes or the top-20 92 
+
+> 5
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+DEGs. Across settings, kNN prediction using PertOmni text embeddings yields the best performance 93 
+
+with 𝑘 = 100 . The comparison of PertOmni text embeddings with different 𝑘 s can be found in Sup-94 
+
+plementary Figure 3. From the linecharts, the performance is sensitive to the neighborhood size 𝑘 . At 95 
+
+larger 𝑘 , transcriptome-derived embeddings become competitive with text embeddings, suggesting 96 
+
+that denser neighborhoods partially compensate for weaker semantic priors. PertOmni consistently 97 
+
+outperforms LangPert when evaluated on sufficiently large gene sets; moreover, LangPert improves 98 
+
+when restricted to gene sets proposed by PertOmni (PertOmni+refined LangPert), indicating that 99 
+
+the gene-selection signal learned by PertOmni is useful beyond our framework. We include the non-100 
+
+control (non-ctrl) mean as a strong baseline. While competitive at small 𝑘 , this baseline is consistently 101 
+
+surpassed by PertOmni as 𝑘 increases, whereas other methods, including LangPert, do not reliably 102 
+
+outperform it. 103 
+
+Additionally, we compared our proposed method with GenePert (41) and STRING GNN (42). GenePert (41) 104 
+
+fits a ridge regression model from GenePT embeddings of perturbed genes (43) to mean expression 105 
+
+profiles and then uses the learned mapping to predict expression profiles for unseen perturbations. 106 
+
+STRING GNN, one of the top-performing methods in the benchmark studies from (42), initializes a 107 
+
+GNN with weights pretrained by link prediction on STRING (44), extracts the embedding of each 108 
+
+perturbed gene from the pretrained model, and uses a linear head to predict the observed treatment-109 
+
+effect vector by minimizing squared error. From Figure 3, our proposed PertOmni_text outperforms 110 
+
+all other methods. 111 
+
+Cross-modality retrieval benchmarking on transcriptomic and text. We assess how well PertOmni 112 
+
+aligns transcriptomic and textual representations using bi-directional retrieval (text ↔transcriptome) 113 
+
+under two perturbation regimes: chemical-only training on Tahoe-100M (8), CRISPRi-only training 114 
+
+on merged perturb-seq datasets (9, 40, 45), and joint training on both. We compare against single-115 
+
+modality baselines (e.g., scGPT (27), PaSCient (46)), one-hot embeddings, and random matching. 116 
+
+Retrieval is evaluated with ACC@K, nDCG@K, MRR, and an aggregate mean score. 117 
+
+Figure 4: Results of cross-modality retrieval between transcriptomic and text. We find that using training data from two perturbations can benefit CRISPR-based retrieval, whereas it does not improve Chem-based retrieval (Tahoe). (a) Multi-metric comparison based on the Tahoe 100M dataset. (b) Multi-metric comparison based on the merged CRISPR dataset. Figure 4 summarizes performance with a bubble plot across metrics. PertOmni and its variants 118 
+
+achieve the top or near-top rank on most metrics in both Tahoe and CRISPR settings, indicating 119 
+
+robust cross-modal alignment rather than gains limited to a single modality. Detailed results are in 120 
+
+Supplementary Figures 4 and 5. 121 
+
+Joint training improves CRISPR-side retrieval while slightly degrading Tahoe-side retrieval. We hy-122 
+
+> 6
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+pothesize that this reflects data imbalance, as we have substantially more CRISPR perturbations, 123 
+
+which can bias the shared space toward the higher-sample data. Exploring explicit reweighting or 124 
+
+balanced batching is a natural next step. Architecture and hyperparameter ablations are reported in 125 
+
+Supplementary Figures 1, 6, 7, 8, 9, 10, 11, 12, 13, and 14. 126 
+
+Cross-modality retrieval benchmarking on image and text. We further assess PertOmni’s ability 127 
+
+in aligning image and textual representations. We compare PertOmni with CellCLIP (47) on RxRx3-128 
+
+core (48), a Cell Painting dataset curated from the RxRx3 dataset (18). Following the preprocessing 129 
+
+steps in CellCLIP, we use only 5 channels in this dataset, and get channel-wise 1536 -dimensional 130 
+
+embeddings using pretrained DINOv2 (49). 131 
+
+On the image side, we train three different channel aggregation methods for PertOmni: (i) Con-132 
+
+cat_PertOmni: concatenates the channel-wise embeddings into a 5 × 1536 dimensional represen-133 
+
+tation; (ii) ProjMean_PertOmni: projects each channel embedding with a shared MLP, and then 134 
+
+mean-pools the projected channel embeddings. (iii) Mean_PertOmni: direct averages across chan-135 
+
+nels. Then we average the image embeddings to perturbation-level, and optimize the contrastive loss 136 
+
+between the perturbation-level image embedding and the LLM-derived text embedding. For com-137 
+
+parison with CellCLIP, we include both the pretrained checkpoint provided by CellCLIP and CellCLIP 138 
+
+fine-tuned on the RxRx3-core dataset (ft_CellCLIP). Retrieval between image and text is evaluated at 139 
+
+the perturbation level separately for compound and CRISPR perturbations, with ACC@K, nDCG@K, 140 
+
+MRR, and an aggregate mean score. 141 
+
+Figure 5: Results of cross-modality retrieval between image and text. (a) Multi-metric comparison based on the compound perturbations in RxRx3-core dataset. (b) Multi-metric comparison based on the genetic perturbations. Figure 5 summarizes performance with a bubble plot across metrics. All three variants of PertOmni 142 
+
+perform better than CellCLIP and ft_CellCLIP in the aggregated mean score in both compound 143 
+
+and genetic perturbations, indicating its robustness of aligning between image and text modalities. 144 
+
+Among the three variants, Concat_PertOmni performs the best, followed by ProjMean_PertOmni 145 
+
+and then Mean_PertOmni. This suggests that preserving channel-specific information is important 146 
+
+for cross-modality alignment. Concat_PertOmni retains the full channel identity by concatenating 147 
+
+channel-wise embeddings, whereas ProjMean_PertOmni preserves channel-wise processing but com-148 
+
+presses the channels through mean pooling. Mean_PertOmni performs the strongest aggregation by 149 
+
+directly averaging across channels, which removes channel identity earliest and may obscure stain-150 
+
+specific morphological signals. Detailed results can be found in Supplementary Figures 15, 16. 151 
+
+> 7
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+3. Discussion 152 
+
+We introduce PertOmni, a framework for aligning representations of perturbation effects across 153 
+
+modalities. By leveraging LLM embeddings and masked contrastive learning, PertOmni successfully 154 
+
+integrates heterogeneous cell context and perturbation information, outperforming strong baselines 155 
+
+across four applications relevant to drug discovery. 156 
+
+The key innovation of PertOmni lies in two dimensions. First, PertOmni leverages the prior knowl-157 
+
+edge introduced by databases and translates the textual descriptions into numerical representations 158 
+
+with the help of LLM embedding layers. We also perform a joint training approach by matching 159 
+
+the samples from sequencing data with their correct paired embeddings in different cell types, and 160 
+
+thus we can achieve perturbation modeling at the cell-type-level resolution, thereby better align-161 
+
+ing with biological requirements and providing more insights. Second, our approach attempts to 162 
+
+integrate perturbation datasets from diverse sources, including genetic perturbations and chemical 163 
+
+perturbations, thereby directly linking drugs to their potential targets. We also demonstrated that 164 
+
+after integrated training, we can better predict drug-gene interactions, thereby providing insights 165 
+
+for clinical applications. 166 
+
+In addition, PertOmni simultaneously addresses multiple applications, thereby supporting its role as 167 
+
+a unified model for studying perturbation effects. In addition to predicting drug-gene interactions, 168 
+
+we can also enhance the correlation of predicting perturbations effects at the cellular type level 169 
+
+under different gene groups. PertOmni also enables us to search for neighbors of specified genes 170 
+
+based on embedding similarity, thereby enhancing the effectiveness of related tools by constructing 171 
+
+gene similarity networks. For example, utilizing improved gene sets can help LangPert better pre-172 
+
+dict perturbation outcomes. Additionally, PertOmni shows its superiority in multi-modality tasks, 173 
+
+outperforming baselines in both gene-text retrieval and image-text retrieval. Our framework also 174 
+
+employs rigorous experimental design and validation, enabling us to select the most suitable model 175 
+
+architecture and parameters to achieve optimal performance across multiple tasks. 176 
+
+Although PertOmni performs well across multiple datasets and tasks, it still has some limitations. 177 
+
+First, the performance of PertOmni depends on the current LLM’s ability to integrate knowledge. 178 
+
+Therefore, we need to track the progress of advanced LLM research to ensure we always use state-179 
+
+of-the-art embeddings. Second, PertOmni cannot directly process other informative modalities, such 180 
+
+as protein-based perturbation data, due to data access limitation. By leveraging these multimodal 181 
+
+perturbation datasets, we may push the unified setting of our current design. In the future, we will 182 
+
+focus on these areas to continue improving the boundaries of PertOmni with the help of enriched 183 
+
+datasets. 184 
+
+Overall, our work shows that LLM-derived priors can be combined with sequencing readouts to learn 185 
+
+transferable perturbation representations. Future work could extend PertOmni to additional modal-186 
+
+ities and update LLM embeddings to improve generalization with larger and more diverse data. 187 
+
+4. Methods 188 
+
+Problem definition. Our objective is to learn aligned representations of perturbation effects from 189 
+
+single-cell transcriptomic perturbation data and LLM embeddings. Consider a perturbation dataset 190 
+
+D = {( 𝑥 𝑖 , 𝑝 𝑖 , 𝑐 𝑖 )} 𝑁 𝑖 =1, where 𝑥 𝑖 ∈ ℝ𝐺 is the pseudobulk expression vector for sample 𝑖 , 𝑝 𝑖 denotes 191 
+
+the perturbation condition (gene knockdown or small molecule), and 𝑐 𝑖 denotes the corresponding 192 
+
+cell line. We learn a transcriptome encoder 𝑃 𝑋 and text encoders 𝑃 𝑍 that map inputs to a shared 193 
+
+embedding space: 194 
+
+𝐸 𝑖 = 𝑃 𝑋 (𝑥 𝑖 ), 𝑍 𝑖 = 𝑃 𝑍 ([ LLM ( 𝑝 text ,𝑖 ); LLM (𝑐 text ,𝑖 )]) (1) 
+
+> 8
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+where 𝑝 text ,𝑖 and 𝑐 text ,𝑖 are textual descriptions of the perturbation and cell line for sample 𝑖 , respec-195 
+
+tively, LLM (·) denotes a fixed text embedding model, [· ; ·] denotes concatenation, and 𝐸 𝑖 , 𝑍 𝑖 ∈ ℝ𝑑 .196 
+
+We demonstrate that the learned transcriptome embeddings ( 𝐸 ) and text embeddings ( 𝑍 ) support 197 
+
+multiple downstream applications via linear probing or joint fine-tuning. 198 
+
+Data preparation. For small-molecule perturbations, we use the Tahoe-100M dataset (8). For ge-199 
+
+netic perturbations, we use 5 cell lines across 3 datasets: K562 and RPE1 (40), HepG2 and Jurkat (9), 200 
+
+and HCT116 (45). For both modalities, cells and genes are first filtered based on standard quality 201 
+
+control criteria following the Scanpy tutorial (50), including the removal of cells that express fewer 202 
+
+than 100 genes and the removal of genes that are detected in fewer than three cells. In each plate or 203 
+
+batch, we perform pseudobulk aggregation by summing gene expression across cells sharing the same 204 
+
+condition (perturbation and cell line). Then, normalization is performed following the Scanpy tuto-205 
+
+rial (50), where we count-normalize each pseudobulk sample to the median of total counts and apply 206 
+
+a log1p transformation. For the Tahoe-100M dataset, text descriptions for perturbations are obtained 207 
+
+directly from the dataset, where compound descriptions are extracted from MedChemExpress (51) 208 
+
+using Selenium(52). For CRISPRi data, embeddings for target genes are taken from GenePT (43). 209 
+
+For both datasets, cell line text descriptions are generated from GPT-4o using the prompt: "Please 210 
+
+summarize the information of cell line: {cell line} in one paragraph. Use academic language and in-211 
+
+clude pathway information." All perturbation- and cell line-level text descriptions are then converted 212 
+
+into 1536 -dimensional embeddings using the text-embedding-3-small model. We split the training, 213 
+
+validation, and test sets into 4/1/1 based on perturbations in the two datasets, ensuring that per-214 
+
+turbations in the test set are not observed during training. For PertOmni-chem and PertOmni-cri 215 
+
+training, we use all genes in Tahoe-100M dataset and CRISPRi dataset, respectively. For PertOmni 216 
+
+training, we use the intersection of genes between the two datasets. 217 
+
+For the image-text retrieval task, we use the RxRx3-core dataset (48), a Cell Painting dataset curated 218 
+
+from the RxRx3 dataset (18). The RxRx3-core dataset contains 222 , 601 six-channel fluorescent 219 
+
+microscopy images of HUVEC cells, covering 736 genetic perturbations and 1, 674 compound per-220 
+
+turbations. We follow the image preprocessing steps from CellCLIP (47), where we normalize raw 221 
+
+Cell Painting image values into 0 − 255 . Then we treat each Cell Painting channel as an indepen-222 
+
+dent grayscale image and extract embeddings separately using pretrained DINOv2-giant model (49). 223 
+
+For retrieval evaluation on unseen perturbations, we split the perturbations into 70 /10 /20 for train-224 
+
+ing, validation and testing. For the text embedding, we first extract compound descriptions from 225 
+
+MedChemExpress (51), following Tahoe-100M (8). For compounds that are not available on Med-226 
+
+ChemExpress, we generate compound text descriptions from GPT-4o using the prompt: "Please sum-227 
+
+marize the information of compound perturbation: {compound} in one paragraph. Use academic 228 
+
+language and include pathway information." Text descriptions for CRISPR perturbations and cell line 229 
+
+are generated in the same manner. Then all text descriptions are converted into 1536 -dimensional 230 
+
+embeddings using the text-embedding-3-small model. The perturbation embeddings and cell line 231 
+
+embeddings are concatenated to form the text embeddings for training PertOmni. 232 
+
+Encoder architecture. All encoders ( 𝑃 𝑋 , 𝑃 𝑍 𝑑 , 𝑃 𝑍 𝑔 ) are lightweight projection heads with two fully-233 
+
+connected layers and a residual connection. Each maps an input of dimension 𝑑 to a 128-dimensional 234 
+
+latent vector: a linear layer to 128 dimensions, GELU, a second 128 × 128 linear layer with dropout, 235 
+
+residual addition to the first projection, and layer normalization. 236 
+
+Masked contrastive learning. Our model follows Contrastive Language-Image Pre-Training (CLIP) 237 
+
+(53) and its sigmoid-based variant SigLIP (54), aligning paired samples across modalities by increas-238 
+
+ing similarity of matched pairs and decreasing similarity of unmatched pairs. We also modify the 239 
+
+masking process across different cell lines to learn better cellular representations. In our setting, each 240 
+
+sample consists of a gene expression profile paired with LLM-derived embeddings of the perturbation 241 
+
+> 9
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+and cell line. 242 
+
+We encode gene expression with a shared transcriptomic encoder 𝑃 𝑋 . We encode text with modality-243 
+
+specific text encoders: 𝑃 𝑍 𝑑 for small-molecule data and 𝑃 𝑍 𝑔 for genetic perturbation data. Each text 244 
+
+encoder takes as input the concatenation of perturbation and cell-line text embeddings. For genetic 245 
+
+perturbation data, we additionally concatenate LLM-derived embeddings of Gene Ontology biological 246 
+
+pathways related to each target gene, where pathway descriptions are obtained from MSigDB (55, 247 
+
+56). We train 𝑃 𝑋 jointly with 𝑃 𝑍 𝑑 and 𝑃 𝑍 𝑔 using a contrastive objective, and share the weights of the 248 
+
+final fully-connected layer between 𝑃 𝑍 𝑑 and 𝑃 𝑍 𝑔 to encourage alignment across perturbation types. The 249 
+
+architecture is visualized in Figure 1(a). We denote text embeddings for chemical perturbations as 250 
+
+𝑇 and for genetic perturbations as 𝑀 .251 
+
+Let the small-molecule and genetic perturbation datasets contain 𝑛 and 𝑚 samples, respectively. Let 252 
+
+𝑥 𝑖 denote the input gene expression vector for sample 𝑖 , and let 𝑐 text , 𝑝 text be text descriptions of the 253 
+
+cell line and perturbation. For the small-molecule perturbation dataset, we encode embeddings from 254 
+
+the encoders as 𝐸 𝑖 = 𝑃 𝑋 (𝑥 𝑖 ) and 𝑇 𝑖 = 𝑃 𝑍 𝑑 ([ LLM ( 𝑝 text ,𝑖 ); LLM (𝑐 text ,𝑖 )]) for the 𝑖 𝑡ℎ sample. For the genetic 255 
+
+perturbation dataset, encoded embeddings are 𝐸 𝑖 ′ = 𝑃 𝑋 (𝑥 ′ 
+
+> 𝑖 ′
+
+) and 𝑀 𝑖 ′ = 𝑃 𝑍 𝑔 ([ LLM ( 𝑝 text ,𝑖 ′ ); LLM (𝑐 text ,𝑖 ′ )]) 256 
+
+for the 𝑖 ′th sample. Our loss function is written as: 257 
+
+𝐿 𝑚𝐶𝐿𝐼𝑃 = − 1
+
+𝑛 ∑︁ 𝑖, 𝑗 
+
+log 𝜎 (𝑌 𝑖 𝑗 · ⟨ 𝐸 𝑖 , 𝑇 𝑗 ⟩/ 𝑡 ) − 1
+
+𝑚 ∑︁ 𝑖 ′, 𝑗 ′
+
+log 𝜎 (𝑌 𝑖 ′ 𝑗 ′ · ⟨ 𝐸 𝑖 ′ , 𝑀 𝑗 ′ ⟩/ 𝑡 ) (2) where 𝑡 is temperature, 𝑌 𝑖 𝑗 , 𝑌 𝑖 ′ 𝑗 ′ specify how each cross-modal pair contributes to the contrastive ob-258 
+
+jective (positive, negative, or masked), and ⟨· , ·⟩ denotes cosine similarity. 𝜎 is the sigmoid function. 259 
+
+In standard SigLIP, 𝑌 𝑖 𝑗 = +1 if 𝐸 𝑖 and 𝑇 𝑗 correspond to the same sample (matched pair) and 𝑌 𝑖 𝑗 = −1260 
+
+otherwise (unmatched pair). In our setting, we perform contrastive learning only within cell lines. 261 
+
+Concretely, we mask all pairs across different cell lines so that they do not contribute to the loss: 262 
+
+𝑌 𝑖 𝑗 =
+
+
+
++1 if 𝑖 = 𝑗 (matched pair) 
+
+−1 if 𝑖 ≠ 𝑗 and 𝑐 𝑖 = 𝑐 𝑗 (within-cell-line negative) 
+
+0 if 𝑐 𝑖 ≠ 𝑐 𝑗 (masked) (3) (and analogously for 𝑌 𝑖 ′ 𝑗 ′ in the genetic perturbation dataset). Here, 𝑐 𝑖 denotes the discrete cell-line 263 
+
+identity label used for masking. A visualization of 𝑌 is shown in Figure 1(b). Hyperparameters are 264 
+
+described in Table 1. 265 
+
+Cross–cell-line negatives in standard contrastive learning can encourage the model to separate sam-266 
+
+ples primarily by cell identity rather than perturbation identity, because baseline expression pro-267 
+
+grams differ strongly across contexts. By setting 𝑌 𝑖 𝑗 = 0 when 𝑐 𝑖 ≠ 𝑐 𝑗 (Eq. (3)), we prevent the ob-268 
+
+jective from using cell line as an easy shortcut and instead force discrimination among perturbations 269 
+
+within the same context. This design makes the learned space well-suited for context-conditional 270 
+
+tasks (e.g., retrieval and kNN prediction within a given cell line), at the cost of not explicitly enforc-271 
+
+ing that a perturbation’s embedding be invariant across cell lines. In joint training, cross-context 272 
+
+generalization can still emerge indirectly through shared encoder parameters and shared perturba-273 
+
+tion text priors, but we do not assume perturbation effects are globally comparable across cell types. 274 
+
+Perturbation retrieval. Using the learned transcriptome and text embeddings from PertOmni, we 275 
+
+perform intra-cell-line retrieval between different modalities based on cosine similarity. For this task, 276 
+
+we evaluate retrieval performance using three retrieval metrics shown below: 277 
+
+Let 𝑄 be a set of queries. For each query 𝑞 ∈ 𝑄 , let 𝑔 𝑞 be the ground-truth target and 𝑅 𝑞 =278 
+
+(𝑟 𝑞, 1, . . . , 𝑟 𝑞,𝑁 ) be the ranked list of retrieved items. Define 𝑟𝑎𝑛𝑘 𝑞 = min {𝑖 ∈ { 1, . . . , 𝑁 } | 𝑟 𝑞,𝑖 = 𝑔 𝑞 }.279 
+
+> 10
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+Hyperparameter Value 
+
+Minimum epochs 100 Learning rate 1.0 × 10 −4
+
+Tahoe-side temperature 5CRISPR-side temperature 5Table 1: Training hyperparameters. Temperatures correspond to the scaling factor 𝑡 in Eq. (2) for Tahoe (chemical) and CRISPR (genetic) datasets. Details of experiment settings are shown in Ap-pendix A. Hyperparameter sensitivity is shown in Supplementary Figures. 1. Accuracy score for top-K retrieval measures whether the ground truth appears within the re-280 
+
+trieved candidates. It is defined as 281 
+
+𝑎𝑐𝑐 @𝑡𝑜𝑝𝐾 = 1
+
+|𝑄 |∑︁ 𝑞 ∈𝑄 
+
+𝕀 [𝑟𝑎𝑛𝑘 𝑞 ≤ 𝐾 ]. (4) 2. Normalized discounted cumulative gain (nDCG) score for top-K retrieval measures overall rank-282 
+
+ing quality. It is defined as 283 
+
+𝑛𝐷𝐶𝐺 @𝑡𝑜𝑝𝐾 = 1
+
+|𝑄 |∑︁ 𝑞 ∈𝑄 
+
+𝕀 [𝑟𝑎𝑛𝑘 𝑞 ≤ 𝐾 ] 1log 2 (𝑟𝑎𝑛𝑘 𝑞 + 1) (5) 3. Mean reciprocal rank (MRR) score captures how early the ground-truth target appears in the 284 
+
+ranked list. It is defined as 285 
+
+𝑚𝑟𝑟 = 1
+
+|𝑄 |∑︁ 𝑞 ∈𝑄 
+
+1
+
+𝑟𝑎𝑛𝑘 𝑞 
+
+(6) 
+
+Gene-drug interaction prediction. This task aims to identify target genes for chemical perturba-286 
+
+tions (Drug2Gene) and identify chemicals that target a specific gene (Gene2Drug). We fine-tune 287 
+
+PertOmni using interaction annotations from DGIdb (57). Since DGIdb is incomplete, the absence 288 
+
+of an annotation does not imply a true negative interaction. We therefore treat this as a positive– 289 
+
+unlabeled learning problem and optimize a positive-only objective: annotated drug–gene pairs are 290 
+
+encouraged to have high similarity in the learned embedding space, while unannotated pairs are 291 
+
+ignored during the development process. 292 
+
+Let 𝐴 𝑖 𝑗 ∈ { 0, 1} denote whether DGIdb annotates an interaction between drug 𝑖 and gene 𝑗 , and let 293 
+
+𝑠 𝑖 𝑗 = ⟨𝑇 𝑖 , 𝑀 𝑗 ⟩/ 𝑡 be the scaled cosine similarity between the corresponding embeddings. To train the 294 
+
+model, we optimize the following objective: 295 
+
+𝐿 𝑓 𝑡 = − 1
+
+|P | ∑︁ (𝑖, 𝑗 ) ∈ P 
+
+log 𝜎 (𝑠 𝑖 𝑗 ), (7) where P = {( 𝑖, 𝑗 ) : 𝐴 𝑖 𝑗 = 1}, 𝑇 𝑖 and 𝑀 𝑗 are outputs from the drug and gene text encoders of PertOmni, 296 
+
+respectively. 297 
+
+For this task (PertOmni 𝑓 𝑡 ), we initialize from the pretrained PertOmni model and optimize only 298 
+
+the dataset-specific text encoders ( 𝑃 𝑍 𝑑 , 𝑃 𝑍 𝑔 ) under Eq. (7), while keeping the shared transcriptome 299 
+
+encoder ( 𝑃 𝑋 ) fixed. 300 
+
+Inspired by (36), we also consider training a Siamese neural network (SNN) on transcriptomic, text, 301 
+
+and all (transcriptomic+text) embedding as a strong baseline for comparison. The SNN applies 302 
+
+> 11
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+shared weights to a pair of drug and gene embeddings, followed by element-wise multiplication of 303 
+
+the resulting representations and a classifier that predicts the probability of a drug-gene pairing. 304 
+
+Following (36), we apply a balanced training strategy to prevent the SNN from being biased towards 305 
+
+well-known targets. Specifically, for the Drug2Gene task, for each gene in a positive pair, we sam-306 
+
+ple a drug that is not annotated to target that gene to form an unannotated contrast pair; for the 307 
+
+Gene2Drug task, the other way round. 308 
+
+For evaluation, we use AUROC and AUPRC as metrics, since this is a binary classification problem for 309 
+
+each drug-gene pair. Here we treat unannotated pairs as negatives, noting this likely underestimates 310 
+
+performance due to label incompleteness. 311 
+
+Perturbation prediction. Inspired by LangPert (39), we perform retrieval between text embedding 312 
+
+in the testing set and text or transcriptome embedding in the training set, followed by k-nearest 313 
+
+neighbors (kNN) aggregation of retrieved training samples’ expression profiles to generate predic-314 
+
+tions. Additionally, we first use retrieval to narrow down candidate perturbations, then use the re-315 
+
+fined LangPert model to obtain the final prediction. Model performance is evaluated using Pearson 316 
+
+correlation between predicted and observed gene expression, computed over all genes or the top 20 317 
+
+differentially expressed genes (DEGs). 318 
+
+Transcriptomic embedding ablations. We perform an ablation study to evaluate alternative meth-319 
+
+ods for embedding transcriptomic profiles. Either pseudobulk or embeddings are then used as input 320 
+
+𝑥 to the transcriptome encoder 𝑃 𝑋 in PertOmni. The evaluation uses cross-modality retrieval as a 321 
+
+metric. We compare PertOmni directly on pseudobulk with two foundation-model baselines: scGPT 322 
+
+(27) and PaSCient (46). We generate cell-level embeddings using scGPT, then aggregate them to 323 
+
+the sample level, whereas PaSCient directly generates sample-level embeddings. In addition, we test 324 
+
+random matching and one-hot embeddings in place of the LLM-derived perturbation and cell line 325 
+
+embeddings. Training cost comparisons are presented in Supplementary Table 4. 326 
+
+Image-text retrieval. We follow CellCLIP (47) and extract a frozen 1536 -dimensional DINOv2 327 
+
+embedding for each channel, resulting in five channel-wise embeddings per image. We consid-328 
+
+ered three channel aggregation strategies. Concat_PertOmni concatenates the five channel-wise 329 
+
+embeddings into a 7680 -dimensional vector. ProjMean_PertOmni applies a shared MLP projection 330 
+
+head to each channel embedding and then mean-pools the projected embeddings across channels. 331 
+
+Mean_PertOmni directly averages the five channel-wise embeddings before projection. Image em-332 
+
+beddings are averaged to the perturbation level before contrastive training and retrieval evaluation. 333 
+
+Using the image and text embeddings, We train the same model architecture and contrastive loss 334 
+
+as previous transcriptome-text retrieval task. We compare PertOmni with the pretrained CellCLIP 335 
+
+checkpoint and a CellCLIP model fine-tuned on the RxRx3-core dataset. 336 
+
+5. Ethics Statement and Acknowledgment 337 
+
+The authors used LLMs to generate fixed text embeddings for model training and editing of the 338 
+
+manuscript, such as rephrasing for clarity. 339 
+
+6. Conflict of interests 340 
+
+F.J.T. consults for Immunai, CytoReason, Genbio, Valinor Industries, Bioturing and Phylo Inc., and 341 
+
+has ownership interest in RN.AI Therapeutics, Dermagnostix, and Cellarity. The remaining authors 342 
+
+declare no competing interests. 343 
+
+> 12
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+References 344 
+
+[1] Paul Datlinger, André F Rendeiro, Christian Schmidl, Thomas Krausgruber, Peter Traxler, Jo-345 
+
+hanna Klughammer, Linda C Schuster, Amelie Kuchler, Donat Alpar, and Christoph Bock. Pooled 346 
+
+crispr screening with single-cell transcriptome readout. Nature Methods , 14(3):297–301, 2017. 347 
+
+[2] Atray Dixit, Oren Parnas, Biyu Li, Jenny Chen, Charles P Fulco, Livnat Jerby-Arnon, Nemanja D 348 
+
+Marjanovic, Danielle Dionne, Tyler Burks, Raktima Raychowdhury, et al. Perturb-seq: dissect-349 
+
+ing molecular circuits with scalable single-cell rna profiling of pooled genetic screens. Cell ,350 
+
+167(7):1853–1866, 2016. 351 
+
+[3] Diego Adhemar Jaitin, Assaf Weiner, Ido Yofe, David Lara-Astiaso, Hadas Keren-Shaul, Eyal 352 
+
+David, Tomer Meir Salame, Amos Tanay, Alexander van Oudenaarden, and Ido Amit. Dissecting 353 
+
+immune circuits by linking crispr-pooled screens with single-cell rna-seq. Cell , 167(7):1883– 354 
+
+1896, 2016. 355 
+
+[4] Luke A Gilbert, Max A Horlbeck, Britt Adamson, Jacqueline E Villalta, Yuwen Chen, Evan H 356 
+
+Whitehead, Carla Guimaraes, Barbara Panning, Hidde L Ploegh, Michael C Bassik, et al. 357 
+
+Genome-scale crispr-mediated control of gene repression and activation. Cell , 159(3):647– 358 
+
+661, 2014. 359 
+
+[5] Britt Adamson, Thomas M Norman, Marco Jost, Min Y Cho, James K Nuñez, Yuwen Chen, 360 
+
+Jacqueline E Villalta, Luke A Gilbert, Max A Horlbeck, Marco Y Hein, et al. A multiplexed single-361 
+
+cell crispr screening platform enables systematic dissection of the unfolded protein response. 362 
+
+Cell , 167(7):1867–1882, 2016. 363 
+
+[6] Stefan Peidli, Tessa D Green, Ciyue Shen, Torsten Gross, Joseph Min, Samuele Garda, Bo Yuan, 364 
+
+Linus J Schumacher, Jake P Taylor-King, Debora S Marks, et al. scperturb: harmonized single-365 
+
+cell perturbation data. Nature Methods , 21(3):531–540, 2024. 366 
+
+[7] Sanjay R Srivatsan, José L McFaline-Figueroa, Vijay Ramani, Lauren Saunders, Junyue Cao, 367 
+
+Jonathan Packer, Hannah A Pliner, Dana L Jackson, Riza M Daza, Lena Christiansen, et al. 368 
+
+Massively multiplex chemical transcriptomics at single-cell resolution. Science , 367(6473):45– 369 
+
+51, 2020. 370 
+
+[8] Jesse Zhang, Airol A Ubas, Richard de Borja, Valentine Svensson, Nicole Thomas, Neha Thakar, 371 
+
+Ian Lai, Aidan Winters, Umair Khan, Matthew G Jones, et al. Tahoe-100m: A giga-scale single-372 
+
+cell perturbation atlas for context-dependent gene function and cellular modeling. BioRxiv ,373 
+
+pages 2025–02, 2025. 374 
+
+[9] Ajay Nadig, Joseph M. Replogle, Angela N. Pogson, Mukundh Murthy, Steven A. McCarroll, 375 
+
+Jonathan S. Weissman, Elise B. Robinson, and Luke J. O’Connor. Transcriptome-wide analysis 376 
+
+of differential expression in perturbation atlases. Nature Genetics , 57(5):1228–1237, May 2025. 377 
+
+[10] Artur Szałata, Andrew Benz, Robrecht Cannoodt, Mauricio Cortes, Jason Fong, Sunil Kup-378 
+
+pasani, Richard Lieberman, Tianyu Liu, Javier A. Mas-Rosario, Rico Meinl, Jalil Nourisa, Jared 379 
+
+Tumiel, Tin M. Tunjic, Mengbo Wang, Noah Weber, Hongyu Zhao, Benedict Anchang, Fabian J. 380 
+
+Theis, Malte D. Luecken, and Daniel B. Burkhardt. A benchmark for prediction of transcrip-381 
+
+tomic responses to chemical perturbations across cell types. Advances in Neural Information 382 
+
+Processing Systems , 37:20566–20616, December 2024. 383 
+
+[11] Benjamin DeMeo, Charlotte Nesbitt, Samuel A. Miller, Daniel B. Burkhardt, Inna Lipchina, 384 
+
+Doris Fu, Peter Holderrieth, David Kim, Sergey Kolchenko, Artur Szalata, Ishan Gupta, Chris-385 
+
+tine Kerr, Thomas Pfefer, Raziel Rojas-Rodriguez, Sunil Kuppassani, Laurens Kruidenier, Parul B. 386 
+
+> 13
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+Doshi, Mahdi Zamanighomi, James J. Collins, Alex K. Shalek, Fabian J. Theis, and Mauricio 387 
+
+Cortes. Active learning framework leveraging transcriptomics identifies modulators of disease 388 
+
+phenotypes. Science , 390(6776):eadi8577, October 2025. 389 
+
+[12] Mitchell L. Leibowitz, Stamatis Papathanasiou, Phillip A. Doerfler, Logan J. Blaine, Lili Sun, 390 
+
+Yu Yao, Cheng-Zhong Zhang, Mitchell J. Weiss, and David Pellman. Chromothripsis as an on-391 
+
+target consequence of CRISPR–Cas9 genome editing. Nature Genetics , 53(6):895–905, June 392 
+
+2021. 393 
+
+[13] Longda Jiang, Carol Dalgarno, Efthymia Papalexi, Isabella Mascio, Hans-Hermann Wessels, 394 
+
+Huiyoung Yun, Nika Iremadze, Gila Lithwick-Yanai, Doron Lipson, and Rahul Satija. Systematic 395 
+
+reconstruction of molecular pathway signatures using scalable single-cell perturbation screens. 396 
+
+Nature Cell Biology , 27(3):505–517, March 2025. 397 
+
+[14] Po-Yuan Tung, John D. Blischak, Chiaowen Joyce Hsiao, David A. Knowles, Jonathan E. Burnett, 398 
+
+Jonathan K. Pritchard, and Yoav Gilad. Batch effects and the effective design of single-cell gene 399 
+
+expression studies. Scientific Reports , 7(1):39921, January 2017. 400 
+
+[15] Wenxin Long, Tianyu Liu, Lingzhou Xue, and Hongyu Zhao. spvelo: Rna velocity inference for 401 
+
+multi-batch spatial transcriptomics data. Genome Biology , 26(1):239, 2025. 402 
+
+[16] Mark-Anthony Bray, Shantanu Singh, Han Han, Chadwick T Davis, Blake Borgeson, Cathy Hart-403 
+
+land, Maria Kost-Alimova, Sigrun M Gustafsdottir, Christopher C Gibson, and Anne E Carpenter. 404 
+
+Cell painting, a high-content image-based assay for morphological profiling using multiplexed 405 
+
+fluorescent dyes. Nature Protocols , 11(9):1757–1774, 2016. 406 
+
+[17] Srinivas Niranj Chandrasekaran, Beth A Cimini, Amy Goodale, Lisa Miller, Maria Kost-Alimova, 407 
+
+Nasim Jamali, John G Doench, Briana Fritchman, Adam Skepner, Michelle Melanson, et al. 408 
+
+Three million images and morphological profiles of cells treated with matched chemical and 409 
+
+genetic perturbations. Nature Methods , 21(6):1114–1121, 2024. 410 
+
+[18] Marta M Fay, Oren Kraus, Mason Victors, Lakshmanan Arumugam, Kamal Vuggumudi, John 411 
+
+Urbanik, Kyle Hansen, Safiye Celik, Nico Cernek, Ganesh Jagannathan, et al. Rxrx3: Phenomics 412 
+
+map of biology. BioRxiv , pages 2023–02, 2023. 413 
+
+[19] Leon Hetzel, Simon Boehm, Niki Kilbertus, Stephan Günnemann, Fabian Theis, et al. Predicting 414 
+
+cellular responses to novel drug perturbations at a single-cell resolution. Advances in Neural 415 
+
+Information Processing Systems , 35:26711–26722, 2022. 416 
+
+[20] Yusuf Roohani, Kexin Huang, and Jure Leskovec. Predicting transcriptional outcomes of novel 417 
+
+multigene perturbations with gears. Nature Biotechnology , 42(6):927–935, 2024. 418 
+
+[21] Zoe Piran, Niv Cohen, Yedid Hoshen, and Mor Nitzan. Disentanglement of single-cell data with 419 
+
+biolord. Nature Biotechnology , 42(11):1678–1683, 2024. 420 
+
+[22] Gefei Wang, Tianyu Liu, Jia Zhao, Youshu Cheng, and Hongyu Zhao. Modeling and predicting 421 
+
+single-cell multi-gene perturbation responses with sclambda. BioRxiv , 2024. 422 
+
+[23] Dominik Klein, Jonas Simon Fleck, Daniil Bobrovskiy, Lea Zimmermann, Sören Becker, Alessan-423 
+
+dro Palma, Leander Dony, Alejandro Tejada-Lapuerta, Guillaume Huguet, Hsiu-Chuan Lin, 424 
+
+et al. Cellflow enables generative single-cell phenotype modeling with flow matching. BioRxiv ,425 
+
+pages 2025–04, 2025. 426 
+
+> 14
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+[24] Abhinav K Adduri, Dhruv Gautam, Beatrice Bevilacqua, Alishba Imran, Rohan Shah, Mohsen 427 
+
+Naghipourfar, Noam Teyssier, Rajesh Ilango, Sanjay Nagaraj, Mingze Dong, et al. Predicting 428 
+
+cellular responses to perturbation across diverse contexts with state. BioRxiv , pages 2025–06, 429 
+
+2025. 430 
+
+[25] Tianyu Liu, Tianqi Chen, Wangjie Zheng, Xiao Luo, Yiqun Chen, and Hongyu Zhao. Embed-431 
+
+dings from language models are good learners for single-cell data analysis. Patterns , page 432 
+
+101431, 2026. 433 
+
+[26] Yuchen Wang, Tianchi Lu, Xingjian Chen, Zhongyu Yao, and Ka-Chun Wong. scotm: a deep 434 
+
+learning framework for predicting single-cell perturbation responses with large language mod-435 
+
+els. Bioengineering , 12(8):884, 2025. 436 
+
+[27] Haotian Cui, Chloe Wang, Hassaan Maan, Kuan Pang, Fengning Luo, Nan Duan, and Bo Wang. 437 
+
+scgpt: toward building a foundation model for single-cell multi-omics using generative ai. Na-438 
+
+ture Methods , 21(8):1470–1480, 2024. 439 
+
+[28] Minsheng Hao, Jing Gong, Xin Zeng, Chiming Liu, Yucheng Guo, Xingyi Cheng, Taifeng Wang, 440 
+
+Jianzhu Ma, Xuegong Zhang, and Le Song. Large-scale foundation model on single-cell tran-441 
+
+scriptomics. Nature Methods , 21(8):1481–1491, 2024. 442 
+
+[29] Christina V Theodoris, Ling Xiao, Anant Chopra, Mark D Chaffin, Zeina R Al Sayed, Matthew C 443 
+
+Hill, Helene Mantineo, Elizabeth M Brydon, Zexian Zeng, X Shirley Liu, et al. Transfer learning 444 
+
+enables predictions in network biology. Nature , 618(7965):616–624, 2023. 445 
+
+[30] Artur Szałata, Karin Hrovatin, Sören Becker, Alejandro Tejada-Lapuerta, Haotian Cui, Bo Wang, 446 
+
+and Fabian J. Theis. Transformers in single-cell omics: a review and new perspectives. Nature 447 
+
+Methods , 21(8):1430–1443, August 2024. 448 
+
+[31] Tianyu Liu, Kexing Li, Yuge Wang, Hongyu Li, and Hongyu Zhao. Evaluating the utilities of 449 
+
+foundation models in single-cell data analysis. BioRxiv , pages 2023–09, 2023. 450 
+
+[32] Kasia Z Kedzierska, Lorin Crawford, Ava P Amini, and Alex X Lu. Zero-shot evaluation reveals 451 
+
+limitations of single-cell foundation models. Genome Biology , 26(1):101, 2025. 452 
+
+[33] Mohammad Lotfollahi, F Alexander Wolf, and Fabian J Theis. scgen predicts single-cell pertur-453 
+
+bation responses. Nature Methods , 16(8):715–721, 2019. 454 
+
+[34] Hanwen Xing and Christopher Yau. Gperturb: Gaussian process modelling of single-cell per-455 
+
+turbation data. Nature Communications , 16(1):5423, 2025. 456 
+
+[35] Conrad L Schoch, Stacy Ciufo, Mikhail Domrachev, Carol L Hotton, Sivakumar Kannan, 457 
+
+Rogneda Khovanskaya, Detlef Leipe, Richard Mcveigh, Kathleen O’Neill, Barbara Robbertse, 458 
+
+et al. Ncbi taxonomy: a comprehensive update on curation, resources and tools. Database ,459 
+
+2020:baaa062, 2020. 460 
+
+[36] Hao Chen, Frederick J King, Bin Zhou, Yu Wang, Carter J Canedy, Joel Hayashi, Yang Zhong, 461 
+
+Max W Chang, Lars Pache, Julian L Wong, et al. Drug target prediction through deep learning 462 
+
+functional representation of gene signatures. Nature Communications , 15(1):1853, 2024. 463 
+
+[37] TahoeBlog. Target deconvolution through data integration: Unifying drug and genetic pertur-464 
+
+bations. https://blog.tahoebio.ai/p/target-deconvolution-through-data . Ac-465 
+
+cessed: 2026-01-21. 466 
+
+> 15
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+[38] David DeTomaso, Matthew G Jones, Meena Subramaniam, Tal Ashuach, Chun J Ye, and 467 
+
+Nir Yosef. Functional interpretation of single cell similarity maps. Nature Communications ,468 
+
+10(1):4376, 2019. 469 
+
+[39] Kaspar Märtens, Marc Boubnovski Martell, Cesar A Prada-Medina, and Rory Donovan-Maiye. 470 
+
+Langpert: Llm-driven contextual synthesis for unseen perturbation prediction. In ICLR 2025 471 
+
+Workshop on Machine Learning for Genomics Explorations .472 
+
+[40] Joseph M Replogle, Reuben A Saunders, Angela N Pogson, Jeffrey A Hussmann, Alexander 473 
+
+Lenail, Alina Guna, Lauren Mascibroda, Eric J Wagner, Karen Adelman, Gila Lithwick-Yanai, 474 
+
+et al. Mapping information-rich genotype-phenotype landscapes with genome-scale perturb-475 
+
+seq. Cell , 185(14):2559–2575, 2022. 476 
+
+[41] Yiqun Chen and James Zou. Genepert: Leveraging genept embeddings for gene perturbation 477 
+
+prediction. BioRxiv , pages 2024–10, 2024. 478 
+
+[42] Elijah Cole, Geert-Jan Huizing, Sohan Addagudi, Nicholas Ho, Euxhen Hasanaj, Merel Kuijs, 479 
+
+Toby Johnstone, Maria Carilli, Alec Davi, Caleb Ellington, et al. Foundation models improve 480 
+
+perturbation response prediction. BioRxiv , pages 2026–02, 2026. 481 
+
+[43] Yiqun Chen and James Zou. Simple and effective embedding model for single-cell biology built 482 
+
+from chatgpt. Nature Biomedical Engineering , 9(4):483–493, 2025. 483 
+
+[44] Damian Szklarczyk, Rebecca Kirsch, Mikaela Koutrouli, Katerina Nastou, Farrokh Mehryary, 484 
+
+Radja Hachilif, Annika L Gable, Tao Fang, Nadezhda T Doncheva, Sampo Pyysalo, et al. The 485 
+
+string database in 2023: protein–protein association networks and functional enrichment anal-486 
+
+yses for any sequenced genome of interest. Nucleic Acids Research , 51(D1):D638–D646, 2023. 487 
+
+[45] Ann C Huang, Tsung-Han S Hsieh, Jiang Zhu, Jackson Michuda, Ashton Teng, Soohong Kim, 488 
+
+Elizabeth M Rumsey, Sharon K Lam, Ikenna Anigbogu, Philip Wright, et al. X-atlas/orion: 489 
+
+Genome-wide perturb-seq datasets via a scalable fix-cryopreserve platform for training dose-490 
+
+dependent biological foundation models. BioRxiv , pages 2025–06, 2025. 491 
+
+[46] Tianyu Liu, Edward De Brouwer, Tony Kuo, Nathaniel Diamant, Alsu Missarova, Hanchen 492 
+
+Wang, Minsheng Hao, Hector Corrada Bravo, Gabriele Scalia, Aviv Regev, et al. Learning 493 
+
+multi-cellular representations of single-cell transcriptomics data enables characterization of 494 
+
+patient-level disease states. In International Conference on Research in Computational Molecular 495 
+
+Biology , pages 303–306, 2025. 496 
+
+[47] Mingyu Lu, Ethan Weinberger, Chanwoo Kim, and Su-In Lee. Cellclip-learning perturbation 497 
+
+effects in cell painting via text-guided contrastive learning. Advances in Neural Information 498 
+
+Processing Systems , 38:124505–124537, 2026. 499 
+
+[48] Oren Kraus, Federico Comitani, John Urbanik, Kian Kenyon-Dean, Lakshmanan Arumugam, 500 
+
+Saber Saberian, Cas Wognum, Safiye Celik, and Imran S Haque. Rxrx3-core: Benchmarking 501 
+
+drug-target interactions in high-content microscopy. arXiv preprint arXiv:2503.20158 , 2025. 502 
+
+[49] Maxime Oquab, Timothée Darcet, Théo Moutakanni, Huy Vo, Marc Szafraniec, Vasil Khalidov, 503 
+
+Pierre Fernandez, Daniel Haziza, Francisco Massa, Alaaeldin El-Nouby, et al. Dinov2: Learning 504 
+
+robust visual features without supervision. arXiv preprint arXiv:2304.07193 , 2023. 505 
+
+[50] F Alexander Wolf, Philipp Angerer, and Fabian J Theis. Scanpy: large-scale single-cell gene 506 
+
+expression data analysis. Genome biology , 19(1):15, 2018. 507 
+
+> 16
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+[51] MedChemExpress. Medchemexpress. Accessed: 2026-02-04. 508 
+
+[52] Selenium Contributers. The selenium project. Accessed: 2026-02-04. 509 
+
+[53] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, 510 
+
+Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learning transferable visual 511 
+
+models from natural language supervision. In International Conference on Machine Learning ,512 
+
+pages 8748–8763. PMLR, 2021. 513 
+
+[54] Xiaohua Zhai, Basil Mustafa, Alexander Kolesnikov, and Lucas Beyer. Sigmoid loss for language 514 
+
+image pre-training. In Proceedings of the IEEE/CVF International Conference on Computer Vision ,515 
+
+pages 11975–11986, 2023. 516 
+
+[55] Aravind Subramanian, Pablo Tamayo, Vamsi K Mootha, Sayan Mukherjee, Benjamin L Ebert, 517 
+
+Michael A Gillette, Amanda Paulovich, Scott L Pomeroy, Todd R Golub, Eric S Lander, et al. Gene 518 
+
+set enrichment analysis: a knowledge-based approach for interpreting genome-wide expression 519 
+
+profiles. Proceedings of the National Academy of Sciences , 102(43):15545–15550, 2005. 520 
+
+[56] Arthur Liberzon, Chet Birger, Helga Thorvaldsdóttir, Mahmoud Ghandi, Jill P Mesirov, and 521 
+
+Pablo Tamayo. The molecular signatures database hallmark gene set collection. Cell Systems ,522 
+
+1(6):417–425, 2015. 523 
+
+[57] Matthew Cannon, James Stevenson, Kathryn Stahl, Rohit Basu, Adam Coffman, Susanna Ki-524 
+
+wala, Joshua F McMichael, Kori Kuzma, Dorian Morrissey, Kelsy Cotto, et al. Dgidb 5.0: rebuild-525 
+
+ing the drug–gene interaction database for precision medicine and drug discovery platforms. 526 
+
+Nucleic Acids Research , 52(D1):D1227–D1235, 2024. 527 
+
+> 17
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+A. Experimental settings 528 
+
+For model training, we utilize 128 as batch size, 1e-4 as learning rate, Adam as optimizer, 0.0 as 529 
+
+dropout rate, 100 as default epochs, 5.0 as temperature, and top-1 retrieval accuracy as the criteria 530 
+
+for early stopping. The choices of hyper parameters satisfy for both cross-modality retrieval and 531 
+
+drug-gene interaction prediction tasks. 532 
+
+B. Supplementary Tables 533 
+
+Plate # Samples # Genes # Cell Lines # Perturbations 
+
+Plate 1 4516 62710 50 93 Plate 2 4631 62710 50 93 Plate 3 4650 62710 50 93 Plate 4 4750 62710 50 95 Plate 5 4750 62710 50 95 Plate 6 4750 62710 50 95 Plate 7 4700 62710 50 94 Plate 8 4750 62710 50 94 Plate 9 4750 62710 50 94 Plate 10 4750 62710 50 95 Plate 11 4750 62710 50 95 Plate 12 4750 62710 50 95 Plate 13 4700 62710 50 44 Plate 14 4746 62710 50 95 
+
+Total 65943 62710 50 380 
+
+Table 2: Summary statistics of the Tahoe-100M dataset across plates. 
+
+Cell Line # Samples # Genes # Cell Lines # Perturbations 
+
+K562 11818 6408 1 9783 RPE1 2373 6408 1 2373 HepG2 2373 6408 1 2373 Jurkat 2373 6408 1 2373 HCT116 18115 6408 1 18115 
+
+Total 37052 6408 5 18385 
+
+Table 3: Summary statistics of the CRISPR perturbation datasets across cell lines. 
+
+> 18
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+Tahoe-100M CRISPR Multi-dataset 
+
+Method Time (s) Method Time (s) Method Time (s) PertOmni-chem 2006.02 (18.82) PertOmni-cri 796.85 (12.00) PertOmni 2576.25 (19. scGPT 1253.35 (15.69) scGPT 1244.83 (8.96) multi scGPT 3301.70 (50. PaSCient 1119.90 (12.85) PaSCient 1248.61 (16.43) multi PaSCient 3204.23 (37. one-hot 1988.04 (14.61) one-hot 657.26 (7.09) multi one-hot 2364.36 (19. Table 4: Runtime (seconds; mean (std)) on Tahoe-100M, CRISPR, and multi-dataset settings. We use 8 CPUs and 1 NVIDIA RTX 5000 GPU for this experiment. 
+
+> 19
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+C. Supplementary Figures 534 
+
+Supplementary Figure 1: Results of cross-modality retrieval in ablation studies. In this ablation study, we first concatenate text descriptions of perturbation and cell line, and then generate LLM embeddings based on the concatenated descriptions. In contrast, PertOmni first generates LLM em-beddings for perturbation and cell line, respectively, and then concatenates LLM embeddings as input to text encoders. (a) Gene2Text retrieval metrics comparison based on the Tahoe-100M dataset. (b) Text2Gene retrieval metrics comparison based on the merged CRISPR dataset. 
+
+> 20
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings
+
+Supplementary Figure 2: Comparison of drug-gene interaction performance before and after fine-tuning. PertOmni_zs represents the zero-shot performance of PertOmni without training based on paired gene-drug interactions, and PertOmni_ft represents fine-tuned performance. We find that the finetuning (ft) mode performs better. (a) AUROC comparison for the Drug2Gene task. (b) AUPRC comparison for the Drug2Gene task. (c) AUROC comparison for the Gene2Drug task. (d) AUPRC comparison for the Gene2Drug task. 
+
+> 21
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint
+
+Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings 
+
+Supplementary Figure 3: Linechart visualization of how perturbation prediction performance changes with 𝑘 . a) All genes, RPE1. (b) Top-20 DEGs, RPE1. (c) All genes, HepG2. (d) Top-20 DEGs, HepG2. (e) All genes, Jurkat. (f) Top-20 DEGs, Jurkat. 
+
+22 
+
+.CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings 
+
+Supplementary Figure 4: Boxplot visualization of cross-modality retrieval in Tahoe-100m dataset. (a,b) Accuracy retrieval scores comparison. (c,d) nDCG scores comparison. (e,f) MRR scores com-parison. 
+
+23 
+
+.CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings 
+
+Supplementary Figure 5: Boxplot visualization of cross-modality retrieval in the CRISPR dataset. (a,b) Accuracy retrieval scores comparison. (c,d) nDCG scores comparison. (e,f) MRR scores com-parison. 
+
+24 
+
+.CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings 
+
+Supplementary Figure 6: Results of cross-modality retrieval in ablation studies. In this ablation study, we use trainable embedding as input to text encoders for control samples ("DMSO_TF" in Tahoe-100M dataset and "non-targeting" in CRISPR dataset), instead of using 0s as in PertOmni. (a) Gene2Text retrieval metrics comparison based on the Tahoe-100M dataset. (b) Text2Gene retrieval metrics comparison based on the merged CRISPR dataset. 
+
+> 25
+> .CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint
+
+Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings 
+
+Supplementary Figure 7: Results of cross-modality retrieval under different minimum epochs set-tings in Tahoe-100m dataset. (a) Gene2Text retrieval metrics comparison for PertOmni-chem. (b) Text2Gene retrieval metrics comparison for PertOmni-chem. (c) Gene2Text retrieval metrics com-parison for PertOmni. (d) Text2Gene retrieval metrics comparison for PertOmni. 
+
+26 
+
+.CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings 
+
+Supplementary Figure 8: Results of cross-modality retrieval under different minimum epochs settings in the CRISPR dataset. (a) Gene2Text retrieval metrics comparison for PertOmni-cri. (b) Text2Gene retrieval metrics comparison for PertOmni-cri. (c) Gene2Text retrieval metrics comparison for Per-tOmni. (d) Text2Gene retrieval metrics comparison for PertOmni. 
+
+27 
+
+.CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings 
+
+Supplementary Figure 9: Results of cross-modality retrieval under different learning rate settings in Tahoe-100m dataset. (a) Gene2Text retrieval metrics comparison for PertOmni-chem. (b) Text2Gene retrieval metrics comparison for PertOmni-chem. (c) Gene2Text retrieval metrics comparison for PertOmni. (d) Text2Gene retrieval metrics comparison for PertOmni. 
+
+28 
+
+.CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings 
+
+Supplementary Figure 10: Results of cross-modality retrieval under different learning rate settings in the CRISPR dataset. (a) Gene2Text retrieval metrics comparison for PertOmni-cri. (b) Text2Gene retrieval metrics comparison for PertOmni-cri. (c) Gene2Text retrieval metrics comparison for Per-tOmni. (d) Text2Gene retrieval metrics comparison for PertOmni. 
+
+29 
+
+.CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings 
+
+Supplementary Figure 11: Results of cross-modality retrieval under different temperature settings in the Tahoe-100m dataset. (a) Gene2Text retrieval metrics comparison for PertOmni-chem. (b) Text2Gene retrieval metrics comparison for PertOmni-chem. (c) Gene2Text retrieval metrics com-parison for PertOmni. (d) Text2Gene retrieval metrics comparison for PertOmni. 
+
+30 
+
+.CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings 
+
+Supplementary Figure 12: Results of cross-modality retrieval under different temperature settings in the CRISPR dataset. (a) Gene2Text retrieval metrics comparison for PertOmni-cri. (b) Text2Gene retrieval metrics comparison for PertOmni-cri. (c) Gene2Text retrieval metrics comparison for Per-tOmni. (d) Text2Gene retrieval metrics comparison for PertOmni. 
+
+31 
+
+.CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings 
+
+Supplementary Figure 13: Results of cross-modality retrieval under different loss functions in the Tahoe-100m dataset. (a) Gene2Text retrieval metrics comparison for PertOmni-chem. (b) Text2Gene retrieval metrics comparison for PertOmni-chem. (c) Gene2Text retrieval metrics comparison for PertOmni. (d) Text2Gene retrieval metrics comparison for PertOmni. 
+
+32 
+
+.CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings 
+
+Supplementary Figure 14: Results of cross-modality retrieval under different loss functions in the CRISPR dataset. (a) Gene2Text retrieval metrics comparison for PertOmni-cri. (b) Text2Gene re-trieval metrics comparison for PertOmni-cri. (c) Gene2Text retrieval metrics comparison for Per-tOmni. (d) Text2Gene retrieval metrics comparison for PertOmni. 
+
+33 
+
+.CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings 
+
+Supplementary Figure 15: Boxplot visualization of cross-modality retrieval in compound perturba-tions of RxRx3-core dataset. (a,b) Accuracy retrieval scores comparison. (c,d) nDCG scores compar-ison. (e,f) MRR scores comparison. 
+
+34 
+
+.CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint Learning Perturbation Effects Through Contrastive Alignment of Multimodal Biological Embeddings 
+
+Supplementary Figure 16: Boxplot visualization of cross-modality retrieval in crispr perturbations of RxRx3-core dataset. (a,b) Accuracy retrieval scores comparison. (c,d) nDCG scores comparison. (e,f) MRR scores comparison. 
+
+35 
+
+.CC-BY 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 26, 2026. ;https://doi.org/10.64898/2026.06.23.734145 doi: bioRxiv preprint

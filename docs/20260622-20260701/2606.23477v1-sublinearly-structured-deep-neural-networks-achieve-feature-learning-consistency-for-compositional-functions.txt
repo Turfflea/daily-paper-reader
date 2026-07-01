@@ -1,0 +1,5288 @@
+Title: Sublinearly Structured Deep Neural Networks Achieve Feature Learning Consistency for Compositional Functions
+
+URL Source: https://arxiv.org/pdf/2606.23477v1
+
+Published Time: Tue, 23 Jun 2026 03:22:23 GMT
+
+Number of Pages: 58
+
+Markdown Content:
+# Sublinearly Structured Deep Neural Networks Achieve Feature Learning Consistency for Compositional Functions 
+
+Sehwan Kim Ewha Womans University, Seoul 03760, Republic of Korea Yan Sun New Jersey Institute of Technology, Newark, NJ 07102, USA Faming Liang ∗
+
+Purdue University, West Lafayette, IN 47907, USA 
+
+Abstract 
+
+Over the past decade, deep neural networks (DNNs) have achieved remarkable success on complex machine-learning tasks, yet the theoretical foundations of their performance remain incomplete. From a statistical viewpoint, a natural question is: can DNNs attain feature-learning and prediction consistency comparable to that of classical models? While a full characterization is open, we provide positive results for a broad subclass. We establish feature-learning consistency guarantees for sublinearly structured DNNs —architectures whose input/output dimensions and number of hidden neurons grow sublinearly with the sample size—when learning hierarchically compositional target functions. Importantly, this consis-tency still holds even in the conventional “over-parameterized” regime where the total number of parameters exceeds the number of training samples. Empirically, sublinearly structured DNNs match or surpass wide DNNs in prediction. A structural audit further indicates that widely used convolutional neural networks (CNNs), including AlexNet, VGGNet, ResNet, GoogLeNet, are sublinearly structured on their image classification benchmarks. We further prove that the sublinearly structured DNNs achieve universal approximation for hierarchically compositional functions in the large-sample limit. Moreover, images exhibit an inherent hier-archical, compositional structure. Taken together, these results explain, through a statistical lens, why many large-scale deep learning models succeed after adequate training on massive image datasets. 
+
+Keywords: Compositional Function, Eigen Analysis, Feature Learning Consistency, Over Parameterization, Stochastic Neural Network 
+
+Mathematics Subject Classification (2020): 62M45, 62F12 
+
+> ∗
+
+Corresponding author: fmliang@purdue.edu 
+
+1
+
+> arXiv:2606.23477v1 [stat.ML] 22 Jun 2026
+
+# 1 Introduction 
+
+Over the past decade, DNNs have made major breakthroughs in many research domains, including image generation, protein folding, and language processing. The ability of these models to automatically learn the problem-specific features hidden in the training data is considered as a major factor contributing to their success, see e.g. Radhakrishnan et al. (2024), Shi et al. (2022), and Yang and Hu (2021). Therefore, understanding the mechanism of feature learning and, by extension, designing the network structure for ensuring the hidden features to be effectively learned has attracted much attention in recent literature. Feature learning for linear models has been well studied in statistics, see e.g., Tibshirani (1996), Fan and Li (2001), and Loh and Wainwright (2017), where one aims to identify important covariates through estimating their regression coefficients. For DNNs, we follow Radhakrishnan et al. (2024) to define a neural feature as an eigenvector of wTl wl, where wl ∈ Rdl×dl−1 denotes the weight matrix of hidden layer l, and dl denotes the width of layer l. It is easy to see that the regression coefficient vector of the linear model can be viewed as a special case of this general definition (with d1 = 1 and d0 = p for the number of covariates, and rescaled by w1w⊤ 
+
+> 1
+
+). From a statistical perspective, a natural question is whether a DNN can achieve feature learning consistency similar to that of linear models. To bridge the gap between linear models and deep learning, Sun and Liang (2022) and Liang et al. (2022) proposed a new type of neural network – stochastic neural network (abbreviated as StoNet). This network is formulated as a composition of many linear/logistic regressions and provides a framework for transferring theory and methods from linear models to DNNs. Additionally, the StoNet offers a convenient way for addressing many important problems encountered in modern data science, such as sufficient dimension reduction (Liang et al., 2022), uncertainty quantification (Sun and Liang, 2024), and causal effect estimation (Fang and Liang, 2024, 2026). These problems are otherwise hard to address using conventional DNNs. In this paper, based on the asymptotic equivalence between DNN and StoNet (Liang et al., 2022), we prove that the sublinearly structured DNN achieves feature-learning consistency for hierarchically compositional functions in which each constituent depends on at most a bounded number of variables. We refer to a DNN as a sublinearly structured DNN (or sublinear DNN for short) if its structure satisfies the constraints: 
+
+d0 ≺ n, dh+1 ≺ n, 
+
+> h∑
+> l=1
+
+dl ≺ n, (1) where d0 = p denotes the input dimension, dl denotes the width of layer l, h denotes the number of hidden layers, dh+1 denotes the output dimension, and n denotes the training sample size. Here, we denote an ≺ bn if lim n→∞ an 
+
+> bn
+
+= 0 . In equation (1) , the dependence of di’s on n is implicit. This definition of sublinear DNN applies to fully connected neural networks and may require slight modification for convolutional neural networks (CNNs), where the filter size used at each convolutional layer must be considered in defining the corresponding StoNet (see Section 5). It is worth noting that the number of parameters in a sublinear DNN can still greatly exceed 
+
+n; in other words, sublinear DNNs may be over-parameterized. 2Hierarchical compositional functions are multivariate maps built as compositions of low-arity modules arranged in a tree or directed acyclic graph (DAG). They also include conventional functions with a fixed input dimension as special cases. This structure is widespread in science and engineering (e.g., PDE operators, image processing pipelines) and captures rich multiscale interactions while keeping each module low-dimensional — precisely the regime where DNNs admit a sparse structure and avoid the curse of dimensionality. Additionally, we prove that sublinear DNNs achieve universal approximation for hierarchically compositional functions in the large-sample limit. We analyze the structures of many popular large-scale DNNs, such as AlexNet, VGGNet, ResNet, and GoogLeNet, used in image classification, and find that they are all sublinear on their image classification benchmarks. Furthermore, images exhibit an inherent hierarchical, compositional structure. Taken together, our results explain, through a statistical lens, why many large-scale DNNs succeed after adequate training on massive image datasets. To our knowledge, this work provides the first theoretical result on feature-learning consistency for DNNs in the over-parameterized regime, although our analysis is restricted to the class of hierarchically compositional functions. This represents a notable distinction from existing studies, where parameter estimation consistency, up to loss-invariant transformations, has been established under the assumption that the total number of parameters or effective parameters is of lower order than n (Farrell et al., 2021; Sun et al., 2022). Parameter estimation consistency is stronger than feature-learning consistency, but it typically requires more restrictive network-size conditions. Our numerical experiments show that sublinear DNNs can achieve prediction accuracy comparable to, or even exceeding, that of wide DNNs for hierarchically compositional functions. 
+
+Related Works Motivated by the observation of benign overfitting (Bartlett et al., 2020), a line of work has emerged studying the properties of wide DNNs, see e.g., Yang and Hu (2021) and Woodworth et al. (2020). These studies typically rely on two key assumptions: (i) the wide DNNs are trained using gradient-descent-type methods, and (ii) the scale of initialization is appropriately chosen. For instance, Yang and Hu (2021) noted that the standard initialization of neural networks do not admit infinite-width limits that can learn features and proposed a modification to enable feature learning in the limit. Woodworth et al. (2020) showed how the scale of the initialization controls the transition between the kernel and feature learning regimes. Although our theory is restricted to the class of hierarchically compositional functions, it does not depend on the specific optimization algorithm used or the initialization scale adopted. On the restricted domain, our theory can be seen as complementary to those on wide DNNs, thereby providing a complete spectrum of theoretical insights on DNNs from narrow to wide. Another line of related work investigates the intrinsic dimensionality of large-scale DNNs (see, e.g., Li et al., 2018; Aghajanyan et al., 2020). These studies show that such networks often have a very low intrinsic dimension that changes little as width or depth increase. Building on this observation, several low-rank adaptation methods have been proposed for fine-tuning large language models, such as LoRA (Hu et al., 2022) and QLoRA (Dettmers et al., 2023). This, in turn, suggests that large-scale DNNs admit effective low-dimensional reparameterizations, reflecting the hierarchical, compositional structure of the underlying target function and making sublinear DNNs a viable and efficient option. 32 DNN and Its Stochastic Surrogate 
+
+Consider a DNN model with h hidden layers defined as follows: 
+
+˜Y 1 = b1 + w1X,
+
+˜Y i = bi + wiΨ( ˜Y i−1), i = 2 , 3, . . . , h, 
+
+Y = bh+1 + wh+1 Ψ( ˜Y h) + eh+1 ,
+
+(2) where eh+1 ∼ N (0 , σ 2
+
+> h+1
+
+Idh+1 ) is Gaussian random error; X ∈ Rd0 ; ˜Y i ∈ Rdi denotes the pre-activation of the i-th hidden layer; wi ∈ Rdi×di−1 , bi ∈ Rdi denotes the weights and bias of the i-th layer; Ψ( ·) is the element-wise activation function such that Ψ( ˜Y i−1) = (Ψ( ˜Yi−1,1), Ψ( ˜Yi−1,2), . . . Ψ( ˜Yi−1,d i−1 )) ⊤. For simplicity, we consider only regression problems in (2). It can be easily extended to classification problems by replacing the third equation in (2) with a logit model. The StoNet (Liang et al., 2022) is a probabilistic deep learning model defined by adding auxiliary noise to the pre-activation ˜Y i’s in the DNN model (2): 
+
+Y 1 = b1 + w1X + e1,
+
+Y i = bi + wiΨ( Y i−1) + ei, i = 2 , 3, . . . , h, 
+
+Y = bh+1 + wh+1 Ψ( Y h) + eh+1 ,
+
+(3) It can be viewed as a composition of many simple regressions, where Y 1, Y 2, . . . , Y h are latent variables. For simplicity, we assume that ei ∼ N (0 , σ 2 
+
+> i
+
+Idi ) for i = 1 , 2, . . . , h, h + 1 . Other distributions can also be assumed for ei’s. For instance, Sun and Liang (2022) assumed a modified double exponential distribution for e1 such that the first layer defines a series of support vector regressions (SVRs). The parameters {σ21 , . . . , σ 2
+
+> h
+
+, σ 2
+
+> h+1
+
+} control the variation of latent variables {Y 1, . . . , Y h}. For classification problems, σ2 
+
+> h+1
+
+works as the temperature for the binomial or multinomial distribution formed at the output layer. The property of the StoNet, as an approximator to the DNN, has been studied in Liang et al. (2022). A brief review for their theory is provided below, which forms the basis of this work. Let θ = {w1, b1, . . . , wh+1 , bh+1 } denote the collection of all parameters of the StoNet (3), let 
+
+Θ denote the space of θ, and let Y mis = {Y 1, Y 2, . . . , Y h} denote the collection of all latent variables. Let π(Y , Y mis |X, θ) denote the joint density function of the pseudo-complete data 
+
+(Y , Y mis ), and let πDNN (Y |X, θ) denote the probability density function of the DNN model (2). Regarding the network structure, activation function, and the variance of the latent variables, they made the following assumption: 
+
+Assumption 1. (i) Θ is compact, i.e., Θ is contained in a dθ-ball centered at 0 with radius r;(ii) E( log π(Y , Y mis |X, θ)) 2 < ∞ for any θ ∈ Θ; (iii) the activation function Ψ( ·) is c-Lipschitz continuous for some constant c; (iv) the network’s depth h and widths dl’s are both allowed to increase with n; (v) σh+1 is a constant, and for every k ∈ { 1, 2, . . . , h }, dh+1 (∏hi=k+1 d2 
+
+> i
+
+)dkσ2 
+
+> k
+
+≺ 1
+
+> h
+
+and dkσk = o(1) .
+
+Assumption 1-(i) & (ii) are regular and generally satisfied; Assumption 1-(iii) allows the StoNet to work with a wide range of Lipschitz continuous activation functions such as tanh ,4sigmoid and ReLU ; Assumption 1-(v) constrains the magnitude of noise added to each hidden neuron, where the factor dh+1 (∏hi=k+1 d2 
+
+> i
+
+)dk can be understood as the amplification factor of the noise ek at the output layer. In general, the noise added to the first few hidden layers should be small to prevent large random errors propagated to the output layer. Under slightly weaker conditions than Assumption 1 (specifically, without requiring dkσk = o(1) ), they showed that StoNet (3) and the DNN (2) share the same asymptotic energy landscape, as stated in Lemma 1. Imposing a slightly stronger scaling condition on σl further enables a refined analysis of feature learning, rather than limiting the analysis to properties of the hidden neuron outputs. 
+
+Lemma 1 (Theorem 2.1 of Liang et al. (2022)) . Suppose Assumptions 1 holds. Then 
+
+sup  
+
+> θ∈Θ
+> ∣∣∣
+
+1
+
+n
+
+> n∑
+> i=1
+
+log π(Y (i), Y (i)
+
+> mis
+
+|X(i), θ) − 1
+
+n
+
+> n∑
+> i=1
+
+log πDNN (Y (i)|X(i), θ) 
+
+> ∣∣∣p
+
+→ 0. (4) Lemma 1 shows that the StoNet and the corresponding DNN have asymptotically equivalent empirical objective functions as n becomes large. This loss equivalence provides the basis for transferring theoretical properties between the two models. It can be understood from two complementary perspectives: 
+
+• If the DNN model (2) is the target model, then a StoNet with the same network structure and noise levels satisfying Assumption 1-(v) provides an asymptotically equivalent surrogate objective. Thus, for large n, training the StoNet can be viewed as a latent-variable-augmented approach to training the DNN. 
+
+• Conversely, if the StoNet model (3) is the target model, then the corresponding DNN ob-jective provides an asymptotically equivalent deterministic counterpart. Under appropriate identifiability and argmax conditions, likelihood maximizers of the two objectives therefore share the same population target. As shown later, this asymptotic loss equivalence is a key ingredient for transferring the operator-norm consistency theory from StoNets to likelihood-based sublinear DNN estimators. 
+
+# 3 Feature Learning Consistency in sublinear DNNs 
+
+This section first describes the imputation-regularized optimization (IRO) algorithm (Liang et al., 2018a) for training sublinear StoNets, and then establishes feature-learning consistency for them. This result, by Lemma 1, further implies feature-learning consistency for the sublinear DNNs that are trained with an optimization algorithm such as stochastic gradient descent (SGD) or Adam (Kingma and Ba, 2015). 
+
+3.1 The IRO Algorithm 
+
+Notation: Let Dn = {Y, X} denote a dataset of n observations, where Y ∈ Rn×dh+1 and X ∈ Rn×p
+
+contain the responses and covariates, respectively. Let σ2 
+
+> n
+
+= ( σ21 , . . . , σ 2
+
+> h+1
+
+), where the dependence of σl on n is implicit as implied by Assumption 1. To facilitate theoretical development, we assume that for a given dataset Dn, the true model is a StoNet model with σ2 
+
+> n
+
+being known and satisfying Assumption 1-(v). By treating the latent 5Algorithm 1 IRO Algorithm for StoNet 
+
+Input : Dataset Dn, total iteration number T , and Monte Carlo step number tM C .
+
+Initialization : Randomly initialize the network parameters ˆθ(0)  
+
+> n
+
+.
+
+for t = 1 to T do 
+
+• Imputation step : For each sample (X(i), Y (i)), draw Y (i,t )mis from π(Y mis |Y (i), X(i),
+
+ˆθ(t−1)  
+
+> n
+
+, σ2
+
+> n
+
+) by running the SGLD (Welling and Teh, 2011), SGHMC (Chen et al., 2014), or Metropolis-Hastings algorithm (Metropolis et al., 1953; Hastings, 1970) for tM C steps. 
+
+• Regularized optimization step : Based on the pseudo-complete data (Y , Y (t)mis , X),update ˆθ(t−1)  
+
+> n
+
+by minimizing a penalized loss function, i.e., setting 
+
+ˆθ(t) 
+
+> n
+
+= arg min 
+
+> θ
+
+{
+
+− 1
+
+n
+
+> n
+
+∑
+
+> i=1
+
+log π(Y (i), Y (i,t )mis 
+
+∣∣X(i), θ, σ2
+
+> n
+
+) + Pλn (θ)
+
+}
+
+, (5) where the penalty Pλn (θ) is chosen such that ˆθ(t) 
+
+> n
+
+forms a consistent estimator of 
+
+θ(t) 
+
+> ∗
+
+= arg max  
+
+> θ
+
+Eθ(t−1) 
+
+> n
+
+log π(Y , Y mis |X, θ, σ2
+
+> n
+
+)= arg max 
+
+> θ
+
+∫
+
+log π(Y mis , Y |X, θ, σ2
+
+> n
+
+)π(Y mis |Y , X, θ(t−1)  
+
+> n
+
+, σ2
+
+> n
+
+)π(Y |X, θ∗, σ2
+
+> n
+
+)dY mis dY ,
+
+where θ(t) 
+
+> ∗
+
+is called the working true parameter at iteration t.
+
+end for Output : ˆθ(T ) 
+
+> n
+
+.variables Y mis as missing, the IRO algorithm can be applied to train the StoNet. The key to the IRO algorithm is to find an estimator that is uniformly consistent for the working true parameter θ(t) 
+
+> ∗
+
+over all iterations. For high-dimensional problems, as suggested by Liang et al. (2018a), such a uniformly consistent sparse estimator can typically be obtained by minimizing an appropriately penalized loss function as defined in (5). For a sublinear StoNet, such a penalty term is unnecessary. Therefore, we set Pλn (θ) = 0 for θ ∈ Θ. Under this setting, solving (5) corresponds to solving a series of linear regressions by noting that the joint distribution 
+
+π(Y mis , Y |X, θ, σ2
+
+> n
+
+) can be decomposed in a Markovian structure: 
+
+π(Y mis , Y |X, θ, σ2
+
+> n
+
+) = π(Y |Y h, θ, σ2
+
+> n
+
+)π(Y h|Y h−1, θ, σ2
+
+> n
+
+) · · · π(Y 1|X, θ, σ2
+
+> n
+
+), (6) and, furthermore, the components of Y i ∈ Rdi are mutually independent conditional on Y i−1
+
+for i = 1 , 2, . . . , h + 1 . For notational simplicity, we let Y 0 = X and Y h+1 = Y .We note that the IRO algorithm is reduced to the stochastic EM algorithm (Celeux and Diebolt, 1985; Nielsen, 2000) when no penalty is used in (5). However, the theoretical framework established in Liang et al. (2018a) still works for the sublinear StoNet models. For this reason, Algorithm 1 is still referred to as an IRO algorithm. 
+
+3.2 Feature Learning Consistency 
+
+For all theoretical results in this paper, the proofs are presented in the Appendix. Let λmin (A)
+
+and λmax (A) denote, respectively, the minimum and maximum eigenvalues of the matrix A. For the inputs and network structure, we make the following assumption: 6Assumption 2. (i) The network architecture satisfies the condition given in (1); (ii) X ∈ [0 , 1] p
+
+(i.e., in a bounded space); additionally, there exists a constant κmin > 0 such that λmin (Σ0) ≥ κmin ,where Σ0 denotes the covariance matrix of X.
+
+Assumption 2-(i) restricts the architecture of the DNN, while its universal approximation ability can still be established for some classes of functions under the large sample regime, detailed in Section 3.3. Assumption 2-(ii) is regular, which implies that the eigenvalues of the covariance matrix of X are uniformly bounded across sample sizes, i.e., κmin ≤ λmin (Σ0) ≤ λmax (Σ0) ≤ κmax 
+
+for some constant κmax > 0 and all sample size n > 0.
+
+Assumption 3 (Preactivation regularity) . Let ˜Y (t) 
+
+> l,k
+
+denote the preactivation input to the neuron 
+
+k of layer l at iteration t of the IRO algorithm. For tanh and sigmoid activations, assume that the preactivations have uniformly bounded coordinatewise second moments; that is, there exists a constant C˜Y < ∞, independent of n, l, k , and the IRO iteration t, such that 
+
+sup 
+
+> l,k,t
+
+E
+
+> {( ˜
+
+Y (t)
+
+> l,k
+> )2}
+
+≤ C˜Y . (7) 
+
+For the ReLU activation, assume that each hidden neuron has a nonnegligible active-region probability. Specifically, there exist constants s ∈ R and π0 > 0, independent of n, l, k , and the IRO iteration t, such that 
+
+P
+
+> ( ˜
+
+Y (t) 
+
+> l,k
+
+≥ sσ l
+
+> )
+
+≥ π0, l = 1 , . . . , h, k = 1 , . . . , d l, t = 1 , . . . , T. (8) The first part of Assumption 3 prevents the smooth activations, such as tanh and sigmoid, from being uniformly saturated. A sufficient condition for (7) is provided in Lemma A1; thus, we state (7) explicitly to keep the subsequent covariance lower-bound argument transparent. The second part is specific to the ReLU activation. It rules out asymptotically inactive, or removable, ReLU units by requiring the scaled preactivation ˜Y (t) 
+
+> l,k
+
+/σ l to have nonvanishing probability mass above a fixed finite threshold. This prevents the preactivation from drifting to the far negative region with probability tending to one. 
+
+Lemma 2. For any layer l ∈ { 1, 2, . . . , h }, let Σ(t) 
+
+> l
+
+∈ Rdl×dl denote the covariance matrix of the covariates of the regressions, which are formed for the neurons of layer l + 1 at iteration t of Algorithm 1. If Assumptions 1-3 hold, then there exist constants c > 0 such that λmin (Σ(t) 
+
+> l
+
+) ≥ cσ 2
+
+> l
+
+for any iteration t.
+
+The proof of Lemma 2 is given in Appendix A.2. To study properties of the coefficient estimators for the regressions formed in the StoNet, we introduce the following two lemmas, one for linear regression and the other for multinomial logistic regression. 
+
+Lemma 3. (Rencher and Schaalje, 2007, Theorem 7.3; Golub and Loan, 2013, Chapter 2) Consider the linear regression model 
+
+Y = Xβ∗ + σϵ, ϵ ∼ N (0 , I n),
+
+where Y ∈ Rn, X ∈ Rn×p, β∗ ∈ Rp, σ > 0, and p < n . Let ˆβ denote the OLS estimator of β∗. If 
+
+7λmin (X⊤X) ≥ nκ min , then 
+
+∥∥∥E
+
+[
+
+(ˆβ − β∗)( ˆβ − β∗)⊤ | X
+
+]∥ ∥∥2 ≤ σ2
+
+nκ min 
+
+.
+
+Equivalently, for every unit vector u ∈ Rp, E
+
+[
+
+{u⊤(ˆβ − β∗)}2 | X
+
+]
+
+≤ σ2 
+
+> nκ min
+
+.
+
+Lemma 4. Consider a multinomial logistic regression, which contains m + 1 classes and n
+
+observations. Assume that (i) each covariate in X ∈ Rn×p is normally distributed with the variance decreasing with n at a rate of O(n−α) for some α > 0; (ii) p ≤ n; and (iii) the design matrix X is nondegenerate in the sense that there exists a constant κmin > 0 such that λmin (X⊤X) ≥ nκ min 
+
+with probability tending to one. Let ⃗ B = ( β⊤ 
+
+> 1
+
+, β⊤ 
+
+> 2
+
+, · · · , β⊤
+
+> m
+
+)⊤ denote the vector of true regression coefficients of the model, where βi ∈ Rp, and let ̂⃗ B denote the maximum likelihood estimator (MLE) of ⃗ B. Then there exists a constant ν0 such that 
+
+∥∥∥∥EY|X
+
+[
+
+(̂⃗ B −⃗ B)( ̂⃗ B −⃗ B)⊤
+
+]∥ ∥∥∥2
+
+≤ 1
+
+nν 0κmin 
+
+with probability tending to one, where the expectation is taken with respect to the conditional distribution π(Y | X).
+
+The proof of Lemma 4 is given in Appendix A.3. The conditions of Lemma 4 are specifically tailored to the auxiliary StoNet used in the proof. In this StoNet, the output of each hidden neuron is modeled as a Gaussian random variable with variance chosen by the user. As such, the conditions, including the rate at which the variance decreases, can be satisfied. Specifically, condition (i) aligns with Assumption 1-(v), where the variance of the random noise added to each hidden neuron tends to decrease as n increases; condition (ii) aligns with Assumption 2-(i); and condition (iii) aligns with Lemma 2. 
+
+Lemma 5 (One iteration layerwise operator-norm error) . Suppose Assumptions 1–3 hold. For each layer l = 1 , . . . , h + 1 , let ¯W l = ( bl, wl) ∈ Rdl×(dl−1+1) denote the augmented coefficient matrix including the bias term, and define ∆(t) 
+
+> l
+
+=̂ ¯W (t) 
+
+> l,n
+
+− ¯W (t) 
+
+> l, ∗
+
+. Let pl = dl−1 + 1 , so that 
+
+∆(t) 
+
+> l
+
+∈ Rdl×pl . Suppose that, conditional on the imputed covariates used in the lth layer regression, the row errors 
+
+∆(t) 
+
+> lk
+
+= ˆβ(t) 
+
+> lk
+
+− β(t) 
+
+> lk, ∗
+
+∈ Rpl , k = 1 , . . . , d l,
+
+are independent mean-zero sub-Gaussian vectors satisfying, for every unit vector v ∈ Rpl ,
+
+∥∥∥v⊤∆(t)
+
+> lk
+
+∥∥∥ψ2
+
+≤ C σl
+
+σl−1
+
+√n ,
+
+where ∥ · ∥ ψ2 denotes the sub-Gaussian Orlicz norm and C is a constant. Then 
+
+∥∥∥∥̂ ¯W (t) 
+
+> l,n
+
+− ¯W (t)
+
+> l, ∗
+
+∥∥∥∥op 
+
+= Op
+
+
+
+σl
+
+σl−1
+
+√
+
+dl + dl−1 + 1 
+
+n
+
+ ,
+
+8where ∥A∥op = λmax {(A⊤A)1/2}. Consequently, if 
+
+a2 
+
+> n
+
+:= 1
+
+n
+
+> h+1
+
+∑
+
+> l=1
+
+(dl + dl−1 + 1) σ2
+
+> l
+
+σ2
+
+> l−1
+
+→ 0, as n → ∞ , (9) 
+
+then the layerwise operator-norm error 
+
+> h+1
+
+∑
+
+> l=1
+
+∥∥∥∥̂ ¯W (t) 
+
+> l,n
+
+− ¯W (t)
+
+> l, ∗
+
+∥∥∥∥
+
+> 2op
+
+= Op(a2
+
+> n
+
+) = op(1) . (10) 
+
+Remark 1. The row-wise second-moment operator bound alone would not yield the operator-norm rate in (10). That rate is obtained using the sub-Gaussian structure of the layerwise regression estimators, see the proof of Lemma 5 in Appendix A.4. In the present StoNet setting, the Gaussian layerwise regression model and the local asymptotic normal approximation for the logistic layer justify the sub-Gaussian operator-norm formulation used above. 
+
+Remark 2 (Hidden-layer noise levels) . To satisfy (9), we suggest to choose the hidden-layer noise levels to increase toward the output layer. Let 
+
+Sl,n = dl + dl−1 + 1 , l = 1 , . . . , h + 1 .
+
+Define 
+
+Tn =
+
+> h+1
+
+∑
+
+> l=2
+
+Sl,n , Bl,n = dh+1 
+
+
+
+> h
+
+∏
+
+> i=l+1
+
+d2
+
+> i
+
+ dl, l = 1 , . . . , h. 
+
+Suppose that there exists a sequence rn → ∞ such that 
+
+max 
+
+> 1≤l≤h
+
+{
+
+(hB l,n )1/(h+1 −l), d 2/(h+1 −l)
+
+> l
+
+}
+
+≺ rn ≺ nTn
+
+. (11) 
+
+Then, with fixed σh+1 = O(1) , choose σ2 
+
+> l
+
+= σ2
+
+> h+1
+
+r−(h+1 −l) 
+
+> n
+
+for l = 1 , . . . , h . This choice gives 
+
+σ1 < σ 2 < · · · < σ h < σ h+1 and σ2
+
+> l
+> σ2
+> l−1
+
+= rn for l = 2 , . . . , h + 1 . Therefore, 
+
+> h+1
+
+∑
+
+> l=2
+
+Sl,n 
+
+nσ2
+
+> l
+
+σ2
+
+> l−1
+
+= rnTn
+
+n = o(1) .
+
+The first term in a2 
+
+> n
+
+also satisfies 
+
+S1,n 
+
+nσ21
+
+σ20
+
+= S1,n 
+
+nσ2
+
+> h+1
+
+r−hn
+
+σ20
+
+= o(1) ,
+
+where σ20 = κmin is fixed. Hence a2 
+
+> n
+
+= 1
+
+> n
+
+∑h+1  
+
+> l=1
+
+Sl,n σ2
+
+> l
+> σ2
+> l−1
+
+→ 0.Moreover, for each l = 1 , . . . , h ,
+
+Bl,n σ2 
+
+> l
+
+= Bl,n σ2
+
+> h+1
+
+r−(h+1 −l) 
+
+> n
+
+= o
+
+( 1
+
+h
+
+)
+
+,
+
+9because (hB l,n )1/(h+1 −l) ≺ rn. Similarly, 
+
+dlσl = dlσh+1 r−(h+1 −l)/2 
+
+> n
+
+= o(1) ,
+
+because d2/(h+1 −l) 
+
+> l
+
+≺ rn. Thus Assumption 1-(v) is also satisfied. Additionally, we note that (11) controls the growth rates of the layer widths, but it does not preclude the network from being over-parameterized in the usual parameter-count sense; see Remark 4 in the Appendix for an instance of architecture design for sublinear DNNs. 
+
+Regarding the energy landscape of the DNN, we make Assumption 4. Let 
+
+Q∗(θ) = E(log πDNN (Y |X, θ)) ,
+
+be the expected loss, taken with respect to the joint distribution π(X, Y ), of the DNN. By Assumption 1-(i)&(ii) and the law of large numbers, 
+
+1
+
+n
+
+> n∑
+> i=1
+
+log πDNN (Y (i)|X(i), θ) − Q∗(θ) p
+
+→ 0 (12) holds uniformly over Θ, where the superscript i indexes observations of the dataset. 
+
+Assumption 4. (i) The expected loss function Q∗(θ) is continuous in θ and uniquely maximized (up to loss-invariant transformations) at θ∗; (ii) for any ϵ > 0, sup θ∈Θ\B(ϵ)Q∗(θ) exists, where 
+
+B(ϵ) = {θ : dop (θ, θ∗) < ϵ }, and δϵ = Q∗(θ∗) − sup θ∈Θ\B(ϵ)Q∗(θ) > 0.
+
+Assumption 4 restricts the shape of Q∗(θ) around the global maximizer, ensuring that it is neither discontinuous nor too flat. Given nonidentifiability of the neural network model, Assumption 4 implicitly assumes that each θ is unique up to loss-invariant transformations, such as reordering the hidden neurons within the same layer or simultaneously altering the signs or scales of certain weights and biases; see e.g., Liang et al. (2018b) and Sun et al. (2022) for further discussions. Alternatively, the optimal solutions can be considered as belonging to an equivalent class, subject to appropriate loss-invariant transformations, with the uniqueness assumption applying to this equivalent class. Further, let’s consider the IRO parameter update mapping M (θ) as defined in (5), i.e., 
+
+M (θ) = arg max 
+
+> ˜θ
+
+Eθ log π(Y , Y mis |X, ˜θ).
+
+As argued in Liang et al. (2018a) and Nielsen (2000), it is reasonable to assume this mapping is contractive. A recursive application of the mapping, i.e., setting ˆθ(t+1)  
+
+> n
+
+= θ(t+1)  
+
+> ∗
+
+= M ( ˆθ(t) 
+
+> n
+
+), leads to a monotone increase of the target expectations Eˆθ(t)
+
+> n
+
+log π(Y , Y mis |X, ˆθ(t+1)  
+
+> n
+
+) for t = 1 , 2, . . . , T .
+
+Assumption 5 (Local stability of the IRO parameter update mapping) . Let M (θ) denote the IRO parameter update mapping. Let Θ∗ := arg max θ∈Θ Q∗(θ) denote the set of population maximizers, where parameters in Θ∗ are identified up to loss-invariant transformations. Suppose that M (θ∗) = θ∗ for some representative θ∗ ∈ Θ∗.Write θ = ( ¯W 1, . . . , ¯W h+1 ) and ¯W l = ( bl, W l). For a layerwise perturbation ∆ = (∆ 1, . . . , ∆h+1 ), where each ∆l has the same dimension as ¯W l, define the ℓ2-aggregated layerwise 
+
+10 operator norm 
+
+∥∆∥dop := 
+
+> (h+1 ∑
+> l=1
+
+∥∆l∥2op 
+
+> )1/2
+
+. (13) 
+
+For the derivative of M , write 
+
+DM (θ)[∆] := ddϵ M (θ + ϵ∆) 
+
+> ∣∣∣∣ϵ=0
+
+,
+
+and define ∥DM (θ)[∆] ∥dop by applying the same layerwise norm to the resulting layerwise perturbation. There exist a neighborhood U (θ∗) of θ∗ such that M is differentiable on U (θ∗) and a constant 0 < λ ∗ < 1 such that 
+
+ρop (θ) := sup 
+
+> ∆̸=0
+
+∥DM (θ)[∆] ∥dop 
+
+∥∆∥dop 
+
+≤ λ∗, θ ∈ U (θ∗).
+
+This assumption is essentially a local stability condition for the IRO dynamics. Under nondegenerate imputation noise, if this stability condition is violated, the stochastic perturbations may excite unstable directions and cause the iterates to move away from the target fixed point. Thus, from a practical point of view, the condition is closely related to the observed long-run stability and convergence of the algorithm. Although this condition may not be directly verifiable in complex models, stable convergence across sufficiently long runs and multiple initializations provides practical evidence supporting its validity. Consequently, we obtain the following IRO estimation consistency in an operator norm metric. 
+
+Lemma 6 (IRO estimation consistency in an operator-norm metric) . Suppose Assumptions 1–5 hold and an → 0, where an is defined in (9) . Define the ℓ2-aggregated layerwise operator norm metric dop (θ, θ′) := ∥θ − θ′∥dop . Then, for the IRO estimator ̂ θ(t) 
+
+> n
+
+,
+
+dop 
+
+> (̂
+
+θ(t) 
+
+> n
+
+, θ∗
+
+> )
+
+= Op
+
+> (
+
+(λ∗)t)
+
++ Op(an),
+
+where 0 < λ ∗ < 1 is the local contraction constant as defined in Assumption 5. Consequently, 
+
+dop 
+
+> (̂
+
+θ(t) 
+
+> n
+
+, θ∗ 
+
+> )p
+
+→ 0, as t → ∞ and n → ∞ .
+
+Lemma 6, whose proof is given in Appendix A.5, establishes consistency of the IRO estimator in an operator norm metric. This notion should be distinguished from consistency in the usual Euclidean norm of the vectorized parameter. For a matrix A,
+
+∥A∥op ≤ ∥ A∥F ≤
+
+> √
+
+rank( A) ∥A∥op ,
+
+where ∥ · ∥ F denotes the Frobenius norm. Since the Euclidean norm of the vectorized coefficient matrix is exactly its Frobenius norm, Euclidean parameter consistency is stronger than operator-norm consistency when the layer widths grow with n. More explicitly, if we define d2 
+
+> F
+
+(θ, θ′) =  
+
+> ∑h+1
+> l=1
+
+∥ ¯W l − ¯W ′
+
+> l
+
+∥2 
+
+> F
+
+, then dop (θ, θ′) ≤ dF (θ, θ′). Thus Euclidean/Frobenius consistency implies operator-norm consistency. The converse, however, need not hold when the dimensions dl
+
+increase with n, because the factor 
+
+> √
+
+rank( ¯W l − ¯W ′
+
+> l
+
+) may diverge. In this sense, operator-norm 11 consistency is a weaker but more appropriate notion for studying neural features, as shown below, in growing neural networks. 
+
+Assumption 6 (Eigen-gap condition for neural features) . For each layer l = 1 , . . . , h + 1 , let 
+
+A∗ 
+
+> l
+
+= W ∗⊤  
+
+> l
+
+W ∗
+
+> l
+
+and let its eigenvalues be ordered as λ(l)1 ≥ λ(l)2 ≥ · · · ≥ λ(l) 
+
+> dl−1
+
+≥ 0. Suppose that the top rl-dimensional neural-feature subspace is the object of interest, and there exists a constant δl > 0
+
+such that λ(l) 
+
+> rl
+
+− λ(l) 
+
+> rl+1
+
+≥ δl.
+
+Theorem 1 (Eigenvalue and feature-learning consistency of sublinear DNNs) . Suppose Assump-tions 1–6 hold. Let ˆθ(t) 
+
+> n
+
+denote the IRO estimator at iteration t, and let θ∗ denote the population target, up to loss-invariant transformations. (i) For each layer l = 1 , . . . , h + 1 , define 
+
+A∗ 
+
+> l
+
+= W ∗⊤  
+
+> l
+
+W ∗ 
+
+> l
+
+,̂ A(t) 
+
+> l
+
+=̂ W (t)⊤
+
+> l
+
+̂ W (t) 
+
+> l
+
+.
+
+Let λ1(A∗ 
+
+> l
+
+) ≥ · · · ≥ λdl−1 (A∗ 
+
+> l
+
+) and λ1(̂A(t) 
+
+> l
+
+) ≥ · · · ≥ λdl−1 (̂ A(t) 
+
+> l
+
+) denote their ordered eigenvalues. Then 
+
+max 
+
+> 1≤j≤dl−1
+
+∣∣∣∣λj (̂A(t) 
+
+> l
+
+) − λj (A∗ 
+
+> l
+
+)
+
+∣∣∣∣ p
+
+→ 0, as t → ∞ and n → ∞ .
+
+Moreover, let V ∗ 
+
+> l
+
+and ̂ V (t) 
+
+> l
+
+contain orthonormal bases for the top rl-dimensional eigenspaces of A∗ 
+
+> l
+
+and ̂ A(t) 
+
+> l
+
+, respectively. If the eigengap condition λrl (A∗ 
+
+> l
+
+) − λrl+1 (A∗ 
+
+> l
+
+) ≥ δl > 0 holds, then ∥∥∥∥̂ V (t)
+
+> l
+
+̂ V (t)⊤ 
+
+> l
+
+− V ∗ 
+
+> l
+
+V ∗⊤ 
+
+> l
+
+∥∥∥∥op 
+
+> p
+
+→ 0, as t → ∞ and n → ∞ .
+
+Thus the IRO-produced estimator is eigenvalue consistent and feature-subspace consistent. If, in addition, the kth eigenvalue of A∗ 
+
+> l
+
+is simple, in the sense that 
+
+δl,k = min {λk−1(A∗ 
+
+> l
+
+) − λk(A∗ 
+
+> l
+
+), λ k(A∗ 
+
+> l
+
+) − λk+1 (A∗ 
+
+> l
+
+)} > 0,
+
+with the obvious one-sided modification for k = 1 , then the corresponding individual neural feature is consistent up to sign. That is, if v∗ 
+
+> l,k
+
+and ̂ v(t) 
+
+> l,k
+
+are unit eigenvectors corresponding to λk(A∗ 
+
+> l
+
+) and λk(̂A(t) 
+
+> l
+
+), respectively, then there exists s(t) 
+
+> l,k
+
+∈ {− 1, 1} such that 
+
+∥∥∥̂ v(t) 
+
+> l,k
+
+− s(t)
+
+> l,k
+
+v∗
+
+> l,k
+
+∥∥∥2
+
+> p
+
+−→ 0.
+
+(ii) Define the conventional DNN estimator ̂
+
+θDNN ,n = arg max 
+
+> θ
+
+{ 1
+
+n log πDN N (Y|X, θ)
+
+}
+
+. (14) 
+
+Then 
+
+dop (ˆθ(t) 
+
+> n
+
+,̂ θDNN ,n) p
+
+→ 0, as t → ∞ and n → ∞ , (15) 12 and the same conclusions hold for the DNN estimator. In particular for each layer l =1, . . . , h + 1 ,
+
+max 
+
+> 1≤j≤dl−1
+
+∣∣∣λj (̂ADNN ,l ) − λj (A∗ 
+
+> l
+
+)
+
+∣∣∣ p
+
+→ 0, as n → ∞ .
+
+and, under the eigengap condition, 
+
+∥∥∥∥̂ V DNN ,l ̂ V ⊤ 
+
+> DNN ,l
+
+− V ∗ 
+
+> l
+
+V ∗⊤ 
+
+> l
+
+∥∥∥∥op 
+
+> p
+
+→ 0, as n → ∞ .
+
+If the relevant eigenvalue is simple, then the corresponding individual DNN neural feature is also consistent up to sign. 
+
+By Theorem 1, sublinear DNNs can achieve eigenvalue and feature-learning consistency, provided that their training errors are sufficiently small. As noted in Remark 2, however, the total number of parameters in a sublinear DNN can still be much larger than n. In other words, a sublinear DNN may be over-parameterized in the conventional parameter-count sense while still achieving consistency in eigenvalues and feature learning. Nevertheless, eigenvalue and feature-learning consistency alone do not imply prediction consistency. Prediction consistency additionally requires control of the forward-stability factor, which measures how layerwise operator-norm errors propagate and are amplified through the forward pass of the neural network. 
+
+Lemma 7 (Forward-stability factor in the layerwise operator norm) . Consider the deterministic DNN 
+
+¯h0(X) = (1 , X⊤)⊤, hl(X; θ) = Ψ l
+
+( ¯W l ¯hl−1(X; θ)
+
+)
+
+, l = 1 , . . . , h, 
+
+with augmented hidden representation ¯hl(X; θ) = (1 , h⊤ 
+
+> l
+
+(X; θ)) ⊤, and output 
+
+fθ(X) = Ψ h+1 
+
+( ¯W h+1 ¯hh(X; θ)
+
+)
+
+.
+
+Suppose each activation map Ψl is Lipschitz with constant Ll. Let V (θ∗) be a sufficiently small neighborhood of θ∗, and define 
+
+τl,n (V ) = sup  
+
+> θ∈V(θ∗)
+
+E∥¯hl(X; θ)∥22, l = 0 , . . . , h, 
+
+and 
+
+Kj,n (V ) = sup  
+
+> θ∈V(θ∗)
+
+Lj ∥ ¯W j ∥op , j = 1 , . . . , h + 1 .
+
+Then, for all θ ∈ V (θ∗),
+
+∥fθ − fθ∗ ∥L2(PX ) ≤ Γn(V )dop (θ, θ∗),
+
+where Γn(V ) is the local forward-stability factor, and one may take 
+
+Γ2
+
+> n
+
+(V ) = 
+
+> h+1
+
+∑
+
+> l=1
+
+L2 
+
+> l
+
+τl−1,n (V )
+
+> h+1
+
+∏
+
+> j=l+1
+
+K2
+
+> j,n
+
+(V ),
+
+with the convention that an empty product equals one. 
+
+13 In particular, evaluating the local bound at θ∗, one obtains the sharper expression 
+
+Γ2 
+
+> n
+
+≲
+
+> h+1
+
+∑
+
+> l=1
+
+L2 
+
+> l
+
+τl−1,n h+1 ∏
+
+> j=l+1
+
+{Lj ∥ ¯W ∗ 
+
+> j
+
+∥op }2, (16) 
+
+where 
+
+τl,n = E∥¯hl(X; θ∗)∥22 = tr 
+
+[
+
+E{¯hl(X; θ∗)¯hl(X; θ∗)⊤}
+
+]
+
+.
+
+If all activations have a common Lipschitz constant LΨ, then 
+
+Γ2 
+
+> n
+
+≲
+
+> h+1
+
+∑
+
+> l=1
+
+τl−1,n h+1 ∏
+
+> j=l+1
+
+{LΨ∥ ¯W ∗ 
+
+> j
+
+∥op }2. (17) The proof of the lemma is given in Appendix A.7. The factor Γn measures how layerwise operator-norm parameter errors are propagated and amplified through the forward pass of the network. By Lemma 7, a local upper bound for Γn is given in (17) . This bound shows that Γn is governed by two quantities: the effective size of the hidden representations, measured by τl,n ,and the downstream spectral amplification, measured by products of layerwise spectral norms. This forward-stability analysis complements the eigenvalue and feature-learning consistency results in Theorem 1. Theorem 1 ensures that the learned feature matrices recover the population feature spectra and eigenspaces in operator norm. However, feature-learning consistency alone does not automatically imply prediction consistency, because prediction also depends on how errors in the learned layers propagate through subsequent layers. Therefore, to establish prediction consistency, we must additionally control the order of Γn. This leads to the following theorem. 
+
+Theorem 2 (Prediction consistency) . Suppose the conditions of Theorem 1 hold. Let fθ denote the deterministic DNN map associated with parameter θ. Assume further that the network is locally forward-stable around θ∗, in the sense that there exists a deterministic sequence Γn such that, for all θ in a neighborhood of θ∗,
+
+∥fθ − fθ∗ ∥L2(PX ) ≤ Γndop (θ, θ∗).
+
+Therefore, if 
+
+Γn{(λ∗)t + an} → 0, (18) 
+
+then 
+
+∥fˆθ(t)
+
+> n
+
+− fθ∗ ∥L2(PX )
+
+> p
+
+→ 0. (19) 
+
+Consequently, the IRO-produced DNN is prediction consistent. 
+
+In what follows, we analyze the order of Γn in three scenarios. For each layer l = 0 , . . . , h n,we define 
+
+τl,n = tr( ¯G∗
+
+> l,n
+
+) = ∑
+
+> j
+
+λj ( ¯G∗
+
+> l,n
+
+), with ¯G∗ 
+
+> l,n
+
+:= E{¯hl(X; θ∗)¯hl(X; θ∗)⊤}.
+
+First, suppose that the DNN has a low-dimensional representation structure. More precisely, 14 assume that the hidden-feature spectra have uniformly bounded total mass: 
+
+τl,n = ∑
+
+> j
+
+λj ( ¯G∗
+
+> l,n
+
+) = O(1) , l = 0 , . . . , h n,
+
+even though the ambient widths dl may diverge. This situation occurs, for example, when only finitely many eigenvalues of ¯G∗ 
+
+> l,n
+
+are non-negligible, or when the hidden representations are effectively low-rank, sparse, or concentrated on a low-dimensional manifold. By eigenvalue consistency, the empirical spectra of the learned feature matrices then also exhibit the same low-dimensional structure. By feature-learning consistency, the corresponding empirical feature subspaces are consistently recovered. Consequently, the IRO estimator learns the relevant low-dimensional feature directions rather than the full ambient-width representation. If, in addition, the depth is fixed and the layerwise spectral norms are uniformly bounded, then 
+
+Γn = O(1) .
+
+In this case, the prediction consistency condition reduces to (18) . Thus, over-parameterization in ambient width does not necessarily harm prediction consistency, provided the learned features have bounded effective spectral dimension. Second, suppose the network is wide and the hidden representations occupy the ambient dimension. For example, if the activations are uniformly bounded and a non-negligible fraction of the hidden units carry signal, then 
+
+∥¯hl(X; θ∗)∥22 = O(dl), τl,n = O(dl).
+
+Equivalently, the spectrum of ¯G∗ 
+
+> l,n
+
+has total mass of order dl. In this case, eigenvalue consistency implies that the learned feature matrices also have many non-negligible empirical eigenvalues, and feature learning takes place in a genuinely high-dimensional feature space. If the depth is fixed and the layerwise spectral norms are uniformly bounded, then 
+
+Γ2 
+
+> n
+
+= O 
+
+> (h∑
+> l=0
+
+dl
+
+> )
+
+, Γn = O 
+
+> (h∑
+> l=0
+
+dl 
+
+> )1/2
+
+.
+
+Thus prediction consistency requires the stronger condition  
+
+> (h∑
+> l=0
+
+dl
+
+> )1/2
+
+{(λ∗)t + an} → 0.
+
+Using the rate expression in (9) , this condition is implied by the more restrictive sublinear growth condition ( h∑
+
+> l=0
+
+dl
+
+> ) ( h+1 ∑
+> l=1
+
+(dl + dl−1 + 1) 
+
+> )
+
+≺ n, 
+
+which says that the network must be sub-√n in total width, and consequently sublinear in total parameter count, consistent with the existing results as established in Sun et al. (2022). This is a worst-case width-based regime. It corresponds to the case where the feature spectra do 15 not concentrate on a low-dimensional subspace, so the ambient widths enter the stability factor directly. Third, suppose the hidden representations are spectrally low-dimensional, but the depth hn
+
+grows. Assume τl,n = O(1) for l = 0 , . . . , h n, so that eigenvalue consistency and feature-learning consistency still imply stable recovery of low-dimensional feature directions at each layer. Let 
+
+Kn = max  
+
+> 1≤j≤hn+1
+
+LΨ∥ ¯W ∗ 
+
+> j
+
+∥op .
+
+Then 
+
+Γ2 
+
+> n
+
+= O
+
+> 
+> hn∑
+> m=0
+
+K2mn 
+
+> 
+
+.
+
+Consequently, 
+
+Γn =
+
+> 
+
+O(1) , Kn ≤ K < 1,O(√hn), Kn = 1 ,O(Khn 
+
+> n
+
+), Kn > 1 and bounded away from 1.
+
+See Appendix A.9 for the justification. Thus, even when each layer learns a low-dimensional feature representation consistently, prediction consistency also requires control of the downstream amplification across depth. In the contractive case Kn < 1, depth does not create additional instability. In the neutral case Kn = 1 , the stability factor grows only as √hn. In the expansive case Kn > 1, the forward map can amplify small parameter errors exponentially in depth. 
+
+3.3 Approximation Power of Sublinear DNNs 
+
+Theorem 1 rests on the implicit assumption that the sublinear DNN can adequately approximate the target function. Given the model’s structural constraints, a natural question arises: can it still approximate common target classes, e.g., continuous functions on compact sets, arbitrarily well as the sample size n → ∞ ? While a complete characterization remains open, we establish positive results for several important classes of functions, as detailed below. To understand the approximation power of DNNs, a line of work has analyzed compositional functions, see, e.g., Schmidt-Hieber (2020); Bauler and Kohler (2019); Poggio et al. (2017), motivated by the compositional structure of DNNs. Combining the approximation theory of Poggio et al. (2017) with Theorem 1, we obtain: 
+
+Theorem 3. Let f (x) be defined on a compact domain in Rd0 and admit a hierarchical composi-tional representation in which each constituent depends on at most s variables (with s ≤ d0 and being fixed). (i) If f is Lipschitz with the dimension d0 = O(nα) for some 0 < α < 1, then for any 
+
+ε = n−(1 −α−δ)/s with 0 < δ < 1 − α, there exists a sublinear ReLU DNN such that ∥f − fθ∥ ≤ ε
+
+as n → ∞ , where fθ denotes the DNN function. (ii) If f is continuously differentiable with d0 = O(nα) for some 0 < α < 1, then the same conclusion holds for sublinear DNNs that have a smooth activation function, such as sigmoid or tanh. 
+
+16 Refer to Appendix A.10 for the proof. Beyond compositional classes, the approximation theory of deep-ReLU networks established in Montanelli and Du (2019) yield analogous guarantees for functions in the Korobov space (denoted by K2,p with an equipped ℓp-norm) — a subspace of the Sobolev space with dominating mixed smoothness, i.e., all mixed partial derivatives up to order 2 exist. The proof of Montanelli and Du (2019) leverages the ability of deep networks to approximate sparse grids (Zenger, 1991) via a binary tree structure, resembling the compositional structure used in Poggio et al. (2017). 
+
+Theorem 4. If f (x) ∈ K 2,p ([0 , 1] d0 ) (i.e., defined on a compact domain in Rd0 ), where the input dimension d0 is fixed or grows with n at the rate d0 = o (log n/ log log n), then for any 
+
+ε = n−(1 /2−δ) with 0 < δ < 1/2, there exists a sublinear ReLU DNN such that ∥f − fθ∥ ≤ ε as 
+
+n → ∞ .
+
+Additionally, we note that Theorem 1 complies with the neural scaling law. Both Hestness et al. (2017) and Kaplan et al. (2020) investigated scaling between model size (i.e., the number of parameters) and data size; the former found sub-linear scaling of model size with data size, whereas the latter found a super-linear scaling. Specifically, by Kaplan et al. (2020), the network width can increase with the data size at a polynomial rate of dl ≺ n0.676 (≈ n0.5/0.74 ) for neural language models; and by Hestness et al. (2017), the scaling law dl ≺ n0.5 holds for different model architectures in four deep learning domains: machine translation, language modeling, image processing, and speech recognition. For both scaling laws, the conditions of Theorem 1-(ii) can be satisfied by choosing an appropriate growth rate for the depth of the DNN, ensuring the feature-learning consistency holds. Sublinear DNNs can be trained effectively using SGD. For conventional nonlinear models, obtaining the exact maximum likelihood estimator (MLE) is often challenging, however, DNNs present a different picture: in practice, they often interpolate the training data (achieving essentially zero empirical risk), which coincides with attaining the MLE. This interpolation phenomenon has been widely documented in the deep-learning literature; for example, Zhou et al. (2019) noted that SGD, although considered as a randomized algorithm, converges in an intrinsically deterministic manner to a global minimum. See Section S1.3 of the supplement for an ablation study on SGD’s sensitivity to learning rates. We find that sublinear DNNs maintain stable training and test error across a wide range of learning rates, whereas wide DNNs are markedly more sensitive. 
+
+# 4 Numerical Experiments 
+
+We first test the performance of the IRO algorithm 1 for StoNet training; see Supplement S1.2 for details. Our numerical experiments show that the StoNet trained with IRO and the DNN trained with SGD perform similarly, which is consistent with the theory established in Lemma 1. In practice, the IRO algorithm requires solving a series of regressions on the entire dataset for each iteration, which can be slow for large datasets. Therefore, we use SGD in all subsequent experiments, while using StoNet with IRO as a bridge for transferring theory and methods from linear models to DNNs. 17 4.1 Feature Learning Consistency 
+
+To illustrate the consistency of feature learning in sublinear DNNs, we consider the following two-hidden-layer neural network model: 
+
+yi = w3 tanh( w2 tanh( w1xi + b1) + b2) + b3 + σϵ i, i = 1 , 2, . . . , n, (20) where ϵi’s are i.i.d. standard Gaussian random errors. The neural network has a structure of 
+
+p-5-5-1 with p = 20 , xi’s are drawn independently from Np(0 , I p). The neural network parameters include w1 ∈ R5×20 , w2 ∈ R5×5, w3 ∈ R1×5, b1 ∈ R5, b2 ∈ R5, and b3 ∈ R, and each of their elements is randomly drawn the set {− 1, −0.5, 0, 0.5, 1}. Multiple datasets have been simulated from the model (20) under each setting: n = 500 and 50 , 000 . Obviously, this function belongs to the Korobov space and is also a hierarchical composition function, where p is considered as a fixed value. We modeled the simulated data using 6 different DNNs with the respective structures given by p-5-5-1, p-1000-1000-1, p-10-10-1, p-10-10-10-1, p-10-10-10-10-1, and p-10-10-10-10-10-1. To demonstrate the consistency of neural feature learning, we calculate the canonical correlation (CC) coefficient ρk, 1: k′ = ρ(νk(w⊤ 
+
+> 1
+
+w1), ν 1: k′ ( ˆw⊤ 
+
+> 1
+
+ˆw1)) , where νk(w⊤ 
+
+> 1
+
+w1) denotes the k-th eigenvector of 
+
+w⊤ 
+
+> 1
+
+w1, ν1: k′ ( ˆw⊤ 
+
+> 1
+
+ˆw1) denotes top k′ eigenvectors of ˆw⊤ 
+
+> 1
+
+ˆw1, and ˆw1 denotes an estimator of w1.Under this setting, ρk, 1: k′ is given by 
+
+ρk, 1: k′ = max   
+
+> (c1,...,c k′)⊤∈Rk′
+
+Corr 
+
+> (
+
+νk(w⊤ 
+
+> 1
+
+w1), c 1ν1( ˆ w⊤ 
+
+> 1
+
+ˆw1) + · · · + ck′ νk′ ( ˆ w⊤ 
+
+> 1
+
+ˆw1)
+
+> )
+
+,
+
+which measures the extent to which the neural feature νk(w⊤ 
+
+> 1
+
+w1) is recovered by the learned neural network. As shown in Table S5, w⊤ 
+
+> 1
+
+w1 contains three major eigenvalues. Table 1 presents the values of ρk, 1: k′ for k = 1 , 2, 3 and k′ = 3 .A careful examination of Table 1 shows that the sublinear DNNs not only recover the neural features but also preserve their orders as n becomes large. Note that the network p-1000-1000-1 is considered wide when n = 500 but becomes sublinear in width for n = 50 , 000 , and its results clearly highlight the importance of a sublinear structure for effective neural feature recovery. It is worth noting that this neural network has a total of 1,023,001 parameters, making it highly over-parameterized — a scenario commonly encountered in our deep learning practice. Furthermore, the recovery of low-dimensional neural features by the network p-1000-1000-1 suggests that it contains a large number of redundant parameters, supporting the use of sublinear DNNs and the low-rank approximation method proposed in LoRA (Hu et al., 2022). The sublinear DNN actually provides loose, yet effective, upper bounds for the ranks that can be used for each hidden layer of the wide DNN in LoRA. Our results also indicate that the depth of the DNN affects the recovery of neural features, but not significantly. The similar performance of all the different DNNs in neural feature recovery aligns well with the findings of Li et al. (2018), where it was observed that the intrinsic dimension of the DNN remains stable even as models grow in width and depth. For a thorough comparison for the performance of sublinear and wide DNNs, we reported their training and test errors in Table 2. The comparison highlights the importance of consistent 18 Table 1: Canonical correlations ρk, 1: k′ (k = 1 , 2, 3) for different DNN structures, where the mean CC coefficient and its standard deviation (reported in parenthesis) are calculated by averaging over 5 independent datasets. 
+
+n CC p-5-5-1 p-1000-1000-1 p-10-10-1 p-10-10-10-1 p-10-10-10-10-1 p-10-10-10-10-10-1 500 ρ1,1:1 0.95(0.02) 0.16(0.03) 0.60(0.15) 0.68(0.14) 0.58(0.14) 0.58(0.08) 500 ρ1,1:2 0.97(0.02) 0.28(0.05) 0.84(0.06) 0.89(0.04) 0.77(0.12) 0.66(0.09) 500 ρ1,1:3 0.99(0.00) 0.37(0.07) 0.89(0.04) 0.90(0.04) 0.79(0.11) 0.81(0.05) 50,000 ρ1,1:1 1.00(0.00) 0.88(0.03) 0.88(0.08) 0.88(0.07) 0.96(0.02) 0.88(0.08) 50,000 ρ1,1:2 1.00(0.00) 0.95(0.01) 0.96(0.03) 0.99(0.00) 0.97(0.01) 0.99(0.01) 50,000 ρ1,1:3 1.00(0.00) 0.97(0.01) 0.99(0.00) 1.00(0.00) 0.99(0.00) 1.00(0.00) 500 ρ2,1:1 0.22(0.08) 0.22(0.04) 0.48(0.11) 0.49(0.11) 0.55(0.10) 0.59(0.08) 500 ρ2,1:2 0.88(0.09) 0.47(0.02) 0.79(0.05) 0.81(0.04) 0.64(0.09) 0.76(0.03) 500 ρ2,1:3 0.90(0.09) 0.52(0.04) 0.89(0.04) 0.87(0.05) 0.82(0.04) 0.83(0.03) 50,000 ρ2,1:1 0.06(0.01) 0.29(0.10) 0.25(0.04) 0.33(0.12) 0.13(0.03) 0.27(0.07) 50,000 ρ2,1:2 1.00(0.00) 0.94(0.01) 0.97(0.03) 0.99(0.00) 0.83(0.11) 0.89(0.08) 50,000 ρ2,1:3 1.00(0.00) 0.97(0.01) 0.99(0.01) 0.99(0.00) 0.97(0.02) 1.00(0.00) 500 ρ3,1:1 0.12(0.03) 0.24(0.07) 0.28(0.01) 0.19(0.02) 0.26(0.07) 0.27(0.09) 500 ρ3,1:2 0.28(0.09) 0.34(0.06) 0.49(0.08) 0.38(0.08) 0.61(0.07) 0.38(0.07) 500 ρ3,1:3 0.96(0.03) 0.42(0.07) 0.83(0.09) 0.62(0.14) 0.82(0.05) 0.63(0.08) 50,000 ρ3,1:1 0.04(0.01) 0.14(0.05) 0.19(0.11) 0.10(0.03) 0.16(0.05) 0.17(0.12) 50,000 ρ3,1:2 0.06(0.02) 0.28(0.05) 0.22(0.11) 0.13(0.02) 0.44(0.13) 0.29(0.15) 50,000 ρ3,1:3 1.00(0.00) 0.93(0.04) 0.99(0.01) 0.99(0.00) 0.97(0.01) 0.99(0.01) 
+
+feature learning in DNN prediction. In particular, all the networks achieve oracle-level training and test errors when n = 50 , 000 , where major neural features of the data have been successfully recovered as implied by Table 1. In contrast, when n = 500 , the test errors appear to depend on the extent of neural feature recovery. 
+
+Table 2: Mean squared training and test errors produced by different DNN structures, where the mean and standard deviation (reported in parenthesis) are calculated by averaging over 5 independent datasets.                                        
+
+> np-5-5-1 p-1000-1000-1 p-10-10-1 p-10-10-10-1 p-10-10-10-10-1 p-10-10-10-10-10-1 —Model size 141 1,023,001 331 441 551 661 500 train 0.01(0.00) 0.00(0.00) 0.01(0.00) 0.01(0.00) 0.01(0.00) 0.00(0.00) test 0.05(0.02) 0.21(0.04) 0.08(0.02) 0.14(0.05) 0.15(0.03) 0.16(0.04) 50,000 train 0.01(0.00) 0.01(0.00) 0.01(0.00) 0.01(0.00) 0.01(0.00) 0.01(0.00) test 0.01(0.00) 0.01(0.00) 0.01(0.00) 0.01(0.00) 0.01(0.00) 0.01(0.00)
+
+As mentioned earlier, θ is unique up to loss-invariant transformations, such as reordering hidden neurons within the same layer or simultaneously altering the signs or scales of certain weights and biases. This invariance property makes it particularly challenging to demonstrate the consistency of DNN parameter estimation. To address this challenge, we present in Table S4 the canonical correlations ρ4,1: k′ and ρ5,1: k′ (for k′ = 1 , 2, . . . , 5) achieved by the network p-5-5-1 with n = 50 , 000 , and in Table S5 the eigenvalues. Based on the results shown in Table 1, Table S4, and Table S5, we can conclude that for this network, the eigenvalues and eigenvectors of 
+
+w⊤ 
+
+> 1
+
+w1 have been asymptotically recovered by those of ˆw⊤ 
+
+> 1
+
+ˆw1.The recovery of the eigenvalues and eigenvectors of w⊤ 
+
+> 1
+
+w1 implies recovery of the neural-feature directions and the singular values of w1. When d1 ≤ p and w1 has full row rank, w1
+
+is determined by w⊤ 
+
+> 1
+
+w1 only up to a left orthogonal transformation. Thus the eigen-analysis identifies the row space and feature directions of w1, but not the exact weight matrix itself 19 without choosing an additional representative. 
+
+4.2 Double Descent and Beyond 
+
+Double descent is a surprising phenomenon in machine learning, which describes the observation that the test error of a model drops as the model grows ever larger into the highly overparam-eterized regime relative to the training sample size, see e.g., Belkin et al. (2019); Adlam and Pennington (2020); Schaeffer et al. (2023). This phenomenon will be explained at the end of this subsection from a perspective of neural feature learning. 
+
+MNIST As in Belkin et al. (2019), we worked with a subset of MNIST (with ntrain = 4000 ,
+
+p = 784 , and K = 10 classes) as training data. We trained a one-hidden-layer neural network: 784-L-10, where L is the hidden layer width, and measured its prediction performance on a test dataset with ntest = 10 , 000 . Figure 1(a) shows the resulting training and test errors, where the second descent in test errors occurs with L ranging 50 ∼1000. Notably, for each L ∈ [50 , 1000] ,the resulting DNN is sublinear in width, although its total number of parameters can be much greater than ntrain . Our feature-learning consistency theory provides a principled explanation for the second descent phenomenon, as detailed below. (a) (b)     
+
+> Figure 1: MNIST example, where the y-axis represents ℓ2-loss and the x-axis represents log 10 (L): (a) training both layers’ weights; (b) training the second layer’s weights only.
+
+Importantly, Figure 1 shows that as L further increases, the test error increases again. That is, this example also exhibits a “double ascent” phenomenon. We would attribute the second ascent to the lack of feature learning consistency. To make this point clearer, we trained the one-hidden-layer neural networks again with L ∈ [4000 , 8000] , each of which forms a wide neural network. For each of the wide networks, we fixed the first layer’s weights, initialized with 
+
+N (0 , 0.52); and trained the second layer’s weights only, which were initialized with N (0 , 0.12).Since L > n train , the second layer forms K small-n-large-p logistic regressions and zero-training error solutions exist. As shown in Figure 1(b), these networks can still attain zero training errors, but their test errors are very large. By design, the features represented by the first hidden layer of the wide DNNs are purely noise; the resulting large test errors indicate the importance of feature learning consistency. In what follows, we further explain the importance of feature learning consistency from two perspectives. First, let’s understand why a wide DNN can predict well, if it is trained by a 20 gradient descent method. Consider a StoNet model for nonlinear regression. Suppose that the StoNet model is true, and its hidden layer outputs Y mis are observed. Training such a StoNet is reduced to solving a series of high-dimensional linear regressions. If a gradient descent method is used, then training the StoNet is equivalent to solving a series of ridge regressions with zero penalty, as the gradient descent method provides an implicit regularization for the models in training, see e.g., Gunasekar et al. (2017), Soudry et al. (2018), and Ji and Telgarsky (2019). By the recovery property of ridge regression (Kobak et al., 2020), each of the ridge regressions leads to consistent feature learning for its relevant variables as well as consistent estimation for its response. Therefore, the wide DNN can still predict well, if sufficiently trained with gradient descent. For classification problems, the explanation is similar. 
+
+> Table 3: Training and test errors produced by a wide neural network with structure 784-5000-10, different learning rates and epochs, for the subset MNIST data.
+
+Learning rate #epoch training loss test loss 0.001 4,000 0.000 0.523 0.001 40,000 0.000 0.515 0.001 100,000 0.000 0.497 0.01 4,000 0.000 0.048 On the other hand, as pointed out by Soudry et al. (2018), the convergence of the gradient descent to its implicit regularization limit is very slow, only logarithmic in the convergence of the loss itself. This suggests that the “double ascent” phenomenon in Figure 1(a) might be due to insufficient training. To examine this, we re-trained a wide neural network with structure 
+
+p-5000-10. We set the learning rate to 0.001 and increased the number of epochs from 4,000 to 40,000 and 100,000. We found that with lengthened runs, the test error of the wide DNN can be reduced, but at a very slow rate, see Table 3. We have also set the learning rate to 0.01 and re-trained the model for 4,000 epochs, which yielded low test errors and recovered the double descent phenomenon. Other than test errors, we compared the features learned in different runs. Figure 2 shows that consistent feature learning can be achieved by the wide network with a learning rate of 0.01, while a learning rate of 0.001 may require an extremely long time to achieve the same result. In summary, Table 3 and Figure 2 underscore the importance of feature learning consistency, reinforcing the evidence we observed in Section 4.1. Additionally, we compared in Figure 3 the features learned by the sublinear and wide DNNs with a learning rate of 0.001, where all the networks have been sufficiently trained to zero training errors. The comparison indicates that the sublinear DNN works better than the wide ones in feature extraction.  
+
+> Figure 2: Features learned by a wide neural network p-5000-10 for the subset MNIST data under the settings (learning rate, epoch)=(0.001, 4,000), (0.001, 40,000), (0.001, 100,000), and (0.01, 4,000), from left to right, where the features were extracted from the first hidden layer using the method as described in Radhakrishnan et al. (2024).
+
+21 L=80 L=170 L=500 L=1000 L=2000 L=5000 L=10000   
+
+> Figure 3: Features learned by the neural networks with structure p-L-10 for different values of L, where the features were extracted from the first hidden layer using the method as described in Radhakrishnan et al. (2024).
+
+Other than classification, we have tried a nonlinear regression problem, see Supplement S1.3. As shown by Figure S2, if we fix the first layer weights at random values and trained the second layer weights only, the training error can be reduced to 0, while the test error is large. Again, this underscores the importance of feature learning consistency for prediction. In summary, our experiments indicate that feature learning consistency is crucial for DNNs to achieve accurate predictions . Whether a network is narrow or wide, it can perform well as long as it effectively extracts the correct features. From a feature learning perspective, we provide the following conjectural explanation for the double descent phenomenon: First of all, a large value of L allows more features to be extracted from the data; however, as mathematically shown by Chang (1983), the importance of features in separating data classes is not necessarily aligned with their eigenvalues. For instance, Chang (1983) constructed a two-component mixture Gaussian example, where the two components are only well-separated in the subspace of the first and last eigenvectors. In the context of DNNs, some useful features with large eigenvalues can be learned when L is small, leading to the first descent in test errors. As L increases to a moderate value, additional noisy features may be learned, resulting in an ascent in test errors. Finally, some useful features with small eigenvalues may only be learned when L is sufficiently large, leading to the second descent in test errors, where the network is highly over-parameterized. 
+
+4.3 More Examples: Sublinear or Wide? 
+
+In this subsection, we delve deeper into the choice of hidden layer widths from the perspective of feature learning. Theoretically, as shown in a series of papers (e.g., Gunasekar et al. (2017), Soudry et al. (2018), Ji and Telgarsky (2019)), the gradient descent method provides implicit regularization during model training. Specifically, for high-dimensional linear regression models initialized at the origin, gradient descent converges to the solution with the minimum Euclidean norm. By applying this result to the StoNet model (3), we arrive at the following solution for wi
+
+at each hidden layer: 
+
+ˆwi = Y⊤ 
+
+> i
+
+Ψ( Yi−1)(Ψ( Yi−1)⊤Ψ( Yi−1) + ˜ σ2I)−1,
+
+where ˜σ2 ≥ 0 represents the implicit penalty coefficient, and Yi ∈ Rn×di denotes imputed Y i
+
+values for all n observations. This leads to the rank constraint: 
+
+rank( ˆ w⊤ 
+
+> i
+
+ˆwi) ≤ min {rank(Ψ( Yi−1)) , rank( Yi)} ≤ min {n, d i, d i−1) ≤ n, 
+
+22 which indicates that an overly wide neural network will not learn more than n features at each hidden layer. By the singular value decomposition of ˆwi, it is clear that features corresponding to zero eigenvalues will not affect the values of Yi. Therefore, to enable the DNN to extract more features from the data, one should set di’s to be reasonably large, but not necessarily greater than n.To illustrate this finding, we considered a simulation study, see Section S1.4 of the supplement, where the true regression function has a hierarchical composition structure and the networks 
+
+p−L−1, p−L−L−1, and p−L−L−L−L−1 are trained. We set n = 500 and L ∈ { 2, . . . , 1000 }.Additionally, we considered three UCI datasets: Boston housing, Yacht, and Energy. For each dataset, we tried DNNs with structure p-L − · · · − L-1, with L ranging from 100 to 2,000 and h
+
+ranging from 2 to 7. For real-data problems, a slightly deeper architecture may better capture the unknown compositional structure of the true function. For evaluation, we performed five random train/test splits and trained a fresh network on each split. Refer to Tables S6–S8 for the results. The results indicate that, with appropriate width and depth, sublinear DNNs can perform as well as or better than wide DNNs in prediction. Our findings recommend using sublinear architectures with a reasonably large width and suitable depth so that useful features are extracted and the compositional structure is captured. Moreover, to match the predictive performance of wider counterparts, the depth of a sublinear DNN may need to increase roughly inversely with its width. 
+
+4.4 CelebA 
+
+As another application of the sublinear DNN, we consider an example of feature extraction in classifying images from the CelebA dataset (Liu et al., 2015). As in Radhakrishnan et al. (2024), we employed a fully connected ReLU DNN for the task. The DNN we used has a structure of 
+
+3 × 64 × 64 − L − L − L − L − 2 with L = 1024 . Therefore, the DNN is still of sublinear width when applied to the CelebA data with a training sample size ntrain = 14 , 000 . We trained the fully connected DNN using SGD with a momentum parameter of 0.9, a learning rate of 0.05, a mini-batch size of 64, and 100 epochs. Figure 4 shows four features extracted in training, which indicate the success of feature learning by the sublinear DNN.      
+
+> Figure 4: Four features extracted from the first hidden layer, as described in Radhakrishnan et al. (2024), in training a fully connected ReLU DNN with structure 3×64 ×64 -L-L-L-L-2 for the CelebA data: glass, smile, hat, and arched eyebrow, from left to right.
+
+23 5 Structure Analysis for Large-Scale DNNs 
+
+It is worth noting that many large-scale DNNs, such as AlexNet (Krizhevsky et al., 2012), VGGNet (Simonyan and Zisserman, 2014), ResNet (He et al., 2016), and GoogLeNet (Szegedy et al., 2015), belong to the class of sublinear DNNs in their benchmark studies, despite containing a huge number of parameters. For any deep CNN, we can still randomize the feeding value of each node with incoming trainable connections as in (3), thereby enabling the construction of an asymptotically equivalent StoNet for it. For each node, the number of incoming connections, i.e., the dimension of explanatory variables of the corresponding regression, is calculated as 
+
+(s(1)  
+
+> l
+
+∗s(2)  
+
+> l
+
+∗dl−1+1) , where s(1)  
+
+> l
+
+∗s(2)  
+
+> l
+
+denotes the filter size and corresponds to the fixed s value in the constituent map of the compositional function (see Theorem 3), and dl−1 denotes the number of filters in the previous layer, and ‘1’ represents the bias term. For a deep CNN belonging to the class of sublinear DNNs, the following two conditions need to be satisfied: max l(s(1)  
+
+> l
+
+∗s(2)  
+
+> l
+
+∗dl−1 +1) ≺ n
+
+and ∑ 
+
+> l
+
+dl ≺ n. The latter condition can also be interpreted as the total number of regressions formed in the stochastic deep CNN. The structures of the deep CNNs are analyzed in the following, based on the summary provided by Aqeel Anwar at https://towardsdatascience. com/the-w3h-of-alexnet-vggnet-resnet-and-inception-7baaaecccc96 .AlexNet is one of the earliest deep CNNs, which won the 2012 ImageNet LSVRC-2012 challenge. It comprises a total of 62.4 million trainable parameters, including 5 convolutional layers and 3 fully connected (FC) layers. In this network, the maximum number of incoming connections to a single node is 9,217, achieved at the first FC layer, and the total number of nodes with incoming trainable connections is 10,568. VGG16 has approximately 138.4 million parameters. In VGG16, the maximum number of incoming connections to a single node is 25,089, achieved at the first FC layer, and the total number of nodes with incoming trainable connections is 13,544. ResNets have many variants, e.g., ResNet18, ResNet50, and ResNet101. Let’s consider ResNet18 as an example. It comprises approximately 11.5 million trainable parameters, its maximum number of incoming connections to a single node is 4,609, achieved at layers 15, 16 and 17, and its total number of nodes with incoming trainable connections is 4,904. GoogLeNet has about 6.4 million trainable parameters, in which the maximum number of incoming connections to a single node is 1,729, achieved in Inception 5b, and the total number of nodes with incoming trainable connections is 8,280. In summary, all these networks are sublinear when trained on large-scale datasets such as ImageNet, CIFAR10, CIFAR100, and MNIST, each with n ≥ 50 , 000 training samples. Moreover, because images exhibit an inherent hierarchical, compositional structure, Theorems 1 and 3 apply to these sublinear networks. Taken together, these theoretical insights and the preceding analysis help explain why such large-scale networks achieve exceptional predictive performance after sufficient training on large-scale datasets. We have tested feature consistency on CelebA using ResNet18. Instead of the original ResNet18, which has a kernel size configuration of (64, 128, 256, 512), we utilized a modified version of (16, 32, 64, 128). The modified ResNet18 was trained with SGD with momentum 0.9, a learning rate of 0.1, and a batch size of 64. For feature visualization, many methods are available, as listed at https://github.com/justinbellucci/cnn-visualizations-pytorch .We employed activation map visualization, processing images at each layer and visualizing the 24 Figure 5: Activation maps of the smile features extracted from the first convolutional layer, first residual block, and second residual block. 
+
+respective image representation. In other words, activation map visualization demonstrates what the image looks like after the application of each filter. Figure 5 shows that the sublinear CNN works well for feature learning. 
+
+# 6 Conclusion 
+
+We study sublinear DNNs and prove that, in the large-sample limit, they achieve universal approximation and feature-learning consistency for hierarchically compositional functions. We also analyze AlexNet, VGGNet, and ResNet, showing that these deep CNNs are sublinear on their image-classification benchmarks. Because natural images are hierarchically compositional, our results offer a statistical explanation for the strong performance of large-scale deep learning models in image processing. Our theory identifies a regime in which consistent prediction is guaranteed for large-scale deep learning models despite possible over-parameterization. Empirically, sublinear DNNs match or outperform wide DNNs in prediction accuracy and are more robust to training hyperparameter settings. The theoretical proof of this paper leverages StoNet as a surrogate for the DNN, creating a bridge between linear models and DNNs. Beyond sublinear DNNs, this approach can be applied to sparse deep learning by extending the sparse learning theory from linear models to DNNs. Additionally, we conjecture that the StoNet could enable the extension of benign overfitting theory from linear models to super-wide DNNs, leveraging its capability in sufficient dimension reduction (Liang et al., 2022). In summary, this work validates the effectiveness of sublinear DNNs for learning features from hierarchically compositional functions and provides theoretical guidance for designing appropriate network architectures for tasks such as image processing, where hierarchical composition is intrinsic. The main takeaways are: (i) sublinear DNNs achieve feature-learning consistency 25 for hierarchically compositional functions, even when the total number of parameters exceeds the sample size; (ii) although wide DNNs can drive training error near zero, their predictive performance can be sensitive to the optimization algorithms and hyperparameter settings, whereas sublinear DNNs are notably more robust; and (iii) sublinear DNNs comply with neural scaling laws, achieve universal approximation for hierarchically compositional functions in the large-sample limit, and may extend to other classes of functions, a direction that merits further study. 
+
+# Availability 
+
+The code used to run the experiments is available at https://github.com/sehwankimstat/ Sublinear-DNN .
+
+# Acknowledgments 
+
+Liang’s research is supported in part by the NSF grant DMS-2210819 and the NIH grant R01-GM152717. Kim’s research is supported by the Global-Learning & Academic Research Institution for Master’s and PhD Students, and Postdocs (G-LAMP) Program of the National Research Foundation of Korea (NRF), funded by the Ministry of Education (No. RS-2025-25442252). 
+
+# References 
+
+Adlam, B. and Pennington, J. (2020), “Understanding Double Descent Requires a Fine-Grained Bias-Variance Decomposition,” NeurIPS .Aghajanyan, A., Zettlemoyer, L., and Gupta, S. (2020), “Intrinsic Dimensionality Explains the Effectiveness of Language Model Fine-Tuning,” ArXiv , abs/2012.13255. Bartlett, P. L., Long, P. M., Lugosi, G., and Tsigler, A. (2020), “Benign overfitting in linear regression,” Proceedings of the National Academy of Sciences , 117, 30063–30070. Bauler, B. and Kohler, M. (2019), “On deep learning as a remedy for the curse of dimensionality in nonparametric regression,” The Annals of Statistics , 47, 2261–2285. Belkin, M., Hsu, D. J., Ma, S., and Mandal, S. (2019), “Reconciling modern machine-learning practice and the classical bias–variance trade-off,” Proceedings of the National Academy of Sciences , 116, 15849 – 15854. Celeux, G. and Diebolt, J. (1985), “The SEM algorithm: a probabilistic teacher algorithm derived from the EM algorithm for the mixture problem,” Computational Statistics Quarterly ,2, 73–82. Chang, W.-C. (1983), “On using Principal Components before Separating a Mixture of Two Multivariate Normal Distributions,” Applied Statistics , 32, 267–275. 26 Chen, T., Fox, E., and Guestrin, C. (2014), “Stochastic gradient hamiltonian monte carlo,” in 
+
+International conference on machine learning , pp. 1683–1691. Davis, C. and Kahan, W. M. (1970), “The Rotation of Eigenvectors by a Perturbation. III,” 
+
+SIAM Journal on Numerical Analysis , 7, 1–46. Dettmers, T., Pagnoni, A., Holtzman, A., and Zettlemoyer, L. (2023), “QLoRA: Efficient Finetuning of Quantized LLMs,” NeurIPS 2023 .Fan, J. and Li, R. (2001), “Variable selection via nonconcave penalized likelihood and its oracle properties,” Journal of the American Statistical Association , 96, 1348–1360. Fang, Y. and Liang, F. (2024), “Causal-StoNet: Causal Inference for High-Dimensional Complex Data,” ICLR .— (2026), “Stochastic Neural Networks for Causal Inference with Missing Confounders,” ICLR .Farrell, M., Liang, T., and Misra, S. (2021), “Deep Neural Networks for Estimation and Inference,” 
+
+Econometrica , 89, 181–213. Golub, G. H. and Loan, C. V. (2013), Matrix Computations (4th Edition) , Baltimore: The Johns Hopkins University Press. Gunasekar, S., Woodworth, B. E., Bhojanapalli, S., Neyshabur, B., and Srebro, N. (2017), “Im-plicit Regularization in Deep Matrix Factorization,” 2018 Information Theory and Applications Workshop (ITA) , 1–10. Hastings, W. (1970), “Monte Carlo sampling methods using Markov chain and their applications,” 
+
+Biometrika , 57, 97–109. He, K., Zhang, X., Ren, S., and Sun, J. (2016), “Deep residual learning for image recognition,” in 
+
+Proceedings of the IEEE conference on computer vision and pattern recognition , pp. 770–778. Hestness, J., Narang, S., Ardalani, N., Diamos, G. F., Jun, H., Kianinejad, H., Patwary, M. M. A., Yang, Y., and Zhou, Y. (2017), “Deep Learning Scaling is Predictable, Empirically,” 
+
+ArXiv , abs/1712.00409. Horn, R. A. and Johnson, C. R. (2013), Matrix Analysis , Cambridge University Press, 2nd ed. Hu, J. E., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., and Chen, W. (2022), “LoRA: Low-Rank Adaptation of Large Language Models,” ICLR 2022 .Ji, Z. and Telgarsky, M. (2019), “The implicit bias of gradient descent on nonseparable data,” in 
+
+Annual Conference Computational Learning Theory .Kaplan, J., McCandlish, S., Henighan, T., Brown, T. B., Chess, B., Child, R., Gray, S., Radford, A., Wu, J., and Amodei, D. (2020), “Scaling Laws for Neural Language Models,” ArXiv ,abs/2001.08361. Kingma, D. and Ba, J. (2015), “Adam: a Method for Stochastic Optimization,” in International Conference on Learning Representations .27 Kobak, D., Lomond, J., and Sanchez, B. (2020), “The Optimal Ridge Penalty for Real-world High-dimensional Data Can Be Zero or Negative due to the Implicit Ridge Regularization,” J. Mach. Learn. Res. , 21, 169:1–169:16. Krizhevsky, A., Sutskever, I., and Hinton, G. E. (2012), “ImageNet classification with deep convolutional neural networks,” Communications of the ACM , 60, 84 – 90. Li, C., Farkhoor, H., Liu, R., and Yosinski, J. (2018), “Measuring the Intrinsic Dimension of Objective Landscapes,” ICLR 2018 .Liang, F., Jia, B., Xue, J., Li, Q., and Luo, Y. (2018a), “An imputation–regularized optimization algorithm for high dimensional missing data problems and beyond,” Journal of the Royal Statistical Society: Series B (Statistical Methodology) , 80, 899–926. Liang, F., Li, Q., and Zhou, L. (2018b), “Bayesian Neural Networks for Selection of Drug Sensitive Genes,” Journal of the American Statistical Association , 113, 955–972. Liang, S., Sun, Y., and Liang, F. (2022), “Nonlinear Sufficient Dimension Reduction with a Stochastic Neural Network,” NeurIPS .Liu, Z., Luo, P., Wang, X., and Tang, X. (2015), “Deep Learning Face Attributes in the Wild,” 
+
+2015 IEEE International Conference on Computer Vision (ICCV) , 3730–3738. Loh, P. and Wainwright, M. (2017), “Support recovery without incoherence: A case for nonconvex regularization,” The Annals of Statistics , 45, 2455–2482. Metropolis, N., Rosenbluth, A., Rosenbluth, M., Teller, A., and Teller, E. (1953), “Equation of state calculations by fast computing machines,” Journal of Chemical Physics , 21, 1087–1091. Montanelli, H. and Du, Q. (2019), “New Error Bounds for Deep ReLU Networks Using Sparse Grids,” SIAM J. Math. Data Sci. , 1, 78–92. Nielsen, S. (2000), “The stochastic EM algorithm: Estimation and asymptotic results,” Bernoulli ,6, 457–489. Poggio, T., Mhaskar, H., Rosasco, L., Miranda, B., and Liao, Q. (2017), “Why and When Can Deep–But Not Shallow–Networks Avoid the Curse of Dimensionality: A Review,” International Journal of Automation and Computing , 14, 503–519. Radhakrishnan, A., Beaglehole, D., Pandit, P., and Belkin, M. (2024), “Mechanism for feature learning in neural networks and backpropagation-free machine learning models,” Science , 383, 1461–1467. Rencher, A. C. and Schaalje, G. B. (2007), Linear Models in Statistics (2nd Edition) , New Jersey: Wiley. Schaeffer, R., Khona, M., Robertson, Z., Boopathy, A., Pistunova, K., Rocks, J. W., Fiete, I. R., and Koyejo, O. (2023), “Double Descent Demystified: Identifying, Interpreting & Ablating the Sources of a Deep Learning Puzzle,” ArXiv , abs/2303.14151. 28 Schmidt-Hieber, J. (2020), “Nonparametric regression using deep neural networks with ReLU activation function,” Annals of Statistics , 48, 1875–1897. Shi, Z., Wei, J., and Liang, Y. (2022), “A Theoretical Analysis on Feature Learning in Neural Networks: Emergence from Inputs and Advantage over Fixed Features,” ArXiv , abs/2206.01717. Simonyan, K. and Zisserman, A. (2014), “Very Deep Convolutional Networks for Large-Scale Image Recognition,” CoRR , abs/1409.1556. Soudry, D., Hoffer, E., Gunasekar, S., and Srebro, N. (2018), “The Implicit Bias of Gradient Descent on Separable Data,” J. Mach. Learn. Res. , 19, 70:1–70:57. Sun, Y. and Liang, F. (2022), “A kernel-expanded stochastic neural network,” Journal of the Royal Statistical Society Series B , 84, 547–578. — (2024), “Uncertainty Quantification for Large-Scale Deep Neural Networks via Post-StoNet Modeling,” Statistica Sinica , 37. Sun, Y., Song, Q., and Liang, F. (2022), “Consistent Sparse Deep Learning: Theory and Computation,” Journal of the American Statistical Association , 117, 1981–1995. Szegedy, C., Liu, W., Jia, Y., Sermanet, P., Reed, S., Anguelov, D., Erhan, D., Vanhoucke, V., and Rabinovich, A. (2015), “Going deeper with convolutions,” in 2015 IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 1–9. Tibshirani, R. (1996), “Regression shrinkage and selection via the lasso,” Journal of the Royal Statistical Society. Series B (Methodological) , 267–288. Welling, M. and Teh, Y. W. (2011), “Bayesian learning via stochastic gradient Langevin dynamics,” in ICML , pp. 681–688. Woodworth, B. E., Gunasekar, S., Lee, J., Moroshko, E., Savarese, P. H. P., Golan, I., Soudry, D., and Srebro, N. (2020), “Kernel and Rich Regimes in Overparametrized Models,” Journal of Machine Learning Research , 125, 1–39. Yang, G. and Hu, J. E. (2021), “Tensor Programs IV: Feature Learning in Infinite-Width Neural Networks,” in International Conference on Machine Learning .Zenger, C. (1991), “Sparse Grids,” in Parallel Algorithms for Partial Differential Equations: Proceedings of the Sixth GAMM -Seminar, Kiel, January 19–21, 1990 , ed. Hackbusch, W., Braunschweig; Wiesbaden: Friedr. Vieweg & Sohn, vol. 31 of Notes on Numerical Fluid Mechanics , pp. 241–151. Zhou, Y., Yang, J., Zhang, H., Liang, Y., and Tarokh, V. (2019), “SGD Converges to Global Minimum in Deep Learning via Star-convex Path,” ICLR .29 APPENDIX 
+
+# A Theoretical Proofs 
+
+A.1 Useful Lemmas 
+
+Lemma A1 (Coordinatewise preactivation bound) . Suppose that X ∈ [0 , 1] d0 . Assume that the biases are uniformly bounded and that the incoming weights of each neuron have uniformly bounded ℓ1-norm; that is, there exist constants Bb, B w < ∞ such that 
+
+max  
+
+> l,k
+
+|bl,k | ≤ Bb, max 
+
+> l,k dl−1
+
+∑
+
+> j=1
+
+|wl,kj | ≤ Bw.
+
+Then, for tanh and sigmoid activations, there exists a constant C˜Y < ∞, independent of n, l, k ,such that 
+
+E
+
+( ˜Y (t)
+
+> l,k
+
+)2
+
+≤ C˜Y , l = 1 , . . . , h, k = 1 , . . . , d l.
+
+For ReLU activations, the same conclusion holds provided sup l≤h σ2 
+
+> l
+
+< ∞.Proof. We prove the result by induction over the layers. For the first layer, 
+
+˜Y1,k = b1,k +
+
+> d0
+
+∑
+
+> j=1
+
+w1,kj Xj .
+
+Since Xj ∈ [0 , 1] , we have 
+
+| ˜Y1,k | ≤ | b1,k | +
+
+> d0
+
+∑
+
+> j=1
+
+|w1,kj || Xj | ≤ Bb + Bw.
+
+Hence 
+
+E( ˜Y1,k )2 ≤ (Bb + Bw)2.
+
+Now suppose that, for some l ≥ 2, the previous hidden variables satisfy 
+
+sup 
+
+> j
+
+E{Y 2 
+
+> l−1,j
+
+} ≤ Cl−1
+
+for a constant Cl−1 < ∞. Write 
+
+˜Yl,k = bl,k +
+
+> dl−1
+
+∑
+
+> j=1
+
+wl,kj Ψ( Yl−1,j ).
+
+For tanh and sigmoid, |Ψ( x)| ≤ 1, and therefore 
+
+| ˜Yl,k | ≤ Bb + Bw.
+
+Thus 
+
+E( ˜Yl,k )2 ≤ (Bb + Bw)2.
+
+30 For ReLU, Ψ( x) = x+, so |Ψ( x)| ≤ | x|. By Cauchy’s inequality in weighted form, 
+
+
+
+> dl−1
+
+∑
+
+> j=1
+
+|wl,kj | | Ψ( Yl−1,j )|
+
+
+
+> 2
+
+≤
+
+
+
+> dl−1
+
+∑
+
+> j=1
+
+|wl,kj |
+
+
+
+> dl−1
+
+∑
+
+> j=1
+
+|wl,kj |Ψ( Yl−1,j )2
+
+ .
+
+Taking expectations gives 
+
+E
+
+
+
+> dl−1
+
+∑
+
+> j=1
+
+|wl,kj | | Ψ( Yl−1,j )|
+
+
+
+> 2
+
+≤ B2
+
+> w
+
+Cl−1.
+
+Therefore, 
+
+E( ˜Yl,k )2 ≤ 2B2 
+
+> b
+
++ 2 B2
+
+> w
+
+Cl−1.
+
+Since 
+
+Yl,k = ˜Yl,k + el,k , el,k ∼ N (0 , σ 2 
+
+> l
+
+),
+
+we also have 
+
+E(Yl,k )2 ≤ 2E( ˜Yl,k )2 + 2 σ2 
+
+> l
+
+.
+
+Thus, if sup l σ2 
+
+> l
+
+< ∞, the second moments remain uniformly bounded by induction. This proves the claim. 
+
+Lemma A2 (First-order expansion with stochastic remainder) . Let Ψ : R → R be an activation function, which act componentwise on vectors. Assume Ψ ∈ C2(R) with uniformly bounded second derivatives, i.e., 
+
+∥Ψ′′ ∥∞ := sup 
+
+> x∈R
+
+|Ψ′′ (x)| < ∞.
+
+Fix l and write 
+
+Y l = ˜Y l + el ∈ Rdl ,
+
+where el is independent of ˜Y l, satisfies E[el] = 0 and Var (el) = σ2 
+
+> l
+
+Idl , with σl → 0. Then there exists a remainder vector rl ∈ Rdl such that 
+
+Ψ( Y l) = Ψ( ˜Y l) + ∇ ˜Y l Ψ( ˜Y l) ◦ el + rl, (A1) 
+
+where ∇ ˜Y l Ψ( ˜Y l) = (Ψ ′( ˜Yl, 1), . . . , Ψ′( ˜Yl,d l )) ⊤ and ◦ denotes the Hadamard product. Moreover, the remainder satisfies the coordinatewise bound 
+
+|rl,i | ≤ ∥Ψ′′ ∥∞
+
+2 e2
+
+> l,i
+
+, i = 1 , . . . , d l, (A2) 
+
+where rl,i denotes the i-th element of rl (defined below). In particular, if dlσl → 0, then 
+
+∥rl∥2 = oP(σl).Proof. For each coordinate i, apply Taylor’s expansion to Ψ: there exists ηl,i ∈ (0 , 1) such that 
+
+Ψ( ˜Yl,i + el,i ) = Ψ( ˜Yl,i ) + Ψ ′( ˜Yl,i )el,i + 12 Ψ′′ ( ˜Yl,i + ηl,i el,i )e2
+
+> l,i
+
+.
+
+Define rl,i := 12 Ψ′′ ( ˜Yl,i + ηl,i el,i )e2 
+
+> l,i
+
+and stack over i to obtain (A1) . The bound (A2) follows 31 immediately from |Ψ′′ (·)| ≤ ∥ Ψ′′ ∥∞.Next, by (A2), 
+
+∥rl∥2 ≤ ∥Ψ′′ ∥∞
+
+2
+
+( dl∑
+
+> i=1
+
+e4
+
+> l,i
+
+)1/2
+
+≤ ∥Ψ′′ ∥∞
+
+2
+
+> dl
+
+∑
+
+> i=1
+
+e2 
+
+> l,i
+
+= ∥Ψ′′ ∥∞
+
+2 ∥el∥22,
+
+where we used (∑ a2 
+
+> i
+
+)1/2 ≤ ∑ |ai| with ai = e2
+
+> l,i
+
+. Therefore, for any ε > 0,
+
+P(∥rl∥2 > εσ l
+
+) ≤ P
+
+(
+
+∥el∥22 > 2ε
+
+∥Ψ′′ ∥∞
+
+σl
+
+)
+
+≤ E∥el∥22
+
+(2 ε/ ∥Ψ′′ ∥∞)σl
+
+= ∥Ψ′′ ∥∞
+
+2ε dlσl,
+
+by Markov’s inequality and E∥el∥22 = tr (σ2 
+
+> l
+
+Idl ) = dlσ2 
+
+> l
+
+. If dlσl → 0, the right-hand side tends to 
+
+0, proving ∥rl∥2/σ l → 0 in probability, i.e. ∥rl∥2 = oP(σl).Define ∥A∥op =
+
+√
+
+λmax (A⊤A), where λmax (·) denotes the maximum eigenvalue of a matrix. 
+
+Lemma A3 (Covariance expansion for Σl). Assume the conditions of Lemma A2 hold, and define Σl := Var (Ψ( Y l)) ∈ Rdl×dl . Assume in addition that el has independent coordinates with 
+
+E(el,i ) = 0 , Var (el,i ) = σ2 
+
+> l
+
+, and E(e4
+
+> l,i
+
+) ≤ Ceσ4 
+
+> l
+
+for some constant Ce < ∞, and that ∥Ψ′∥∞ < ∞.Let Ul = E[rl| ˜Y l] and G( ˜Y l) = Ψ( ˜Y l) + Ul. If dlσl → 0, then there exists a remainder matrix 
+
+Rl,n ∈ Rdl×dl such that 
+
+Σl = Var (G( ˜Y l)) + diag 
+
+{
+
+σ2 
+
+> l
+
+E[(∇ ˜Y l Ψ( ˜Y l)) ◦ (∇ ˜Y l Ψ( ˜Y l)) ]}
+
++ Rl,n , (A3) 
+
+where Rl,n satisfies ∥Rl,n ∥op = o(σ2 
+
+> l
+
+).Proof. Fix l. By Lemma A2, there exists a measurable remainder rl ∈ Rdl such that 
+
+Ψ( Y l) = Ψ( ˜Y l) + Al + rl = G( ˜Y l) + Al + ˜ rl, (A4) where Al := ∇ ˜Y l Ψ( ˜Y l) ◦ el and ˜rl = rl − Ul. Therefore, E[˜ rl | ˜Y ] = 0 .By the law of total variance, 
+
+Σl = Var 
+
+(
+
+E[Ψ( Y l) | ˜Y l]
+
+)
+
++ E
+
+(
+
+Var (Ψ( Y l) | ˜Y l)
+
+)
+
+. (A5) Since E(Al | ˜Y l) = 0 and E(˜ rl | ˜Y l) = 0 , by (A4), the conditional mean term is Var 
+
+(
+
+E[Ψ( Y l) | ˜Y l]
+
+)
+
+= Var (G( ˜Y l)). (A6) For the conditional variance term , conditioning on ˜Y l and using E(Al | ˜Y l) = 0 and 
+
+E(˜ rl | ˜Y l) = 0 ,Var (Ψ( Y l) | ˜Y l) = Var (Al + ˜ rl | ˜Y l) = Var (Al | ˜Y l) + Var (˜ rl | ˜Y l) + 2 Cov (Al, ˜rl | ˜Y l).
+
+(i) For Var (Al | ˜Y l), taking expectations yields 
+
+E[Var (Al | ˜Y l)] = diag 
+
+{
+
+σ2 
+
+> l
+
+E[(∇ ˜Y l Ψ( ˜Y l)) ◦ (∇ ˜Y l Ψ( ˜Y l)) ]}
+
+. (A7) 32 (ii) By the law of iterated expectations and ∥Var (Z)∥op ≤ E∥Z∥22,
+
+∥∥∥E[Var (˜ rl | ˜Y l)] 
+
+∥∥∥op ≤ E∥˜rl∥22 ≤ E∥rl∥22.
+
+Using the coordinatewise bound from Lemma A2, |rl,i | ≤ (∥Ψ′′ ∥∞/2) e2
+
+> l,i
+
+, and the moment assumption E(e4
+
+> l,i
+
+) ≤ Ceσ4 
+
+> l
+
+, we get 
+
+E∥rl∥22 =
+
+> d
+
+∑
+
+> i=1
+
+E(r2
+
+> l,i
+
+) ≤ ∥Ψ′′ ∥2
+
+> ∞
+
+4
+
+> d
+
+∑
+
+> i=1
+
+E(e4
+
+> l,i
+
+) ≤ C d l σ4 
+
+> l
+
+, (A8) hence ∥∥∥E[Var (˜ rl | ˜Y l)] 
+
+∥∥∥op = O(dlσ4 
+
+> l
+
+) = o(σ3 
+
+> l
+
+) if dlσl → 0. (A9) 
+
+(iii) Using ∥Cov (U, V )∥op ≤ E∥U ∥2∥V ∥2 and then Cauchy–Schwarz, 
+
+∥∥∥E[Cov (Al, ˜rl | ˜Y l)] 
+
+∥∥∥op ≤ E∥Al∥2∥˜rl∥2 ≤
+
+√
+
+E∥Al∥22
+
+√
+
+E∥˜rl∥22 ≤
+
+√
+
+E∥Al∥22
+
+√
+
+E∥rl∥22.
+
+Moreover, 
+
+E∥Al∥22 =
+
+> d
+
+∑
+
+> i=1
+
+E[Ψ′( ˜Yl,i )2e2
+
+> i
+
+] = σ2
+
+> ld
+
+∑
+
+> i=1
+
+E[Ψ ′( ˜Yl,i )2] ≤ dl σ2 
+
+> l
+
+∥Ψ′∥2
+
+> ∞
+
+.
+
+Combining this with (A8) yields 
+
+∥∥∥E[Cov (Al, ˜rl | ˜Y l)] 
+
+∥∥∥op ≤ ∥ Ψ′∥∞
+
+√
+
+dlσ2 
+
+> l
+
+·
+
+√
+
+Cd lσ4 
+
+> l
+
+= O(dlσ3 
+
+> l
+
+) = o(σ2 
+
+> l
+
+) if dlσl → 0. (A10) Plugging (A6) and the bounds (A7) , (A9) , (A10) into (A5) yields (A3), which concludes the proof. 
+
+Remark 3. Recall G( ˜Y l) = Ψ( ˜Y l) + Ul with Ul = E[rl | ˜Y l]. Then Var (G( ˜Y l)) = Var (Ψ( ˜Y l)) + Var (Ul) + 2 Cov (Ψ( ˜Y l), U l).
+
+By Jensen’s inequality, (A8) , and the condition dlσl → 0,
+
+E∥Ul∥22 = E∥E[rl | ˜Y l]∥22 ≤ E∥rl∥22 ≤ C d lσ4 
+
+> l
+
+= o(σ3 
+
+> l
+
+).
+
+Hence 
+
+∥Var (Ul)∥op ≤ E∥Ul∥22 = o(σ3 
+
+> l
+
+).
+
+Next, using ∥Cov (X, Z )∥op ≤
+
+√
+
+E∥X∥22
+
+√
+
+E∥Z∥22 and the boundedness of Ψ for tanh and sigmoid (say |Ψ( x)| ≤ B), we have 
+
+E∥Ψ( ˜Y l)∥22 ≤ dlB2, E∥Ul∥22 ≤ Cd lσ4 
+
+> l
+
+,
+
+and thus 
+
+∥Cov (Ψ( ˜Y l), U l)∥op ≤
+
+√
+
+dlB2
+
+√
+
+Cd lσ4 
+
+> l
+
+= O(dlσ2 
+
+> l
+
+) = o(σl).
+
+33 Therefore, 
+
+∥Var (G( ˜Y l)) − Var (Ψ( ˜Y l)) ∥op ≤ ∥ Var (Ul)∥op + 2 ∥Cov (Ψ( ˜Y l), U l)∥op = o(σl),
+
+that is, Var (G( ˜Y l)) = Var (Ψ( ˜Y l)) + o(σl) in ∥ · ∥ op . (A11) 
+
+Lemma A4 (Uniform derivative lower bound from bounded second moments) . Let {Zα : α ∈ A} 
+
+be a collection of real-valued random variables satisfying 
+
+sup 
+
+> α∈A
+
+EZ2 
+
+> α
+
+≤ CZ < ∞.
+
+Let Ψ be either the tanh or sigmoid activation. Then there exists a constant cΨ > 0, depending only on CZ and Ψ, such that 
+
+inf  
+
+> α∈A
+
+E
+
+{
+
+Ψ′(Zα)2}
+
+≥ cΨ.
+
+Proof. Choose R > 0 such that CZ 
+
+> R2
+
+≤ 12 . By Markov’s inequality, for every α ∈ A ,
+
+P (|Zα| > R ) ≤ EZ2
+
+> α
+
+R2 ≤ CZ
+
+R2 ≤ 12 .
+
+Hence 
+
+P (|Zα| ≤ R) ≥ 12 .
+
+For tanh and sigmoid activations, Ψ′ is continuous and strictly positive on every compact interval. Therefore, 
+
+mR := inf  
+
+> |z|≤ R
+
+|Ψ′(z)| > 0.
+
+It follows that 
+
+E{Ψ′(Zα)2} ≥ E
+
+[
+
+Ψ′(Zα)21{| Zα| ≤ R}
+
+]
+
+≥ m2
+
+> R
+
+P (|Zα| ≤ R) ≥ m2
+
+> R
+
+2 .
+
+Thus the claim holds with cΨ = m2 
+
+> R
+> 2
+
+> 0.
+
+Lemma A5 (Argmax transfer to the DNN estimator in dop ). Suppose Assumptions 1 and 4 hold. Let 
+
+Qn, DNN (θ) = 1
+
+n
+
+> n
+
+∑
+
+> i=1
+
+log πDNN (Y (i) | X(i), θ)
+
+denote the empirical DNN objective. Let ̂ θDNN ,n be an approximate maximizer of Qn, DNN , in the sense that 
+
+Qn, DNN (̂ θDNN ,n ) ≥ sup 
+
+> θ∈Θ
+
+Qn, DNN (θ) − ηn, ηn = op(1) .
+
+Then 
+
+dop (̂ θDNN ,n , θ∗) p
+
+→ 0, as n → ∞ . (A12) 
+
+Proof. Let 
+
+ξn = sup 
+
+> θ∈Θ
+
+|Qn, DNN (θ) − Q∗(θ)| .
+
+34 Under Assumption 1-(i)&(ii), by invoking the uniform law of large numbers, we have ξn = op(1) ;see also (12). Fix ϵ > 0. On the event An,ϵ = {dop (̂ θDNN ,n , θ∗) ≥ ϵ}, the population separation condition gives 
+
+Q∗(̂ θDNN ,n ) ≤ Q∗(θ∗) − δϵ.
+
+Hence 
+
+Qn, DNN (̂ θDNN ,n ) ≤ Q∗(̂ θDNN ,n ) + ξn ≤ Q∗(θ∗) − δϵ + ξn.
+
+On the other hand, by approximate optimality, 
+
+Qn, DNN (̂ θDNN ,n ) ≥ Qn, DNN (θ∗) − ηn.
+
+Again using the definition of ξn,
+
+Qn, DNN (θ∗) ≥ Q∗(θ∗) − ξn.
+
+Therefore, 
+
+Qn, DNN (̂ θDNN ,n ) ≥ Q∗(θ∗) − ξn − ηn.
+
+Combining the upper and lower bounds yields 
+
+Q∗(θ∗) − ξn − ηn ≤ Q∗(θ∗) − δϵ + ξn,
+
+and therefore 
+
+δϵ ≤ 2ξn + ηn.
+
+Hence 
+
+An,ϵ ⊆ { 2ξn + ηn ≥ δϵ} .
+
+Since δϵ > 0 is fixed for the given ϵ > 0, and 2ξn + ηn = op(1) , we have 
+
+P {2ξn + ηn ≥ δϵ} → 0.
+
+Therefore, 
+
+P
+
+{
+
+dop (̂ θDNN ,n , θ∗) ≥ ϵ
+
+}
+
+≤ P {2ξn + ηn ≥ δϵ} → 0.
+
+Because ϵ > 0 is arbitrary, (A12) holds. 
+
+A.2 Proof of Lemma 2 
+
+Proof. For simplicity, we suppress the iteration index t. Let 
+
+˜Y 1 = b1 + w1X, ˜Y l = bl + wlΨ( Y l−1), l = 2 , . . . , h. 
+
+By the StoNet construction, 
+
+Y l = ˜Y l + el, el ∼ N (0 , σ 2 
+
+> l
+
+Idl ),
+
+35 where el is independent of ˜Y l. Let 
+
+Σl = Cov {Ψ( Y l)}.
+
+We prove that there exists a constant c > 0 such that λmin (Σl) ≥ cσ 2 
+
+> l
+
+.We consider two cases. 
+
+Case 1: tanh and sigmoid activations. Assume Ψ is either tanh or sigmoid. By Lemma A3, 
+
+Σl = Var {G(˜Y l)} + diag 
+
+[
+
+σ2 
+
+> l
+
+E
+
+{
+
+Ψ′( ˜Yl, 1)2}
+
+, . . . , σ 2 
+
+> l
+
+E
+
+{
+
+Ψ′( ˜Yl,d l )2}] 
+
++ Rl,n ,
+
+where G(˜Y l) = Ψ( ˜Y l) + E(rl | ˜Y l) and ∥Rl,n ∥op = o(σ2 
+
+> l
+
+). The matrix Var {G(˜Y l)} is positive semidefinite. By Assumption 3, 
+
+sup 
+
+> l,k,t
+
+E
+
+{( ˜Y (t)
+
+> l,k
+
+)2}
+
+≤ C˜Y .
+
+Applying Lemma A4 to the collection 
+
+{ ˜Y (t) 
+
+> l,k
+
+: l = 1 , . . . , h, k = 1 , . . . , d l, t ≥ 1
+
+}
+
+, there exists a constant cΨ > 0, independent of n, l, k , and t, such that inf l,k,t E
+
+{
+
+Ψ′ ( ˜Y (t)
+
+> l,k
+
+)2}
+
+≥ cΨ. Therefore, 
+
+λmin 
+
+[
+
+diag 
+
+{
+
+σ2 
+
+> l
+
+E
+
+[
+
+Ψ′ ( ˜Yl,k 
+
+)2]} dl
+
+> k=1
+
+]
+
+≥ cΨσ2 
+
+> l
+
+.
+
+By Weyl’s inequality, 
+
+λmin (Σl) ≥ λmin 
+
+[
+
+diag 
+
+{
+
+σ2 
+
+> l
+
+E
+
+[
+
+Ψ′ ( ˜Yl,k 
+
+)2]} dl
+
+> k=1
+
+]
+
+− ∥ Rl,n ∥op 
+
+≥ cΨσ2 
+
+> l
+
+− o(σ2 
+
+> l
+
+).
+
+Hence, for all sufficiently large n, λmin (Σl) ≥ cΨ 
+
+> 2
+
+σ2 
+
+> l
+
+.
+
+Case 2: ReLU activation. Without loss of generality, let’s work under the scalar setting. Let 
+
+Y = ˜Y + e, where e ∼ N (0 , σ 2) is independent of ˜Y , and Ψ( y) = y+ := max {y, 0}. For simplicity, we suppress indices and work component-wisely. The following exact truncated–normal identities hold for u := ˜Y /σ :
+
+E
+
+[
+
+Ψ( Y ) | ˜Y
+
+]
+
+= ˜Y Φ( u) + σ ϕ (u), (A13) 
+
+E
+
+[
+
+Ψ( Y )2 | ˜Y
+
+]
+
+= ( ˜Y 2 + σ2) Φ( u) + ˜Y σ ϕ (u), (A14) where Φ and ϕ denote, respectively, the CDF and PDF of the standard normal distribution. 
+
+Conditional mean correction. Define 
+
+r( ˜Y ) := E
+
+[
+
+Ψ( Y ) | ˜Y
+
+]
+
+− Ψ( ˜Y ) = σ ϕ (u) + ˜Y (Φ( u) − 1{ ˜Y > 0}). (A15) In what follows, we show r( ˜Y ) is nonnegative and symmetric about 0. In particular, 
+
+r(− ˜Y ) = σϕ (−u) − ˜Y Φ( −u) = σϕ (u) + ˜Y (Φ( u) − 1) = r( ˜Y ),
+
+36 so r is symmetric about 0. Furthermore, since x 7 → x+ is convex, we have 
+
+E[( ˜Y + σZ )+ | ˜Y ] ≥ (E[ ˜Y + σZ | ˜Y ]) + = ˜Y+,
+
+by Jensen’s inequality. Therefore, r( ˜Y ) ≥ 0.To find the maximum of r( ˜Y ), we write r( ˜Y ) = σf (u) with 
+
+f (u) = 
+
+> 
+
+ϕ(u) + u(Φ( u) − 1) , u > 0,ϕ(u) + u Φ( u), u < 0.
+
+Then, using ϕ′(u) = −uϕ (u) and Φ′(u) = ϕ(u), we obtain 
+
+dr ( ˜Y )
+
+d ˜Y = f ′(u) = 
+
+> 
+
+Φ( u) − 1 < 0, ˜Y > 0,
+
+Φ( u) > 0, ˜Y < 0,
+
+so r is strictly decreasing on (0 , ∞) and strictly increasing on (−∞ , 0) . Therefore, r attains its global maximum at ˜Y = 0 , where 
+
+r(0) = σ ϕ (0) = σ
+
+√2π .
+
+Hence, for all ˜Y ∈ R, we have 
+
+0 ≤ r( ˜Y ) ≤ r(0) = σ
+
+√2π . (A16) 
+
+Conditional variance: scalar bounds. Let’s first derive some scalar bounds for the conditional variance Var (Ψ( Y )| ˜Y ). Let μ = ˜Y , u = μ/σ , and write 
+
+m1 := E[Ψ( Y ) | ˜Y ] = μ Φ( u) + σ ϕ (u), m2 := E[Ψ( Y )2 | ˜Y ] = ( μ2 + σ2) Φ( u) + μσ ϕ (u).
+
+Then Var (Ψ( Y ) | ˜Y ) = m2 − m21 = [(μ2 + σ2) Φ( u) + μσ ϕ (u)] − [μ Φ( u) + σ ϕ (u)]2.
+
+Expand the square and collect terms: Var (Ψ( Y ) | ˜Y ) = μ2Φ( u) + σ2Φ( u) + μσϕ (u) − μ2Φ( u)2 − 2μσ Φ( u)ϕ(u) − σ2ϕ(u)2
+
+= μ2[Φ( u) − Φ( u)2] + σ2[Φ( u) − ϕ(u)2] + μσ [ϕ(u) − 2Φ( u)ϕ(u)].
+
+Now factor out σ2 using μ = σu :Var (Ψ( Y ) | ˜Y ) = σ2{
+
+u2Φ( u)[1 − Φ( u)] + [Φ( u) − ϕ(u)2] + u ϕ (u)[1 − 2Φ( u)]}
+
+:= σ2g(u),
+
+where 
+
+g(u) = Φ( u) − ϕ(u)2 + u ϕ (u)(1 − 2Φ( u)) + u2Φ( u)(1 − Φ( u)).
+
+37 Taking derivative for g(u) (using ϕ′(u) = −uϕ (u) and Φ′(u) = ϕ(u)) leads to 
+
+dg (u)
+
+du = 2 (1 − Φ( u)) ( ϕ(u) + u Φ( u)).
+
+Note that 
+
+ϕ(u) + u Φ( u) = E[(u + Z) 1{Z > −u}] = 
+
+> ∫∞−u
+
+(u + z) ϕ(z) dz ≥ 0,
+
+since the integrand is nonnegative on [−u, ∞). Therefore, dg (u)/du ≥ 0 for all u. That is, g is increasing on R. It is easy to verify that lim u→−∞ g(u) = 0 and lim u→∞ g(u) = 1 , so we conclude that 0 < g (u) < 1 for any finite u ∈ R.Thus, for any finite ˜Y ,
+
+σ2 > Var (Ψ( Y ) | ˜Y ) = σ2g( ˜Y /σ ) > 0.
+
+For the unconditional bound, write U = ˜Y /σ . By monotonicity, for any threshold s ∈ R,
+
+σ2 ≥ E[Var (Ψ( Y ) | ˜Y )] = σ2 E[g(U )] ≥ σ2 g(s) P(U ≥ s). (A17) By the ReLU active-region condition in Assumption 3, there exist a constant s ∈ R and 
+
+π0 > 0, independent of n, l, k , and t, such that P (U ≥ s) ≥ π0. Hence, there exists a constant 
+
+c+ = g(s)π0 > 0 such that 
+
+E[Var (Ψ( Y ) | ˜Y )] ≥ c+σ2. (A18) By the law of total variance and the conditional mean correction formula (A15), Var (Ψ( Y )) = Var (E[Ψ( Y ) | ˜Y ]) + E[Var (Ψ( Y ) | ˜Y )]
+
+= Var (Ψ( ˜Y ) + r( ˜Y )) + E[Var (Ψ( Y ) | ˜Y )]. (A19) By (A18), we have the lower bound: Var (Ψ( Y )) ≥ E[Var (Ψ( Y ) | ˜Y )] ≥ c+ σ2. (A20) 
+
+Eigenvalues of the covariance matrix at layer l. Let Σl = Cov (Ψ( Y l)). Since different components of el are mutually independent with variance σ2 
+
+> l
+
+, (A20) implies 
+
+λmin (Σl) ≥ c+ σ2 
+
+> l
+
+,
+
+which completes the proof. 
+
+A.3 Proof of Lemma 4 
+
+Proof. Consider the multinomial logistic regression model with m + 1 classes. Let x(i) ∈ Rp
+
+denote the covariate vector of observation i, where p ≤ n may increase with n. Let 
+
+π(i) = ( π(i)0 , π (i)1 , . . . , π (i) 
+
+> m
+
+)⊤
+
+38 denote the class-probability vector, where 
+
+π(i) 
+
+> j
+
+= exp {β⊤ 
+
+> j
+
+x(i)}
+
+1 + ∑mk=1 exp {β⊤ 
+
+> k
+
+x(i)} , j = 0 , 1, . . . , m, 
+
+with the convention β0 = 0. Let ⃗
+
+B = ( β⊤ 
+
+> 1
+
+, . . . , β⊤
+
+> m
+
+)⊤ ∈ Rmp .
+
+For observation i, the negative Hessian of the log-likelihood with respect to ⃗ B is 
+
+H(i) := −∇ 2⃗ 
+
+> B
+
+L(i) = K⊤ {
+
+Λπ(i) − π(i)π(i)⊤}
+
+K ⊗
+
+(
+
+x(i)x(i)⊤)
+
+:= A(i) ⊗
+
+(
+
+x(i)x(i)⊤)
+
+,
+
+where 
+
+Λπ(i) = diag {π(i)0 , π (i)1 , . . . , π (i) 
+
+> m
+
+}, and K =
+
+(0⊤
+
+> m
+
+Im
+
+)
+
+.
+
+The full negative Hessian is therefore 
+
+H =
+
+> n
+
+∑
+
+> i=1
+
+H(i) =
+
+> n
+
+∑
+
+> i=1
+
+A(i) ⊗
+
+(
+
+x(i)x(i)⊤)
+
+.
+
+We first establish a uniform lower bound for A(i). Let 
+
+p(i) = ( π(i)1 , . . . , π (i) 
+
+> m
+
+)⊤, D(i) = diag {π(i)1 , . . . , π (i) 
+
+> m
+
+}.
+
+Under the baseline parameterization β0 = 0, we have 
+
+A(i) = K⊤ {
+
+Λπ(i) − π(i)π(i)⊤}
+
+K = D(i) − p(i)p(i)⊤.
+
+For any a = ( a1, . . . , a m)⊤ ∈ Rm,
+
+a⊤A(i)a =
+
+> m
+
+∑
+
+> j=1
+
+π(i) 
+
+> j
+
+a2 
+
+> j
+
+−
+
+
+
+> m
+
+∑
+
+> j=1
+
+π(i) 
+
+> j
+
+aj
+
+
+
+> 2
+
+.
+
+Let si = ∑mj=1 π(i) 
+
+> j
+
+= 1 − π(i)0 . By the Cauchy–Schwarz inequality, 
+
+
+
+> m
+
+∑
+
+> j=1
+
+π(i) 
+
+> j
+
+aj
+
+
+
+> 2
+
+≤
+
+
+
+> m
+
+∑
+
+> j=1
+
+π(i)
+
+> j
+
+
+
+> m
+
+∑
+
+> j=1
+
+π(i) 
+
+> j
+
+a2
+
+> j
+
+ = sim∑
+
+> j=1
+
+π(i) 
+
+> j
+
+a2 
+
+> j
+
+.
+
+Therefore, 
+
+a⊤A(i)a ≥ (1 − si)
+
+> m
+
+∑
+
+> j=1
+
+π(i) 
+
+> j
+
+a2 
+
+> j
+
+= π(i)0
+
+> m
+
+∑
+
+> j=1
+
+π(i) 
+
+> j
+
+a2 
+
+> j
+
+≥ π(i)0
+
+(
+
+min  
+
+> 1≤j≤m
+
+π(i)
+
+> j
+
+)
+
+∥a∥22.
+
+We next show that the class probabilities are bounded away from zero with probability 39 tending to one. Let 
+
+Xn(E) = 
+
+> p
+
+∏
+
+> r=1
+
+[μr − E, μ r + E],
+
+and define the event 
+
+En(E) = {Xir ∈ [μr − E, μ r + E], 1 ≤ i ≤ n, 1 ≤ r ≤ p} .
+
+Since Xir ∼ N (μr, ς 2
+
+> n
+
+) with ς2 
+
+> n
+
+= n−α, a Gaussian tail bound gives 
+
+P {E n(E)c} ≤ 2np exp 
+
+(
+
+− E2
+
+2ς2
+
+> n
+
+)
+
+= 2 np exp 
+
+(
+
+− 12 E2nα
+
+)
+
+→ 0,
+
+because p ≤ n. Define 
+
+π∗ = inf  
+
+> n
+
+inf  
+
+> x∈X n(E)
+
+min 
+
+> 0≤j≤m
+
+exp {β⊤ 
+
+> j
+
+x}
+
+∑mk=0 exp {β⊤ 
+
+> k
+
+x} , β0 = 0.
+
+We assume that π∗ > 0. Equivalently, on the high-probability covariate region Xn(E), all class probabilities are uniformly bounded away from zero. This condition is satisfied, for example, if the linear predictors β⊤ 
+
+> j
+
+x are uniformly bounded on Xn(E).On the event En(E), we have 
+
+min  
+
+> 1≤i≤n
+
+min  
+
+> 0≤j≤m
+
+π(i) 
+
+> j
+
+≥ π∗.
+
+Hence, on En(E),
+
+a⊤A(i)a ≥ π2 
+
+> ∗
+
+∥a∥22, i = 1 , . . . , n. 
+
+Thus 
+
+A(i) ⪰ ν0Im, ν0 = π2 
+
+> ∗
+
+> 0, i = 1 , . . . , n. 
+
+We now lower-bound the full Hessian H. For any b = ( b⊤ 
+
+> 1
+
+, . . . , b⊤
+
+> m
+
+)⊤ ∈ Rmp , define 
+
+zi = ( x(i)⊤b1, . . . , x(i)⊤bm)⊤ ∈ Rm.
+
+Then, on En(E),
+
+b⊤Hb =
+
+> n
+
+∑
+
+> i=1
+
+z⊤ 
+
+> i
+
+A(i)zi ≥ ν0
+
+> n
+
+∑
+
+> i=1
+
+∥zi∥22 = ν0
+
+> n
+
+∑
+
+> i=1
+> m
+
+∑
+
+> j=1
+
+(x(i)⊤bj )2 = ν0
+
+> m
+
+∑
+
+> j=1
+
+b⊤ 
+
+> j
+
+X⊤Xbj .
+
+By the eigenvalue condition on X⊤X, λmin (X⊤X) ≥ nκ min . Therefore, 
+
+b⊤Hb ≥ nν 0κmin 
+
+> m
+
+∑
+
+> j=1
+
+∥bj ∥22 = nν 0κmin ∥b∥22.
+
+It follows that, on En(E),
+
+λmin (H) ≥ nν 0κmin .
+
+Since P {E n(E)} → 1, this lower bound holds with probability tending to one. 40 Finally, by the asymptotic normality of the multinomial-logistic MLE, conditional on X,
+
+EY|X
+
+[
+
+(̂⃗B −⃗ B)( ̂⃗ B −⃗ B)⊤
+
+]
+
+= H−1 + o{∥ H−1∥2}
+
+in operator norm. Hence, with probability tending to one, 
+
+∥∥∥∥EY|X
+
+[
+
+(̂⃗ B −⃗ B)( ̂⃗ B −⃗ B)⊤
+
+]∥ ∥∥∥2
+
+≤ (1 + o(1)) ∥H−1∥2 = 1 + o(1) 
+
+λmin (H) ≤ 1 + o(1) 
+
+nν 0κmin 
+
+.
+
+Equivalently, for every unit vector u ∈ Rmp ,
+
+EY|X
+
+[{
+
+u⊤(̂⃗ B −⃗ B)
+
+}2]
+
+≤ 1 + o(1) 
+
+nν 0κmin 
+
+,
+
+with probability tending to one. This proves the lemma after absorbing the factor (1 + o(1)) /ν 0
+
+into a generic positive constant. 
+
+A.4 Proof of Lemma 5 
+
+Proof. Fix a layer l, and write 
+
+pl = dl−1 + 1 , ∆l = ∆ (t) 
+
+> l
+
+=̂ ¯W (t) 
+
+> l,n
+
+− ¯W (t) 
+
+> l, ∗
+
+∈ Rdl×pl .
+
+The kth row of ∆l is denoted by ∆⊤ 
+
+> lk
+
+with 
+
+∆lk = ˆβ(t) 
+
+> lk
+
+− β(t) 
+
+> lk, ∗
+
+∈ Rpl , k = 1 , . . . , d l.
+
+Let Fl denote the sigma-field generated by the imputed covariates used in the layer l regressions. By Lemmas 3 and 4, the coefficient-estimation error for each neuron-wise regression satisfies 
+
+∥∥∥E
+
+[
+
+∆lk ∆⊤ 
+
+> lk
+
+| F l
+
+]∥ ∥∥op ≤ Cnσ2
+
+> l
+
+σ2
+
+> l−1
+
+,
+
+where σ20 = κmin is fixed, and its effect is absorbed into the constant C. Equivalently, for every unit vector v ∈ Rpl ,
+
+E
+
+[
+
+(v⊤∆lk )2 | F l
+
+]
+
+≤ Cnσ2
+
+> l
+
+σ2
+
+> l−1
+
+.
+
+Under the conditional sub-Gaussian version of this bound, there exists a constant C0 > 0 such that 
+
+∥v⊤∆lk ∥ψ2|F l ≤ C0
+
+σl
+
+σl−1
+
+√n , ∥v∥2 = 1 .
+
+Set 
+
+τl = C0
+
+σl
+
+σl−1
+
+√n .
+
+We now pass from row-wise directional bounds to a matrix operator-norm bound. By definition, 
+
+∥∆l∥op = sup  
+
+> u∈Sdl−1,v∈Spl−1
+
+u⊤∆lv,
+
+41 where Sd−1 = {u ∈ Rd : ∥u∥2 = 1 } denotes a unit sphere in Rd. For fixed unit vectors u ∈ Rdl
+
+and v ∈ Rpl ,
+
+u⊤∆lv =
+
+> dl
+
+∑
+
+> k=1
+
+uk ∆⊤
+
+> lk
+
+v.
+
+Conditional on Fl, the random variables ∆⊤
+
+> lk
+
+v, k = 1 , . . . , d l, are mean-zero sub-Gaussian with sub-Gaussian norm bounded by τl. Hence, since ∥u∥2 = 1 ,
+
+∥∥∥u⊤∆lv
+
+∥∥∥ψ2|F l
+
+≤ Cτ l
+
+
+
+> dl
+
+∑
+
+> k=1
+
+u2
+
+> k
+
+
+
+> 1/2
+
+= Cτ l.
+
+Therefore, for fixed (u, v),
+
+P
+
+(
+
+|u⊤∆lv| > x | F l
+
+)
+
+≤ 2 exp 
+
+(
+
+− cx 2
+
+τ 2
+
+> l
+
+)
+
+(A21) for some universal constant c > 0.Next, we construct finite nets of the unit spheres. Let Nd be a 1/4-net of Sdl−1, and let Np
+
+be a 1/4-net of Spl−1. Such nets can be chosen with the cardinalities 
+
+|N d| ≤ 9dl , |N p| ≤ 9pl .
+
+Indeed, more generally, for the unit sphere Sd−1, there exists an ε-net Nε such that |N ε| ≤ 
+
+(
+
+1 + 2
+
+> ε
+
+)d
+
+. To see this, take Nε to be a maximal ε-separated subset of Sd−1. By maximality, it is also an ε-net. The Euclidean balls B (u, ε
+
+> 2
+
+), u ∈ N ε, are disjoint, and they are all contained in the Euclidean ball centered at zero with radius 1 + ε/ 2. Comparing volumes gives 
+
+|N ε|
+
+( ε
+
+2
+
+)d
+
+Vol( Bd) ≤
+
+(
+
+1 + ε
+
+2
+
+)d
+
+Vol( Bd),
+
+where Bd denotes the d-dimensional unit ball, and hence |N ε| ≤ 
+
+(
+
+1 + 2
+
+> ε
+
+)d
+
+. Taking ε = 1 /4 yields 
+
+|N ε| ≤ 9d. This gives the stated bounds for Nd and Np.A standard net argument gives 
+
+∥∆l∥op ≤ 2 max  
+
+> u∈N d,v∈N p
+
+|u⊤∆lv|. (A22) For completeness, we recall the argument. Let u0, v0 be unit vectors such that ∥∆l∥op = |u⊤ 
+
+> 0
+
+∆lv0|.Choose u ∈ N d and v ∈ N p such that ∥u − u0∥2 ≤ 14 and ∥v − v0∥2 ≤ 14 . Then 
+
+|u⊤ 
+
+> 0
+
+∆lv0| ≤ | u⊤∆lv| + |(u0 − u)⊤∆lv0| + |u⊤∆l(v0 − v)|≤ max 
+
+> ˜u∈N d,˜v∈N p
+
+|˜u⊤∆l ˜v| + 14 ∥∆l∥op + 14 ∥∆l∥op .
+
+Thus (A22) holds. Using the tail bound (A21) for each fixed pair (u, v) and applying a union bound over 42 Nd × N p, we get 
+
+P (∥∆l∥op > 2x | F l) ≤ P
+
+(
+
+max  
+
+> u∈N d,v∈N p
+
+|u⊤∆lv| > x | F l
+
+)
+
+≤ 2|N d||N p| exp 
+
+(
+
+− cx 2
+
+τ 2
+
+> l
+
+)
+
+≤ 2 · 9dl+pl exp 
+
+(
+
+− cx 2
+
+τ 2
+
+> l
+
+)
+
+.
+
+Choosing x = C1τl
+
+√dl + pl with C1 sufficiently large gives 
+
+∥∆l∥op = Op
+
+(
+
+τl
+
+√dl + pl
+
+)
+
+.
+
+Recalling that τl = C0 σl 
+
+> σl−1
+> √n
+
+and pl = dl−1 + 1 , we obtain 
+
+∥∥∥∥̂ ¯W (t) 
+
+> l,n
+
+− ¯W (t)
+
+> l, ∗
+
+∥∥∥∥op 
+
+= Op
+
+
+
+σl
+
+σl−1
+
+√
+
+dl + dl−1 + 1 
+
+n
+
+ .
+
+Moreover, integrating the above tail bound yields 
+
+E
+
+(
+
+∥∆l∥2op | F l
+
+)
+
+≤ Cτ 2 
+
+> l
+
+(dl + pl) = Cn (dl + dl−1 + 1) σ2
+
+> l
+
+σ2
+
+> l−1
+
+.
+
+Therefore, 
+
+E
+
+[h+1 ∑
+
+> l=1
+
+∥∆l∥2op 
+
+]
+
+≤ Cn
+
+> h+1
+
+∑
+
+> l=1
+
+(dl + dl−1 + 1) σ2
+
+> l
+
+σ2
+
+> l−1
+
+= Ca 2
+
+> n
+
+.
+
+By Markov’s inequality, h+1 ∑
+
+> l=1
+
+∥∥∥∥̂ ¯W (t) 
+
+> l,n
+
+− ¯W (t)
+
+> l, ∗
+
+∥∥∥∥
+
+> 2op
+
+= Op(a2
+
+> n
+
+).
+
+Since an → 0, the aggregate bound is op(1) . This completes the proof. 
+
+Remark 4 (A sublinear DNN with many narrow downstream layers) . Consider the increasing hidden-layer noise schedule in Remark 2. Let Mn = max 1≤l≤h
+
+{
+
+(hB l,n )1/(h+1 −l), d 2/(h+1 −l)
+
+> l
+
+}
+
+.Then the condition in (11) is satisfied provided that Tn log( n)Mn ≺ n.This condition becomes mild for a tapered architecture with many narrow downstream layers. Suppose that h = hn → ∞ , and that only the first s = sn hidden layers are allowed to grow with n,where sn ≺ hn, while the downstream layers are narrow: ds+1 , d s+2 , . . . , d h, d h+1 = O(1) . Assume further that the growing widths are polynomially bounded, say dl = O(nγl,n ), for l = 1 , . . . , s n,with sup l≤sn γl,n < 1. Then, for l ≤ sn, Bl,n = O
+
+(
+
+nγl,n +2 ∑sn i=l+1 γi,n 
+
+)
+
+, because the factors 
+
+ds+1 , . . . , d h, d h+1 are bounded. Hence, (hB l,n )1/(h+1 −l) = no(1) whenever sn ≺ hn and hn grows at most subexponentially. Similarly, d2/(h+1 −l) 
+
+> l
+
+= no(1) . For l > s n, all widths involved in 
+
+Bl,n are bounded, and the only remaining factor in Mn is due to h. Thus, if the depth grows subpolynomially, hn = no(1) , then Mn = no(1) . Consequently, the architecture condition reduces 
+
+43 to Tn log( n)no(1) ≺ n. Equivalently, up to a subpolynomial factor, it is enough to require 
+
+Tn ≺ n
+
+log n .
+
+This shows that, by increasing the depth while keeping most downstream layers narrow, one can allow the first few layers to be very wide while still satisfying (11) . In this regime, 
+
+Tn = O
+
+(
+
+hn − sn +
+
+> sn
+
+∑
+
+> l=1
+
+dl
+
+)
+
+,
+
+so the sublinear neuron-count requirement can remain mild even when the number of connection parameters is large. For example, if two adjacent early layers satisfy 
+
+d1 = O(na), d2 = O(nb), 0 < a < 1, 0 < b < 1, a + b > 1,
+
+then the number of trainable parameters contains the term d1d2 = O(na+b) ≻ n, so the network is over-parameterized in the usual parameter-count sense. 
+
+A.5 Proof of Lemma 6 
+
+Proof. Let M (θ) denote the population IRO update map. By Lemma 5, 
+
+dop 
+
+(̂ 
+
+θ(t) 
+
+> n
+
+, M (̂θ(t−1)  
+
+> n
+
+)
+
+)
+
+= Op(an). (A23) By the local contraction condition in Assumption 5, 
+
+dop 
+
+(
+
+M (̂ θ(t−1)  
+
+> n
+
+), M (θ∗)
+
+)
+
+≤ λ∗dop 
+
+(̂ 
+
+θ(t−1)  
+
+> n
+
+, θ∗
+
+)
+
+. (A24) Indeed, by the mean-value representation, for θs = θ∗ + s(θ − θ∗), with 0 ≤ s ≤ 1, we have 
+
+M (θ) − M (θ∗) = 
+
+∫ 10
+
+DM (θs)[ θ − θ∗] ds. 
+
+Therefore, if θs ∈ U (θ∗) for all s ∈ [0 , 1] , then Assumption 5 gives 
+
+dop {M (θ), M (θ∗)} ≤ 
+
+∫ 10
+
+∥DM (θs)[ θ − θ∗]∥dop ds 
+
+≤
+
+∫ 10
+
+λ∗∥θ − θ∗∥dop ds 
+
+= λ∗dop (θ, θ∗).
+
+Since M (θ∗) = θ∗, combining (A23) and (A24) yields 
+
+dop 
+
+(̂ 
+
+θ(t) 
+
+> n
+
+, θ∗
+
+)
+
+≤ Op(an) + λ∗dop 
+
+(̂ 
+
+θ(t−1)  
+
+> n
+
+, θ∗
+
+)
+
+.
+
+44 Iterating the recursion gives 
+
+dop 
+
+(̂ 
+
+θ(t) 
+
+> n
+
+, θ∗
+
+)
+
+≤ (λ∗)tdop 
+
+(̂ 
+
+θ(0)  
+
+> n
+
+, θ∗
+
+)
+
++ Op(an)1 − λ∗ .
+
+Thus 
+
+dop 
+
+(̂ 
+
+θ(t) 
+
+> n
+
+, θ∗
+
+)
+
+= Op
+
+(
+
+(λ∗)t)
+
++ Op(an),
+
+which converges to zero as t → ∞ and n → ∞ .
+
+A.6 Proof of Theorem 1 
+
+Proof. We first prove part (i). By Lemma 6, 
+
+dop 
+
+(
+
+ˆθ(t) 
+
+> n
+
+, θ∗
+
+) p
+
+→ 0, as t → ∞ and n → ∞ .
+
+In particular, for each hidden layer l = 1 , . . . , h ,
+
+∥̂W (t) 
+
+> l
+
+− W ∗ 
+
+> l
+
+∥op 
+
+> p
+
+→ 0,
+
+because ̂ W (t) 
+
+> l
+
+− W ∗ 
+
+> l
+
+is a submatrix of ̂ ¯W (t) 
+
+> l
+
+− ¯W ∗ 
+
+> l
+
+.Let ∆(t) 
+
+> l
+
+=̂ W (t) 
+
+> l
+
+− W ∗ 
+
+> l
+
+. Then ̂
+
+A(t) 
+
+> l
+
+− A∗ 
+
+> l
+
+=̂ W (t)⊤
+
+> l
+
+̂ W (t) 
+
+> l
+
+− W ∗⊤  
+
+> l
+
+W ∗ 
+
+> l
+
+= W ∗⊤  
+
+> l
+
+∆(t) 
+
+> l
+
++ ∆ (t)⊤ 
+
+> l
+
+W ∗ 
+
+> l
+
++ ∆ (t)⊤ 
+
+> l
+
+∆(t) 
+
+> l
+
+.
+
+Taking operator norms gives 
+
+∥̂ A(t) 
+
+> l
+
+− A∗ 
+
+> l
+
+∥op ≤ 2∥W ∗ 
+
+> l
+
+∥op ∥∆(t) 
+
+> l
+
+∥op + ∥∆(t) 
+
+> l
+
+∥2op .
+
+By compactness of the parameter space, ∥W ∗ 
+
+> l
+
+∥op is bounded. Therefore, 
+
+∥̂ A(t) 
+
+> l
+
+− A∗ 
+
+> l
+
+∥op 
+
+> p
+
+→ 0. (A25) Since both ̂ A(t) 
+
+> l
+
+and A∗ 
+
+> l
+
+are symmetric, 
+
+max 
+
+> 1≤j≤dl−1
+
+∣∣∣∣λj (̂ A(t) 
+
+> l
+
+) − λj (A∗ 
+
+> l
+
+)
+
+∣∣∣∣ ≤ ∥ ̂A(t) 
+
+> l
+
+− A∗ 
+
+> l
+
+∥op ,
+
+by Weyl’s eigenvalue perturbation inequality for Hermitian matrices (see, e.g., Horn and Johnson, 2013). Hence, by (A25), 
+
+max 
+
+> 1≤j≤dl−1
+
+∣∣∣∣λj (̂ A(t) 
+
+> l
+
+) − λj (A∗ 
+
+> l
+
+)
+
+∣∣∣∣ p
+
+−→ 0.
+
+Next, under the eigengap condition λrl (A∗ 
+
+> l
+
+) − λrl+1 (A∗ 
+
+> l
+
+) ≥ δl > 0, the Davis-Kahan sin-theta theorem (Davis and Kahan, 1970) implies 
+
+∥∥∥∥̂ V (t)
+
+> l
+
+̂ V (t)⊤ 
+
+> l
+
+− V ∗ 
+
+> l
+
+V ∗⊤ 
+
+> l
+
+∥∥∥∥op 
+
+≤ C ∥̂A(t) 
+
+> l
+
+− A∗ 
+
+> l
+
+∥op 
+
+δl
+
+,
+
+45 where C > 0 is a universal constant. By (A25), we obtain 
+
+∥∥∥∥̂ V (t)
+
+> l
+
+̂ V (t)⊤ 
+
+> l
+
+− V ∗ 
+
+> l
+
+V ∗⊤ 
+
+> l
+
+∥∥∥∥op 
+
+> p
+
+−→ 0.
+
+Thus the top rl-dimensional neural-feature subspace is consistently estimated. If the kth eigenvalue is simple and separated from the remaining eigenvalues, the same Davis–Kahan perturbation bound applied to the one-dimensional eigenspace gives 
+
+∥∥∥̂ v(t)
+
+> l,k
+
+̂ v(t)⊤ 
+
+> l,k
+
+− v∗
+
+> l,k
+
+v∗⊤ 
+
+> l,k
+
+∥∥∥op 
+
+> p
+
+−→ 0.
+
+For one-dimensional subspaces, convergence of the projection matrices is equivalent to convergence of the unit eigenvectors up to sign. Hence there exists s(t) 
+
+> l,k
+
+∈ {− 1, 1} such that 
+
+∥∥∥̂ v(t) 
+
+> l,k
+
+− s(t)
+
+> l,k
+
+v∗
+
+> l,k
+
+∥∥∥2
+
+> p
+
+−→ 0.
+
+This proves the eigenvalue and eigenvector consistency claims for the IRO-produced estimator. We next prove part (ii). Under the sublinear architecture condition, one can choose the hidden-layer noise levels so that the StoNet surrogate satisfies the required noise-scaling conditions and the StoNet and DNN objectives are asymptotically equivalent. By the StoNet–DNN loss equivalence and the population separation condition, the DNN estimator in (14) has the same limiting target as the corresponding StoNet estimator, up to loss-invariant transformations. By Lemma A5, the DNN estimator in (14) is also consistent with respect to θ∗ in operator norm. Therefore, (15) holds by the triangular inequality 
+
+dop (ˆθ(t) 
+
+> n
+
+,̂ θDNN ,n) ≤ dop (ˆθ(t) 
+
+> n
+
+, θ∗) + dop (̂ θDNN ,n, θ∗) p
+
+→ 0. (A26) Repeating the same argument as above with ̂
+
+ADNN ,l =̂ W ⊤
+
+> DNN ,l
+
+̂ W DNN ,l 
+
+gives 
+
+∥̂ADNN ,l − A∗ 
+
+> l
+
+∥op 
+
+> p
+
+−→ 0.
+
+Weyl’s inequality then yields eigenvalue consistency: 
+
+max 
+
+> 1≤j≤dl−1
+
+∣∣∣λj (̂ADNN ,l ) − λj (A∗ 
+
+> l
+
+)
+
+∣∣∣ p
+
+−→ 0.
+
+Under the same eigengap condition, the Davis–Kahan theorem gives 
+
+∥∥∥∥̂ V DNN ,l ̂ V ⊤ 
+
+> DNN ,l
+
+− V ∗ 
+
+> l
+
+V ∗⊤ 
+
+> l
+
+∥∥∥∥op 
+
+> p
+
+−→ 0.
+
+If the eigenvalue of interest is simple, the corresponding individual eigenvector is also consistent up to sign. This completes the proof. 46 A.7 Proof of Lemma 7 
+
+Proof. Let 
+
+∆l = ¯W l − ¯W ∗ 
+
+> l
+
+, l = 1 , . . . , h + 1 .
+
+We prove the result by replacing the layers of θ∗ with the corresponding layers of θ one at a time. For l = 0 , 1, . . . , h + 1 , define the hybrid parameter 
+
+θ[l] = ( ¯W 1, . . . , ¯W l, ¯W ∗
+
+> l+1
+
+, . . . , ¯W ∗
+
+> h+1
+
+).
+
+Thus 
+
+θ[0] = θ∗, θ[h+1] = θ.
+
+By telescoping, 
+
+fθ(X) − fθ∗ (X) = 
+
+> h+1
+
+∑
+
+> l=1
+
+{fθ[l] (X) − fθ[l−1] (X)} .
+
+Therefore, 
+
+∥fθ − fθ∗ ∥L2(PX ) ≤
+
+> h+1
+
+∑
+
+> l=1
+
+∥fθ[l] − fθ[l−1] ∥L2(PX ).
+
+We now bound the l-th telescoping term. The two networks θ[l] and θ[l−1] have the same layers before layer l. Hence their input to layer l is the same: 
+
+¯hl−1(X; θ[l]) = ¯hl−1(X; θ[l−1] ).
+
+The only difference at layer l is the replacement of ¯W ∗ 
+
+> l
+
+by ¯W l. By the Lipschitz property of Ψl,
+
+∥∥∥hl(X; θ[l]) − hl(X; θ[l−1] )
+
+∥∥∥2 ≤ Ll
+
+∥∥∥( ¯W l − ¯W ∗ 
+
+> l
+
+)¯hl−1(X; θ[l−1] )
+
+∥∥∥2
+
+≤ Ll∥∆l∥op ∥¯hl−1(X; θ[l−1] )∥2.
+
+For downstream layers j = l + 1 , . . . , h + 1 , both hybrid networks use the same parameter matrices ¯W ∗ 
+
+> j
+
+. Applying the Lipschitz bound recursively, we obtain 
+
+∥∥fθ[l] (X) − fθ[l−1] (X)∥∥2 ≤ Ll
+
+
+
+> h+1
+
+∏
+
+> j=l+1
+
+Lj ∥ ¯W ∗ 
+
+> j
+
+∥op 
+
+ ∥∆l∥op ∥¯hl−1(X; θ[l−1] )∥2.
+
+Using the definition of Kj,n (V ), this is bounded by 
+
+∥∥fθ[l] (X) − fθ[l−1] (X)∥∥2 ≤ Ll
+
+
+
+> h+1
+
+∏
+
+> j=l+1
+
+Kj,n (V )
+
+ ∥∆l∥op ∥¯hl−1(X; θ[l−1] )∥2.
+
+Taking L2(PX )-norms gives 
+
+∥fθ[l] − fθ[l−1] ∥L2(PX ) ≤ Ll
+
+
+
+> h+1
+
+∏
+
+> j=l+1
+
+Kj,n (V )
+
+ ∥∆l∥op 
+
+[
+
+E∥¯hl−1(X; θ[l−1] )∥22
+
+]1/2
+
+.
+
+Because V (θ∗) is a layerwise product neighborhood, each hybrid parameter θ[l−1] belongs to 47 V (θ∗). Hence 
+
+E∥¯hl−1(X; θ[l−1] )∥22 ≤ τl−1,n (V ).
+
+Therefore, 
+
+∥fθ[l] − fθ[l−1] ∥L2(PX ) ≤ Bl,n (V )∥∆l∥op ,
+
+where 
+
+Bl,n (V ) = Llτ 1/2
+
+> l−1,n
+
+(V )
+
+> h+1
+
+∏
+
+> j=l+1
+
+Kj,n (V ).
+
+Combining the telescoping bound over all layers yields 
+
+∥fθ − fθ∗ ∥L2(PX ) ≤
+
+> h+1
+
+∑
+
+> l=1
+
+Bl,n (V )∥∆l∥op .
+
+By Cauchy’s inequality, 
+
+> h+1
+
+∑
+
+> l=1
+
+Bl,n (V )∥∆l∥op ≤
+
+[h+1 ∑
+
+> l=1
+
+B2
+
+> l,n
+
+(V )
+
+]1/2 [h+1 ∑
+
+> l=1
+
+∥∆l∥2op 
+
+]1/2
+
+= Γ n(V )dop (θ, θ∗),
+
+where 
+
+Γ2
+
+> n
+
+(V ) = 
+
+> h+1
+
+∑
+
+> l=1
+
+L2 
+
+> l
+
+τl−1,n (V )
+
+> h+1
+
+∏
+
+> j=l+1
+
+K2
+
+> j,n
+
+(V ).
+
+This proves the desired local forward-stability bound. Finally, if V (θ∗) is chosen sufficiently small, the quantities τl,n (V ) and Kj,n (V ) may be bounded locally by their values at θ∗, up to a universal multiplicative constant. This gives 
+
+Γ2 
+
+> n
+
+≲
+
+> h+1
+
+∑
+
+> l=1
+
+L2 
+
+> l
+
+τl−1,n h+1 ∏
+
+> j=l+1
+
+{Lj ∥ ¯W ∗ 
+
+> j
+
+∥op }2.
+
+The common-Lipschitz case follows immediately by taking Lj = LΨ.
+
+A.8 Proof of Theorem 2 
+
+Proof. By the local forward-stability condition, 
+
+∥fˆθ(t)
+
+> n
+
+− fθ∗ ∥L2(PX ) ≤ Γndop (ˆθ(t) 
+
+> n
+
+, θ∗).
+
+Lemma 6 gives 
+
+dop (ˆθ(t) 
+
+> n
+
+, θ∗) = Op{(λ∗)t} + Op(an),
+
+and thus, 
+
+∥fˆθ(t)
+
+> n
+
+− fθ∗ ∥L2(PX ) = Op
+
+(
+
+Γn{(λ∗)t + an}
+
+)
+
+.
+
+Therefore, if (18) holds, then the prediction is consistent. 48 A.9 On the order of Γn
+
+Proposition 1 (Orders of Γn). Suppose τl,n = O(1) for l = 0 , . . . , h n, and define 
+
+Kn = max  
+
+> 1≤j≤hn+1
+
+Lj ∥ ¯W ∗ 
+
+> j
+
+∥op .
+
+Then 
+
+Γ2 
+
+> n
+
+= O
+
+
+
+> hn
+
+∑
+
+> m=0
+
+K2mn
+
+ .
+
+Consequently, 
+
+Γn =
+
+
+
+O(1) , Kn ≤ K < 1,O(√hn), Kn = 1 ,O(Khn 
+
+> n
+
+), Kn > 1 and bounded away from 1.
+
+In contrast, under only bounded activations and uniformly bounded spectral norms, the crude ambient-width bound is 
+
+Γn = O
+
+( h∑
+
+> l=0
+
+dl
+
+)1/2 .
+
+Proof. By Lemma 7, evaluated locally at θ∗, we have 
+
+Γ2 
+
+> n
+
+≲
+
+> hn+1
+
+∑
+
+> l=1
+
+τl−1,n hn+1 ∏
+
+> j=l+1
+
+{Lj ∥ ¯W ∗ 
+
+> j
+
+∥op }2.
+
+Assume that τl,n = O(1) for l = 0 , . . . , h n. Then there exists a constant C > 0, independent of l
+
+and n, such that τl,n ≤ C. Therefore, 
+
+Γ2 
+
+> n
+
+≲
+
+> hn+1
+
+∑
+
+> l=1
+> hn+1
+
+∏
+
+> j=l+1
+
+{Lj ∥ ¯W ∗ 
+
+> j
+
+∥op }2.
+
+By the definition of Kn, we have Lj ∥ ¯W ∗ 
+
+> j
+
+∥op ≤ Kn for every j. Hence 
+
+> hn+1
+
+∏
+
+> j=l+1
+
+{Lj ∥ ¯W ∗ 
+
+> j
+
+∥op }2 ≤
+
+> hn+1
+
+∏
+
+> j=l+1
+
+K2
+
+> n
+
+.
+
+There are hn + 1 − l factors in this product. Thus ∏hn+1  
+
+> j=l+1
+
+K2 
+
+> n
+
+= K2( hn+1 −l) 
+
+> n
+
+. Consequently, 
+
+Γ2 
+
+> n
+
+= O
+
+
+
+> hn+1
+
+∑
+
+> l=1
+
+K2( hn+1 −l)
+
+> n
+
+ .
+
+Let m = hn + 1 − l. As l ranges from 1 to hn + 1 , m ranges from hn down to 0. Therefore, 
+
+∑hn+1  
+
+> l=1
+
+K2( hn+1 −l) 
+
+> n
+
+= ∑hn 
+
+> m=0
+
+K2mn . Hence 
+
+Γ2 
+
+> n
+
+= O
+
+
+
+> hn
+
+∑
+
+> m=0
+
+K2mn
+
+ .
+
+49 We now consider three cases. First, suppose Kn ≤ K < 1. Then 
+
+> hn
+
+∑
+
+> m=0
+
+K2mn ≤
+
+> ∞
+
+∑
+
+> m=0
+
+K2m = 11 − K2 .
+
+Therefore, Γn = O(1) .Second, suppose Kn = 1 . Then 
+
+> hn
+
+∑
+
+> m=0
+
+K2mn =
+
+> hn
+
+∑
+
+> m=0
+
+1 = hn + 1 .
+
+Therefore, Γn = O(√hn).Third, suppose Kn > 1. Then the geometric sum gives 
+
+> hn
+
+∑
+
+> m=0
+
+K2mn = K2( hn+1)  
+
+> n
+
+− 1
+
+K2 
+
+> n
+
+− 1 .
+
+If Kn is bounded away from one from above, namely Kn ≥ 1 + δ for some δ > 0, then 
+
+K2 
+
+> n
+
+− 1 ≥ (1 + δ)2 − 1 > 0.
+
+Hence hn∑
+
+> m=0
+
+K2mn = O
+
+(
+
+K2( hn+1) 
+
+> n
+
+)
+
+.
+
+Equivalently, up to constants, 
+
+Γn = O
+
+(
+
+Khn+1 
+
+> n
+
+)
+
+.
+
+If Kn is also uniformly bounded above, this is the same order as 
+
+Γn = O(Khn 
+
+> n
+
+).
+
+More explicitly, without absorbing the last factor, 
+
+Γn = O
+
+( Khn+1 
+
+> n
+
+√K2 
+
+> n
+
+− 1
+
+)
+
+.
+
+It remains to justify the crude ambient-width bound. Suppose the activations are bounded and the depth h is fixed. If 
+
+∥Ψl(z)∥∞ ≤ CΨ,
+
+then 
+
+∥hl(X; θ∗)∥22 ≤ C2Ψdl.
+
+Since 
+
+¯hl(X; θ∗) = 
+
+( 1
+
+hl(X; θ∗)
+
+)
+
+,
+
+we have 
+
+∥¯hl(X; θ∗)∥22 = 1 + ∥hl(X; θ∗)∥22 ≤ 1 + C2Ψdl.
+
+50 Therefore, 
+
+τl,n = E∥¯hl(X; θ∗)∥22 = O(dl).
+
+If the layerwise spectral norms are uniformly bounded and the depth h is fixed, then all downstream products satisfy h+1 ∏
+
+> j=l+1
+
+{Lj ∥ ¯W ∗ 
+
+> j
+
+∥op }2 = O(1) .
+
+Hence 
+
+Γ2 
+
+> n
+
+≲
+
+> h+1 ∑
+> l=1
+
+τl−1,n = O 
+
+> (h∑
+> l=0
+
+dl
+
+> )
+
+.
+
+Taking square roots gives 
+
+Γn = O 
+
+> (h∑
+> l=0
+
+dl 
+
+> )1/2
+
+.
+
+This proves the proposition. 
+
+A.10 Proof of Theorem 3 
+
+Proof. Poggio et al. (2017) analyze the approximation power of deep neural networks for hierar-chically compositional functions whose constituent maps have bounded arity (at most s variables; e.g., s = 2 for a binary tree). For this class of functions, they show: 
+
+Lemma A6 (Theorem 4 of Poggio et al. (2017)) . Let f : [0 , 1] d0 → R be L-Lipschitz and admit a hierarchical compositional representation in which each constituent depends on at most s variables. Then a ReLU DNN that mirrors this compositional architecture can achieve approximation error at most ε (in ℓp-norm) with 
+
+m = O((d0 − 1) ( L/ε ) s)
+
+hidden neurons. 
+
+Let d0 = O(nα) for some 0 < α < 1 and set ε = n−(1 −α−δ)/s with 0 < δ < 1 − α. Then, by Lemma A6, 
+
+m = O(d0 ε−s) = O(nα n1−α−δ) = O(n1−δ),
+
+which satisfies the structural constraint in Theorem 1. Consequently, for sublinear-width ReLU networks, Theorem 3-(i) follows from Lemma A6. For sublinear-width DNNs with smooth activations, including sigmoid and tanh , analogous guarantees hold for continuously differentiable, hierarchically compositional functions following from Theorem 2 of Poggio et al. (2017) (omit the details). 
+
+A.11 Proof of Theorem 4 
+
+Proof. In the proof, Montanelli and Du (2019) studied the functions in the Korobov space K2,p 
+
+(with p indicating the ℓp-norm) and proved the following result: For any 0 < ε < 1 and any function f ∈ K 2,p ([0 , 1] d0 ) that satisfies ∥∥∂2 
+
+> x1
+
+· · · ∂2 
+
+> xd0
+
+f ∥∥∞ ≤ 1,there exists a deep ReLU network on inputs (x1, x 2, . . . , x d0 )⊤ ∈ [0 , 1] d0 that approximates f to 51 accuracy ε, with depth O(| log 2 ε| log 2 d0
+
+) and the number of hidden neurons 
+
+m = O
+
+(
+
+ε−2 | log 2 ε| 32 (d0−1)+1 (d0 − 1) 
+
+)
+
+. (A27) If we set ε = n−(1 /2−δ) for some 0 < δ < 1/2 as the target approximation accuracy, then a deep ReLU network can achieve this accuracy for the target function f , provided that the network has depth O(( 12 − δ) log 2 n log 2 d0
+
+) and the number of hidden neurons 
+
+m = O
+
+(
+
+n 1−2δ (log 2 n) 32 (d0−1)+1 ( 12 − δ) 32 (d0−1)+1 (d0 − 1) 
+
+)
+
+= o(n 1−δ), (A28) Here the input dimension d0 is fixed or grows with n at the rate d0 = o (log n/ log log n).52 SUPPLEMENTARY MATERIAL 
+
+# S1 Additional Numerical Results 
+
+This subsection presents numerical results that supplement those in the main body of the paper. The narrow DNN models were trained with a Tesla T4, while the wider DNN model were trained with an NVIDIA A100-SXM4-40GB. 
+
+S1.1 Experimental setting 
+
+Table S1 shows the detailed hyper parameter settings described in the manuscripts. All models were trained using SGD with a momentum coefficient of 0.9, except for the MNIST for which a momentum coefficient of 0.95 was used. 
+
+Table S1: Learning schedule for experiments, where L denotes the width of hidden layers.                                                
+
+> Dataset MNIST Simulated Data Boston Yacht Energy Protein CelebA Learning rate 0.01 (L≤2000) 0.005 (L≤10000) , 0.001 (10000 < L ≤30000) 0.0005 0.0002 0.0005 0.0002 0.05 0.001 (L > 2000) 0.0005 (30000 < L ≤70000) , 0.0001 (L > 70000)
+> Total epochs 4000 12000 10000 10000 10000 2000 100 Mini-batch size 128 100 50 50 50 300 64
+
+S1.2 A Test for the IRO Algorithm 
+
+We simulate data from the following model: 
+
+xij ∼ U nif [−2, 2] , j = 1 , . . . , 5,yi = 5xi1
+
+1 + x2
+
+> i2
+
++ 5 sin (xi3xi4) + 2 xi5 + ei, (S.1) where ei ∼ N (0 , 1) . We set the training sample size ntrain = 500 and the test sample size ntest =250 . We trained a one-hidden-layer DNN: p-L-1, with p = 5 and L ∈ 2, 4, 8, 16 , 32 , 50 , 100 , 120 , 150 ,and the ReLu activation function. We train the models using both SGD and IRO. Using SGD, we train the model for 12000 epochs with a learning rate of 0.005, a momentum coefficient of 0.9, and a batch size of 100. Using IRO, we train the model for 6000 steps with the model initialized by the model at the 6000 epochs of SGD training. For IRO, the imputation step is conducted by one step Langevin Dynamics update with step size 1e − 6, σ21 = 1 e − 2, σ 22 = 1 e − 3.Figure S1 shows that the performance of IRO and SGD are similar, see also Table S2 for numerical details. In practice, the IRO algorithm needs to solve a series of regressions on the entire data set for every iteration, it could be slow for large data sets and networks. So we use SGD in all of our experiments, while using the StoNet together with IRO as a bridge for transferring some properties of linear models to deep neural networks. 53 0 20 40 60 80 100 120 140 number of hidden units     
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> 12 MSE
+> IRO train
+> IRO test
+> SGD train
+> SGD test
+
+Figure S1: Training MSE and Testing MSE of neural network trained with SGD and IRO Table S2: Comparison of the training MSE and test MSEs produced by the neural networks trained using SGD and IRO for the simulated nonlinear regression example. 
+
+L = 2 L = 4 L = 8 L = 16 L = 32 L = 50 L = 100 L = 120 L = 150 IRO train 7.577 4.891 1.886 1.009 0.526 0.174 0.004 0.002 0.002 IRO test 7.339 6.033 2.443 2.219 4.585 6.013 7.164 6.629 6.352 SGD train 11.887 5.349 1.779 1.112 0.446 0.115 0.005 0.005 0.002 SGD test 11.153 5.337 2.316 2.642 4.347 5.873 7.931 6.245 6.348 
+
+S1.3 A nonlinear regression example 
+
+The datasets were simulated from model (S.1) as in Section S1.2. We trained a one-hidden-layer DNN: p-L-1, with L ranging from 2 to 256,000 and the ReLu activation function. Figure S2 shows the plots for the training and test errors. Additionally, we fixed the weights from the input layer to the first hidden layer, and trained those from the second hidden layer to the output layer only. In this case, the neural network can still achieve zero training errors, but the test errors are very large. The results are also summarized in Figure S2. 
+
+Figure S2: A simulated example for model (S.1) with the network architecture p-L-1, where the x-axis represents log 10 (L) and the y-axis represents the mean squared error (MSE) averaged over 5 different datasets; and the ‘train random’ and ‘test random’ represent, respectively, the training and test errors obtained by the networks with the first layer weights being fixed to random numbers. 
+
+54 In our experience, the performance of SGD is primarily sensitive to learning rates. To explore this issue, we re-ran the experiment with different learning rates. Specifically, we set the learning rate in the form α γ t, where {γt} denotes the baseline (“standard”) schedule employed previously and reported in Table S1, and α ∈ { 2/3, 4/5, 5/4, 3/2}. Figure S3 summarizes the training and test errors across different values of α. The comparison shows: (i) The network training errors are fairly robust to learning rates (see red curves): When L is reasonably large, say L ≥ 100 (equivalently, log 10 L ≥ 2), the training errors consistently converge to 0. (ii) For sublinear-width networks, the test errors (blue curves) are fairly robust to learning rates: In the sublinear regime (with L < 500 or, equivalently, log 10 (L) ≤ 2.7), the network test-error curves are nearly unchanged as α varies. (iii) For wide networks, the test errors are sensitive to the learning rate: In the wide regime (with L ≥ 500 or, equivalently, log 10 (L) ≥ 2.7), the network test-error trajectories differ noticeably when α is large.                  
+
+> (a) Larger learning rate with α=54(b)Larger learning rate with α=32
+> (c) Smaller learning rate with α=45(d)Smaller learning rate with α=23
+> Figure S3: An ablation study (with the sample size n= 500 ) for learning rates, where the horizontal axis is log 10 (L); the vertical axis is the mean squared error (MSE), averaged over five independent datasets.
+
+S1.4 Comparison of sublinear-width and wide DNNs for nonlinear regression 
+
+The datasets were simulated from model (S.1) as in Section S1.2. We trained neural networks of different architectures: p-L-1, p-L-L-1, and p-L-L-L-L-1. The training parameter settings are given in Table S1, except that a learning rate of 0.002 was used for the architecture p-L-L-L-L-1 with L < 1000 . For the architecture p-L-L-L-L-1 with L = 1000 , the learning rate was further 55 reduced to 0.0001 in order to prevent gradient explosion. Table S3 reports the mean squared error (MSE) (with standard deviations given in parentheses), averaged over five independent runs, for both training and test sets. The comparison strongly suggests that sublinear-width networks can even outperform wide networks in prediction for this example. 
+
+Table S3: Training and test errors, measured in MSE averaged over 5 independent runs (with standard deviations given in parentheses), for nonlinear regression (S.1) with network architecture “ p-L-· · · -L-1”, where h represents the number of hidden layers. The cases with the test MSE < 3.10 are highlighted in red. 
+
+Regime Width ( L) h=1 h=2 h=4 Train Test Train Test Train Test Sublinear 2 9.80 (2.43) 10.82 (3.00) 12.51 (7.46) 13.56 (6.10) 20.23 (9.83) 20.78 (10.25) 16 2.02 (0.11) 3.75 (0.50) 0.35 (0.10) 3.43 (0.20) 0.06 (0.02) 4.21 (0.83) 50 0.57 (0.05) 4.13 (0.27) 0.00 (0.00) 3.78 (0.29) 0.00 (0.00) 3.33 (0.47) 100 0.15 (0.05) 4.95 (0.56) 0.00 (0.00) 3.21 (0.33) 0.00 (0.00) 3.05 (0.41) 
+
+125 0.06 (0.07) 4.54 (0.60) 0.00 (0.00) 3.00 (0.29) 0.00 (0.00) 3.24 (0.33) 150 0.01 (0.00) 4.98 (0.89) 0.00 (0.00) 3.25 (0.47) 0.00 (0.00) 2.99 (0.33) 
+
+175 0.00 (0.00) 5.00 (0.95) 0.00 (0.00) 2.97 (0.32) 0.00 (0.00) 2.96 (0.29) 
+
+200 0.00 (0.00) 4.41 (0.55) 0.00 (0.00) 3.26 (0.36) 0.00 (0.00) 3.01 (0.31) 
+
+225 0.00 (0.00) 4.29 (0.55) 0.00 (0.00) 3.11 (0.28) 0.00 (0.00) 3.08 (0.29) 
+
+250 0.00 (0.00) 4.27 (0.53) 0.00 (0.00) 3.18 (0.37) 0.00 (0.00) 3.10 (0.31) 275 0.00 (0.00) 4.17 (0.59) 0.00 (0.00) 3.18 (0.36) 0.00 (0.00) 3.05 (0.34) 
+
+300 0.00 (0.00) 4.10 (0.67) 0.00 (0.00) 3.07 (0.31) 0.00 (0.00) 3.05 (0.31) 
+
+325 0.00 (0.00) 3.74 (0.56) 0.00 (0.00) 3.11 (0.36) 0.00 (0.00) 3.15 (0.32) 350 0.00 (0.00) 3.93 (0.51) 0.00 (0.00) 3.14 (0.38) 0.00 (0.00) 3.05 (0.32) 
+
+375 0.00 (0.00) 3.82 (0.51) 0.00 (0.00) 3.01 (0.30) 0.00 (0.00) 3.12 (0.35) 400 0.00 (0.00) 3.76 (0.52) 0.00 (0.00) 3.16 (0.30) 0.00 (0.00) 3.18 (0.40) 425 0.00 (0.00) 3.70 (0.54) 0.00 (0.00) 3.10 (0.26) 0.00 (0.00) 3.16 (0.31) 450 0.00 (0.00) 3.74 (0.52) 0.00 (0.00) 3.13 (0.40) 0.00 (0.00) 3.05 (0.31) 
+
+475 0.00 (0.00) 3.57 (0.45) 0.00 (0.00) 3.08 (0.37) 0.00 (0.00) 3.19 (0.34) Wide 500 0.00 (0.00) 3.56 (0.52) 0.00 (0.00) 3.22 (0.37) 0.00 (0.00) 3.10 (0.27) 600 0.00 (0.00) 3.78 (0.64) 0.00 (0.00) 3.06 (0.37) 0.00 (0.00) 3.25 (0.42) 700 0.00 (0.00) 3.62 (0.54) 0.00 (0.00) 3.13 (0.41) 0.00 (0.00) 3.24 (0.45) 800 0.00 (0.00) 3.49 (0.49) 0.00 (0.00) 3.05 (0.31) 0.00 (0.00) 3.36 (0.42) 900 0.00 (0.00) 3.47 (0.55) 0.00 (0.00) 3.20 (0.41) 0.00 (0.00) 3.12 (0.33) 1000 0.00 (0.00) 3.32 (0.49) 0.00 (0.00) 3.17 (0.44) 0.00 (0.00) 3.83 (0.52) 
+
+56 S1.5 Feature Learning Consistency 
+
+See Table S4 and Table S5. 
+
+Table S4: Canonical correlations ρ4,1: k′ and ρ5,1: k′ achieved by the network p-5-5-1 with n = 50 , 000 for the simulated example in Section 4.1, where the canonical correlation and its standard deviation (in the parenthesis) are calculated by averaging over 5 independent datasets. 
+
+k ρk, 1:1 ρk, 1:2 ρk, 1:3 ρk, 1:4 ρk, 1:5 
+
+4 0.03(0.01) 0.05(0.01) 0.05(0.01) 1.00(0.00) 1.00(0.00) 5 0.14(0.07) 0.17(0.07) 0.18(0.07) 0.19(0.07) 1.00(0.00) 
+
+Table S5: Eigenvalues of wT 
+
+> 1
+
+w1 (denoted by “true”) and those of ˆwT 
+
+> 1
+
+ˆw1 obtained by the network p-5-5-1 with different sample sizes for the simulated example in Section 4.1, where the mean and standard deviation (in the parenthesis) are calculated by averaging over 5 independent datasets. 
+
+n Model λ1 λ2 λ3 λ4 λ5
+
+— True 16.86(0.55) 13.97(0.24) 10.32(0.46) 6.44(0.73) 4.56(0.33) 500 p-5-5-1 20.43(1.72) 12.34(1.26) 8.69(1.16) 5.01(0.97) 3.13(0.63) 50000 p-5-5-1 17.62(0.58) 14.13(0.27) 10.24(0.51) 6.61(0.79) 4.56(0.35) 
+
+S1.6 UCI 
+
+See Table S6, Table S7, and Table S8. 
+
+Table S6: Training and test errors, measured in MSE, for the Boston Housing Dataset ( n = 506 , p = 13 )with network “ p-L-L-· · · -L-1”, where h represents of the number of hidden layers, and five random splits were done with (ntrain , n test ) = (400 , 106) . he best test errors are highlighted in bold. 
+
+Regime Width (L) h = 2 h = 3 h = 4 h = 5 h = 6 h = 7 
+
+Sublinear 100 Train 0.04(0.01) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) Test 3.86(0.23) 3.59(0.25) 3.30(0.20) 3.21(0.13) 3.02(0.15) 3.00(0.14) 200 Train 0.03(0.01) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) Test 3.59(0.30) 3.29(0.15) 3.23(0.19) 3.11(0.16) 3.09(0.19) 2.97(0.12) 
+
+Wide 500 Train 0.02(0.01) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) Test 3.52(0.17) 3.27(0.12) 3.16(0.17) 3.07(0.16) 3.01(0.17) 2.97(0.20) 
+
+1000 Train 0.02(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) Test 3.23(0.16) 3.07(0.11) 3.20(0.14) 3.07(0.15) 3.01(0.15) 3.03(0.16) 2000 Train 0.02(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) Test 3.29(0.18) 3.09(0.11) 3.16(0.16) 3.00(0.13) 2.98(0.18) 3.05(0.19) 
+
+57 Table S7: Training and test errors, measured in MSE, for the Yacht Dataset ( n = 308 , p = 6 ) with network structure “ p-L-L-· · · -L-1”, where h represents the number of hidden layers, and five random splits were done with (ntrain , n test ) = (270 , 38) . The best test errors are highlighted in bold. 
+
+Regime Width (L) h = 2 h = 3 h = 4 h = 5 h = 6 h = 7 
+
+Sublinear 100 Train 0.07(0.00) 0.04(0.00) 0.03(0.00) 0.03(0.00) 0.03(0.00) 0.02(0.00) Test 0.49(0.08) 0.37(0.07) 0.36(0.09) 0.29(0.05) 0.34(0.07) 0.44(0.07) 200 Train 0.05(0.00) 0.03(0.00) 0.02(0.00) 0.02(0.00) 0.02(0.00) 0.02(0.00) Test 0.46(0.07) 0.36(0.08) 0.36(0.08) 0.32(0.04) 0.36(0.07) 0.31(0.05) Wide 500 Train Error 0.05(0.00) 0.03(0.00) 0.02(0.00) 0.01(0.00) 0.01(0.00) 0.01(0.00) Test 0.39(0.06) 0.33(0.08) 0.32(0.07) 0.30(0.05) 0.29(0.05) 0.35(0.05) 1000 Train 0.06(0.00) 0.03(0.00) 0.02(0.00) 0.02(0.00) 0.02(0.00) 0.02(0.00) Test 0.35(0.09) 0.32(0.07) 0.29(0.05) 0.29(0.06) 0.32(0.06) 0.37(0.07) 2000 Train 0.06(0.00) 0.03(0.00) 0.02(0.00) 0.02(0.00) 0.02(0.00) 0.03(0.00) Test 0.34(0.07) 0.33(0.07) 0.30(0.06) 0.32(0.06) 0.32(0.06) 0.32(0.07) 
+
+Table S8: Training and test errors (MSE) for the Energy Dataset ( n = 768 , p = 8 ) with network structure “p-L-L-· · · -L-1”, where h represents the number of hidden layers, and five random splits were done with 
+
+(ntrain , n test ) = (650 , 118) . The best test errors are highlighted in bold. 
+
+Regime Width (L) h = 2 h = 3 h = 4 h = 5 h = 6 h = 7 
+
+Sublinear 100 Train 0.16(0.02) 0.03(0.00) 0.02(0.01) 0.00(0.00) 0.01(0.00) 0.01(0.00) Test 0.71(0.01) 0.68(0.04) 0.72(0.04) 0.66(0.05) 0.64(0.05) 0.65(0.03) 200 Train 0.06(0.01) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) Test 0.67(0.05) 0.66(0.03) 0.67(0.03) 0.64(0.03) 0.68(0.05) 0.64(0.05) 500 Train 0.05(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) Test 0.63(0.04) 0.59(0.02) 0.61(0.02) 0.66(0.03) 0.58(0.03) 0.65(0.03) Wide 1000 Train 0.03(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) Test 0.65(0.03) 0.61(0.03) 0.61(0.02) 0.58(0.03) 0.62(0.03) 0.60(0.03) 2000 Train 0.02(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) 0.00(0.00) Test 0.65(0.03) 0.61(0.03) 0.58(0.03) 0.60(0.05) 0.61(0.03) 0.68(0.03) 
+
+58

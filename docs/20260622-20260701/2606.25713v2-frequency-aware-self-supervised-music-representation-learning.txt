@@ -1,0 +1,399 @@
+Title: Frequency-Aware Self-Supervised Music Representation Learning
+
+URL Source: https://arxiv.org/pdf/2606.25713v2
+
+Published Time: Tue, 30 Jun 2026 02:07:04 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+> 1
+
+# Frequency-Aware Self-Supervised Music Representation Learning 
+
+Yicheng Gu, Student Member, IEEE , Junan Zhang, Jerry Li, Zhizheng Wu, Senior Member, IEEE , Lauri Juvela, Member, IEEE 
+
+Abstract —Self-supervised learning (SSL) has emerged as an essential paradigm for music information retrieval (MIR). While current SSL models achieve state-of-the-art performance across various MIR tasks, they typically treat audio as 1D sequences, either operating on time-domain waveforms or on flattened time-frequency-domain spectrograms. This discards the rich spatial and structural information in time-frequency representations and overlooks a fundamental intuition in music production. In particular, music is naturally represented as time-frequency grids in MIDI-based workflows, a structure that tightly corresponds to 2D spectrograms and inherently makes many MIR tasks trivial. Motivated by this intuition, we propose PupuJEPA, a visual Joint-Embedding Predictive Architecture (JEPA) that is trained directly on 2D spectrograms. Instead of applying masked language modeling (MLM) to 1D sequences, PupuJEPA learns robust representations by predicting the latent embeddings of masked 2D spectrogram patches from unmasked contexts. To optimally adapt such a visual framework to music signals, we also apply domain-specific modifications to model architecture, training scheme, and inference paradigm, with comprehensive ablation studies showing their effectiveness. Evaluations on the MARBLE benchmark show that PupuJEPA outperforms the 1D sequence-based SSL models across multiple MIR tasks in linear probing. Additionally, case studies of the attention maps also confirm that PupuJEPA captures musically meaningful patterns within the 2D time-frequency domain. Codes and checkpoints are available at: https://www.yichenggu.com/PupuJEPA/. 
+
+Index Terms —music information retrieval, joint-embedding predictive architecture, self-supervised learning. 
+
+I. I NTRODUCTION 
+
+Music Information Retrieval (MIR) is a fundamental field encompassing a wide range of tasks, such as music tagging, genre classification, emotion recognition, and key detection. Traditionally, these tasks use supervised learning and require massive amounts of high-quality, human-annotated data [1]. As acquiring them is expensive and prone to subjective bias, the performance of such methods is often limited by the data bottlenecks. To solve this, self-supervised learning (SSL) has emerged as a mainstream paradigm in the MIR community. In particular, SSL models can efficiently learn universal acoustic and semantic representations from vast amounts of unlabeled audio, and can be easily adapted to various MIR tasks with competitive performances through simple linear probing. 
+
+> Jerry Li is with the Spellbrush, Akihabara, Tokyo 101-0021, Japan (e-mail: jerry@sizigistudios.com). Lauri Juvela is with the Acoustic Lab, Department of Information and Communications Engineering (DICE), Aalto University, Espoo 02150, Finland (e-mail: lauri.juvela@aalto.fi). Junan Zhang and Zhizheng Wu are with the School of Data Science, The Chinese University of Hong Kong, Shenzhen, Guangdong 518172, China (e-mail: junanzhang@link.cuhk.edu.cn; wuzhizheng@cuhk.edu.cn). Yicheng Gu is with the Spellbrush, Akihabara, Tokyo 101-0021, Japan, also with the Acoustic Lab, Department of Information and Communications Engineering (DICE), Aalto University, Espoo 02150, Finland, and also with the School of Data Science, The Chinese University of Hong Kong, Shenzhen, Guangdong 518172, China (e-mail:yichenggu@link.cuhk.edu.cn).
+
+In the early stages, music SSL models mainly relied on leveraging generative models or directly adapting existing frameworks from other domains. Specifically, JukeboxMIR [2] explored using the hidden states of Jukebox [3] for MIR tasks; CLMR [4] adapted a contrastive learning framework with audio-specific data augmentations; and MULE [5] further scaled this up by incorporating visual CNNs on spectrograms. However, their performance is often limited, as extracting features from generative models incurs high computational costs, and contrastive learning often relies on augmentations like cropping and rotation that are unnatural to music. Recent studies shifted towards BERT-style masked language modeling (MLM) [6] to address these limitations. In particular, MERT [7] introduces a dual-teacher framework that leverages acoustic tokens from Encodec [8] and musical tokens from the Constant-Q Transform (CQT) to construct comprehensive targets that capture diverse aspects of audio; MusicFM [9] bypasses external tokenizers by using random projections to generate masked targets; and MuQ [10] proposes a lightweight Mel-RVQ tokenizer to generate robust quantization targets from spectrograms, which achieves state-of-the-art (SOTA) performance across diverse MIR benchmarks. However, a fundamental architectural bias persists across these recent works: they rigidly follow the model design in speech and natural language processing, treating audio as 1D sequences, either operating on time-domain waveforms [7, 9] or on flattened time-frequency-domain spectrograms [10]. Such an operation discards the rich 2D spatial and harmonic structures preserved in time-frequency representations, thereby restricting the models’ ability for fine-grained and localized musical analysis. This reduction also overlooks a fundamental intuition in modern music production. As shown in Figure 1, in MIDI-based workflows, music is naturally represented as time-frequency grids, a structure that tightly corresponds to 2D spectrograms and makes many MIR tasks trivial. Motivated by this intuition, we propose PupuJEPA, a visual Joint-Embedding Predictive Architecture (JEPA) that explicitly models music on 2D spectrograms. Instead of relying on 1D tokenization, PupuJEPA learns robust representations by predicting the latents of masked spectrogram patches from the unmasked contexts. To optimize such a framework for music, we apply domain-specific modifications to the model architecture, training scheme, and inference paradigm, and conduct comprehensive ablation studies to demonstrate their effectiveness. Evaluations on the MARBLE benchmark show that PupuJEPA consistently outperforms existing 1D sequence-based baselines across diverse MIR tasks under linear probing; and visualizations of the model’s attention maps also confirm that PupuJEPA can naturally capture musically meaningful patterns within the 2D time-frequency domain. 
+
+> arXiv:2606.25713v2 [cs.SD] 29 Jun 2026 2
+
+Fig. 1: Illustration of the fundamental intuition behind PupuJEPA. The top panel displays a multitrack project in a Digital Audio Workstation (DAW), while the bottom panel shows its corresponding 2D spectrogram. Colored bounding boxes explicitly map individual tracks to their distinct time-frequency patterns in the spectrogram. As illustrated on the right, an experienced producer, Pupu (“bunny” in Finnish), can intuitively perform MIR tasks by visually interpreting these 2D spectrogram patterns. II. R ELATED WORK 
+
+A. Visual Self-Supervised Learning 
+
+Vision SSL models have evolved rapidly in recent years. Specifically, Masked Autoencoders (MAE) [11] first learn powerful visual representations by reconstructing the raw pixels of masked image patches. However, this pixel-level loss often biases the model towards low-level reconstruction rather than learning high-level representations. To address this, JEPAs[12–14] shift the prediction loss to the latent space, forcing the network to capture robust, high-level features without the need for pixel-level losses. Conversely, contrastive learning, as exemplified by the evolution from iBOT [15] to the DINO series [16–18], maximizes agreement across differently augmented views of the same image, achieving SOTA performance. However, unlike images, which can be safely cropped, rotated, or color-jittered, music inherently lacks natural data augmentation methods. While some early attempts [4, 5] address this issue by incorporating audio effects such as filtering and reverberation, these operations are only effective when applied to individual tracks rather than the whole song, thereby limiting their performances. To avoid both limitations, we adopt the JEPA framework for this work. 
+
+B. Audio Self-Supervised Learning 
+
+Inspired by advances in visual SSL, audio SSL has been widely adopted for 2D modeling of Mel-spectrograms. In particular, AudioMAE [19, 20] pioneers this by successfully adapting the MAE to reconstruct masked spectrogram patches, followed by MSM-MAE [21], MaskSpec [22], and MAE-AST [23] to further expand the paradigm across various audio tasks. To overcome the limitations of pixel reconstruction, BEAT [24] and EAT [25] use acoustic tokenizers to generate discrete prediction targets; ATST [26] and M2D-X [27] use contrastive learning to learn robust representations, followed by MATPAC [28–30], which further enhances this paradigm with advanced patch-clustering strategies. Meanwhile, models such as A-JEPA [31] and Audio-JEPA [32] successfully adapt the JEPA framework to the audio, achieving competitive results across various tasks. More recently, Dasheng [33] systematically optimizes and scales up the MAE architecture, aiming to build a universal SSL paradigm for general sound. However, directly adopting audio SSL models to the music domain remains suboptimal. As their pipelines are designed for audio event classification, their large patch size will make fine-grained musical events inseparable, and their optimized training scheme will result in representation collapse in music. 3
+
+Fig. 2: Overview of the PupuJEPA architecture and training scheme. The target encoder encodes the masked spectrogram patches into target latent patches. The context encoder encodes the unmasked spectrogram patches into context latent patches, which are subsequently combined with mask tokens and injected with positional encodings before being passed to the predictor to estimate the target latent patches. The target encoder is updated via an exponential moving average (EMA) of the context encoder, and stop gradient (SG) is applied to prevent representation collapse.   
+
+> (a) Random (b) Blockwise (c) Time-Frequency
+
+Fig. 3: Illustration of different masking strategies. III. M ETHODOLOGY 
+
+This section details the model architecture, training scheme, and inference paradigm of the proposed PupuJEPA framework. 
+
+A. Model Architecture 
+
+As illustrated in Figure 2, PupuJEPA comprises a context encoder, a target encoder, and a predictor, all implemented as standard Vision Transformers (ViTs) [34]. The context encoder extracts representations from the unmasked context patches, and the target encoder extracts representations from the masked target patches. The predictor takes in the context embeddings and mask tokens to predict the target embeddings. 
+
+B. Spectrogram Patching 
+
+Following relevant works [19–32], we transform music signals into Mel-spectrograms and apply the standard mean-variance normalization to stabilize training. The spectrograms will then be divided into non-overlapping regular-grid patches. Unlike visual SSL models, we use a patch size of 4 ×16 instead of 16 ×16 to ensure a suitable frame rate for MIR tasks that require high temporal resolution. These patches are then flattened and embedded by a linear projection. We add rotary position embeddings (RoPE) [35] to the embedded patches to accommodate variable-length audio inputs in inference time. 
+
+C. Masking Strategies 
+
+Unlike standard JEPA implementations [12–14], we restrict the target encoder to process only target patches rather than all patches. This is because music spectrograms exhibit correlated temporal and harmonic structures along the time/frequency axes. From preliminary experiments, we found that exposing the target encoder to the full input patches would allow the model to exploit this information, leading to shortcut learning and representation collapse. For the exact same reason, we also diverge from existing audio SSL works [19–32], where simple random masking is typically sufficient, and additionally use blockwise and time-frequency masking, as shown in Figure 3. 
+
+D. Architectural Optimizations 
+
+We introduce several critical architectural modifications to optimize the ViT backbone’s performance on spectrograms. Specifically, we replace the traditional Feed-Forward Network activation with SwiGLU [36] to enhance model capacity, and apply Query-Key Normalization (QK-Norm) to stabilize the self-attention logits. Conversely, we discard components such as DropPath and LayerScale, as they consistently cause severe training instabilities and lead to representation collapse. Additionally, we replace Batch Normalization with standard Layer Normalization, therefore further stabilizing training. 
+
+E. Training Objective 
+
+PupuJEPA is optimized by minimizing the distance between the predictor’s outputs and the target encoder’s representations across all masked patches. Different from standard JEPA implementations [12, 13], we employ a smoothed L1 loss to ensure training stability, which is defined as follows: 
+
+Lsmooth L1 (ˆ zt,f , z t,f ) = 
+
+( 0.5(ˆ zt,f −zt,f )2 
+
+> β
+
+if |ˆzt,f − zt,f | < β, 
+
+|ˆzt,f − zt,f | − 0.5β otherwise ,
+
+(1) 4
+
+Fig. 4: Illustration of different inference paradigms for global tasks. “GAP” means global average pooling. The top and bottom panels illustrate the inference paradigms for 1D sequence-based and 2D spectrogram-based models. Note that for fine-grained local tasks, GAP and patch aggregation are omitted, and frame-level features are directly used for downstream tasks. where β = 1 .0 is the threshold that controls the loss behaviors; 
+
+ˆzt,f and zt,f are the predictor’s output and the target encoder’s representation for the masked patch. Note that zt,f is locally mean-variance normalized with mini-batch statistics along the feature dimension, ensuring the loss is not dominated by high-magnitude features and thereby stabilizing training and enhancing the resulting representation quality. Compared with the standard L1 loss, which is non-differentiable at zero and can cause severe gradient instabilities near the convergence point, the smoothed L1 loss behaves like an L2 penalty for small errors, ensuring smooth gradients at the convergence point; it also transitions to an L1 penalty for large errors, making it significantly less sensitive to outliers and thus preventing gradient explosion during the early stages of training. As in the standard JEPA implementations [12, 13], we apply a stop-gradient operation to the target encoder to prevent shortcut learning and representation collapse, whose parameters are thus updated using an exponential moving average (EMA) of the context encoder’s parameters θ, as 
+
+ξ ← τ ξ + (1 − τ )θ, where τ is the momentum coefficient and ξ is the target encoder’s parameters, respectively. 
+
+F. Inference Paradigms 
+
+As shown in Figure 4, adapting a 2D spectrogram-based model for downstream MIR tasks is fundamentally different from standard 1D sequence-based baselines. In particular, 1D sequence-based baselines first extract multi-layer 1D hidden representations, which are then applied with an MLP reduction to obtain a single-layer feature, either used directly for fine-grained local tasks or applied with global average pooling (GAP) for global tasks. Such an inference paradigm, however, is incompatible with 2D spectrogram-based models. For the layer fusion strategy, 2D spectrogram-based models produce multi-layer time-frequency patches rather than 1D sequences; flattening and concatenating these patches would result in an exceptionally large feature dimension, making the standard multi-layer MLP reduction incompatible due to parameter explosion. Meanwhile, for the patch aggregation strategy, GAP is essentially suboptimal, as it flattens the spatial layout and results in a complete loss of the essential time-frequency structural information distributed across 2D patches.   
+
+> (a) Standard (b) Time-Partitioned
+> (c) Frequency-Partitioned (d) Block-Partitioned
+
+Fig. 5: Illustration of different patch aggregation strategies. To address these issues, we introduce alternative layer fusion and patch aggregation strategies tailored for 2D spectrogram-based models. Let the multi-layer feature extracted from the encoder be H ∈ RL×T ×F ×D , where L is the number of layers, T and F represent the number of patches along the time and frequency axes, and D is the hidden dimension. We first apply patch-wise average pooling along the hidden dimension with a pooling factor p, yielding ˜H ∈ RL×T ×F ×D′
+
+, where 
+
+D′ = D/p . Then, if no pooling is applied ( p = 1 ) or p is small, we compute the single layer feature Z ∈ RT ×F ×D′
+
+with a learnable weighted sum across all the L layers, as: 
+
+zt,f = PLl=1 wl˜hl,t,f , where wl are learnable scalar weights normalized via softmax, denoted as Weighted Sum . Conversely, if p is large, the compressed hidden dimension will be on par with the standard 1D sequence-based baselines, allowing us to apply the standard multi-layer MLP Reduce , which can be written as: zt,f = MLP (Concat (˜h1,t,f , ˜h2,t,f , . . . , ˜hL,t,f )) .As illustrated in Figure 5, for global tasks, we additionally introduce a family of time-frequency-structure-aware patch aggregation methods to replace the standard GAP, including 
+
+Time-, Frequency-, and Block-Partitioned Patch Aggregation .Their detailed formulations are defined in the equations below: 5
+
+TABLE I: ViT configurations of the PupuJEPA encoders across different scales. “Dim” denotes the hidden dimension, “MLP Dim” indicates the inner dimension of the SwiGLU activation, and “Heads” denotes the number of attention heads.                               
+
+> Model Scale # Params Layers Dim MLP Dim Heads
+> PupuJEPA-Tiny 5M 12 192 768 3PupuJEPA-Small 22M 12 384 1536 6PupuJEPA-Base 86M 12 768 3072 12 PupuJEPA-Large 307M 24 1024 4096 16 PupuJEPA-Huge 632M 32 1280 5120 16
+
+vn,m = 1(T /N )( F/M ) 
+
+> (n+1) TN
+
+X  
+
+> t=nTN
+> (m+1) FM
+
+X  
+
+> f=mFM
+
+zt,f , (2) where n ∈ { 0, . . . , N − 1} and m ∈ { 0, . . . , M − 1}; N and 
+
+M are the number of chunks along the time/frequency axes. In particular, Time- ( N > 1, M = 1 ) and Frequency-Partitioned (N = 1 , M > 1) Patch Aggregation divide the 2D patches into chunks alongside the time/frequency axes, while Block-Partitioned ( N > 1, M > 1) Patch Aggregation partitions the 2D patches into localized rectangular blocks to preserve their coarse time-frequency correlations. The resulting global representation v for downstream tasks is obtained by flattening and concatenating the average-pooled vn,m from all blocks: 
+
+v = Concat (v1,1, . . . , v N,M ). (3) IV. E XPERIMENTS 
+
+A. Experiment Setup 1) Datasets: For PupuJEPA training, we use a large-scale, in-house dataset of approximately 100,000 hours of high-quality music audio, encompassing a highly diverse collection of tracks across various genres, instruments, styles, and keys. 
+
+2) Preprocessing: We process the training dataset to 24 kHz mono WAV files for simplified model training. For extracting the Mel-spectrograms, we use an FFT size of 1024, a hop size of 240, a window length of 1024, and 128 Mel filters. The extracted spectrograms will be transformed to the log scale, with values smaller than 1e-5 clipped to 0. During training, we randomly crop continuous audio segments of 10.24 seconds, yielding fixed-size 2D spectrogram inputs of shape 1024 ×128 for the network (both being powers of 2 to leverage optimized PyTorch kernels). Coupled with our asymmetric 4 ×16 patch size, this configuration results in a frame rate of 25 Hz. 
+
+3) Configurations: We implement PupuJEPA across five parameter scales: Tiny, Small, Base, Large, and Huge. The detailed ViT configurations of the encoder across all parameter scales are illustrated in Table I. Following relevant audio SSL works [19–32], the predictor is fixed across all model scales and is implemented as a lightweight 8-layer ViT with a hidden dimension of 512, MLP dimension of 2048, and 16 attention heads. Note that the parameter counts reported in our experiments include only the target encoder, which serves as the standalone feature extractor for downstream tasks. As for masking strategies, we set the overall target masking ratio to ρ = 0.8 following previous works [19–32] and dynamically apply one of three masking strategies for each input, with selection probabilities Prand = 0 .4, Pblock = 0 .3,and Ptime-freq = 0 .3. The detailed implementations are: TABLE II: Layer fusion selection for downstream tasks of the PupuJEPA encoders at different scales.                        
+
+> Model Scale Layers Selected Layer Indices
+> PupuJEPA-Tiny 12 {9,10 , . . . , 12 }
+> PupuJEPA-Small 12 {9,10 , . . . , 12 }
+> PupuJEPA-Base 12 {9,10 , . . . , 12 }
+> PupuJEPA-Large 24 {12 ,13 , . . . , 24 }
+> PupuJEPA-Huge 32 {16 ,17 , . . . , 32 }
+> •
+
+Random Masking: Individual patches are uniformly sampled and removed across the entire time-frequency patches until the target masking ratio ρ is reached.  
+
+> •
+
+Blockwise Masking: We iteratively sample rectangular blocks to mask. For each block, the area scale s relative to the full grid is sampled uniformly with s ∼ U (0 .01 , 0.05) .To ensure the model learns both long-temporal and wide-spectral patterns, the block aspect ratio r is sampled from a bimodal distribution, chosen equally from either a vertical range r ∼ U (2 .0, 5.0) or a horizontal range 
+
+r ∼ U (0 .2, 0.5) . To precisely achieve the target ratio 
+
+ρ without over-masking, we halt block generation once adding a new block would exceed the limit, and fulfill the residual masking requirement by uniformly sampling individual patches, as in the random masking.  
+
+> •
+
+Time-Frequency Masking: We iteratively mask chunk-wise spans along the time/frequency axes. To compensate for the large area covered by frequency masking, the probability of selecting an axis is proportional to its span size, as Ptime = TT +F and Pfreq = FT +F . We then remove temporal and spectral chunks up to a maximum width of wtime = 40 and wfreq = 1 patches. Similar to blockwise masking, we halt chunk generation once the limit is reached and apply random masking afterward. 
+
+4) Training: We train all PupuJEPA models for a total of 500,000 steps with a global batch size of 2048 on 32 NVIDIA B200 GPUs. We adapted BF16 mixed precision to maximize computational efficiency. The networks are optimized using the AdamW optimizer. To stabilize training, all gradients are clipped to a maximum norm of 1.0, and a constant weight decay of 0.05 is applied to all weights (explicitly excluding biases, normalization layers, learnable tokens, and positional embeddings). The learning rate uses a cosine decay schedule, warming up linearly over the first Tw = 25 , 000 steps to a peak of 1 × 10 −3, and subsequently decaying to 1 × 10 −6.The target encoder is updated using EMA, with the momentum coefficient increasing linearly from 0.99995 to 0.99999. To ease the optimization difficulty in the early training phase, we introduce a curriculum-based masking scheduling mechanism. Let P (t) = (Prand , P block , P time-freq ) denote the selection probabilities for the random, blockwise, and time-frequency masking. Here, we define the initial purely random distribution as P init = (1 .0, 0, 0) , and target mixed distribution as P target = (0 .4, 0.3, 0.3) . The dynamic masking distribution transitions over a specified Tm = 100 , 000 steps: P(t) = 
+
+
+
+Pinit t ≤ Tw,
+
+Pinit + ( Ptarget − Pinit ) t−Tw 
+
+> Tm−Tw
+
+Tw < t ≤ Tm,
+
+Ptarget t > T m.
+
+(4) 6
+
+TABLE III: Experimental results of PupuJEPA and baseline models in MARBLE benchmark (1/2). “*” denotes the results are obtained by evaluating official checkpoints provided by MARBLE within our evaluation environment, and “ ‡” denotes the results are obtained from audio-domain baseline models that we reproduced and pre-trained on our datasets under identical settings. The best and second-best results for each column are bold and underlined, respectively.                                                                                                                                                                                         
+
+> Dataset EMO GS GTZAN HookTheory MTT Type Global Local Global Local Local Local Global
+> Task Emotion Key Genre Rhythm Key Structure Tagging
+> # Param Model R2 V(↑)R2 A(↑)Acc Refined (↑)Acc ( ↑)F1 Beat (↑)Acc Refined (↑)Acc ( ↑)ROC ( ↑)AP ( ↑)95M MERT-Base [7] 54.1 ∗75.3 ∗62.5 ∗78.3 ∗87.9 ∗73.4 ∗55.0 ∗90.3 ∗37.5 ∗
+> 330M MERT-Large [7] 56.7 ∗76.1 ∗64.1 ∗77.6 ∗86.8 ∗70.4 ∗54.8 ∗90.6 ∗37.9 ∗
+> 86M Dasheng-Base [33] 59.6 ∗75.7 ∗54.5 ∗76.9 ∗87.2 ∗63.1 ∗57.3 ∗91.5 ∗40.6 ∗
+> 600M Dasheng-0.6B [33] 59.0 ∗76.7 ∗55.4 ∗81.4 ∗88.2 ∗66.9 ∗57.9 ∗91.6 ∗40.3 ∗
+> 1.2B Dasheng-1.2B [33] 57.4 ∗75.0 ∗58.0 ∗81.4 ∗87.7 ∗67.0 ∗57.5 ∗91.5 ∗40.4 ∗
+> 310M MuQ [10] 58.3 ∗76.4 ∗63.2 ∗83.8 ∗90.1 ∗72.8 ∗57.0 ∗90.5 ∗38.5 ∗
+> 330M MusicFM [9] 57.2 ∗74.4 ∗63.0 ∗84.1 ∗90.2 ∗71.8 ∗59.8 ∗90.9 ∗38.3 ∗
+> 307M AudioMAE++ [19, 20] 59.0 ‡75.7 ‡61.7 ‡80.3 ‡90.0 ‡72.2 ‡57.3 ‡91.2 ‡39.5 ‡
+> 307M MATPAC++ [28–30] 57.8 ‡74.7 ‡63.7 ‡81.4 ‡90.1 ‡70.6 ‡56.6 ‡90.6 ‡38.2 ‡
+> 307M A-JEPA [31, 32] 57.4 ‡74.8 ‡65.0 ‡83.8 ‡90.0 ‡71.5 ‡57.8 ‡91.0 ‡39.2 ‡
+> 5M PupuJEPA-Tiny 55.3 74.8 64.2 76.2 88.4 70.3 55.7 90.8 38.8 22M PupuJEPA-Small 61.1 74.9 64.8 78.6 89.0 70.7 57.6 91.4 40.4 86M PupuJEPA-Base 58.8 76.3 60.5 77.9 91.0 71.0 57.5 91.3 39.7 307M PupuJEPA-Large 62.5 76.8 66.1 86.9 91.0 72.9 57.6 91.7 40.8
+> 632M PupuJEPA-Huge 62.0 78.5 64.8 85.9 90.5 72.2 58.7 91.3 39.7
+
+TABLE IV: Ablation study of different training strategies and model architectures on PupuJEPA-Large in MARBLE benchmark (1/2). The best and second-best results for each column are bold and underlined, respectively.                                                                        
+
+> Dataset EMO GS GTZAN HookTheory MTT Type Global Local Global Local Local Local Global
+> Task Emotion Key Genre Rhythm Key Structure Tagging
+> Model R2 V(↑)R2 A(↑)Acc Refined (↑)Acc ( ↑)F1 Beat (↑)Acc Refined (↑)Acc ( ↑)ROC ( ↑)AP ( ↑)PupuJEPA-Large 62.5 76.8 66.1 86.9 91.0 72.9 57.6 91.7 40.8
+> w/o SwiGLU 58.1 76.3 62.5 83.8 90.2 69.6 57.3 90.9 39.1 w/o QKNorm 60.8 77.3 64.1 83.8 90.8 70.0 56.5 91.3 39.3 w/o Mixing Masking Strategy 60.8 79.1 64.4 82.8 90.8 72.8 57.6 91.0 39.2 w/o Smoothed L1Loss
+> Training Collapsed
+> w/ Full-Patch Target Encoder w/ DropPath w/ LayerScale w/ Batch Normalization
+
+5) Baselines: We compare PupuJEPA against music and universal SSL baselines, including MERT [7], Dasheng [33], MusicFM [9], and MuQ [10], as well as general audio SSL baselines, including AudioMAE++ [19, 20], MATPAC++ [28– 30], and A-JEPA [31, 32]. Since the music and universal SSL baselines were already trained on massive music data, we directly use their official checkpoints and implementations from the MARBLE [37] benchmark. For the general audio SSL baselines, we reproduced and retrained them from scratch on our in-house dataset. To ensure a fair comparison, we use the exact same optimal ViT model architecture and inference paradigm developed for PupuJEPA (i.e., layer fusion and patch aggregation strategies) for both training and evaluation. 
+
+B. Downstream Tasks 
+
+We use MARBLE [37] benchmark to evaluate PupuJEPA and baseline models on MIR tasks using linear probing. Following [38], we select a specific subset of intermediate layers that capture rich musical semantics and exhibit strong linear separability for evaluation, as illustrated in Table II. All evaluations are conducted on NVIDIA B200 GPUs, and the specific downstream task formulations are described below. In particular, we broadly categorize these tasks into two types: global tasks and local tasks . global tasks aim to predict track-level labels such as emotion, genre, and tags, while fine-grained local tasks aim to predict frame-level labels such as musical key and beat types. The detailed tasks are: 
+
+1) Emotional Analysis: Emotional analysis is a global task 
+
+that aims to predict the emotional arousal and valence values from music signals. We use the EmoMusic (EMO) [39] dataset for evaluation and report the determination coefficients for valence (R 2 
+
+> V
+
+) and arousal (R 2
+
+> A
+
+) scores as metrics. 
+
+2) Key Detection: Key detection is a local task that aims to estimate the frame-level musical key of a given track. We use the GiantSteps (GS) [40] and HookTheory [41] datasets for evaluation and report the refined accuracy [42] as the metric. 
+
+3) Genre Classification: Genre classification is a global task that categorizes music tracks into distinct genres. We use the GTZAN [43] and MTG-Jamendo (MTG) [44] datasets for evaluation. For metrics, we report the standard accuracy on the GTZAN dataset. We report the Receiver Operating Characteristic Area Under the Curve (ROC-AUC) and Average Precision (AP) on the multi-label MTG dataset. 7
+
+TABLE V: Experimental results of PupuJEPA and baseline models in MARBLE benchmark (2/2). “*” denotes the results are obtained by evaluating official checkpoints provided by MARBLE within our evaluation environment, and “ ‡” denotes the results are obtained from audio-domain baseline models that we reproduced and pre-trained on our datasets under identical settings. The best and second-best results for each column are bold and underlined, respectively.                                                                                                                                                             
+
+> Dataset MTG MTG MTG MTG Type Global Global Global Global
+> Task Instrument MoodTheme Genre Top50
+> # Param Model ROC ( ↑)AP ( ↑)ROC ( ↑)AP ( ↑)ROC ( ↑)AP ( ↑)ROC ( ↑)AP ( ↑)95M MERT-Base [7] 77.1 ∗19.7 ∗75.8 ∗13.5 ∗86.2 ∗18.4 ∗81.8 ∗28.8 ∗
+> 330M MERT-Large [7] 75.5 ∗18.8 ∗75.3 ∗13.5 ∗86.1 ∗18.0 ∗82.6 ∗29.1 ∗
+> 86M Dasheng-Base [33] 76.5 ∗19.5 ∗76.9 ∗15.4 ∗86.2 ∗19.0 ∗82.4 ∗29.6 ∗
+> 600M Dasheng-0.6B [33] 75.9 ∗19.7 ∗77.2 ∗15.9 ∗86.1 ∗19.4 ∗82.7 ∗30.0 ∗
+> 1.2B Dasheng-1.2B [33] 75.0 ∗19.0 ∗76.1 ∗15.5 ∗85.5 ∗18.8 ∗82.4 ∗29.6 ∗
+> 310M MuQ [10] 74.8 ∗19.1 ∗73.7 ∗13.2 ∗85.4 ∗19.1 ∗83.0 ∗30.2 ∗
+> 330M MusicFM [9] 74.6 ∗18.5 ∗74.9 ∗14.1 ∗85.3 ∗19.4 ∗81.9 ∗29.7 ∗
+> 307M AudioMAE++ [19, 20] 77.1 ‡19.9 ‡75.6 ‡14.0 ‡86.3 ‡18.9 ‡83.1 ‡31.1 ‡
+> 307M MATPAC++ [28–30] 77.2 ‡19.7 ‡75.1 ‡14.1 ‡85.7 ‡19.6 ‡82.5 ‡30.2 ‡
+> 307M A-JEPA [31, 32] 76.6 ‡19.3 ‡74.6 ‡14.3 ‡85.5 ‡19.2 ‡82.5 ‡29.6 ‡
+> 5M PupuJEPA-Tiny 77.0 19.0 74.9 13.8 85.1 17.6 82.4 28.8 22M PupuJEPA-Small 77.0 19.8 75.6 14.3 85.2 18.6 83.2 30.1 86M PupuJEPA-Base 76.2 19.6 75.7 14.2 85.7 19.4 82.7 29.7 307M PupuJEPA-Large 78.4 21.2 76.2 15.3 86.1 20.1 82.8 30.5 632M PupuJEPA-Huge 77.6 20.5 75.9 14.7 85.9 20.1 83.1 30.7
+
+TABLE VI: Ablation study of different training strategies and model architectures on PupuJEPA-Large in MARBLE benchmark (2/2). The best and second-best results for each column are bold and underlined, respectively.                                                       
+
+> Dataset MTG MTG MTG MTG Type Global Global Global Global
+> Task Instrument MoodTheme Genre Top50
+> Model ROC ( ↑)AP ( ↑)ROC ( ↑)AP ( ↑)ROC ( ↑)AP ( ↑)ROC ( ↑)AP ( ↑)PupuJEPA-Large 78.4 21.2 76.2 15.3 86.1 20.1 82.8 30.5
+> w/o SwiGLU 76.6 19.3 74.6 14.3 85.5 19.2 82.5 29.6 w/o QKNorm 77.7 19.5 75.2 14.4 85.2 18.6 82.5 29.4 w/o Mixing Masking Strategy 77.1 20.0 75.4 14.3 85.6 19.8 82.0 29.7 w/o Smoothed L1Loss
+> Training Collapsed
+> w/ Full-Patch Target Encoder w/ DropPath w/ LayerScale w/ Batch Normalization
+
+4) Music Structure Analysis: Music structure analysis is a local task that aims to categorize each frame into distinct functional sections, such as Intro, Verse, Chorus, Bridge, and Outro. We use the HookTheory [41] dataset for evaluation and report the frame-level accuracy as the metric. 
+
+5) Beat Tracking: Beat tracking is a local task that aims to locate the frame-level beat timestamps (Beats, Downbeats, and Tempo) of music tracks. We use the GTZAN [43] dataset for evaluation and report the F1-score (F1 Beat ) as the metric. 
+
+6) Music Tagging: Music tagging is a global task that aims to assign descriptive tags to different music clips. We use the MagnaTagATune (MTT) [45] and MTG [44] datasets, each with the top 50 most frequent tags for evaluation. We report the macro-averaged ROC-AUC and AP scores as the metrics. 
+
+7) Instrument Classification: Instrument classification is a 
+
+global task that aims to identify the presence of specific musical instruments within a given music track. We use the MTG [44] dataset for evaluation and report the macro-averaged ROC-AUC and AP scores as the metrics. 
+
+C. Experimental Results 1) Comparison with Baseline Models: Tables III and V illustrate the evaluation results on the MARBLE benchmark. Notably, across all 2D models, including both our PupuJEPA variants and the reproduced audio baselines, the reported metrics are the optimal results obtained by sweeping across the various inference paradigms, to ensure a fair comparison. Overall, the proposed PupuJEPA model shows exceptional performance, achieving SOTA results across most tasks. 
+
+Superiority over 1D Sequence-Based Baselines: It can be observed that 2D spectrogram-based models generally outperform standard 1D sequence-based models across a wide range of tasks, such as emotion recognition, key detection, beat tracking, and instrument classification. This validates the inherent advantage of preserving structural time-frequency information over treating the audio as 1D sequences. Such a superiority is particularly effective in fine-grained local tasks where 2D spectrograms naturally provide intuitive visual cues. For instance, the 5M parameter PupuJEPA-Tiny achieves 64.2% on GS Key, outperforming all baseline models. 8
+
+TABLE VII: Ablation study of different layer fusion and patch aggregation strategies with various pooling factors on PupuJEPA-Large in MARBLE benchmark’s global tasks (1/2). “Standard”, “Time-x”, “Freq-y”, and “Block-x×y” mean Standard, Time-Partitioned, Frequency-Partitioned, and Block-Partitioned patch aggregation with x and y as the number of time and frequency chunks. The best and second-best results for each column in each layer fusion strategy are bold and underlined, respectively. 
+
+Dataset EMO GTZAN MTT Type Global Global Global 
+
+Task Emotion Genre Tagging 
+
+Layer Fusion Dim Pooling Patch Aggregation R2 V (↑) R2 A (↑) Acc ( ↑) ROC ( ↑) AP ( ↑)
+
+Weighted Sum 
+
+8192 1Time-8 62.5 76.8 83.8 91.2 40.1 Freq-8 60.9 76.6 85.2 91.3 39.3 Block-2 ×4 54.5 75.6 85.2 91.2 39.4 Block-4 ×2 61.0 77.0 86.2 91.0 38.3 4096 1Time-4 61.3 74.4 84.8 90.8 38.4 Freq-4 60.4 74.7 86.2 91.3 39.0 Block-2 ×2 60.8 76.5 86.9 91.3 39.1 2Time-8 60.1 77.4 82.1 91.1 39.3 Freq-8 57.8 77.1 85.2 91.1 39.2 Block-2 ×4 59.9 77.0 86.2 91.2 39.1 Block-4 ×2 61.1 77.1 83.8 90.8 38.8 2048 1Time-2 60.3 75.6 85.2 91.3 39.6 Freq-2 60.7 74.9 85.2 91.4 39.9 2Time-4 60.8 77.1 85.5 91.1 39.0 Freq-4 59.0 76.3 85.5 91.4 40.2 Block-2 ×2 59.2 76.0 85.2 91.4 39.9 4Time-8 57.3 73.5 81.3 90.8 38.4 Freq-8 56.8 74.8 84.8 91.3 39.8 Block-2 ×4 55.2 77.6 83.8 91.5 40.4 Block-4 ×2 60.8 77.8 84.1 91.0 39.0 1024 1 Standard 60.8 74.1 81.7 91.5 40.3 2 Time-2 61.3 76.8 85.5 91.6 40.1 Freq-2 60.3 75.8 85.5 91.6 40.2 4Time-4 56.0 74.8 83.4 91.2 39.5 Freq-4 58.0 76.2 84.1 91.5 40.1 Block-2 ×2 56.8 75.4 82.4 91.7 40.8 MLP Reduce 
+
+2048 1 Time-2 55.9 74.7 83.4 90.9 39.5 Freq-2 55.6 75.4 84.8 91.1 39.5 2Time-4 54.6 75.9 85.2 90.9 39.0 Freq-4 55.6 75.9 82.1 90.9 39.3 Block-2 ×2 56.4 77.6 84.1 91.3 39.7 4Time-8 58.7 77.5 82.4 90.6 38.8 Freq-8 56.5 78.6 83.4 90.8 39.1 Block-2 ×4 51.4 78.7 82.1 91.2 39.8 Block-4 ×2 55.8 78.5 82.4 90.7 38.5 1024 1 Standard 54.3 74.5 85.5 91.4 39.3 2 Time-2 55.2 77.1 86.6 90.8 38.7 Freq-2 55.3 76.6 86.9 91.3 40.0 
+
+4Time-4 52.3 74.9 82.1 91.2 39.7 Freq-4 53.4 77.5 83.1 91.2 39.3 Block-2 ×2 54.7 78.6 83.1 91.0 39.3 8Time-8 54.5 75.6 80.0 91.0 38.6 Freq-8 54.0 77.5 81.7 91.0 39.3 Block-2 ×4 53.2 77.8 82.1 91.3 39.6 Block-4 ×2 57.0 77.7 82.8 91.1 39.5 512 2 Standard 55.8 76.8 86.6 91.2 39.8 4 Time-2 50.9 75.7 81.0 91.2 39.3 Freq-2 53.9 77.9 83.4 91.3 39.4 8Time-4 54.1 76.1 81.4 90.9 38.6 Freq-4 56.6 79.5 82.4 91.4 39.5 Block-2 ×2 57.2 79.7 81.7 91.2 39.4 16 Time-8 63.4 72.6 77.2 91.0 39.0 Freq-8 59.3 76.2 79.7 91.2 39.7 9
+
+TABLE VIII: Ablation study of different layer fusion and patch aggregation strategies with various pooling factors on PupuJEPA-Large in MARBLE benchmark’s global tasks (2/2). “Standard”, “Time-x”, “Freq-y”, and “Block-x×y” mean Standard, Time-Partitioned, Frequency-Partitioned, and Block-Partitioned patch aggregation with x and y as the number of time and frequency chunks. The best and second-best results for each column in each layer fusion strategy are bold and underlined, respectively. 
+
+Dataset MTG MTG MTG MTG Type Global Global Global Global 
+
+Task Instrument MoodTheme Genre Top50 
+
+Layer Fusion Dim Pooling Patch Aggregation ROC ( ↑) AP ( ↑) ROC ( ↑) AP ( ↑) ROC ( ↑) AP ( ↑) ROC ( ↑) AP ( ↑)
+
+Weighted Sum 
+
+8192 1Time-8 76.4 19.4 75.1 14.8 84.3 18.7 81.5 29.3 
+
+Freq-8 75.1 18.9 73.7 13.9 83.0 17.5 80.6 28.0 Block-2 ×4 75.5 19.5 74.0 14.0 83.1 17.7 80.8 28.3 Block-4 ×2 76.2 19.7 74.6 14.4 83.7 17.9 81.2 28.5 4096 1Time-4 76.6 19.9 74.9 14.2 83.9 18.6 81.3 28.9 Freq-4 76.0 20.0 74.2 13.9 83.3 17.8 80.8 28.1 Block-2 ×2 76.1 19.6 74.3 13.7 83.6 18.1 81.1 29.0 2Time-8 76.0 19.2 74.3 14.1 85.6 18.9 81.6 29.1 Freq-8 75.4 19.7 73.6 13.4 82.8 17.4 80.7 28.0 Block-2 ×4 75.2 19.4 74.1 13.8 83.9 18.0 80.8 28.2 Block-4 ×2 76.5 19.7 75.0 14.2 84.0 18.0 81.3 28.7 2048 1Time-2 75.4 19.4 73.6 13.8 83.9 18.5 81.6 28.8 Freq-2 75.5 19.7 73.7 14.0 83.8 18.3 80.7 28.4 2Time-4 75.4 19.5 74.7 14.3 84.2 18.6 81.6 28.8 Freq-4 75.4 19.0 74.0 14.2 83.4 18.0 80.8 28.3 Block-2 ×2 75.4 19.4 74.4 14.2 83.9 18.1 81.1 28.6 4Time-8 75.6 19.4 74.1 13.6 84.9 18.5 81.3 29.3 
+
+Freq-8 75.0 18.8 73.2 13.6 83.4 17.6 80.8 28.1 Block-2 ×4 75.3 19.2 74.4 14.1 84.1 18.1 81.1 28.7 Block-4 ×2 75.6 19.5 75.0 14.5 84.4 18.5 81.5 28.9 1024 1 Standard 75.0 19.1 74.0 14.0 83.2 18.2 80.9 28.4 2 Time-2 75.4 19.7 74.4 14.2 83.9 18.2 81.3 29.0 Freq-2 75.1 19.3 74.7 14.3 83.6 18.0 81.0 28.7 3Time-4 75.4 19.3 74.6 14.4 84.0 18.5 81.6 29.0 Freq-4 75.1 19.4 74.2 13.8 83.3 17.9 80.8 28.4 Block-2 ×2 75.3 19.3 74.6 14.2 83.9 18.2 80.9 28.7 
+
+MLP Reduce 
+
+2048 1 Time-2 77.5 20.9 76.1 15.2 85.6 20.0 82.3 30.5 
+
+Freq-2 76.9 20.2 73.9 14.1 85.2 19.5 81.4 29.7 2Time-4 78.4 21.2 75.0 14.4 85.6 19.8 82.5 30.4 Freq-4 76.1 20.2 74.5 14.6 84.8 18.7 81.7 30.0 Block-2 ×2 77.6 20.8 74.9 14.9 85.2 19.0 82.5 30.5 
+
+4Time-8 76.0 20.8 76.1 15.0 86.1 20.1 82.8 30.5 
+
+Freq-8 76.0 19.3 74.1 14.2 85.5 19.3 81.6 29.4 Block-2 ×4 76.9 20.7 74.9 14.3 84.8 19.1 82.0 30.2 Block-4 ×2 76.7 20.8 75.3 14.7 85.6 19.7 81.7 29.9 1024 1 Standard 75.2 20.3 74.9 14.2 85.1 19.8 82.1 29.9 2 Time-2 77.7 20.8 75.3 14.9 85.3 19.7 82.1 30.1 Freq-2 76.2 20.1 75.1 14.8 85.0 19.3 81.6 30.0 4Time-4 76.3 20.4 75.4 14.5 85.4 19.7 82.4 30.4 Freq-4 76.2 20.6 74.3 14.1 84.4 18.8 81.6 29.7 Block-2 ×2 76.3 20.5 75.2 14.8 85.5 19.6 81.8 30.2 8Time-8 77.5 20.3 76.2 15.3 85.5 20.0 82.3 30.3 Freq-8 75.9 19.4 74.6 14.0 85.2 18.7 81.4 28.9 Block-2 ×4 76.5 20.4 74.6 13.8 85.3 19.3 81.9 29.8 Block-4 ×2 76.2 20.5 75.0 14.2 85.3 19.4 82.0 30.0 512 2 Standard 75.6 19.8 75.2 14.2 84.9 18.9 81.8 29.9 4 Time-2 74.9 19.9 75.5 14.6 85.0 19.5 82.0 29.9 Freq-2 74.9 20.0 75.0 14.6 84.5 18.8 81.5 29.6 8Time-4 75.7 19.8 75.9 14.9 84.7 19.5 82.6 30.3 Freq-4 75.0 20.0 74.6 14.8 84.6 18.4 81.8 29.7 Block-2 ×2 75.8 20.2 75.4 14.4 84.7 19.1 82.2 29.8 16 Time-8 76.1 20.1 75.9 14.7 85.3 19.5 82.7 29.8 Freq-8 75.4 19.8 74.7 14.2 84.1 18.5 81.8 29.2 10 
+
+TABLE IX: Ablation study of different layer fusion strategies with various pooling factors on PupuJEPA-Large in MARBLE benchmark’s local tasks. The best and second-best results for each column in each strategy are bold and underlined, respectively.                                                   
+
+> Dataset GS GTZAN HookTheory Type Local Local Local Local
+> Task Key Rhythm Key Structure
+> Layer Fusion Dim Pooling Acc Refined (↑)F1 Beat (↑)Acc Refined (↑)Acc ( ↑)
+> Weighted Sum
+> 8192 166.1 91.0 72.9 57.6
+> 4096 262.9 90.6 71.4 56.4 2048 464.2 90.5 71.7 57.6 MLP Reduce
+> 2048 463.8 90.5 72.9 57.2
+> 1024 862.4 90.4 71.8 56.4 512 16 60.1 90.5 68.4 56.8
+
+Effectiveness against 2D Audio Baselines: Compared to general 2D audio SSL baselines, PupuJEPA demonstrates clear superiority on tasks that require high-level abstract understanding, mainly including emotion recognition, genre classification, and instrument classification, confirming the effectiveness of our domain-specific modifications on model architecture, training scheme, and inference diagrams. 
+
+Robustness across Global and Local Tasks: For fine-grained local tasks, PupuJEPA shows clear advantages in GS key detection and GTZAN beat tracking. However, its performance on HookTheory structure analysis is mostly on par with the baselines. This reflects an inherent trade-off when applying linear probing to 2D models for local tasks: applying pooling inevitably destroys localized time-frequency structure, whereas completely bypassing pooling results in an exceptionally high feature dimension, making the linear probe harder to optimize. Conversely, for global tasks, PupuJEPA demonstrates consistent performance gains from our proposed patch aggregation strategies, especially in emotion regression and various MTG global tasks (Instrument and TOP50). 
+
+Scaling Behavior: Consistent parameter scaling behavior can be observed across the PupuJEPA variants. Downstream task performance exhibits a clear and steady upward trajectory as model capacity increases from the Tiny (5M) and Small (22M) variants, culminating at the PupuJEPA-Large (307M) scale. Across both global and local tasks, the Large variant consistently emerges as the optimal configuration. Scaling further to PupuJEPA-Huge (632M) yields diminishing returns, with slight performance regressions observed across several linear probing metrics. This saturation is a well-documented phenomenon in SSL under linear probing evaluations: as model capacity becomes excessively large, the representations often form highly complex, non-linear structures. While they may have deeper information, they become inherently more difficult for a simple single-layer linear classifier to learn [11, 12, 16–18]. As a result, PupuJEPA-Large strikes the ideal balance between model capacity and probing compatibility. 
+
+2) Ablation Study on Model Architecture: We ablated all modern ViT performance enhancements and domain-specific modifications on PupuJEPA-Large to systematically show their individual contributions, as illustrated in Tables IV and VI. We found that these modifications can be categorized into two groups: performance enhancers that improve the performance, and stability guardians that avoid representation collapse. 
+
+Performance Enhancers: Removing SwiGLU , QKNorm ,and Mixing Masking Strategy leads to noticeable performance drops across nearly all metrics. This indicates that SwiGLU 
+
+effectively expands the ViT representation capacity, QKNorm 
+
+stabilizes the magnitudes of attention scores for high-variance spectrogram features, and incorporating blockwise and time-frequency masking forces the model to capture longer-range temporal and wider-spectral contextual dependencies. 
+
+Stability Guardians: Notably, several standard components are incompatible with PupuJEPA. Our ablation study illustrates that substituting the Smoothed L1 Loss with standard L1
+
+Loss , or equipping ViT with standard DropPath , LayerScale ,and Batch Normalization , will eventually result in training instabilities and representation collapse. Meanwhile, feeding the full input sequence to the target encoder, as done in standard JEPA implementations, also leads to representation collapse, confirming our shortcut learning hypothesis. 
+
+3) Ablation Study on Inference Paradigms: To validate our proposed 2D inference paradigms, we conducted extensive ablation studies on the layer fusion and patch aggregation strategies with various pooling factors using the PupuJEPA-Large model. The results are in Tables VII, VIII, and IX. 
+
+Impact of Pooling on Local Tasks: For fine-grained local tasks, it can be observed that applying patch-wise pooling along the frequency dimension significantly degrades the quality of spectral structure, which is vital for precise harmonic and temporal understanding. As shown in Table IX, the Weighted Sum strategy without any pooling consistently achieves the highest performance across all evaluated local tasks, demonstrating the necessity of preserving uncompressed spectral dimensionality for fine-grained frame-level analysis. 
+
+Layer Fusion versus Dataset Scale: For global tasks, the optimal layer fusion strategy strongly correlates with the scale of the downstream dataset. On relatively smaller datasets (such as EMO, GTZAN, and MTT), the Weighted Sum approach generally outperforms MLP Reduce . Because 
+
+Weighted Sum directly aggregates layers via simple learnable weights, it effectively prevents overfitting when downstream data is limited. Conversely, on the massive MTG benchmark datasets (Table VIII), MLP Reduce coupled with appropriate pooling yields better performance, as the abundance of training data avoids the previous overfitting problem and thus allows the MLP head to robustly learn complex, non-linear reductions from the compressed multi-layer 2D patches. 11 
+
+Fig. 6: Illustration of PupuJEPA’s predictor attention maps. The top panels display a multitrack project in a DAW, while the bottom panels show the corresponding 2D spectrograms overlaid with the attention heatmaps. Note that the color bars displayed on the right of the bottom panels denote the attention weights rather than the energy of the spectrograms. The red bounding boxes denote the masked target regions that the model aims to predict, while the other colored bounding boxes map individual track components to their corresponding time-frequency patterns in the 2D spectrogram, specifically highlighting the regions that has high attention weights. In particular, the bottom-left panel shows the attention map when predicting a masked Kick drum, whereas the bottom-right panel displays the attention map when predicting the masked root notes of a Lead sound. 
+
+Effectiveness of Partitioned Patch Aggregation: Among the different patch aggregation methods for global tasks, 
+
+Time-Partitioned and Block-Partitioned Patch Aggregation 
+
+consistently outperform the Standard GAP and Frequency-Partitioned Patch Aggregation , illustrating that preserving coarse temporal sequences and spatial correlations is more effective than flattening the spectrogram. We also observe that the optimal partition parameters depend on the specific task, as different MIR tasks rely on events at different resolutions. 
+
+4) Attention Map Visualization: Beyond the quantitative linear probing results on the MARBLE [37] benchmark, we additionally conduct qualitative case studies to investigate whether PupuJEPA learns musically meaningful patterns that inherently align with the intuition of human music producers. In particular, we extract the queries and keys from the last transformer layer of the predictor and then inject the 2D rotary position embeddings. After that, we compute the scaled dot-product attention and apply a softmax function to obtain the probability distribution. The resulting attention weights are subsequently averaged across all attention heads. The attention heatmap is upsampled to the original spectrogram resolution using bilinear interpolation and overlaid on the original Mel-spectrogram for visualization, with the maximum color intensity capped at the 99.9th percentile to ensure visual clarity. The whole process and be written as follows: 
+
+A = Fup 
+
+1
+
+Nh
+
+> Nh
+
+X
+
+> n=1
+
+Softmax 
+
+ RoPE( qn) · RoPE( kn)⊤
+
+√dk
+
+!
+
+,
+
+(5) where A is the attention heatmap, Fup (·) is the upsampling function (bilinear interpolation), Nh is the number of attention heads, qn is the query vector of the target patch for the attention head n, kn is the key matrix of all context tokens for the attention head n, RoPE( ·) denotes the injection of 2D rotary position embeddings, and dk is the scaling factor. We then intuitively align the attention heatmaps with the multi-track project for analysis, as illustrated in Figure 6. As shown in the bottom-left panel, when predicting a masked Kick drum, the model does not simply look at the surrounding pixels; instead, its attention spans broadly across the music segment, selectively highlighting other Kick drum distributions with similar rhythm patterns, demonstrating its ability to capture long-term dependencies. Conversely, as shown in the bottom-right panel, when the model attempts to predict the masked root notes of a Lead sound, its attention spans across the remaining unmasked higher harmonics and the adjacent melodic Lead progressions just before the masked region, illustrating its ability to understand musical context. Such visual evidence strongly validates our core intuition. In MIDI-based music production, music is naturally represented as 2D time-frequency grids, which closely correspond to 2D spectrograms. Just like music producers can “reconstruct” a multi-track project from a spectrogram, the PupuJEPA, pre-trained directly on music spectrograms, also develops this capability. As shown in Figure 6, PupuJEPA naturally enables zero-shot disentanglement of individual tracks and long-range musical structural analysis, thereby making many MIR tasks trivial to probe and achieving the SOTA performance. 12 
+
+V. C ONCLUSION 
+
+This paper proposes PupuJEPA, a visual JEPA explicitly tailored for 2D self-supervised music representation learning. To address the inherent limitations of standard 1D sequence-based musical SSL models, which discard rich spatial and harmonic structures in the time-frequency domain, PupuJEPA directly models time-frequency representations by predicting the latent embeddings of masked 2D spectrogram patches. To optimize such a paradigm for the music domain, we also introduced critical architectural modifications to ensure training stability and proposed novel inference paradigms to improve downstream probing performance. Evaluations on the MARBLE benchmark demonstrate that PupuJEPA consistently outperforms existing SOTA 1D sequence-based SSL models and 2D spectrogram-based audio baselines across various MIR tasks. Finally, our case study on attention maps shows that PupuJEPA can capture musically meaningful patterns within the 2D time-frequency domain, confirming its effectiveness. VI. F UTURE WORK 
+
+While PupuJEPA achieves SOTA performance on various MIR tasks and establishes a strong foundation for 2D music SSL, several potential improvements remain. Firstly, adapting dynamic, variable-aspect-ratio patching (e.g., alternating 4 ×
+
+16 , 16 × 16 , and 16 × 4 grids) could encourage the model to capture different events across diverse temporal and spectral resolutions. Secondly, extending the JEPA training objective to multi-track and multi-song contexts, such as predicting a missing instrument stem from a multi-stem project or the next track in a playlist, would enable the learning of complex multi-resolution semantic information at various levels. Lastly, we plan to further scale up the model parameters and pre-training data scales, alongside investigating more diverse downstream evaluation schemes beyond linear probing. VII. A CKNOWLEDGMENT 
+
+This work is a joint effort by Spellbrush, Aalto University, and The Chinese University of Hong Kong, Shenzhen. Finally, the first author would like to acknowledge her partner, Zeyu Dou, for his consistent support throughout her life and career. In recognition of his fondness for rabbits, Pupu , known as “bunny” in Finnish, was adopted as the prefix for the model. VIII. G ENERATIVE AI U SE DISCLOSURE 
+
+In accordance with the IEEE SPS policy on the use of LLM, the authors disclose the use of Gemini 3 Pro and GPT 5.5 Codex in preparing this manuscript, and the use of NanoBanana Pro in generating the producer Bunny image in Figure 1. These tools were used to improve paper writing and accelerate code development. The authors confirm that all AI outputs have been manually reviewed, edited, and verified. REFERENCES 
+
+[1] J. Pons and X. Serra, “MusicCNN: Pre-trained Convo-lutional Neural Networks for Music Audio Tagging,” in 
+
+Proc. ISMIR , 2019. [2] R. Castellon, C. Donahue, and P. Liang, “Codified Audio Language Modeling Learns Useful Representations for Music Information Retrieval,” in ISMIR , 2021, pp. 88– 96. [3] P. Dhariwal, H. Jun, C. Payne, J. W. Kim, A. Radford, and I. Sutskever, “Jukebox: A generative model for music,” arXiv:2005.00341 , 2020. [4] J. Spijkervet and J. A. Burgoyne, “Contrastive Learning of Musical Representations,” in ISMIR , 2021, pp. 673– 681. [5] M. C. McCallum, F. Korzeniowski, S. Oramas, F. Gouyon, and A. F. Ehmann, “Supervised and Unsu-pervised Learning of Audio Representations for Music Understanding,” in ISMIR , 2022, pp. 256–263. [6] J. Devlin, M. Chang, K. Lee, and K. Toutanova, “BERT: Pre-training of Deep Bidirectional Transformers for Lan-guage Understanding,” in Proc. NAACL , 2019, pp. 4171– 4186. [7] Y. Li, R. Yuan, G. Zhang, Y. Ma, X. Chen, H. Yin, C. Xiao, C. Lin, A. Ragni, E. Benetos, N. Gyenge, R. B. Dannenberg, R. Liu, W. Chen, G. Xia, Y. Shi, W. Huang, Z. Wang, Y. Guo, and J. Fu, “MERT: Acoustic Music Understanding Model with Large-Scale Self-supervised Training,” in Proc. ICLR , 2024. [8] A. D´ efossez, J. Copet, G. Synnaeve, and Y. Adi, “High Fidelity Neural Audio Compression,” Trans. Mach. Learn. Res. , vol. 2023, 2023. [9] M. Won, Y. Hung, and D. Le, “A Foundation Model for Music Informatics,” in Proc. Int. Conf. Acoust. Speech Signal Process. , 2024, pp. 1226–1230. [10] H. Zhu, Y. Zhou, H. Chen, J. Yu, Z. Ma, R. Gu, Y. Luo, W. Tan, and X. Chen, “MuQ: Self-Supervised Music Representation Learning with Mel Residual Vector Quantization,” IEEE/ACM Trans. Audio Speech Lang. Process. , 2025. [11] K. He, X. Chen, S. Xie, Y. Li, P. Doll´ ar, and R. B. Girshick, “Masked Autoencoders Are Scalable Vision Learners,” in Proc. CVPR , 2022, pp. 15 979–15 988. [12] M. Assran, Q. Duval, I. Misra, P. Bojanowski, P. Vincent, M. G. Rabbat, Y. LeCun, and N. Ballas, “Self-Supervised Learning from Images with a Joint-Embedding Predictive Architecture,” in Proc. CVPR , 2023, pp. 15 619–15 629. [13] A. Bardes, Q. Garrido, J. Ponce, X. Chen, M. Rabbat, Y. LeCun, M. Assran, and N. Ballas, “Revisiting Fea-ture Prediction for Learning Visual Representations from Video,” Trans. Mach. Learn. Res. , vol. 2024, 2024. [14] M. Assran, A. Bardes, D. Fan, Q. Garrido, R. Howes, M. Muckley, A. Rizvi, C. Roberts, K. Sinha, A. Zho-lus et al. , “V-JEPA 2: Self-supervised Video Mod-els Enable Understanding, Prediction and Planning,” 
+
+arXiv:2506.09985 , 2025. [15] J. Zhou, C. Wei, H. Wang, W. Shen, C. Xie, A. Yuille, and T. Kong, “iBOT: Image BERT Pre-Training with Online Tokenizer,” arXiv:2111.07832 , 2021. [16] M. Caron, H. Touvron, I. Misra, H. J´ egou, J. Mairal, P. Bojanowski, and A. Joulin, “Emerging Properties in Self-Supervised Vision Transformers,” in Proc. ICCV ,2021, pp. 9630–9640. 13 
+
+[17] M. Oquab, T. Darcet, T. Moutakanni, H. V. Vo, M. Szafraniec, V. Khalidov, P. Fernandez, D. Haziza, F. Massa, A. El-Nouby, M. Assran, N. Ballas, W. Galuba, R. Howes, P. Huang, S. Li, I. Misra, M. Rabbat, V. Sharma, G. Synnaeve, H. Xu, H. J´ egou, J. Mairal, P. Labatut, A. Joulin, and P. Bojanowski, “DINOv2: Learning Robust Visual Features without Supervision,” 
+
+Trans. Mach. Learn. Res. , vol. 2024, 2024. [18] O. Sim´ eoni, H. V. Vo, M. Seitzer, F. Baldassarre, M. Oquab, C. Jose, V. Khalidov, M. Szafraniec, S. Yi, M. Ramamonjisoa et al. , “Dinov3,” arXiv:2508.10104 ,2025. [19] P. Huang, H. Xu, J. Li, A. Baevski, M. Auli, W. Galuba, F. Metze, and C. Feichtenhofer, “Masked Autoencoders that Listen,” in Proc. NeurIPS , 2022. [20] S. Yadav, S. Theodoridis, and Z. Tan, “AudioMAE++: Learning Better Masked Audio Representations with Swiglu FFNS,” in IEEE Int. Workshop Mach. Learn. Signal Process. , 2025, pp. 1–6. [21] D. Niizumi, D. Takeuchi, Y. Ohishi, N. Harada, and K. Kashino, “Masked Spectrogram Modeling using Masked Autoencoders for Learning General-purpose Au-dio Representation,” in Proc. NeurIPS , 2021, pp. 1–24. [22] D. Chong, H. Wang, P. Zhou, and Q. Zeng, “Masked Spectrogram Prediction for Self-Supervised Audio Pre-Training,” in Proc. Int. Conf. Acoust. Speech Signal Process. , 2023, pp. 1–5. [23] A. Baade, P. Peng, and D. Harwath, “MAE-AST: Masked Autoencoding Audio Spectrogram Transformer,” in Proc Interspeech , 2022, pp. 2438–2442. [24] S. Chen, Y. Wu, C. Wang, S. Liu, D. Tompkins, Z. Chen, W. Che, X. Yu, and F. Wei, “BEATs: Audio Pre-Training with Acoustic Tokenizers,” in Proc. ICML , 2023, pp. 5178–5193. [25] W. Chen, Y. Liang, Z. Ma, Z. Zheng, and X. Chen, “EAT: Self-Supervised Pre-Training with Efficient Audio Transformer,” in Proc. IJCAI , 2024, pp. 3807–3815. [26] X. Li, N. Shao, and X. Li, “Self-Supervised Audio Teacher-Student Transformer for Both Clip-Level and Frame-Level Tasks,” IEEE/ACM Trans. Audio Speech Lang. Process. , vol. 32, pp. 1336–1351, 2024. [27] D. Niizumi, D. Takeuchi, Y. Ohishi, N. Harada, and K. Kashino, “Masked Modeling Duo: Towards a Univer-sal Audio Pre-Training Framework,” IEEE/ACM Trans. Audio Speech Lang. Process. , vol. 32, pp. 2391–2406, 2024. [28] A. Riou, S. Lattner, G. Hadjeres, and G. Peeters, “Inves-tigating Design Choices in Joint-Embedding Predictive Architectures for General Audio Representation Learn-ing,” in Proc. Int. Conf. Acoust. Speech Signal Process. Workshop , 2024, pp. 680–684. [29] A. Quelennec, P. Chouteau, G. Peeters, and S. Essid, “Masked Latent Prediction and Classification for Self-Supervised Audio Representation Learning,” in Proc. Int. Conf. Acoust. Speech Signal Process. , 2025, pp. 1–5. [30] ——, “MATPAC++: Enhanced Masked Latent Predic-tion for Self-Supervised Audio Representation Learning,” 
+
+arXiv:2508.12709 , 2025. [31] Z. Fei, M. Fan, and J. Huang, “A-Jepa: Joint-Embedding Predictive Architecture can Listen,” arXiv:2311.15830 ,2023. [32] L. Tuncay, E. Labb´ e, E. Benetos, and T. Pellegrini, “Audio-JEPA: Joint-Embedding Predictive Architecture for Audio Representation Learning,” arXiv:2507.02915 ,2025. [33] H. Dinkel, Z. Yan, Y. Wang, J. Zhang, Y. Wang, and B. Wang, “Scaling Up Masked Audio Encoder Learning for General Audio Classification,” in Proc. Interspeech ,2024. [34] A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weis-senborn, X. Zhai, T. Unterthiner, M. Dehghani, M. Min-derer, G. Heigold, S. Gelly, J. Uszkoreit, and N. Houlsby, “An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale,” in Proc. ICLR , 2021. [35] J. Su, M. H. M. Ahmed, Y. Lu, S. Pan, W. Bo, and Y. Liu, “RoFormer: Enhanced transformer with Rotary Posi-tion Embedding,” Neurocomputing , vol. 568, p. 127063, 2024. [36] N. Shazeer, “GLU Variants Improve Transformer,” 
+
+arXiv:2002.05202 , 2020. [37] R. Yuan, Y. Ma, Y. Li, G. Zhang, X. Chen, H. Yin, L. Zhuo, Y. Liu, J. Huang, Z. Tian, B. Deng, N. Wang, C. Lin, E. Benetos, A. Ragni, N. Gyenge, R. B. Dan-nenberg, W. Chen, G. Xia, W. Xue, S. Liu, S. Wang, R. Liu, Y. Guo, and J. Fu, “MARBLE: Music Audio Representation Benchmark for Universal Evaluation,” in 
+
+Proc. NeurIPS , 2023. [38] Y. Zhou, H. Zhu, and H. Chen, “Layer-Wise Investigation of Large-Scale Self-Supervised Music Representation Models,” arXiv:2505.16306 , 2025. [39] M. Soleymani, M. N. Caro, E. M. Schmidt, C. Sha, and Y. Yang, “1000 songs for emotional analysis of music,” in Proc. ACM MM , 2013, pp. 1–6. [40] P. Knees, ´A. Faraldo, P. Herrera, R. Vogl, S. B¨ ock, F. H¨ orschl¨ ager, and M. L. Goff, “Two Data Sets for Tempo Estimation and Key Detection in Electronic Dance Music Annotated from User Corrections,” in Proc. ISMIR , 2015, pp. 364–370. [41] C. Donahue, J. Thickstun, and P. Liang, “Melody tran-scription via generative pre-training,” in Proc. ISMIR ,2022, pp. 485–492. [42] C. Raffel, B. McFee, E. J. Humphrey, J. Salamon, O. Ni-eto, D. Liang, D. P. Ellis, and C. C. Raffel, “MIR EVAL: A Transparent Implementation of Common MIR Met-rics,” in Proc. ISMIR , vol. 10, 2014, p. 2014. [43] G. Tzanetakis and P. R. Cook, “Musical Genre Classifica-tion of Audio Signals,” IEEE/ACM Trans. Audio Speech Lang. Process. , vol. 10, no. 5, pp. 293–302, 2002. [44] D. Bogdanov, M. Won, P. Tovstogan, A. Porter, and X. Serra, “The MTG-Jamendo Dataset for Automatic Music Tagging,” in Proc. ICML , 2019, pp. 1–3. [45] E. Law, K. West, M. I. Mandel, M. Bay, and J. S. Downie, “Evaluation of Algorithms Using Games: The Case of Music Tagging,” in Proc. ISMIR , 2009, pp. 387–392.

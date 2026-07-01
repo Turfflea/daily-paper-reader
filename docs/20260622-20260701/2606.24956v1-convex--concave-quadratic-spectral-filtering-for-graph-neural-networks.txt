@@ -1,0 +1,1303 @@
+Title: Convex–Concave Quadratic Spectral Filtering for Graph Neural Networks
+
+URL Source: https://arxiv.org/pdf/2606.24956v1
+
+Published Time: Thu, 25 Jun 2026 00:02:31 GMT
+
+Number of Pages: 34
+
+Markdown Content:
+# Convex–Concave Quadratic Spectral Filtering for Graph Neural Networks ∗
+
+Ranhui Yan 1, Jia Cai 2†
+
+, Mengzhu Chen 2, Haodong Yang 2
+
+> 1
+
+School of Computing and Artificial Intelligence, Guangzhou Xinhua University, Guangzhou, Guangdong, China 
+
+yan_rh1999@outlook.com 
+
+> 2
+
+School of Statistics and Data Science, Guangdong University of Finance and Economics, Guangzhou, Guangdong, China 
+
+jiacai1999@gdufe.edu.cn , mengzhuchen@student.gdufe.edu.cn , haodongyang@student.gdufe.edu.cn 
+
+Abstract 
+
+Spectral graph neural networks (GNNs) interpret message passing as frequency-selective filtering. While low-order spectral filters are efficient, their limited selectivity often leads to weak attenuation outside the passband, whereas high-order alternatives introduce optimization challenges. We propose DCQ-GNN, a spectral GNN based on a compact bank of adaptive convex–concave quadratic filters. By restricting the filter order to two while explicitly ex-ploiting complementary curvature, DCQ-GNN improves spectral selectivity as quantified by Dirichlet energy and entropy measures without resorting to high-order polynomial expansions. The model fuses filter outputs through a node-adaptive gating mechanism to enable node-wise structure-aware spectral selection. We provide a formal spectral analysis grounded in Dirichlet energy attenuation, von Neumann entropy, and curvature polarity, and derive explicit charac-terizations of filter behavior across varying levels of homophily and structural perturbations. Extensive benchmarks on 10 datasets show that DCQ-GNN ties for the top average rank (3.0) on heterophilic graphs and obtains the second-best rank (4.2) on homophilic graphs, remain-ing competitive with representative high-order polynomial spectral filters. Furthermore, under strong structural perturbations, DCQ-GNN exhibits substantially smaller performance degra-dation compared to both first-order and high-order baselines. These results demonstrate that curvature-aware quadratic banks provide a robust and efficient alternative to high-order spectral models while preserving optimization stability and computational efficiency. 
+
+# 1 Introduction 
+
+Graph neural networks (GNNs) have achieved strong performance across a wide range of rela-tional learning tasks. From a spectral perspective, many GNN architectures can be interpreted as frequency-selective filters applied to the graph Laplacian, where message passing corresponds to polynomial filtering in the spectral domain. This interpretation has inspired a large body of spectral GNN models that explicitly design filter responses over graph frequencies. Low-order spectral filters 
+
+> ∗
+
+Accepted at ECML-PKDD 2026. The final authenticated publication will be available online via Springer LNCS. The work described in this paper was supported partially by the National Natural Science Foundation of China (12271111). 
+
+> †
+
+The corresponding author is Jia Cai. 
+
+1
+
+> arXiv:2606.24956v1 [cs.LG] 23 Jun 2026
+
+are efficient and stable but exhibit limited selectivity: attenuation outside the passband is gradual and may obscure structural signals (Fig. 1). High-order polynomial filters achieve sharper responses but introduce optimization challenges and sensitivity to structural perturbations. Existing spectral 0.00 0.25 0.50 0.75 1.00 1.25 1.50 1.75 2.00             
+
+> Eigenvalues λ
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Filter Response  g(λ)
+> Higher Noise Leakage
+> Linear Limitation (Simplified GCN)
+> Linear Low Pass ( g(λ)∝ − λ)
+> Noise Leakage
+> 0.00 0.25 0.50 0.75 1.00 1.25 1.50 1.75 2.00
+> Eigenvalues λ
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Lower Noise Leakage
+> Broader Active Range
+> Quadratic Advantage (DCQ-GNN)
+> Convex Low-Pass
+> Concave High-Pass
+> Noise Leakage
+
+Figure 1: Spectral responses of linear and convex–concave quadratic Laplacian filters over the normalized eigenvalue range [0 , 2] . The quadratic filter exhibits sharper curvature near the cutoff region compared to the linear baseline. GNNs primarily pursue expressivity by increasing polynomial order or expanding the filter basis family. In contrast, we argue that the primary design axis of spectral filters need not be polyno-mial approximation order, but rather curvature polarity, i.e., explicit control over convexity and concavity of the spectral response. This perspective shifts the goal from universal approximation toward optimizing the stability–selectivity trade-off under low-order constraints. Curvature polarity constrains second derivative sign globally, which cannot be guaranteed in unconstrained polynomial expansions. We propose DCQ-GNN, a spectral GNN based on a compact bank of adaptive convex–concave quadratic filters. Instead of increasing polynomial degree, DCQ-GNN fixes the filter order to two and introduces complementary curvature polarities to shape spectral attenuation. Pairing con-vex and concave responses yields sharper spectral transitions than linear filters without the in-stability of high-order polynomials. This curvature-centric design distinguishes DCQ-GNN from basis-expansion approaches such as Bernstein- or Jacobi-polynomial filters, which improve spec-tral flexibility via higher-order polynomial expansions. Our approach instead leverages controlled curvature to enhance spectral selectivity per parameter, prioritizing robustness and stability over universal approximation capacity. To enable structure-aware spectral adaptation, DCQ-GNN fuses filter outputs via a node-adaptive gating mechanism. This gating module performs localized node-wise spectral selection, allowing different nodes to emphasize convex or concave responses depending on structural context, thereby introducing node-wise spectral bias without increasing filter order. We provide a formal spectral analysis grounded in Dirichlet energy decay gap, von Neumann entropy evolution, and cur-vature polarity. Our analysis characterizes how convex and concave quadratic components induce distinct attenuation regimes, revealing a controllable mechanism for modulating spectral energy decay under varying homophily levels and structural perturbations. Extensive experiments on ten benchmark datasets demonstrate that DCQ-GNN achieves competitive performance across both homophilic and heterophilic graphs. Notably, under strong structural perturbations, DCQ-GNN exhibits smaller performance degradation compared to both first-order and high-order baselines, supporting our hypothesis that curvature-aware low-order filtering improves robustness. Our con-2tributions can be summarized as follows: 
+
+• We introduce curvature polarity as an explicit constraint for second-order spectral GNN filters. By pairing convex and concave responses, DCQ-GNN spans the full quadratic filter space characterized in Theorem 8, rather than selecting filters by heuristic frequency centers or bandwidths. 
+
+• We propose a compact convex–concave quadratic filter bank combined with node-adaptive gating. 
+
+• We provide a theoretical spectral interpretation via Dirichlet energy decay gap and entropy analysis. 
+
+• We demonstrate competitive performance and improved robustness across diverse graph regimes spanning both homophilic and heterophilic settings, with computational costs comparable to low-order propagation. Table 1: Performance comparison between DCQ-GNN and representative polynomial spectral GNNs, including BernNet and JacobiConv. Criterion BernNet JacobiConv DCQ-GNN Polynomial Order High High 2Curvature Control Implicit Implicit Explicit Stability Moderate Moderate High Entropy Interpretation No No Yes Node-Adaptive Selection No No Yes Compared to Bernstein- and Jacobi-based spectral filters that increase polynomial order to enhance flexibility, our approach instead exploits curvature polarity within a fixed second-order formulation (Table 1). Detailed comparisons with Bernstein- and Jacobi-based spectral filters are provided in Appendix B. 
+
+# 2 The Convex–Concave Quadratic Filter GNN Architecture 
+
+We propose DCQ-GNN, a spectral graph neural network designed to address the limited frequency selectivity of linear (first-order) Laplacian filters while preserving the computational efficiency and numerical stability of low-order message passing mechanisms. Rather than increasing polynomial degree, DCQ-GNN enhances spectral expressivity through a compact bank of adaptive quadratic filters, whose convex–concave curvature induces complementary frequency responses within a strictly second-order formulation. As illustrated in Fig. 2, each DCQ-GNN layer consists of two components: 
+
+• Adaptive convex–concave quadratic filter bank. A small set of second-order spectral filters that extract low-, mid-, and high-frequency components, together with an all-pass (iden-tity) channel. The filters are parameterized to adapt their transition regions and magnitudes, enabling frequency-aware representations across graphs with diverse homophily characteris-tics. 3Quadratic Filter Bank 
+
+> Gating Module
+> (Attention)
+> Fusion Module
+> (Weighted Sum)
+> Input Graph
+> Input Feature
+> Output:
+> Layer Embedding
+
+Figure 2: Architecture of DCQ-GNN. Parallel convex and concave quadratic filters extract comple-mentary frequency components, whose outputs are fused through a node-adaptive gating mechanism with an all-pass residual anchor. 
+
+• Node-adaptive gated fusion. A gating mechanism that combines the filtered channels on a per-node basis, allowing the model to emphasize structure-dependent spectral responses when the structure is informative, and to fall back on the all-pass anchor when graph structure is unreliable or noisy. We next formalize the spectral setting, describe the construction of the convex–concave quadratic filter bank, and introduce the node-adaptive fusion mechanism. 
+
+2.1 Preliminaries 
+
+Let G = ( V, E) be an undirected graph with N nodes, adjacency matrix A ∈ RN ×N , and diagonal degree matrix D. We utilize the symmetrically normalized Laplacian L = I − D−1/2AD −1/2 =
+
+U ΛU ⊤, where 0 ≤ λ1 ≤ · · · ≤ λN ≤ 2. For node features X ∈ RN ×F , a spectral filter g : [0 , 2] → R
+
+is defined as g(L)X = U g (Λ) U ⊤X. To ensure computational efficiency and local message passing, we restrict g to quadratic polynomials g(λ) = a0 + a1λ + a2λ2 with a0, a1, and a2 constants, which avoids explicit eigendecomposition while enabling nonlinear spectral shaping. DCQ-GNN explicitly leverages the curvature of these second-order filters to refine frequency responses without increasing the polynomial degree. 
+
+2.2 Adaptive Convex–Concave Quadratic Filter Bank 
+
+We construct a compact filter bank B = {glow , g mid , g high , g all }, where each g(λ) is a quadratic polynomial on [0 , 2] . Each low- or high-pass channel contains convex–concave variants, but the gating mechanism aggregates them into four effective frequency channels. To introduce adaptivity with minimal parameterization, we employ two learnable scalar parameters: (i) a cutoff proxy 
+
+˜λ = 2 − α with α ∈ [0 , 1] , which controls the spectral location of the quadratic extremum; and (ii) a positive scale 0 < β ≤ min {1, ˜λ2/4}1, which controls the response magnitude and ensures      
+
+> 1This specific bound on βis necessary and sufficient to guarantee max λ∈[0 ,2] |g(λ)| ≤ 1.
+
+4well-defined curvature. 
+
+Filter Channels. Let Z1 = LX, Z2 = LZ 1 = L2X. Each channel can be expressed as a linear combination of X, Z1, and Z2, allowing efficient implementation through sparse propagation. 1. Low-pass channel (homophily). Define convex low-pass as 
+
+gcvx low (L)X = β
+
+˜λ2 (Z2 − 2˜λZ1 + ˜λ2X), (1) which induces sharper attenuation in the high-frequency regime, and concave low-pass as 
+
+gccv low (L)X = − β
+
+˜λ2 (Z2 − ˜λ2X), (2) which maintains a broader effective passband across low-to-mid frequencies. 2. High-pass channel (heterophily). To emphasize heterophilic high-frequency components, we use convex high-pass 
+
+gcvx high (L)X = β
+
+˜λ2 Z2, (3) which strongly suppresses low-frequency content, and concave high-pass 
+
+gccv high (L)X = − β
+
+˜λ2 (Z2 − 2˜λZ1) (4) to yield a wider active region in the high-frequency regime. 3. Mid-pass: gmid (L)X = − 4β 
+
+> ˜λ2
+
+(Z2 − ˜λZ1), a non-monotone response emphasizing intermediate frequencies, which are empirically more robust to structural perturbations [13]. 4. All-pass (identity): gall (L)X = X, which preserves raw features and serves as a structure-agnostic anchor. 
+
+Why quadratic rather than alternative structured bases? At fixed order K = 2 , Chebyshev and Jacobi bases span the same three-dimensional polynomial space as a0 + a1λ + a2λ2 under an invertible change of basis. They therefore do not enlarge the admissible spectral response class, while making curvature polarity less explicit. Rational filters g(λ) = p(λ)/q (λ) can realize sharper roll-offs, but possible poles introduce additional constraints on q(λ) and complicate the uniform boundedness requirement |g(λ)| ≤ 1 on [0 , 2] . Wavelet- or framelet-based decompositions provide multi-scale separation, but require frame construction and scale-selection constraints that do not align naturally with the learnable cutoff ˜λ. The quadratic class is therefore the lowest-degree polynomial family that simultaneously (i) encodes sign-definite curvature through the single coefficient a2, (ii) admits an analytic Lipschitz stability bound under Laplacian perturbations (Theorem 5), and (iii) recovers a second-order Taylor form of heat diffusion, which motivates the convex low-pass branch. The negative signs are introduced to ensure passband alignment. The curvature parameters may also be treated as hyperparameters, allowing the model to adapt to graphs with different homophily characteristics. Specifically, the convex low-pass filter defined in Eq. (1) yields 
+
+gcvx low (λ) = β
+
+˜λ2
+
+
+
+λ2 − 2˜λλ + ˜λ2
+
+,
+
+which corresponds to a second-order Taylor approximation of the heat kernel e−τ λ . Consequently, the convex low-pass filter primarily acts as a denoising operator by attenuating high-frequency 5components. On the other hand, When ˜λ = 1 and the maximal admissible scale β = 1 /4 is used, the filter pair {gcvx low , g ccv high } constitutes a scaled partition of unity, since 
+
+gcvx low (λ) + gccv high (λ) = β = 1 /4, ∀λ ∈ [0 , ˜λ].
+
+This property ensures that the filter bank uniformly covers the spectral domain without frequency gaps, which is a fundamental requirement for stable signal reconstruction in graph signal pro-cessing (GSP). Unlike standard GCNs, which employ a fixed linear filter 1 − λ, quadratic filters enable frequency-dependent gain modulation across the spectrum. This design is closely related to quadratic mirror filters in classical signal processing, where signals are decomposed into sub-bands using filters with complementary curvatures. From a spectral geometry perspective, the quadratic term introduces controllable curvature in the frequency response, allowing the model to shape the graph signal manifold beyond the linear bias of traditional GCN filters. 
+
+2.3 Node-Adaptive Gated Fusion 
+
+Let Hconcat = [ Hlow |Hmid |Hhigh |Hall ] ∈ RN ×4F . We compute node-wise gating coefficients S =softmax( Hconcat Wgate + bgate ), where Wgate ∈ R4F ×4 and bgate ∈ R4 are learnable parameters. The layer output is 
+
+Hout = σ
+
+ X
+
+> k∈{ low ,mid ,high ,all }
+
+Sk ⊙ (HkΘk)
+
+ ,
+
+where Hk ∈ RN ×F is the output of the k-th filter channel, Θk ∈ RF ×F ′
+
+is a channel-specific linear matrix, Sk denotes the k-th column of S broadcast across feature dimensions, ⊙ stands for elementwise multiplication, and σ denotes an activation function. This mechanism enables a node-wise spectral mixture model, allowing DCQ-GNN to adaptively down-weight structure-dependent channels and rely on the all-pass anchor when appropriate. 
+
+2.4 Theoretical Analysis 
+
+DCQ-GNN is based on the observation that quadratic spectral filters can improve frequency selec-tivity over linear filters while preserving low-order propagation. We analyze this property from two perspectives: high-frequency Dirichlet energy attenuation and spectral concentration. Theorem 1 shows that, for any suppression band [λ∗, 2] , a bounded strictly quadratic filter can attain a lower worst-case weighted Dirichlet energy than the optimal bounded linear filter gℓ(λ) = 1 − aλ . This result explains why the quadratic channels in DCQ-GNN can suppress high-frequency noise without increasing message-passing depth. Theorem 2 further shows that a normalized convex quadratic low-pass filter induces lower von Neumann entropy than its linear counterpart, indicating reduced spectral leakage within each low-pass channel before node-adaptive gated fusion. 
+
+2.4.1 High-Frequency Dirichlet Energy Decay Gap. 
+
+We consider the normalized Laplacian L with spectrum λ ∈ [0 , 2] . For a graph signal x, its Dirichlet energy after applying a spectral filter g is: 
+
+Eg(x) = 
+
+> N
+
+X
+
+> i=1
+
+λi(g(λi)ˆ xi)2,
+
+6with ˆxi the i-th component of ˆx = U ⊤x. We analyze worst-case attenuation over the high-frequency band 
+
+Hλ∗ := {λ : λ ≥ λ∗}, λ∗ ∈ (0 , 2) .
+
+Then we have the following result. 
+
+Theorem 1 (High-Frequency Dirichlet Energy Decay Gap ) Let GL = {1 − aλ | a ∈ [0 , 1] }
+
+denote the class of linear spectral filters, and GQ = {1 − aλ + bλ 2 | | g(λ)| ≤ 1, ∀λ ∈ [0 , 2] } denote the class of quadratic spectral filters. For any transition frequency λ∗ ∈ (0 , 2) , let g∗ 
+
+> ℓ
+
+∈ G L be the optimal linear filter minimizing the maximum weighted Dirichlet energy in the high-frequency band 
+
+[λ∗, 2] . Then, there exists a strictly quadratic filter gq ∈ G Q (where b̸ = 0 ) that achieves a strictly lower energy bound: 
+
+sup 
+
+> λ∈[λ∗,2]
+
+λ|gq(λ)|2 < sup 
+
+> λ∈[λ∗,2]
+
+λ|g∗ 
+
+> ℓ
+
+(λ)|2
+
+Theorem 1 shows that quadratic filters achieve strictly stronger attenuation within the transi-tion band [λ∗, λ max ] than any linear filter satisfying the same boundedness constraint. This result explains why DCQ-GNN can obtain sharper spectral discrimination without resorting to high-order polynomial expansions. Importantly, this improved attenuation arises within a strictly second-order formulation, preserving the stability and efficiency of low-order propagation. The quadratic term introduces controllable curvature that accelerates high-frequency decay while satisfying |g(λ)| ≤ 1.
+
+2.4.2 Spectral Selectivity via von Neumann Entropy (a measure of spectral spread). 
+
+We quantify the spectral footprint of a filter through von Neumann entropy. Let P = g(L)2
+
+> Tr( g(L)2)
+
+be the normalized power-response matrix, with eigenvalues {ηi}Ni=1 . The entropy is SVN (P ) = 
+
+−Tr(P ln P ), lower values indicate a more concentrated (more selective) spectral response. Since 
+
+L is diagonalizable, the entropy reduces to a spectral distribution over eigenvalues, allowing the analysis to be expressed directly in terms of the spectral response g(λ). This leads to the following result. 
+
+Theorem 2 (Entropy Majorization) Let g1(λ) = α1(λmax − λ) and g2(λ) = α2(λmax − λ)2 be a linear and a convex quadratic low-pass spectral filter with λmax = 2 , respectively, where α1, α 2 are normalization constants such that P 
+
+> i
+
+g2(λi) = 1 . Let p, q ∈ RN be the resulting normalized power spectral distributions, where pi = g21 (λi) and qi = g22 (λi). Then, the quadratic filter induces a more concentrated spectral response in the sense of von Neumann entropy: 
+
+SVN (q) ≤ SVN (p)
+
+with equality if and only if all non-zero eigenvalues of the Laplacian are identical. 
+
+DCQ-GNN uses a filter bank rather than a single operator. Lower entropy for an individual channel indicates reduced spectral leakage within that channel, facilitating cleaner decomposition before gated recombination. Intuitively, the quadratic spectral decay concentrates energy more strongly near the passband. Hence, quadratic filters induce lower spectral entropy, indicating stronger con-centration of spectral energy. However, the adaptive gating mechanism is what prevents this strict concentration from becoming a liability on heterophilic datasets. The proof of Theorem 2 is provided in Appendix C.1. 72.5 Interpretive Analysis 
+
+In this section, we analyze the robustness properties of DCQ-GNN against structural perturbations, followed by an explanation of its performance advantages. We first demonstrate how the quadratic filter bank intrinsically dampens the impact of adversarial edge injections. 
+
+Proposition 3 (Structural Interference Cancellation) Let L be the symmetrically normalized Laplacian and ˆA = I − L be the normalized adjacency matrix. Consider a target node u corrupted by an adversarial edge (u, v ) in the regime of homophilic topological noise, where the neighbors’ features of the attacker v satisfy xt = xv + ξt with ∥ξt∥ ≤ ϵ for all t ∈ N (v). Assume the degrees of v and its neighbors are approximately equal ( dt ≈ dv). Under the simplified concave quadratic filter g(L) = 2 L − L2 = I − ˆA2, the direct first-order adversarial pollution ∆GCN = 1√dudv xv is perfectly neutralized by the second-order random walk component, yielding a residual representation error strictly bounded by: 
+
+∥Err ∥ ≤ ϵ
+
+r du
+
+dv
+
+.
+
+Consequently, as the local homophily around the attacker increases ( ϵ → 0), the quadratic filter exactly cancels the structural interference. 
+
+Proposition 3 reveals that the concave quadratic filter effectively subtracts two-hop aggregated features from the original node features. The second-order term ˆA2 provides a restorative counter-signal that neutralizes the first-order malicious injection. The assumption in Proposition 3 represents a worst-case adversarial scenario where the attacker node lies inside a locally homophilic cluster. The analysis therefore isolates the structural effect of the quadratic filter rather than modeling arbitrary feature noise. Direct Pollution (  )  
+
+> Attacker Target
+> Robust Quadratic Aggregation
+> Contextual Subtraction ( )
+> Injected Edge
+> Context Flow
+> Injected Edge
+> Direct Pollution ( )
+> Attacker Target
+> Vulnerable Linear Aggregation
+
+Figure 3: Illustration of structural interference cancellation. While a first-order GCN propagates adversarial noise from attacker node v, the quadratic term in DCQ-GNN introduces a counteracting signal that helps preserve the feature integrity of the target node u.
+
+2.5.1 Performance Explanation 
+
+The performance advantages of DCQ-GNN arise from combining filters with complementary cur-vature polarities, which is described in the following definition. Combining curvature polarities allows the model to approximate band-pass behaviors unattainable by identical polarities. Detailed discussion is presented in Appendix C.4. 
+
+Definition 4 (Curvature Polarity) For a second-order spectral filter g(λ), we define its curva-ture polarity CP as the sign of its second-order derivative with respect to the eigenvalue λ:
+
+CP (g) := sgn 
+
+ d2g(λ)
+
+dλ 2
+
+
+
+.
+
+8We say g(λ) has positive polarity ( CP > 0) if it is strictly convex, and negative polarity ( CP < 0) if it is strictly concave. 
+
+As shown in Appendix C.4, combining filters with opposing polarities allows DCQ-GNN to approxi-mate non-monotonic band-pass behaviors that are unattainable by identical-polarity combinations. 
+
+# 3 Experiments 
+
+We evaluate the proposed DCQ-GNN on semi-supervised node classification tasks 2 and investigate the following research questions: (1) RQ1 (Expressivity): Does the proposed convex–concave quadratic filter bank provide stronger generalization capability across the homophily–heterophily spectrum compared to linear and higher-order polynomial baselines? (2) RQ2 (Robustness): 
+
+Does the proposed structural interference cancellation mechanism enhance model stability under adversarial structural perturbations? (3) RQ3 (Ablation Study): How do different frequency channels (low-pass, mid-pass, high-pass, and all-pass) and the gating mechanism contribute to performance across varying graph structural regimes? (4) RQ4 (Complexity and Performance Analysis): Why does the quadratic filter bank provide a better efficiency–performance trade-off than learned high-order polynomial filters? 
+
+3.1 Experimental Setup 
+
+Datasets. We evaluate DCQ-GNN on 10 datasets that span a broad homophily–heterophily spec-trum, including citation (CiteSeer, PubMed), co-purchase (Photo, Computers), and heterophilic graphs (Texas, Actor, Squirrel, etc.). Detailed dataset statistics and homophily measures are pro-vided in Appendix E.1. 
+
+Baselines. Our method is compared against four categories of state-of-the-art GNNs: (1) Classi-cal convolution and attention models (GCN [15], GAT [28]); (2) Deep/residual architectures (JK-Net [31], GCNII [8]); and (3) Representative polynomial/spectral filters (H2GCN [35], FAGCN [4], BernNet [12], EvenNet [16], JacobiConv [29]), and (4) Kernel-based LHKGNN [22]. 
+
+Experiment settings. We follow standard semi-supervised node classification protocols with 
+
+60% /20% /20% train/validation/test splits 3. Hyperparameters for all models are optimized using Optuna [1] under equivalent search budgets to ensure a fair comparison. 
+
+3.2 Performance on Node Classification (RQ1) 
+
+Table 2 reports node-classification accuracy on 10 datasets covering homophilic and heterophilic regimes. On homophilic datasets, DCQ-GNN obtains the second-best average rank ( 4.2), outper-forming polynomial spectral baselines such as EvenNet ( 6.0) and BernNet ( 6.2). Although GCNII ranks first ( 1.8), DCQ-GNN remains competitive, ranking first on WikiCS and second on PubMed. These results indicate that curvature-aware quadratic filtering preserves homophilic smoothing while enabling node-wise spectral adaptation. 
+
+> 2Code is available in github.com/yanrh1999/DCQ-GNN
+> 3Partitions are generated via simple random sampling (SRS). We do not enforce class stratification or a minimum sample count per class in the training set.
+
+9Table 2: Node classification accuracy (mean ± standard deviation) on 10 benchmark datasets. Results are averaged over 10 independent runs. The best result is highlighted in bold and the second best is underlined.                                                                                                                                                                                                                                                                                                                                                                                                 
+
+> Datasets Photo PubMed Computers CiteSeer WikiCS Avg. Rank Homophily (Node) h= 0 .83 h= 0 .79 h= 0 .78 h= 0 .71 h= 0 .65
+> GCN 94 .10 ±0.40 88 .53 ±0.28 90 .64 ±0.38 76 .03 ±1.13 82 .02 ±0.69 9.0 GCNII 95 .80 ±0.50 90 .32 ±0.30 92 .19 ±0.39 76 .23 ±1.83 84 .24 ±0.72 1.8
+> GAT 94 .61 ±0.48 88 .12 ±0.48 90 .16 ±0.89 75 .82 ±0.95 84 .23 ±0.82 7.4 JK-Net 94 .33 ±0.57 88 .49 ±0.46 91 .50 ±0.55 76 .47 ±1.25 83 .43 ±1.14 6.4 H2GCN 94 .92 ±0.53 89 .52 ±0.47 90 .78 ±0.57 73 .33 ±0.96 83 .40 ±0.76 7.2 EvenNet 94 .32 ±0.43 89 .56 ±0.43 91 .73 ±0.57 73 .96 ±1.12 83 .47 ±0.73 6.0 FAGCN 95 .24 ±0.31 89 .21 ±0.55 91 .25 ±0.78 73 .30 ±0.61 83 .58 ±1.03 6.2 JacobiConv 94 .83 ±0.23 89 .44 ±0.10 91 .20 ±0.18 74 .75 ±1.21 83 .10 ±0.47 7.2 BernNet 94 .17 ±0.48 89 .46 ±0.33 89 .56 ±0.78 76 .73 ±0.97 83 .80 ±0.75 6.2 LHK-GNN 95 .65 ±0.37 88 .71 ±0.38 91 .27 ±0.72 76 .55 ±1.16 83 .56 ±0.64 4.4
+> DCQ-GNN (ours) 95 .07 ±0.51 89 .62 ±0.49 90 .90 ±0.50 74 .89 ±1.25 85 .50 ±0.82 4.2
+> Datasets Wisconsin Actor Chameleon Squirrel Texas Avg. Rank Homophily (Node) h= 0 .17 h= 0 .15 h= 0 .10 h= 0 .08 h= 0 .06
+> GCN 47 .20 ±5.60 27 .45 ±1.02 41 .34 ±2.08 29 .13 ±1.65 56 .76 ±7.74 10.6 GCNII 78 .60 ±6.87 37 .43 ±1.38 52 .90 ±1.30 36 .73 ±1.18 80 .00 ±7.07 6.0 GAT 47 .80 ±6.16 29 .14 ±1.18 44 .29 ±2.43 30 .62 ±0.84 55 .68 ±6.42 9.8 JK-Net 49 .40 ±4.57 30 .53 ±1.03 42 .29 ±2.20 27 .74 ±1.87 57 .30 ±8.95 9.6 H2GCN 80 .80 ±2.54 34 .76 ±1.06 58 .91 ±1.06 37 .40 ±1.39 74 .47 ±6.04 6.8 EvenNet 81 .80 ±2.82 34 .36 ±0.65 65 .02 ±1.77 49 .71 ±0.85 83 .46 ±2.04 3.8 FAGCN 83 .20 ±4.40 32 .62 ±1.44 60 .47 ±3.09 47 .42 ±1.83 80 .25 ±3.32 5.4 JacobiConv 75 .60 ±5.45 35 .80 ±0.72 66 .34 ±1.06 53 .17 ±0.93 78 .91 ±3.78 4.0 BernNet 85 .20 ±1.40 35 .44 ±0.92 61 .19 ±0.94 50 .82 ±0.69 83 .24 ±4.32 3.4
+> LHK-GNN 81 .40 ±4.64 36 .45 ±1.29 64 .58 ±1.37 51 .41 ±0.66 82 .62 ±4.81 3.6
+> DCQ-GNN (ours) 82 .20 ±4.77 35 .63 ±1.39 64 .88 ±2.31 52 .26 ±1.49 82 .97 ±5.55 3.0
+
+On heterophilic datasets, DCQ-GNN matches the best average rank ( 3.0) and outperforms high-order spectral baselines including BernNet ( 3.4), EvenNet ( 3.8), and JacobiConv ( 4.0). On Squir-rel, DCQ-GNN attains the second-best accuracy ( 52 .26% ), slightly below JacobiConv ( 53 .17% ). This gap suggests that Squirrel may require finer spectral resolution than globally parameterized quadratic channels can provide. Nevertheless, DCQ-GNN achieves competitive heterophilic perfor-mance with a strictly second-order formulation, whereas JacobiConv and BernNet rely on higher-degree polynomial expansions to model complex high-frequency components. These results support the efficiency–resolution trade-off underlying DCQ-GNN: curvature-controlled quadratic filters of-fer robust performance across homophily regimes, while highly irregular datasets may benefit from piecewise or higher-resolution spectral parameterizations. 
+
+3.3 Robustness Analysis (RQ2) 
+
+To evaluate robustness against adversarial topological noise, we conduct experiments on the WikiCS dataset (moderate node homophily, h = 0 .65 ) to the DICE [36] structural attack. Table 3 reports the node classification accuracy and the corresponding relative performance degradation under increasing edge perturbation ratios ( 1% , 5% , and 10% ). Across all attack levels, DCQ-GNN consistently exhibits the highest resilience. Under the most extreme scenario ( 10% perturbation), DCQ-GNN incurs a minimal relative decrease of only 9.26% .In contrast, standard spatial methods like GCN and FAGCN suffer severe degradation, dropping by 26 .13% and 24 .78% , respectively. Furthermore, DCQ-GNN proves significantly more stable than 10 Table 3: Accuracy degradation under the DICE structural attack on WikiCS . ↓ ∆% indicates the relative performance drop compared to the clean graph.                                                                                               
+
+> DICE Perturbation Ratio Model 0% (Clean) 1% 5% 10%
+> GCN 82 .02 ±0.69 75 .74 ±1.57( ↓7.66%) 67 .58 ±1.66( ↓17 .60%) 60 .59 ±1.99( ↓26 .13%)
+> GAT 84 .23 ±0.82 81 .75 ±0.87( ↓2.95%) 74 .67 ±0.93( ↓11 .35%) 68 .07 ±1.61( ↓19 .18%)
+> FAGCN 83 .58 ±1.03 79 .21 ±1.06( ↓5.23%) 72 .16 ±1.24( ↓13 .66%) 62 .87 ±1.18( ↓24 .78%)
+> BernNet 83 .80 ±0.75 77 .01 ±1.00( ↓8.10%) 74 .44 ±1.73( ↓11 .17%) 71 .87 ±2.71( ↓14 .24%)
+> JacobiConv 83 .10 ±0.47 80 .17 ±0.91( ↓3.52%) 76 .86 ±1.26( ↓7.51%) 69 .74 ±1.06( ↓16 .08%)
+> DCQ-GNN (ours) 85 .50 ±0.82 84 .30 ±0.83 (↓1.40 %) 80 .40 ±0.78 (↓5.96 %) 77 .58 ±0.68 (↓9.26 %)
+
+advanced spectral baselines under the same conditions, outperforming JacobiConv, which experi-ences a 16 .08% performance drop. These results validate the structural interference cancellation mechanism. The concave quadratic component incorporates two-hop contexts, dampening spurious adversarial edges lacking local support. 
+
+3.4 Ablation Study (RQ3) 
+
+Table 4: Ablation study showing the impact of removing individual channels on the test set. “w/o” denotes removal of the corresponding component. Values report accuracy ± standard deviation, with relative changes in parentheses.                                                                                                                  
+
+> Datasets Computers WikiCS Wisconsin Squirrel Full Model 90 .90 ±0.50 85 .50 ±0.82 82 .20 ±4.77 52 .26 ±1.49
+> w/o low-pass 82 .82 ±3.40( ↓8.89%) 82 .67 ±1.01( ↓3.31%) 77 .80 ±3.76( ↓5.35%) 50 .49 ±1.03( ↓3.38%)
+> w/o mid-pass 91 .22 ±0.44( ↑0.35%) 84 .41 ±1.33( ↓1.28%) 76 .40 ±5.56( ↓7.06%) 49 .58 ±2.02( ↓5.12%)
+> w/o high-pass 91 .05 ±0.36( ↑0.17%) 84 .48 ±1.57( ↓1.19%) 71 .20 ±5.87( ↓13 .38%) 46 .01 ±2.53( ↓11 .96%)
+> w/o all-pass 90 .85 ±0.56( ↓0.05%) 84 .17 ±1.19( ↓1.56%) 73 .60 ±4.80( ↓10 .46%) 51 .86 ±2.21( ↓0.77%)
+> w/o gating module 83 .82 ±0.64( ↓7.90%) 84 .18 ±0.72( ↓1.54%) 79 .00 ±5.23( ↓3.89%) 46 .51 ±1.98( ↓11 .00%)
+> fixed α, β 90 .12 ±0.59( ↓0.86%) 85 .91 ±0.66( ↑0.48%) 80 .60 ±7.61( ↓1.95%) 48 .77 ±1.77( ↓6.68%)
+
+Spectral Adaptivity. Table 4 quantifies the contribution of each spectral channel. On the ho-mophilic Computers dataset, removing the low-pass channel causes the largest degradation among channel ablations ( ↓ 8.89% ), indicating that local smoothing remains the dominant signal in this regime. In contrast, removing the mid-pass or high-pass channel yields small gains on Computers (↑ 0.35% and ↑ 0.17% ), suggesting that higher-frequency components may introduce redundant or noisy information on strongly homophilic graphs. On heterophilic datasets, the high-pass channel becomes essential: its removal causes the largest channel-level drops on Wisconsin ( ↓ 13 .38% ) and Squirrel ( ↓ 11 .96% ). These results support the intended role of the filter bank: low-pass components capture homophilic smoothing, whereas high-pass components preserve discriminative signals when adjacent nodes often belong to different classes. 
+
+Role of the All-pass Channel. The all-pass channel preserves raw node features and provides a structure-agnostic reference. Its removal has almost no effect on Computers ( ↓ 0.05% ), where neighborhood aggregation is reliable, and only a small effect on Squirrel ( ↓ 0.77% ), where other spectral channels can partially compensate. The largest drop occurs on Wisconsin ( ↓ 10 .46% ), 11 WikiCS (Homophily Graph)  Texas (Heterophily Graph) Figure 4: Distribution of learned filter gate magnitudes on the WikiCS and Texas datasets. WikiCS (Homophily Graph)  Texas (Heterophily Graph) 
+
+Figure 5: Mean filter gate magnitude across frequency channels on the WikiCS and Texas datasets. indicating that direct feature preservation is critical when topology-driven aggregation is unstable or weakly aligned with labels. Thus, the all-pass channel acts as a fallback pathway, but its contribution depends on the relative informativeness of node attributes and graph structure. 
+
+Impact of the Gating Module. Removing the gating module degrades performance on all four datasets, with the largest drops on Squirrel ( ↓ 11 .00% ) and Computers ( ↓ 7.90% ). This confirms that a fixed global mixture of spectral channels is insufficient for graphs with heterogeneous local structures. On Squirrel, the degradation caused by removing the gate is close to that caused by removing the high-pass channel ( ↓ 11 .96% ), indicating that node-wise gating is needed to route high-frequency information effectively. Figures 4 and 5 further illustrate this behavior: on the more homophilic WikiCS dataset, the gate assigns larger weights to low- and all-pass channels, whereas on the heterophilic Texas dataset, the gate distribution becomes more balanced across frequency channels. This pattern is consistent with the model’s need to broaden its spectral mixture under stronger heterophily. 
+
+Functional Impact of Learnable Filter Parameters. The learnable parameters α and β
+
+control the cutoff proxy and response scale of the quadratic filters. Fixing them has limited effect on Computers ( ↓ 0.86% ), Wisconsin ( ↓ 1.95% ), and even improves WikiCS slightly ( ↑ 0.48% ), suggesting that these datasets do not always require fine adjustment of the filter shape. In contrast, the same fixed-parameter setting causes a clear drop on Squirrel ( ↓ 6.68% ), where the spectral structure is more irregular. Thus, learning α and β is most beneficial when the graph requires dataset-specific spectral boundaries, while its effect can be modest on graphs whose useful frequency bands are easier to separate. 12 3.5 Complexity and Performance Analysis (RQ4) 
+
+Table 5: Computational efficiency versus performance on the heterophilic Actor dataset. DCQ-GNN achieves a favorable trade-off between training time (ms per epoch) and accuracy across varying model depths T .
+
+Models #Parameters Time (ms) Accuracy (%) JacobiConv 7, 087 , 931 12 .30 35 .80 
+
+BernNet 60 , 058 8.15 35 .44 
+
+DCQ-GNN ( T = 5 ) 165 , 352 9.90 34 .68 
+
+DCQ-GNN ( T = 4 ) 144 , 673 7.75 34 .23 
+
+DCQ-GNN ( T = 3 ) 123 , 994 5.88 35 .47 
+
+DCQ-GNN ( T = 2 ) 103 , 315 4.83 35 .07 
+
+DCQ-GNN ( T = 1 ) 82 , 636 3.27 35 .63 
+
+To validate the design choice of employing a decoupled quadratic filter bank over high-order single-filter methods, we compare the computational efficiency 4 and performance of DCQ-GNN against state-of-the-art baselines: BernNet and JacobiConv, on the Actor dataset. Table 5 summa-rizes the model size (parameters), runtime, and classification accuracy. 
+
+Efficiency vs. Accuracy: As shown in Table 5, while JacobiConv achieves high accuracy, it incurs a significant computational overhead, requiring over 7 million parameters and 12 .30 ms per epoch due to its complex polynomial basis. In contrast, DCQ-GNN ( T = 3 ) reduces the parameter count by an order of magnitude ( > 10 ×) and decreases latency by more than 50% (5.88 ms vs. 
+
+12 .30 ms), all while maintaining highly competitive accuracy ( 35 .47% vs. 35 .80% ). 
+
+Scalability: Notably, DCQ-GNN remains faster than JacobiConv even when the filter bank depth is increased to T = 5 (9.90 ms). Furthermore, compared to BernNet , DCQ-GNN ( T = 3 ) is approximately 38% faster ( 5.88 ms vs. 8.15 ms). This demonstrates that our decoupled quadratic formulation effectively aggregates long-range signals (theoretically spanning 2T -hops) without the heavy computational burden associated with high-degree polynomial expansions. 
+
+Robustness to Over-smoothing: Furthermore, the results demonstrate that DCQ-GNN ef-fectively mitigates the over-smoothing problem. In many spectral GNNs, increasing the propagation depth typically leads to a sharp decline in performance as node representations become indistin-guishable. However, as shown in Table 5, DCQ-GNN maintains stable accuracy as the filter bank depth increases from T = 1 to T = 5 . Since a depth of T theoretically corresponds to a receptive field of 2T , our model maintains stable accuracy up to 10 -hop receptive fields, suggesting improved resistance to over-smoothing. A discussion of receptive-field expansion and over-squashing is pro-vided in Appendix B.4. 
+
+# 4 Conclusion and Future Work 
+
+This work establishes quadratic spectral filtering as an intermediate design between the limited selectivity of linear filters and the optimization complexity of high-order polynomials. We pro-pose DCQ-GNN, which leverages a compact bank of adaptive convex–concave quadratic filters to achieve sharper spectral shaping and improved noise rejection while maintaining a strictly two-hop 
+
+> 4Runtime evaluations are conducted on a server equipped with an Intel Xeon Platinum 8352V CPU (12 vCPUs @ 2.10GHz) and an NVIDIA L20 GPU.
+
+13 computational footprint. Our theoretical analysis, grounded in Dirichlet energy and von Neumann entropy, shows that exploiting curvature polarity yields more concentrated spectral responses than first-order baselines. Furthermore, we show that the quadratic formulation inherently facilitates structural interference cancellation, providing a second-order correction mechanism against adver-sarial edge injections. Empirical results show that DCQ-GNN remains competitive with representative high-order polynomial spectral filters while improving robustness under structural perturbations and reducing model complexity. The fixed second-order parameterization may be less suitable for tasks requir-ing highly localized, multi-modal, or non-polynomial spectral responses. For irregular spectra such as Squirrel, piecewise quadratic filtering could partition [0 , 2] into sub-intervals and learn separate second-order responses, retaining curvature control while improving spectral localization. Future work includes robustness bounds under non-stochastic structural noise and scalable curvature-aware filter banks. 
+
+# References 
+
+[1] Takuya Akiba, Shotaro Sano, Toshihiko Yanase, Takeru Ohta, and Masanori Koyama. Optuna: A next-generation hyperparameter optimization framework. In Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining , pages 3023–3031, 2019. [2] Uri Alon and Eran Yahav. On the bottleneck of graph neural networks and its practical implications. In International Conference on Learning Representations , 2021. [3] Muhammet Balcilar, Guillaume Renton, Pierre Héroux, Benoit Gaüzère, Sébastien Adam, and Paul Honeine. Analyzing the expressive power of graph neural networks in a spectral perspec-tive. In International Conference on Learning Representations , 2021. [4] Deyu Bo, Xiao Wang, Chuan Shi, and Huawei Shen. Beyond low-frequency information in graph convolutional networks. In Proceedings of the AAAI Conference on Artificial Intelligence ,volume 35, pages 3950–3957, 2021. [5] Sergey Brin and Lawrence Page. The anatomy of a large-scale hypertextual web search engine. 
+
+Computer Networks and ISDN Systems , 30(1-7):107–117, 1998. [6] Joan Bruna, Wojciech Zaremba, Arthur Szlam, and Yann LeCun. Spectral networks and locally connected networks on graphs. In International Conference on Learning Representations , 2014. [7] Ben Chamberlain, James Rowbottom, Maria I Gorinova, Michael M. Bronstein, Stefan Webb, and Emanuele Rossi. Grand: Graph neural diffusion. In International Conference on Machine Learning , pages 1407–1418, 2021. [8] Ming Chen, Zhewei Wei, Zengfeng Huang, Bolin Ding, and Yaliang Li. Simple and deep graph convolutional networks. In International Conference on Machine Learning , pages 1725–1735, 2020. [9] Eli Chien, Jianhao Peng, Pan Li, and Olgica Milenkovic. Adaptive universal generalized pager-ank graph neural network. In International Conference on Learning Representations , 2021. 14 [10] Michaël Defferrard, Xavier Bresson, and Pierre Vandergheynst. Convolutional neural networks on graphs with fast localized spectral filtering. In Advances in Neural Information Processing Systems , volume 29, pages 3844–3852, 2016. [11] Will Hamilton, Zhitao Ying, and Jure Leskovec. Inductive representation learning on large graphs. In Advances in Neural Information Processing Systems , volume 30, pages 1024–1034, 2017. [12] Mingguo He, Zhewei Wei, Hongteng Xu, Zuozhu Liu, Wei Ju, Xiaofei Zhang, and Chang-Tsun Li. Bernnet: Learning arbitrary graph spectral filters via bernstein approximation. In Advances in Neural Information Processing Systems , volume 34, pages 14239–14251, 2021. [13] Jincheng Huang, Lun Du, Xu Chen, Qiang Fu, Shi Han, and Dongmei Zhang. Robust mid-pass filtering graph convolutional networks. In Proceedings of the ACM Web Conference , pages 328–338, 2023. [14] Keke Huang, Yu Guang Wang, Ming Li, and Pietro Lio. How universal polynomial bases enhance spectral graph neural networks: Heterophily, over-smoothing, and over-squashing. In 
+
+International Conference on Machine Learning , pages 20310–20330, 2024. [15] Thomas N Kipf and Max Welling. Semi-supervised classification with graph convolutional networks. In International Conference on Learning Representations , 2017. [16] Runlin Lei, Zhen Wang, Yaliang Li, Bolin Ding, and Zhewei Wei. Evennet: Ignoring odd-hop neighbors improves robustness of graph neural networks. In Advances in Neural Information Processing Systems , volume 35, pages 4694–4706, 2022. [17] Ron Levie, Federico Monti, Xavier Bresson, and Michael M Bronstein. Cayleynets: Graph convolutional neural networks with complex rational spectral filters. IEEE Transactions on Signal Processing , 67(1):97–109, 2019. [18] Sitao Luan, Chenqing hugging Hua, Qincheng Lu, Jiaqi Zhu, Mingde Zhao, Shuyuan Zhang, Xiao-Wen Chang, and Doina Precup. Revisiting heterophily for graph neural networks. In 
+
+Advances in Neural Information Processing Systems , volume 35, pages 1362–1375, 2022. [19] Péter Mernyei and Cătălina Cangea. Wiki-cs: A wikipedia-based benchmark for graph neural networks. arXiv preprint arXiv:2007.02901 , 2020. [20] Shibing Mo, Kai Wu, Qixuan Gao, Xiangyi Teng, and Jing Liu. Autosgnn: automatic prop-agation mechanism discovery for spectral graph neural networks. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, pages 19493–19502, 2025. [21] Hongbin Pei, Bingzhe Wei, Kevin Chen Chuan Chang, Yu Lei, and Bo Yang. Geom-gcn: Geo-metric graph convolutional networks. In International Conference on Learning Representations ,2020. [22] Taoyang Qin, Ke-Jia Chen, and Zheng Liu. Localized heat kernel for graph neural networks. In 
+
+European Conference on Machine Learning and Principles and Practice of Knowledge Discovery in Databases (ECML PKDD) , pages 457–473, 2025. [23] Ladislav Rampášek, Mikhail Galkin, Vijay Prakash Dwivedi, Anh Tuan Luu, Guy Wolf, and Dominique Beaini. Recipe for a general, powerful, scalable graph transformer. In Advances in Neural Information Processing Systems , volume 35, pages 14712–14725, 2022. 15 [24] Benedek Rozemberczki, Carl Allen, and Rik Sarkar. Multi-scale attributed node embedding. 
+
+Journal of Complex Networks , 9(2):cnab014, 2021. [25] T. Konstantin Rusch, Ben P. Chamberlain, James Rowbottom, Siddhartha Mishra, and Michael M. Bronstein. Graph-coupled oscillator networks. In International Conference on Machine Learning , pages 18881–18909, 2022. [26] Oleksandr Shchur, Maximilian Mumme, Aleksandar Bojchevski, and Stephan Günnemann. Pitfalls of graph neural network evaluation. 2018. [27] David I Shuman, Sunil K Narang, Pascal Frossard, Antonio Ortega, and Pierre Vandergheynst. The emerging field of signal processing on graphs: Extending high-dimensional data analysis to networks and other irregular domains. IEEE Signal Processing Magazine , 30(3):83–98, 2013. [28] Petar Veličković, Guillem Cucurull, Arantxa Casanova, Adriana Romero, Pietro Liò, and Yoshua Bengio. Graph attention networks. In International Conference on Learning Rep-resentations , 2018. [29] Xiyuan Wang and Muhan Zhang. How powerful are spectral graph neural networks. In Inter-national Conference on Machine Learning , pages 23341–23362, 2022. [30] Zonghan Wu, Shirui Pan, Guodong Long, Jing Jiang, and Chengqi Zhang. Beyond low-pass filtering: Graph convolutional networks with automatic filtering. IEEE Transactions on Knowl-edge and Data Engineering , 35(7):6687–6697, 2022. [31] Keyulu Xu, Chengtao Li, Yonglong Tian, Tomohiro Sonobe, Ken-ichi Kawarabayashi, and Stefanie Jegelka. Representation learning on graphs with jumping knowledge networks. In 
+
+International Conference on Machine Learning , pages 5453–5462, 2018. [32] Zhilin Yang, William Cohen, and Ruslan Salakhutdinov. Revisiting semi-supervised learning with graph embeddings. In International Conference on Machine Learning , pages 40–48, 2016. [33] Chengxuan Ying, Tianle Cai, Shengjie Luo, Shuxin Zheng, Guolin Ke, Di He, Yanming Shen, and Tie-Yan Liu. Do transformers really perform bad for graph representation? In Advances in Neural Information Processing Systems , volume 34, pages 28877–28888, 2021. [34] Xuebin Zheng, Bingxin Zhou, Junbin Gao, Yuguang Wang, Pietro Lió, Ming Li, and Guido Montufar. How framelets enhance graph neural networks. In International Conference on Machine Learning , pages 12761–12771, 2021. [35] Jiong Zhu, Yujun Yan, Lingxiao Zhao, Mark Heimann, Leman Akoglu, and Danai Koutra. Beyond homophily in graph neural networks: Current limitations and effective designs. In 
+
+Advances in Neural Information Processing Systems , volume 33, pages 7793–7804, 2020. [36] Daniel Zügner, Amir Akbarnejad, and Stephan Günnemann. Adversarial attacks on neural networks for graph data. In Proceedings of the 24th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining , pages 2847–2856, 2018. 16 Appendices A Notation 
+
+Table 6 summarizes the key notations and symbols used throughout this paper. Table 6: Key notations used throughout the paper. 
+
+Symbol Description 
+
+G = ( V, E) An undirected graph with node set V and edge set E.
+
+N Number of nodes in the graph, i.e., |V| .
+
+M Number of edges, i.e., |E| .
+
+F Dimension of node feature vectors. 
+
+A ∈ RN ×N The adjacency matrix of the graph. 
+
+D ∈ RN ×N The diagonal degree matrix, where Dii = P 
+
+> j
+
+Aij .
+
+ˆA Symmetrically normalized adjacency matrix, ˆA = D−1/2AD −1/2.
+
+I Identity matrix of size N × N .
+
+L The normalized graph Laplacian, L = I − ˆA.
+
+T Depth of the neural network. 
+
+U, Λ Eigenvector matrix and diagonal eigenvalue matrix of L, respectively. 
+
+λi The i-th eigenvalue of the Laplacian L, ordered 0 ≤ λ1 ≤ · · · ≤ λN ≤ 2.
+
+X ∈ RN ×F The input node feature matrix. 
+
+g(λ) A spectral filter function defined on the spectrum of L.
+
+B The proposed convex–concave quadratic filter bank 
+
+{glow , g mid , g high , g all }.
+
+α Learnable parameter controlling the transition frequency (cutoff) of the quadratic filter. 
+
+β Learnable parameter controlling the magnitude scale of the quadratic filter. 
+
+˜λ The effective cutoff proxy, defined as ˜λ = 2 − α.
+
+Zk Intermediate feature representation at propagation step k, e.g., Z2 =
+
+L2X.
+
+Hk The output representation of the k-th filter channel (low, mid, high, or all). 
+
+Hconcat Concatenated representations from all filter channels. 
+
+Wgate , b gate Learnable weight matrix and bias vector for the gating mechanism. 
+
+S Node-adaptive gating scores (attention weights) for channel fusion. 
+
+Θk Learnable linear transformation matrix for channel k.
+
+σ(·) Activation function (e.g., ReLU). 
+
+SVN (P ) Von Neumann entropy of the normalized power response matrix P .17 B More Discussion 
+
+In this section, we first present a technical comparison between DCQ-GNN and representative adaptive polynomial spectral methods, including ChebyNet, BernNet, and JacobiConv. We then analyze the sensitivity of the proposed model and discuss its computational complexity. 
+
+B.1 Comparison with Polynomial Spectral GNNs 
+
+Polynomial spectral GNNs such as ChebyNet, BernNet, and JacobiConv learn spectral filters through basis expansions. Specifically, these models parameterize the filter as a linear combina-tion of predefined polynomial bases, where the learned coefficients implicitly determine the spectral response. In contrast, the proposed DCQ-GNN does not rely on polynomial basis expansions to approx-imate arbitrary filters. Instead, it explicitly constructs a filter bank characterized by curvature polarity. Each filter is designed to satisfy structural second-order derivative constraints (convex, concave, or mid-pass), leading to interpretable and stable spectral responses. This design shifts the focus from polynomial degree to curvature structure, enabling expressive filtering with a small number of parameters. 
+
+B.2 Sensitivity Analysis 
+
+We analyze the stability by considering sensitivity to perturbations in both the spatial and spectral domains. 
+
+Spatial Sensitivity. Differentiating the quadratic propagation operator with respect to a perturbed edge weight wuv yields 
+
+∇wuv hquad  
+
+> u
+
+= xv − γ · hlocal  
+
+> v
+
+, (5) where γ is a coefficient derived from the second-order filter weight, hlocal  
+
+> v
+
+denotes the local aggregated representation of node v obtained after one propagation step. If the attacker node v is a “bridge” to a distinct community (heterophilic noise), hlocal  
+
+> v
+
+differs from xv, and the filter maintains high sensitivity. However, if the perturbation is locally homophilic, the gradient is suppressed. 
+
+Spectral Sensitivity. Structural perturbations induce shifts in the Laplacian eigenvalues. We quantify the filter’s sensitivity to these shifts via the derivative magnitude Sg(λ) = |g′(λ)|. For a linear filter gℓ(λ) = 1 − 12 λ, the sensitivity is constant: Sℓ(λ) = 0 .5. For our convex high-pass filter gq(λ) = β 
+
+> ˜λ2
+
+λ2, the sensitivity Sq(λ) = 2β 
+
+> ˜λ2
+
+λ vanishes as λ → 0. This implies that the quadratic filter exhibits reduced sensitivity near low-frequency components of the spectrum. Conversely, for low-pass components, the quadratic form provides a steeper “roll-off” near the cutoff, improving rejection of high-frequency topology noise. 
+
+B.3 Computational Complexity 
+
+The computational cost of DCQ-GNN is primarily dominated by the Sparse-Dense Matrix Multipli-cations (SpMM) required for spectral propagation. For a graph G = ( V, E) with N nodes, M edges, and input features X ∈ RN ×F , the complexity for a single layer with a filter bank of size B is ana-lyzed as follows: (1) Spectral Propagation. Each quadratic spectral filter g(L) = a0I + a1L + a2L2
+
+is implemented via recursive neighborhood aggregation operations. The second-order term L2X is computed as L(LX), requiring two SpMM operations. Thus, for B filters, the propagation cost is 
+
+O(BM F ). (2) Adaptive Gating and Fusion. The node-wise attention mechanism involves a linear 18 projection to compute scores and a weighted summation of B filter outputs. This contributes a complexity of O(BN F ). The total complexity per layer is O(B(M F + N F )) , which remains linear with respect to the number of edges M . This ensures that DCQ-GNN maintains the efficiency of low-order spatial GNNs while offering enhanced spectral selectivity. 
+
+B.4 Receptive Field Expansion and Over-squashing 
+
+Over-squashing. Over-squashing [2] refers to the compression of long-range signals through narrow graph bottlenecks as propagation depth increases. In DCQ-GNN, each quadratic layer uses second-order Laplacian filtering, where g(L) = a0I +a1L+a2L2 can be equivalently expressed as a weighted combination of I, ˆA, and ˆA2 since L = I − ˆA. Thus, a single layer aggregates identity, one-hop, and two-hop components without stacking two sequential first-order layers. For a graph with average degree d, the two-hop term can access up to O(d2) local routes, increasing the number of parallel aggregation paths before depth is increased. This second-order expansion provides a wider local receptive field than a purely first-order propagation step while keeping the per-layer propagation order fixed. Consequently, increasing the filter bank depth T expands the receptive field to at most 
+
+2T hops without relying on a depth-2T stack of first-order transformations. This mechanism is consistent with the stable accuracy observed from T = 1 to T = 5 in Table 5. 
+
+# C Extended Theoretical Results 
+
+C.1 Proof of Main Results 
+
+This section first presents the proofs of Theorems 1 and 2, together with Proposition 3, and then provides additional results on quadratic spectral filter decomposition. Proof. [Proof of Theorem 1] Let fℓ(a) = sup λ∈[λ∗,2] λ(1 − aλ )2, and a∗ be the optimal coefficient that minimizes this maximum error, defining the optimal linear filter 
+
+g∗ 
+
+> ℓ
+
+(λ) = 1 − a∗λ. 
+
+Because g∗ 
+
+> ℓ
+
+(λ) is monotonic and linear, the minimax criterion dictates that its maximum weighted energy, denoted as ML, must be balanced at the boundaries of the transition band: 
+
+ML = λ∗(1 − a∗λ∗)2 = 2(1 − 2a∗)2.
+
+To balance these bounds, the filter must cross zero within the interval, implying g∗ 
+
+> ℓ
+
+(λ∗) >
+
+0 and g∗ 
+
+> ℓ
+
+(2) < 0. We now construct a quadratic filter gq(λ) ∈ G Q that strictly reduces this maximum energy. Define a two-parameter perturbation: 
+
+gq(λ) = 1 − (a∗ + δ)λ + bλ 2,
+
+where δ > 0 and b > 0 are arbitrarily small perturbation constants. We analyze the filter’s energy at the critical boundaries: (1) At the upper boundary λ = 2 : We require the absolute magnitude of the filter to be strictly reduced: 
+
+|gq(2) | < |g∗ 
+
+> ℓ
+
+(2) |.
+
+Since g∗ 
+
+> ℓ
+
+(2) = 1 − 2a∗ < 0, we substitute our perturbed filter and reverse the signs: 
+
+−(1 − 2a∗ − 2δ + 4 b) < −(1 − 2a∗)
+
+19 This simplifies to the condition 4b − 2δ > 0, or equivalently: 
+
+b > δ
+
+2 .
+
+(2) At the lower boundary λ = λ∗: Similarly, we require |gq(λ∗)| < |g∗ 
+
+> ℓ
+
+(λ∗)|. Since 
+
+g∗ 
+
+> ℓ
+
+(λ∗) > 0:
+
+1 − (a∗ + δ)λ∗ + a(λ∗)2 < 1 − a∗λ∗.
+
+This simplifies to: 
+
+b(λ∗)2 − δλ ∗ < 0 = ⇒ b < δλ∗ .
+
+Because λ∗ ∈ (0 , 2) , we have 12 < 1 
+
+> λ∗
+
+. Therefore, there exists a non-empty feasible region for our perturbation parameters. We can cleanly choose a sufficiently small δ > 0 and set b such that: δ
+
+2 < b < δλ∗ .
+
+By satisfying this condition, we guarantee that the weighted Dirichlet energy is strictly reduced at both boundaries: 
+
+λ∗|gq(λ∗)|2 < M L and 2|gq(2) |2 < M L.
+
+Because the polynomials are continuous and evaluated on a compact interval, a suf-ficiently small choice of δ ensures that no interior point λ ∈ (λ∗, 2) exceeds the new strictly lowered bounds. Furthermore, because the perturbation is arbitrarily small and gq(0) = 1 , the filter naturally respects the stability constraint sup λ∈[0 ,2] |gq(λ)| ≤ 1. Consequently, we achieve: 
+
+sup 
+
+> λ∈[λ∗,2]
+
+λ|gq(λ)|2 < M L.
+
+This confirms the existence of a strictly superior quadratic filter, completing the proof. 
+
+□□
+
+Proof. [Proof of Theorem 2] Let the eigenvalues of the normalized Laplacian be ordered 
+
+0 = λ1 ≤ λ2 ≤ · · · ≤ λN ≤ 2. The normalized power spectral components are: 
+
+pi = (λmax − λi)2
+
+PNk=1 (λmax − λk)2 , qi = (λmax − λi)4
+
+PNk=1 (λmax − λk)4 .
+
+Define the ratio ri = qi 
+
+> pi
+
+= C · (λmax − λi)2, where C is the ratio of the normalization constants. Since λmax − λi is non-increasing in i, the sequence {ri}Ni=1 is non-increasing. Notice that P pi = P qi = 1 , the difference di = qi − pi changes sign at least once. Because ri is non-increasing, there exists an index k∗ such that: 
+
+• qi ≥ pi for i ≤ k∗
+
+• qi < p i for i > k ∗.
+
+20 This single-crossing property implies that the mass of the distribution q is more heavily weighted toward the smaller indices (lower frequencies) compared to p.Let Pk = Pki=1 pi and Qk = Pki=1 qi be the cumulative sums. From the single-crossing property: For k ≤ k∗, Qk − Pk = Pki=1 (qi − pi) ≥ 0 because all terms are non-negative. For k > k ∗, Qk − Pk = ( QN − PN ) − PNi=k+1 (qi − pi).Since QN = PN = 1 and (qi − pi) < 0 for i > k ∗, the sum PNi=k+1 (qi − pi) is negative. Thus, Qk − Pk ≥ 0 for all k. By definition, this satisfies the condition for majorization: 
+
+q ≻ p.Since L (thus P ) is diagonal, then the von Neumann entropy SVN (P ) = − P ηi ln ηi is a strictly Schur-concave function. By the property of Schur-concavity: 
+
+q ≻ p =⇒ SVN (q) ≤ SVN (p).
+
+The inequality is strict unless P is a permutation of Q, which, given the monotonicity of the filters, occurs only if the relevant eigenvalues are degenerate. □ □ Proof. [Proof of Proposition 3] Consider the simplified concave quadratic filter g(L) = 2 L − L2. In terms of the normalized adjacency ˆA = I − L, we have: 
+
+g(L) = 2( I − ˆA) − (I − ˆA)2 = I − ˆA2
+
+To formalize the structural interference cancellation, consider the output representa-tion for a target node u, given by hu = xu − [ ˆA2X]u. Suppose an adversarial edge (u, v )
+
+is injected into the graph to corrupt node u. In a standard first-order GCN (where 
+
+hGCN = ˆAX ), the direct feature pollution from the adversarial node v onto u is given by: 
+
+∆GCN = ˆAuv xv = 1
+
+√dudv
+
+xv.
+
+In DCQ-GNN, the application of ˆA2 computes a two-hop random walk. The structural interference reaching u along the adversarial path v is: 
+
+[ ˆA2X]u←v = X 
+
+> t∈N (v)
+
+ˆAuv ˆAvt xt = 1
+
+√dudv
+
+X 
+
+> t∈N (v)
+
+1
+
+√dvdt
+
+xt.
+
+Assume the adversarial node v is embedded in a locally homophilic neighborhood such that its neighbors’ features are ϵ-consistent with xv. Formally, let xt = xv + ξt,where ∥ξt∥ ≤ ϵ for all t ∈ N (v). Assuming bounded degree variation within the local neighborhood (i.e., dt ∈ [c1dv, c 2dv] for constants c1, c 2 > 0), the adversarial contribution becomes: 
+
+[ ˆA2X]u←v ≈ 1
+
+√dudv
+
+X 
+
+> t∈N (v)
+
+1
+
+dv
+
+(xv + ξt) = |N (v)|
+
+dv
+
+√dudv
+
+xv + Err, 
+
+where the error term Err = 1
+
+> dv
+> √dudv
+
+P  
+
+> t∈N (v)
+
+ξt. Since |N (v)| = dv, the primary feature injection term evaluates exactly to 1√dudv xv, which is identical to the first-order pollution 
+
+∆GCN . Because the filter applies I − ˆA2, this adversarial signal is explicitly subtracted from the node’s representation. Furthermore, by the triangle inequality, the residual error is bounded by: 
+
+∥Err ∥ ≤ 1
+
+dv
+
+√dudv
+
+X 
+
+> t∈N (v)
+
+∥ξt∥ ≤ ϵ
+
+√dudv
+
+.
+
+21 Thus, as local homophily around the attacker increases ( ϵ → 0), the quadratic filter effectively cancels the adversarial injection. □ □
+
+C.2 Stability Analysis 
+
+This section establishes the structural robustness of DCQ-GNN by characterizing its response under Laplacian perturbations. 
+
+Theorem 5 (Spectral Stability Under Laplacian Perturbation) Let L be the normalized graph Laplacian of a graph G, and let ˜L = L + ∆ denote a perturbed Laplacian where ∥∆∥2 ≤ ϵ. Consider a quadratic spectral filter 
+
+g(L) = a0I + a1L + a2L2.
+
+Then the perturbation in the filtered signal satisfies 
+
+∥g(˜L)x − g(L)x∥2 ≤ ϵ (|a1| + 4 |a2| + |a2|ϵ) ∥x∥2.
+
+Consequently, the quadratic spectral filtering operator exhibits Lipschitz stability with respect to struc-tural perturbations of the graph topology. 
+
+Proof. Let 
+
+g(L) = a0I + a1L + a2L2.
+
+Evaluating the filter on the perturbed operator yields: 
+
+g(˜L) = a0I + a1(L + ∆) + a2(L + ∆) 2.
+
+Expanding the second-order term, we have 
+
+(L + ∆) 2 = L2 + L∆ + ∆ L + ∆ 2.
+
+The operator difference is consequently expressed as: 
+
+g(˜L) − g(L) = a1∆ + a2(L∆ + ∆ L) + a2∆2.
+
+Taking the spectral norm and using the triangle inequality, we have 
+
+∥g(˜L) − g(L)∥2 ≤ | a1|∥ ∆∥2 + |a2|(∥L∆∥2 + ∥∆L∥2) + |a2|∥ ∆2∥2.
+
+By the submultiplicativity of the operator norm and noting that ∥L∥2 ≤ 2 for normalized Laplacians, the individual terms are bounded as ∥L∆∥2 ≤ 2ϵ and ∥∆2∥2 ≤ ϵ2. Substituting these into the inequality yields: 
+
+∥g(˜L) − g(L)∥2 ≤ ϵ (|a1| + 2 |a2|∥ L∥2 + |a2|ϵ) .
+
+Finally, for any signal x ∈ Rn, the perturbation error satisfies: 
+
+∥g(˜L)x − g(L)x∥2 ≤ ∥ g(˜L) − g(L)∥2∥x∥2
+
+≤ ϵ (|a1| + 2 |a2|∥ L∥2 + |a2|ϵ) ∥x∥2
+
+≤ ϵ (|a1| + 4 |a2| + |a2|ϵ) ∥x∥2.
+
+This completes the proof, confirming that the quadratic filter exhibits bounded output variation under bounded topological perturbations. □. □
+
+22 C.3 Spectral Selectivity of Quadratic Filters 
+
+Theorem 6 (Enhanced Spectral Resolution of Quadratic Formulations) Let L be the nor-malized graph Laplacian with eigenvalues λ ∈ [0 , 2] . Define a linear filter response as gℓ(λ) = a0+a1λ
+
+and a quadratic counterpart as gq(λ) = a0 + a1λ + a2λ2. For any non-zero a2, there exists a non-empty spectral interval [λ1, λ 2] ⊆ [0 , 2] such that: 
+
+|gq(λ1) − gq(λ2)| > |gℓ(λ1) − gℓ(λ2)|.
+
+Thus, quadratic filters can achieve strictly higher spectral selectivity under compatible coefficient polarity conditions, enabling sharper discrimination of high-frequency components relative to the linear regime. 
+
+This result shows that the second-order term can enlarge spectral separation on suitable intervals without necessarily amplifying perturbation-sensitive components. Proof. Consider the spectral gap between two frequencies λ1, λ 2. For the linear filter, the gap is ∆gℓ = a1(λ1 − λ2). For the quadratic case, the gap expands to: 
+
+∆gq = a1(λ1 − λ2) + a2(λ21 − λ22) = ( λ1 − λ2) [ a1 + a2(λ1 + λ2)] .
+
+For any pair of non-trivial frequencies such that sgn (a1) = sgn (a2(λ1 + λ2)) , the absolute difference satisfies: 
+
+|gq(λ1) − gq(λ2)| = |(λ1 − λ2)| · | a1 + a2(λ1 + λ2)| > |a1(λ1 − λ2)|.
+
+This amplification of the spectral distance confirms that the quadratic term a2λ2 increases the filter’s sensitivity to frequency variations, particularly in the high-frequency tail ( λ ≈ 2) where 
+
+a2(λ1 + λ2) is maximized. This completes the proof. □ □
+
+C.4 Curvature-Based Spectral Expressivity 
+
+This section investigates the expressive capacity of convex–concave combinations relative to uniform-polarity banks. Based on the curvature polarity ( CP ) introduced in Definition 4, we demonstrate that opposing polarities are a necessary condition for spectral flexibility within low-order constraints. Consider two convex filters g1(λ) and g2(λ) with CP = 1 , combined as H(λ) = w1g1(λ) + w2g2(λ),where w1, w 2 ∈ [0 , 1] . Since the second derivative of a conical combination of convex functions remains non-negative ( H′′ (λ) ≥ 0), the resulting filter is strictly constrained to the convex functional space. Consequently, its response is restricted to monotonic or U-shaped profiles, precluding the modeling of localized mid-frequency structures common in heterophilic graphs. In contrast, the proposed convex–concave combination H(λ) = w1gcvx low (λ) + w2gccv high (λ) yields a second derivative: 
+
+H′′ (λ) = 2( w1 − w2)β
+
+˜λ2 .
+
+Analytic derivation reveals that the curvature polarity of H(λ) is continuously steerable across the set {− 1, 0, 1} by modulating the gating weights w1, w 2. Unlike uniform-polarity filters, this con-figuration facilitates a band-pass response when the first and second derivatives vanish at critical spectral points—a behavior mathematically unattainable via convex combinations alone. Conse-quently, the convex–concave pair serves as a flexible generator for second-order spectral responses, capturing the full spectrum of homophilic and heterophilic signals within a compact polynomial family. The following result formally characterizes this spectral bias through the lens of second-order derivatives (see Fig. 6). 23 Complementary  
+
+> Filtering
+> Concave Filter:
+> Low Frequency Boost
+> Convex Filter:
+> High Frequency Boost
+> Eigenvalue Eigenvalue
+
+Figure 6: Spectral curvature analysis under different polarity coefficients. The sign of the quadratic coefficient ( a2) determines the curvature of the spectral response. Pairing convex and concave filters enables complementary low- and high-frequency modeling within a single layer. 
+
+Theorem 7 (Spectral Curvature Theorem) Let L be the normalized graph Laplacian with eigen-values λ ∈ [0 , 2] . Consider a quadratic spectral filter g(λ) = a0 + a1λ + a2λ2 with curvature 
+
+g′′ (λ) = 2 a2. The spectral bias is determined as follows: 
+
+• If a2 > 0 (convexity), the filter exhibits high-frequency amplification relative to the low-frequency regime. 
+
+• If a2 < 0 (concavity), the filter prioritizes low-frequency components by attenuating the high-frequency gain. Consequently, a convex–concave pair constitutes a complementary spectral decomposition for the simultaneous capture of multi-scale graph signals. 
+
+Here, g(λ) denotes the final spectral response defined in Eqs. (1)–(4). The curvature polarity is positive for convex filters and negative for concave filters, which determines how aggressively the filter attenuates frequencies across the spectrum. In our framework, the coefficients ai (i ∈ { 0, 1, 2})are parameterized by the learnable cutoff α and scale β, allowing the spectral selectivity to remain adaptive. Theorem 7 further establishes that the curvature coefficient governs the spectral bias: convex filters tend to emphasize high-frequency components, whereas concave filters favor low-frequency components, enabling complementary frequency decomposition. Proof. Let λ1 < λ 2 be two arbitrary eigenvalues. The relative amplification is given by ∆g = g(λ2) − g(λ1). Substituting the quadratic form: 
+
+∆g = a1(λ2 − λ1) + a2(λ22 − λ21) = ( λ2 − λ1) [ a1 + a2(λ1 + λ2)] .
+
+Since λ1 + λ2 > 0 for all non-trivial eigenvalues, the sign of the second-order coefficient a2 governs the monotonicity of the gain relative to the frequency magnitude. Specifically, a2 > 0 induces a positive curvature that scales the gain with λ, whereas a2 < 0 imposes a concave penalty on higher frequencies. This proves that curvature polarity is the mechanical driver of spectral bias. □ □ In fact, any second-order spectral filter can be decomposed into the combination of convex and concave filters, which is presented in the following theorem. 24 Theorem 8 (Convex–Concave Decomposition of Quadratic Filters) Let Q2 = {q(λ) = a0+
+
+a1λ + a2λ2 : a0, a 1, a 2 ∈ R} denote the space of second-order polynomials on the interval [0 , 2] Define the polar sub-spaces: 
+
+Qcvx = {q ∈ Q 2 : a2 > 0}, Qccv = {q ∈ Q 2 : a2 < 0}.
+
+Every quadratic filter q ∈ Q 2 admits a decomposition q = qcvx + qccv , where qcvx ∈ Q cvx and 
+
+qccv ∈ Q ccv . This establishes that the space of quadratic filters Q2 is the sum of the convex and concave quadratic cones, Q2 = Qcvx + Qccv .
+
+This result establishes that the proposed convex–concave architecture is not merely an intuitive heuristic, but a two-branch convex–concave decomposition for second-order spectral filters. Proof. 
+
+For any q(λ) = a0 + a1λ + a2λ2, select any δ > |a2| and define: qcvx (λ) = δλ 2 and qccv (λ) = 
+
+a0 + a1λ + ( a2 − δ)λ2. By construction, δ > 0 ensures qcvx ∈ Q cvx , while a2 − δ < 0 guarantees 
+
+qccv ∈ Q ccv . The identity q = qcvx + qccv holds trivially. □ □
+
+Theoretical Implication. The presented analysis establishes three properties of DCQ-GNN: 
+
+• quadratic propagation increases spectral selectivity relative to linear filters; 
+
+• curvature polarity induces complementary frequency responses; 
+
+• the operator remains stable under bounded Laplacian perturbations. Together, these results explain why DCQ-GNN can simultaneously capture low- and high-frequency graph signals while maintaining structural robustness. 
+
+# D Algorithmic Details 
+
+The overall pipeline of DCQ-GNN is summarized in Algorithm 1. The quadratic filter responses are computed via second-order recursive Laplacian propagation, thereby avoiding explicit polyno-mial expansion or eigendecomposition. Each propagation step consists of a sparse–dense matrix multiplication. 
+
+# E Detailed Experiments 
+
+This appendix provides supplementary experimental details, including dataset statistics (Table 7), baseline descriptions, and hyperparameter configurations. In addition, we extend the empirical study to further analyze robustness under adversarial perturbations, spectral adaptivity across structural regimes, and performance under class-balanced training protocols. Beyond the primary results reported in the main text, we address the following additional research questions: 
+
+• RQ2 Extension (Robustness Analysis): Does the proposed structural interference cor-rection mechanism remain effective under adversarial topology attacks on strongly homophilic graphs (e.g., PubMed )? 
+
+• RQ5 (Spectral Selectivity and Adaptivity): How do the learned spectral responses of the DCQ-GNN filter bank adapt across homophilic and heterophilic graph regimes compared to standard polynomial filters? 
+
+• RQ6 (Evaluation under Dense Splits): How does DCQ-GNN perform relative to recent spectral baselines when evaluated under a class-balanced (dense split) training protocol? 25 Algorithm 1 Overall pipeline of the DCQ-GNN framework. 
+
+Input: Graph Laplacian L ∈ RN ×N , Node features X ∈ RN ×F
+
+Output: Output embedding Hout ∈ RN ×F ′ 
+
+> 1:
+
+Step 1: Second-Order Recursive Propagation  
+
+> 2:
+
+Z0 ← X 
+
+> 3:
+
+Z1 ← LZ 0 {One-hop propagation}  
+
+> 4:
+
+Z2 ← LZ 1 {Two-hop propagation}  
+
+> 5:
+
+Step 2: Construction of Quadratic Filter Bank  
+
+> 6:
+
+˜λ ← 2 − α {Cutoff proxy}  
+
+> 7:
+
+c ← β/ ˜λ2 {Magnitude normalization}  
+
+> 8:
+
+if low-pass curvature is convex then  
+
+> 9:
+
+Hlow ← c Z2 − 2˜λZ1 + ˜λ2Z0
+
+ 
+
+> 10:
+
+else  
+
+> 11:
+
+Hlow ← − c Z2 − ˜λ2Z0
+
+ 
+
+> 12:
+
+end if  
+
+> 13:
+
+Hmid ← − 4c Z2 − ˜λZ1
+
+ 
+
+> 14:
+
+if high-pass curvature is convex then  
+
+> 15:
+
+Hhigh ← c Z2 
+
+> 16:
+
+else  
+
+> 17:
+
+Hhigh ← − c Z2 − 2˜λZ1
+
+ 
+
+> 18:
+
+end if  
+
+> 19:
+
+Hall ← Z0 {All-pass residual anchor}  
+
+> 20:
+
+Step 3: Channel-wise Linear Projection  
+
+> 21:
+
+for k ∈ { low , mid , high , all } do  
+
+> 22:
+
+˜Hk ← HkΘk 
+
+> 23:
+
+end for  
+
+> 24:
+
+Step 4: Node-Adaptive Gated Fusion  
+
+> 25:
+
+Hconcat ← [Hlow ∥Hmid ∥Hhigh ∥Hall ] 
+
+> 26:
+
+S ← softmax( Hconcat Wgate + bgate ) 
+
+> 27:
+
+Hout ← P 
+
+> k
+
+Sk ⊙ ˜Hk 
+
+> 28:
+
+Hout ← σ(Hout ) 
+
+> 29:
+
+return Hout 
+
+26 E.1 Datasets 
+
+Table 7: Summary of dataset statistics and structural properties. Datasets are grouped into ho-mophilic and heterophilic regimes. Reported metrics include the number of nodes |V| , edges |E| ,feature dimension F , number of classes, assortativity, and three homophily measures ( hnode , hedge ,
+
+hclass ).                                                                                            
+
+> Type Dataset |V| |E| FClasses hnode hedge hclass Assortativity
+> Photo 7,650 238,162 745 80.8365 0.8272 0.7722 -0.0449
+> PubMed 19,717 88,648 500 30.7924 0.824 0.6641 -0.0436 Homophilic Computers 13,752 491,722 767 10 0.7853 0.7772 0.7002 -0.0565
+> CiteSeer 3,327 9,104 3,703 60.7062 0.7355 0.6267 0.0484
+> WikiCS 11,701 431,726 300 10 0.6588 0.6547 0.5681 -0.0653
+> Wisconsin 251 515 1,703 50.1719 0.1961 0.0839 -0.2723
+> Actor 7,600 30,019 932 50.1586 0.2188 0.0061 -0.1111 Heterophilic Chameleon 2,277 36,101 2,325 50.1039 0.2350 0.0586 -0.1128
+> Squirrel 5,201 217,073 2,089 50.0889 0.2239 0.0430 0.3738
+> Texas 183 325 1,703 50.0654 0.1077 0.0000 -0.3463
+
+We evaluate the proposed model on 10 benchmark datasets spanning a broad range of structural properties. Consistent with the main text, datasets are categorized according to homophily level: (i) homophilic graphs, where edges predominantly connect nodes of the same class, and (ii) heterophilic graphs, where edges frequently connect nodes of different classes. 
+
+Homophilic Datasets. 
+
+• CiteSeer & PubMed [32]: Standard citation networks evaluated using the Planetoid exper-imental protocol. Nodes represent scientific documents linked by citation edges, with features represented as bag-of-words vectors. The task entails multi-class node classification across distinct research topics. 
+
+• Amazon Computers & Photo [26]: Subgraphs extracted from the Amazon co-purchase network. Nodes correspond to products, while edges denote frequent co-purchase relations. Node features are encoded from review text to facilitate product category classification. 
+
+• WikiCS [19]: A semi-supervised benchmark comprising Wikipedia articles related to com-puter science. Nodes represent articles connected by hyperlinks. The dataset is characterized by multiple predefined training splits to ensure evaluation stability in node classification. 
+
+Heterophilic Datasets. 
+
+• WebKB (Texas, Wisconsin) [21]: Hyperlink networks of university computer science de-partments. Nodes represent webpages and edges denote hyperlinks. Features are bag-of-words representations. The task is page classification into categories such as faculty, student, and course. 
+
+• WikipediaNetwork (Chameleon, Squirrel) [24]: Page-to-page hyperlink graphs from Wikipedia. Node features are derived from textual content. The target variable is discretized page traffic. 27 • Actor [21]: The actor-induced subgraph of a film collaboration network. Nodes represent ac-tors and edges capture co-occurrence relationships. The task is categorical node classification. These datasets collectively enable evaluation under varying spectral regimes, including low-frequency-dominant (homophilic) and high-frequency-dominant (heterophilic) settings. 
+
+E.2 Baselines 
+
+We compare DCQ-GNN against a diverse set of spatial and spectral graph neural networks: 
+
+• GCN [15]: A first-order low-pass spectral approximation with propagation rule g(λ) = 1 − λ.
+
+• GCNII [8]: Incorporates initial residual connections and identity mapping to alleviate over-smoothing in deep architectures. 
+
+• GAT [28]: Introduces attention-based anisotropic aggregation. 
+
+• JK-Net [31]: Aggregates multi-scale representations through jump connections. 
+
+• H2GCN [35]: Explicitly models higher-order neighborhoods and ego-feature separation, de-signed for heterophilic settings. 
+
+• EvenNet [16]: Employs even-degree polynomial filters to achieve spectral symmetry. 
+
+• FAGCN [4]: Integrates low- and high-frequency components through adaptive gating. 
+
+• JacobiConv [29]: A high-order polynomial spectral model using Jacobi basis functions. 
+
+• BernNet [12]: Utilizes Bernstein polynomial bases for flexible spectral approximation. 
+
+• AutoSGNN [20]: An automated framework combining large language models and evolution-ary search for propagation design. 
+
+• LHK-GNN [22]: Introduces localized heat kernel filtering to address over-smoothing. This selection covers first-order spatial models, attention-based methods, polynomial spectral filters, and kernel-based approaches. 
+
+E.3 Hyperparameter Optimization. 
+
+We employ the Optuna framework for automated hyperparameter tuning, with the primary objective of maximizing validation accuracy. Each dataset is allocated 100 trials subject to a maximum time budget of 3, 600 seconds. To ensure empirical rigor, all models undergo the same search protocol. In instances where official implementations provided dataset-specific tuned parameters, those configurations are adopted to ensure a competitive and fair baseline performance. To reduce computational overhead, we employ Optuna’s MedianPruner with 10 startup trials, a 50-epoch warm-up period, and evaluation intervals of 10 epochs. 
+
+• General Training Parameters (Shared across all tuned models): – Learning rate: Log-uniform distribution ∈ [1 e-4, 1e-2] .
+
+– Weight decay: Log-uniform distribution ∈ [1 e-6, 1e-2] .
+
+– Dropout rate: Uniform distribution ∈ [0 .0, 0.9] .28 • DCQ-GNN Architecture-Specific Parameters: – Number of layers: Integer ∈ [1 , 3] .
+
+– Low-pass filter curvature: Categorical ∈ { Convex (cvx) , Concave (ccv) }, tuned inde-pendently for each layer. 
+
+– High-pass filter curvature: Categorical ∈ { Convex (cvx) , Concave (ccv) }, tuned in-dependently for each layer. 
+
+E.4 Sensitivity to α and β
+
+The parameter α controls the cutoff proxy ˜λ = 2 −α, while β rescales the quadratic response subject to |g(λ)| ≤ 1. Fig. 7 visualizes how these parameters modulate the filter profiles. 0.0 0.5 1.0 1.5 2.0                                             
+
+> λ
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> g(λ)
+> Low-pass (Vary α)
+> α= 0 .5
+> α= 0 .25
+> α= 0 .0
+> 0.0 0.5 1.0 1.5 2.0
+> λ
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> g(λ)
+> Mid-pass (Vary α)
+> α= 0 .5
+> α= 0 .25
+> α= 0 .0
+> 0.0 0.5 1.0 1.5 2.0
+> λ
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> g(λ)
+> High-pass (Vary α)
+> α= 0 .5
+> α= 0 .25
+> α= 0 .0
+> 0.0 0.5 1.0 1.5 2.0
+> λ
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> 1.2
+> g(λ)
+> Low-pass (Vary β)
+> β= 0 .75
+> β= 1 .0
+> β= 1 .25
+> 0.0 0.5 1.0 1.5 2.0
+> λ
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> 1.2
+> g(λ)
+> Mid-pass (Vary β)
+> β= 0 .75
+> β= 1 .0
+> β= 1 .25
+> 0.0 0.5 1.0 1.5 2.0
+> λ
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> 1.2
+> g(λ)
+> High-pass (Vary β)
+> β= 0 .75
+> β= 1 .0
+> β= 1 .25
+
+Figure 7: Effect of parameters on spectral response. (Top) α shifts the transition frequency (cutoff), while (Bottom) β controls the response magnitude. Convex (solid) and concave (dashed) filters provide complementary spectral sharpness at the same polynomial order. 
+
+E.4.1 Parameter-Specific Weight Decay. 
+
+To avoid unintended regularization of spectral shape parameters, weight decay is applied only to standard network weights. Learnable spectral parameters (cutoff proxies α and magnitude scalars 
+
+β), bias terms, and normalization parameters are excluded from weight decay (decay rate set to 0.0). This design ensures that curvature parameters are not artificially suppressed during optimization. 
+
+Convergence Stability Analysis. To examine optimization stability, we track training-loss tra-jectories under two initialization settings, α = 0 ( ˜λ = 2) and α = 1 ( ˜λ = 1) , as shown in Figure 8. On WikiCS, the two trajectories are nearly overlapping, decrease smoothly, and stabilize after ap-proximately 400–500 epochs, indicating that optimization is insensitive to the initial cutoff proxy 29 0 50 100 150 200 250 300 350                     
+
+> Epochs
+> 1.00
+> 1.25
+> 1.50
+> 1.75
+> 2.00
+> 2.25
+> 2.50
+> 2.75
+> 3.00
+> Cross Entropy Loss
+> Actor Dataset
+> Train Loss ( = 2)
+> Val Loss ( = 2)
+> Test Loss ( = 2)
+> Train Loss ( = 1)
+> Val Loss ( = 1)
+> Test Loss ( = 1)
+> 0100 200 300 400 500 600 700
+> Epochs
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> 3.0
+> 3.5
+> 4.0
+> Cross Entropy Loss
+> WikiCS Dataset
+> Train Loss ( = 2)
+> Val Loss ( = 2)
+> Test Loss ( = 2)
+> Train Loss ( = 1)
+> Val Loss ( = 1)
+> Test Loss ( = 1)
+> Learning Curve Comparison: Impact of Initialization
+
+Figure 8: Training, validation, and test cross-entropy loss trajectories under two cutoff initializa-tions, α = 0 ( ˜λ = 2) and α = 1 ( ˜λ = 1) , on Actor and WikiCS datasets. on this homophilic graph. On Actor, the two settings also follow similar trajectories, with the cross-entropy loss decreasing rapidly in the early stage and increasing after about 50 epochs. This pattern suggests that validation loss is not always aligned with final classification accuracy on heterophilic graphs, where confidence calibration and decision-boundary refinement may evolve differently. We therefore select checkpoints by validation accuracy rather than validation loss, which is consistent with the node-classification objective used in our evaluation. Table 8: Node classification accuracy under different initializations of the filter cutoff parameter α.Relative changes are computed against the original initialization. 
+
+Initialization Configuration WikiCS Actor 
+
+Original ( α = 0 ) 85 .50 ± 0.82 35 .63 ± 1.39 
+
+Altered ( α = 1 ) 84 .84 ± 0.49 ( ↓ 0.77%) 33 .22 ± 1.00 ( ↓ 6.76%) 
+
+Initialization Sensitivity of Accuracy. Although the loss curves remain stable under both initializations, Table 8 shows that classification accuracy exhibits dataset-dependent sensitivity. On WikiCS, changing the initialization from α = 0 to α = 1 causes only a 0.77% relative drop, suggesting that the homophilic smoothing signal is robust to the initial cutoff proxy. On Actor, the same change leads to a larger decrease of 6.76% . Since heterophilic graphs rely more heavily on non-low-frequency components, initializing with ˜λ = 2 provides a broader initial spectral range and facilitates the subsequent adaptation of high-frequency channels. 
+
+E.5 Robustness under Adversarial Perturbations (RQ2 Extension) 
+
+We further evaluate robustness on PubMed under DICE structural perturbations. PubMed is a homophilic graph ( h = 0 .79 ), so heterophilic edge perturbations directly disrupt the label-consistent neighborhood structure. As shown in Table 9, first-order spatial models degrade rapidly: at the 20% 
+
+perturbation ratio, GCN and GAT drop by 23 .82% and 21 .65% , respectively. Polynomial spectral baselines are more stable, with BernNet and JacobiConv decreasing by 7.90% and 7.67% . DCQ-GNN obtains the smallest degradation at 20% , retaining 85 .63% accuracy with a relative drop of 
+
+4.45% . At 5% , DCQ-GNN ties JacobiConv in rounded accuracy ( 88 .37% ), while at 10% and 20% 
+
+30 Table 9: Node classification accuracy under the DICE structural attack on PubMed . ↓ ∆% denotes the relative accuracy drop from the clean graph. The best rounded accuracy at each perturbation ratio is highlighted in bold.                                                                                               
+
+> DICE Attack Perturbation Ratio Model 0% (Clean) 5% 10% 20%
+> GCN 88 .53 ±0.28 82 .77 ±0.62( ↓6.51%) 77 .64 ±0.59( ↓12 .30%) 67 .44 ±0.73( ↓23 .82%)
+> GAT 88 .12 ±0.48 82 .82 ±0.47( ↓6.01%) 77 .88 ±0.68( ↓11 .62%) 69 .04 ±1.06( ↓21 .65%)
+> FAGCN 89 .21 ±0.55 85 .78 ±0.46( ↓3.85%) 83 .99 ±0.84( ↓5.85%) 78 .41 ±1.18( ↓12 .11%)
+> BernNet 89 .46 ±0.33 87 .62 ±0.45( ↓2.06%) 86 .17 ±0.29( ↓3.68%) 82 .39 ±0.23( ↓7.90%)
+> JacobiConv 89 .44 ±0.10 88 .37 ±0.18 (↓1.20 %) 87 .36 ±0.38( ↓2.32%) 82 .58 ±0.22( ↓7.67%)
+> DCQ-GNN (ours) 89 .62 ±0.49 88 .37 ±0.41 (↓1.39 %) 87 .73 ±0.39 (↓2.11 %) 85 .63 ±0.68 (↓4.45 %)
+
+it achieves the best accuracy among all compared methods. These results support the robustness of curvature-controlled quadratic filtering under adversarial topology modification in homophilic graphs. 
+
+E.6 Spectral Visualization (RQ5) 
+
+To further analyze the spectral behavior of the proposed model across varying homophily regimes, we visualize the learned spectral responses of the DCQ-GNN filter bank alongside established poly-nomial baselines in Fig. 9. To ensure a fair comparison in terms of model complexity, BernNet and JacobiConv are restricted to second-order polynomial capacity ( K = 2 ), matching the quadratic formulation of DCQ-GNN. As shown in Fig. 9, DCQ-GNN exhibits topology-dependent spectral adaptation. In homophilic graphs (PubMed and WikiCS), the learned response is dominated by the convex low-pass compo-nent, emphasizing low-frequency smoothing, while the high-pass channel displays limited activation. In contrast, for heterophilic graphs (Actor and Chameleon), higher-frequency components become more pronounced, indicating increased reliance on disassortative structural signals. The visualization also reveals the behavior of standard polynomial approximations under low-order constraints. On the heterophilic Chameleon dataset, JacobiConv converges to a monotonic low-pass profile under the K = 2 setting, limiting its ability to emphasize higher-frequency bands. Similarly, BernNet learns an approximately flat response on the Actor dataset. While such a flat profile is consistent with empirical observations that structure-agnostic MLP-style models can perform competitively on certain heterophilic graphs, it indicates limited spectral differentiation at low polynomial order. In contrast, DCQ-GNN decomposes the spectrum into complementary frequency channels rather than fitting a single global polynomial. This channel-wise decomposition enables the model to combine frequency-specific responses through node-adaptive gating, facilitating flexible spectral discrimination without increasing polynomial degree. 
+
+E.7 Node Classification with Dense Split (Balanced Classes, RQ6) 
+
+In the main paper (Table 2), models are evaluated under SRS splits without enforcing class balance. In contrast, Table 10 reports results under the dense split protocol. To provide a complementary evaluation and enable comparison with recent studies, we addition-ally evaluate DCQ-GNN under a class-balanced “dense split” protocol. In this setting, the training set allocates an equal number of nodes to each class (specifically, Ntrain = N × train _ratio/C 
+
+31 Figure 9: Learned layer-wise spectral responses of DCQ-GNN compared with second-order ( K =2) polynomial baselines on homophilic (PubMed, WikiCS) and heterophilic (Actor, Chameleon) graphs. Shaded regions denote the explicit frequency channels learned by DCQ-GNN. nodes per class). Although this protocol modifies the inherent class imbalance, it is widely adopted in contemporary spectral GNN literature. For completeness, we include two recent baselines in this evaluation: AutoSGNN and LHK-GNN. As reported in Table 10, DCQ-GNN achieves the best overall average rank (2.50) across the evaluated datasets and outperforms AutoSGNN and LHK-GNN on average. Under this protocol, DCQ-GNN achieves competitive performance across all datasets and obtains the best average rank. Overall, these results indicate that the proposed convex–concave quadratic filter bank maintains competitive performance under both naturally imbalanced and class-balanced training settings. 
+
+# F Related Work 
+
+We review prior work most relevant to DCQ-GNN from three perspectives: spectral graph convolu-tion, adaptive polynomial spectral filtering, and filter-bank mechanisms for learning on heterophilic graphs. 32 Table 10: Node classification accuracy (mean ± standard deviation) on four benchmark datasets un-der the dense split setting. The best result is highlighted in bold and the second best is underlined.                                                                                                         
+
+> Datasets Photo Computers Chameleon Squirrel Avg. Rank Homophily (Node) h= 0 .83 h= 0 .78 h= 0 .10 h= 0 .08
+> GCN 93 .86 ±0.56 88 .80 ±0.27 44 .96 ±2.95 32 .14 ±0.94 7.50 GCNII 95 .74 ±0.38 90 .48 ±0.27 54 .07 ±1.20 37 .34 ±1.80 3.75 GAT 94 .80 ±0.44 90 .25 ±0.79 45 .82 ±2.82 33 .87 ±0.73 6.00 BernNet 93 .63 ±0.35 87 .64 ±0.44 68 .29 ±1.58 51 .35 ±0.73 6.00 AutoSGNN 95 .12 ±0.37 90 .06 ±0.63 66 .30 ±1.94 56 .58 ±1.14 4.50 LHK-GNN 95 .10 ±0.31 90 .12 ±0.29 70 .67 ±0.92 56 .34 ±0.87 4.00
+> DCQ-GNN (ours) 95 .41 ±0.53 90 .95 ±0.65 68 .16 ±1.39 56 .61 ±1.49 2.50
+
+F.1 Spectral Graph Convolutional Networks 
+
+Spectral graph neural networks originate from graph signal processing, which extends classical signal filtering to irregular graph domains [27]. Early formulations defined convolution in the graph Laplacian eigenbasis [6], but their reliance on eigendecomposition limited scalability. ChebyNet [10] alleviates this issue by approximating spectral filters using Chebyshev polynomials, enabling localized and efficient propagation without explicit eigenvectors. GCN [15] further simplifies this formulation to a first-order polynomial approximation, resulting in an efficient and widely adopted low-pass operator. Many spatial GNN architectures can be interpreted within this spectral framework and exhibit an inherent low-frequency bias, including GraphSAGE [11], GAT [28], JK-Net [31], and GCNII [8]. While such low-pass smoothing behavior is well suited to homophilic graphs, it is often suboptimal in heterophilic settings, where adjacent nodes tend to have dissimilar labels and discriminative information may reside in higher-frequency components [3, 35]. 
+
+F.2 Adaptive Polynomial Spectral Filters 
+
+To overcome the limitations of fixed low-pass filtering, several approaches have explored adaptive polynomial spectral responses. GPR-GNN [9] learns propagation coefficients inspired by generalized PageRank [5], allowing data-dependent aggregation across multiple hop distances. BernNet [12] adopts Bernstein polynomial bases with constrained coefficients to improve numerical stability while supporting diverse spectral profiles. JacobiConv [29] employs orthogonal Jacobi polynomials to mitigate instability in higher-order expansions, and UniFilter [14] further enhances adaptivity by dynamically constructing spectral bases tailored to graph heterophily. Although these methods significantly increase spectral flexibility, achieving sharper frequency selectivity typically requires higher polynomial orders. This may enlarge the hypothesis space, increase sensitivity to noise, and incur additional computational cost due to repeated propagation steps [17]. In contrast, our work investigates whether a strictly second-order design can capture much of the practical benefit of spectral adaptivity, while offering improved stability and parameter efficiency. 
+
+F.3 Filter Banks for Heterophilic Graphs 
+
+A complementary line of research addresses heterophily by decomposing graph signals into multi-ple frequency components and combining them through learned mixing mechanisms. FAGCN [4] 33 integrates low- and high-frequency information via frequency-adaptive gating, while related multi-channel formulations have been explored in AutoGCN [30] and Adaptive Channel Mixing (ACM) [18]. More recently, Zheng et al. [34] introduced spectral tight framelet filter banks composed of one low-pass and multiple high-pass filters, enabling principled frequency separation with stable reconstruction guarantees. Despite their effectiveness, most existing filter-bank approaches rely on linear filters as their fundamental building blocks. From a spectral viewpoint, repeated linear low-pass propagation exhibits no intrinsic curvature and therefore provides limited capability for suppressing structurally induced interference. Consequently, perturbations or corrupted components may be repeatedly propagated and even amplified [13, 36]. In contrast, DCQ-GNN employs quadratic filters with an explicit convex–concave decomposition, thereby introducing controllable curvature into the spectral response. As shown in our theoretical analysis, this curvature enables selective attenuation of interference-prone frequency components while preserving informative signal bands. Consequently, DCQ-GNN realizes a structured filter-bank architecture that yields sharper spectral discrimination and improved robustness, without relying on high-order polynomial expansions or sacrificing the computational efficiency of low-order message passing. Several studies have explored multi-channel filtering to address graph heterophily. Although Graph Framelets provide powerful multi-scale frequency decompositions, they typically require com-plex frame construction and high-order spectral expansions. In contrast, DCQ-GNN provides a lightweight quadratic alternative: by exploiting curvature polarity rather than multi-level scaling, the proposed model achieves comparable spectral separation with a strictly two-hop computational footprint. 
+
+F.4 Connections to Continuous Diffusion and Graph Transformers 
+
+Continuous Graph Diffusion. GRAND [7] and GraphCON [25] define node dynamics via neural ODEs on graphs, with stability certified through Lyapunov analysis of the continuous flow. The second-order filter g(λ) = a0 +a1λ+a2λ2 admits a discrete-time interpretation as a two-step Runge– Kutta approximation of such diffusion: a1 governs the diffusion rate, while a2 introduces a curvature correction analogous to the momentum coupling in GraphCON. Theorem 5 can thus be viewed as the spectral counterpart of those Lyapunov certificates. Both characterize bounded output variation under bounded structural perturbation, whereas our result operates on filter coefficients rather than ODE parameters. 
+
+Graph Transformers. Transformer-based architectures such as Graphormer [33] and GPS [23] attend globally over node pairs, achieving strong performance at the cost of O(N 2) attention com-plexity or explicit structural positional encodings. DCQ-GNN targets a complementary regime in which O(M ) polynomial propagation is preferred for efficiency and spectral interpretability. We therefore view Graph Transformers as a distinct design family rather than direct competitors. 34

@@ -1,0 +1,519 @@
+Title: LNGCN: a distance-aware continuous-time graph protocol for prioritizing protein-protein interaction candidates
+
+URL Source: https://www.biorxiv.org/content/10.64898/2026.04.30.721835v2.full.pdf
+
+Number of Pages: 25
+
+Markdown Content:
+# LNGCN: a distance-aware continuous-time graph protocol for prioritizing protein-protein interaction candidates 
+
+## Yueming Xiao 1, Yifan Zheng 2,3 , Yu Hua 1, Jiahua Peng 1,Jinliang Liu 1, Yuan Qu 1, Jizhuang Xu 1,6 , Rao Fu 1,3 ,Qiuting Qian 1,3 , Make Zhao 1, Xinxin Zhang 5, Jingjing Zhao 1,Yifei Yao 1, Martin Kosar 2,3* , Yuehai Ke 4* , Ying Chi 1,3* 
+
+> 1*
+
+Department of Pharmacy of the Second Affiliated Hospital of Zhejiang University School of Medicine, and Zhejiang University-University of Edinburgh Institute (ZJE), Zhejiang University, No.866 Yu Hang Tang road, Hangzhou, 310058, Zhejiang Province, China. 
+
+> 2*
+
+Department of Burns, and the Centre for Infection, Immunity, and Cancer (IIC), the Second Affiliated Hospital of Zhejiang University School of Medicine; Zhejiang University–University of Edinburgh Institute, Zhejiang University School of Medicine, 88 Jiefang Road, Hangzhou, 310009, Zhejiang Province, China. 
+
+> 3*
+
+Edinburgh Medical School: Biomedical Sciences, College of Medicine and Veterinary Medicine, The University of Edinburgh, Edinburgh, United Kingdom. 
+
+> 4*
+
+Department of Pathology and Pathophysiology, and Department of Respiratory Medicine, Sir Run-Run Shaw Hospital, Zhejiang University School of Medicine, No. 3 East Qingchun Road, Hangzhou, 310016, Zhejiang Province, China. 
+
+> 5
+
+Department of Pathology and Pathophysiology, Zhejiang University School of Medicine, No.866 Yuhangtang Road, Hangzhou, 310058, Zhejiang Province, China. 
+
+> 6
+
+School of Pharmaceutical Sciences, Wenzhou Medical University, Chashan Higher Education Zone, Wenzhou, 325035, Zhejiang Province, China.         
+
+> ∗Corresponding authors. E-mail: yingchi@intl.zju.edu.cn (Ying Chi, first corresponding author); yke@zju.edu.cn (Yuehai Ke); martinkosar@intl.zju.edu.cn (Martin Kosar)
+
+1
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+Abstract 
+
+Accurate high-throughput prediction of protein-protein interactions (PPIs) is essential for mapping cellular mechanisms and prioritizing experimental valida-tion. Current graph-based methods often rely on discrete message passing, suffer from representation over-smoothing, and provide poorly calibrated confidence scores. We present LNGCN, a distance-aware continuous-time graph protocol that integrates residue-level structural graphs with liquid neural dynamics to model spatially heterogeneous interaction patterns. Residue radial distance is used as an explicit driving signal for continuous graph evolution, while hier-archical calibration converts raw model outputs into interpretable interaction probabilities. Across balanced, highly imbalanced, and cross-species benchmarks, LNGCN achieved robust predictive performance. Importantly, the calibrated scores supported biologically coherent prioritization in the FGF23-FGFR1c-α-Klotho complex, SHP2-associated signaling interactions and Tdk1 oligomeric-state-dependent binding. In a TPR-centered experimental case study, LNGCN recovered known TPR-associated partners and prioritized ELAVL1-TPR and RALY-TPR, whose physical interactions were subsequently confirmed via exper-imental validation. These results indicate that LNGCN can serve as a practical prioritization protocol for PPI candidates.  
+
+> Keywords: High-throughput Protein-protein interactions, liquid neural network, graph convolution network
+
+# 1 Introduction 
+
+Protein-protein interactions (PPIs) underlie most cellular processes and provide essen-tial entry points for understanding disease mechanisms, pathway regulation and therapeutic intervention [1]. Although experimental methods remain the gold standard for PPI identification, they face significant limitations including high costs, limited throughput, and high false-positive and false-negative rates, making computational prioritization increasingly important. In practical screening settings, the central chal-lenge is not only to classify whether two proteins interact, but also to rank large candidate lists in a way that helps experimental researchers decide which interactions should be tested first. Graph-based learning has become a natural framework for PPI prediction because proteins and their structural or interaction contexts can be represented as graphs. In structure-informed models, protein three-dimensional conformations can be converted into residue-level graphs, enabling graph convolutional networks (GCNs) to capture spatially organized molecular information [5]. GCN-based architectures have there-fore been widely adopted in biomolecular prediction tasks [6]. For example, Yuan et al. applied GCNs to identify residues associated with PPIs [7], Jha et al. combined GCNs with graph attention networks for PPI prediction [8], Torng et al. used GCNs for protein-ligand interaction prediction [9], and Zhai et al. introduced an edge-aware 2
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+GCN framework with self-attention modules [10]. These studies demonstrate the ver-satility of graph learning, but also highlight the need for frameworks that can translate structural representations into experimentally actionable PPI scores. Despite significant progress, existing models face critical bottlenecks. First, multi-modal sequence-structure features lack efficient fusion schemes to eliminate redundant noise and capture non-linear molecular relationships [11]. Second, current GCN models employ discrete hierarchical stacking, which is inadequate for modeling the contin-uous spatial hierarchy of residues. GCN receptive fields are determined by discrete hop counts, while residue spatial positions are inherently continuous variables, causing homogenization of residues at different spatial locations and flattening critical spa-tial information. Simply extending a residual-connected GCN to a continuous-time ODE framework does not fully resolve this issue, as the driving term lacks explicit residue spatial position dependency and adaptive decay mechanisms. Third, uncali-brated raw scores cannot serve as reliable confidence metrics for candidate ranking, uncertainty evaluation and experimental thresholding. Researchers need interpretable confidence estimates that support candidate ranking, uncertainty assessment and threshold selection [12]. Continuous-time neural dynamics offer a possible route to address these issues. Liq-uid Neural Networks (LNNs) [13] and Closed-form Continuous-Time (CfC) Networks [14] provide a framework for continuous-time differential equations with learnable temporal dynamics. These architectures are attractive for structure-informed PPI screening because residue-specific spatial information can be incorporated into the driving terms of a continuous graph evolution process. In this setting, we embed residue radial distance alongside graph neighborhood aggregation into ODE driving terms. This enables distance-aware residue evolution, breaking the limitation of discrete graph layers that ignore continuous spatial distributions. Here we introduce LNGCN, a calibrated structure-aware protocol for high-throughput PPI screening and candidate prioritization. It first uses CfC preprocessing [14] to compress residue features while retaining radial distance as a spatial signal. Then LNGCN embeds graph convolution into an LNN-based continuous dynamical system [13], where neighborhood information and radial distance jointly drive residue-state evolution. Multi-scale graph convolutions capture structural patterns at different receptive fields, and a symmetric fusion module combines two protein-level representa-tions to preserve pair-order invariance. Finally, a hierarchical ensemble of Platt [17, 18], Beta [19, 20], Isotonic [18, 21, 22] and Boosting calibrators [18, 23, 24] converts raw outputs into interpretable interaction probabilities. By integrating feature compression, distance-aware continuous graph evolution, symmetric pairwise representation and probability calibration, LNGCN is designed not simply as a binary classifier but as an end-to-end screening workflow. We evaluate the protocol across balanced, imbalanced and cross-species PPI settings, and further assess whether calibrated predictions can support biologically coherent interpretation and experimental prioritization. This framing positions LNGCN as a practical tool for moving from large candidate PPI lists to ranked, testable hypotheses. 3
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+# 2 Materials and Methods 
+
+## 2.1 Overview of the LNGCN protocol a
+
+c
+
+d e
+
+b
+
+Fig. 1 : Overview of LNGCN framework: (a) Overall workflow of LNGCN; (b) Detailed pipeline of CfC preprocessing module with three hierarchical layers; (c) Detailed pipeline of LNN module with graph convolution-driven continuous dynamics; (d) Detailed pipeline of LNN dense module with two hierarchical layers; (e) Detailed pipeline of calibration module. LNGCN is designed for high-throughput protein-protein interaction (PPI) prediction and experimental candidate prioritization. The model follows a Siamese architecture, in which two input proteins are encoded through shared modules before their graph-level representations are combined for pairwise interaction prediction (Figure 1). This 4
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+Table 1 : Sample Size Distribution of Datasets 
+
+Dataset Category Subset Positive Samples Negative Samples 
+
+Main Dataset Training Set 59096 59095 Validation Set 18467 18468 Test Set 14774 14774 Imbalanced Dataset - 3000 29724 Yeast Generalization Dataset - 22161 22161 Calibration Dataset - 3000 3000 design enables independent protein encoding while preserving symmetry at the pair level. The protocol integrates multimodal residue features, graph convolutional networks [6], liquid neural networks [13], and closed-form continuous-time networks [14]. It contains five stages: (1) residue-level structural graph construction and extraction of high-dimensional static features together with residue radial distance; (2) CfC-based feature compression while retaining radial distance as an explicit spatial signal; (3) distance-aware continuous graph evolution through a graph-driven LNN module; (4) symmetric protein-pair fusion and LNN dense classification; and (5) multi-method probability calibration. Thus, LNGCN converts protein sequence and structure infor-mation into calibrated PPI probabilities that can be used to rank candidates for downstream validation. 
+
+## 2.2 Datasets 
+
+For model training, high-confidence PPIs with STRING scores > 0.9 were selected as positive samples from the STRING database [25]. Negative samples are generated by randomly matching from all the known protein interaction pairs to create protein pairs that do not exist in the interactions. Protein sequences and AlphaFold-predicted structures [2] were obtained from UniRef [26]. The main dataset was divided into training, validation and independent test sets, as summarized in Table 1. To evaluate robustness under realistic class imbalance, we used an independent 1:10 human PPI dataset from Zhang et al. [27], including 3000 high-confidence PPIs intersecting STRING [25], UniRef [26], and BioGrid [28], together with 29,724 negative pairs. Cross-species generalization was assessed using yeast PPI data from STRING [25]. For probability calibration, we constructed a balanced calibration dataset contain-ing 3000 positives from Zhang et al. [27] and 3000 negatives, including 2000 randomly sampled non-interacting pairs and 1000 pairs from Negatome [29]. Detailed dataset construction and filtering procedures are provided in Supplementary Information S4. 
+
+## 2.3 Residue-level graph construction and node features 
+
+Each protein structure was converted into a residue-level contact graph G = ( V, E), where nodes correspond to residues and edges represent spatial contacts. The graph 5
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+construction procedure is described in Supplementary Information S5. For each residue node, we extracted a 1803-dimensional multimodal feature vector integrating ESM-2 sequence representations [30], ESM-IF1 structural representations [31], DSSP sec-ondary structure descriptors [32] and relative solvent accessibility features [33–36]. Detailed feature definitions are provided in Supplementary Information S6. To explicitly encode residue spatial position, we introduced a normalized residue radial distance feature. Let ei denote the Cα coordinate of residue i, and let ¯ e =
+
+> 1
+> N
+
+PNi=1 ei be the protein center. The residue-to-center distance and normalized radial distance are defined as: 
+
+di = |ei − ¯e| ∗ 2, ri = di − dmin 
+
+dmax − dmin + ϵ . (1) Here, ϵ = 10 −8 ensures numerical stability. The normalized value ri ∈ [0 , 1] distin-guishes core-like residues from surface-exposed residues, providing a spatial signal for interaction-oriented candidate scoring. 
+
+## 2.4 CfC-based feature preprocessing 
+
+The initial node feature vector contains high-dimensional heterogeneous information. To reduce redundancy while retaining structurally useful signals, LNGCN uses a closed-form continuous-time network (CfC) as a gated preprocessing module. CfC pro-vides an efficient time-dependent gating mechanism [14]. Its generic form interpolates between a dynamic branch and a static branch: 
+
+y(t) = σ  − f (x, I ; θf ) · t ⊙ g(x, I ; θg ) + 
+
+h
+
+1 − σ  − f (x, I ; θf ) · ti
+
+⊙ h(x, I ; θh), (2) where σ is Sigmoid function. In LNGCN, CfC is adapted as a feedforward gated projection for residue graphs. The input node vector xi ∈ R1804 is divided into a 1803-dimensional base feature and a one-dimensional radial distance ri. The base features pass through three CfC layers with pseudo-time τ (l) = l/L . For layer l, the latent representation z(l) 
+
+> i
+
+is projected into gating coefficients and dynamic/static candidate states: 
+
+p(l) 
+
+> i
+
+= σ  − Wf z(l) 
+
+> i
+
+· τ (l), (3) 
+
+h(l) 
+
+> i, dyn
+
+= Wg z(l) 
+
+> i
+
+, h(l) 
+
+> i, stat
+
+= Whz(l) 
+
+> i
+
+. (4) The output is obtained by element-wise interpolation: 
+
+h(l) 
+
+> i
+
+= p(l) 
+
+> i
+
+⊙ h(l) 
+
+> i, dyn
+
++  1 − p(l)
+
+> i
+
+ ⊙ h(l)
+
+> i, stat
+
+. (5) 6
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+The final CfC output compresses the base representation to 256 dimensions and appends the unchanged radial distance: 
+
+x(i)CfC = [ h(L) 
+
+> i
+
+; ri]. (6) This step reduces feature noise while preserving the spatial variable used for distance-aware graph evolution. 
+
+## 2.5 Distance-aware graph-driven LNN module 
+
+After preprocessing, each node is represented by x(i)CfC = [ h(L) 
+
+> i
+
+; ri]. LNGCN then applies a graph-driven liquid neural network to update residue states through continuous-time dynamics. The standard LNN state equation [13] is: 
+
+dh (t)
+
+dt = −
+
+ 1
+
+τ + f (t)
+
+
+
+⊙ h(t) + A ⊙ f (t), (7) where h(t) is the hidden state, τ is a learnable time constant, A is a driving scale vector and f (t) is the nonlinear driving function. We extend this formulation to each residue node in the protein graph: 
+
+dh i(t)
+
+dt = −
+
+ 1
+
+τ + fi(t)
+
+
+
+⊙ hi(t) + A ⊙ fi(t). (8) Crucially, each node possesses a unique driving term fi = f (hi, N (i), r i; θ), where 
+
+N (i) denotes the neighborhood set of node i (including self-loops), θ contains learn-able parameters. The driving term f (k) 
+
+> i
+
+combines GCN-aggregated structural features with distance embeddings, enabling spatially heterogeneous residue representations. Implementation details are provided in Supplementary Information S7. The continuous dynamics are discretized using implicit Euler: 
+
+h(k+1)  
+
+> i
+
+= h(k) 
+
+> i
+
++ ∆ tg A ⊙ f (k)
+
+> i
+
+1 + ∆ tg
+
+ τ −1 + f (k)
+
+> i
+
+ , (9) The parameter A is initialized as ones and constrained within (0 , 10), while τ ∼
+
+U (0 .5, 5). This implicit scheme is numerically stable [15]. The solution trajectory is continuously differentiable with respect to the radial distance under standard ODE sensitivity analysis [16], supporting gradient-based learning of spatially depen-dent interaction features. Formal stability analysis and propositions are provided in Supplementary Information S8. After S rounds of ODE unfolding, residue states are stacked as HLTC =[h(S)1 ; . . . ; h(S) 
+
+> N
+
+]⊤. Multi-hop graph convolution and residual fusion are then applied to capture local and extended structural neighborhoods: 
+
+Hout = ReLU 
+
+
+
+LayerNorm  GCN aux (G, H 0) + Hfuse  + H0
+
+
+
+∈ RN ×d. (10) 7
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+The graph-level protein representation is obtained through average pooling: 
+
+g = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+hout  
+
+> i
+
+∈ Rd. (11) 
+
+## 2.6 Protein-pair fusion and LNN dense classifier 
+
+For a candidate protein pair, the graph-level representations g1 and g2 are combined using a symmetric fusion strategy: 
+
+w = [ g1 + g2 ∥ g1 ⊙ g2 ∥ | g1 − g2|] ∈ R3d. (12) This representation captures shared patterns, multiplicative compatibility and abso-lute differences while remaining invariant to protein order. The fused vector is passed into two LNN dense layers rather than conventional fully connected layers. Starting from w(0) = w, the hidden state evolves for N = 10 discretization steps with δt = 0 .1: 
+
+w(n+1) = w(n) + δt A ⊙ f (w(n), t n)1 + δt  τ −1 + f (w(n), t n) , n = 0 , 1, . . . , N − 1, (13) The driving function concatenates the current state and pseudo-time: 
+
+f (w(n), t n) = Wtrans ·
+
+
+
+σ(Wσ [w(n) ∥ tn]) ⊙ tanh( Wth [w(n) ∥ tn]) 
+
+
+
+, (14) A final linear projection generates binary classification logits: 
+
+u = Wout w(N ) + bout . (15) 
+
+## 2.7 Probability calibration 
+
+For experimental screening, calibrated probabilities are more useful than raw clas-sification scores because they provide more interpretable confidence estimates for candidate ranking and threshold-based selection. LNGCN therefore incorporates a post-processing calibration module. We evaluated four calibration methods, including Platt calibration [17, 18], Beta calibration [19, 20], Isotonic calibration [18, 21, 22], and Boosting calibration [18, 23, 24], with detailed procedures provided in Supplementary Information S10. Let si,k denote the raw model score assigned to candidate protein pair i by the LNGCN model trained in fold k, where k = 1 , . . . , K and K = 5. Let gk,c (·) denote calibrator c fitted in fold k, where C = {Platt , Beta , Isotonic , Boosting } is the fixed set of calibration methods used in each fold. The calibrated probability generated by calibrator c for candidate pair i in fold k was defined as 
+
+pi,k,c = gk,c (si,k ). (16) 8
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+Since different calibration methods have complementary strengths in large-scale and imbalanced PPI settings, we adopted a hierarchical ensemble strategy across cali-bration methods and cross-validation folds. First, predictions from the four calibrators within each fold were averaged: ¯pi,k = 1
+
+|C| 
+
+X
+
+> c∈C
+
+pi,k,c . (17) Second, cross-fold bagging was applied to obtain the final calibrated interaction probability: ˆpensemble  
+
+> i
+
+= 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+¯pi,k , K = 5 . (18) According to bagging theory [37], averaging models with non-identical errors can reduce variance and improve robustness. The final output ˆ pensemble  
+
+> i
+
+was used as the calibrated interaction probability for candidate ranking. 
+
+## 2.8 Candidate ranking and interpretation of calibrated probabilities 
+
+For downstream screening, the calibrated LNGCN score was used as an empirical pri-oritization score rather than a direct biophysical binding probability or a definitive experimental success rate. Calibration was applied to reduce over-confident raw out-puts and to align model scores with the empirical label distribution of the calibration set, thereby making score ranges more suitable for threshold-based candidate selec-tion. Given a candidate protein-pair list, each pair was processed independently by the trained model, and the calibrated interaction probability was used as the primary ranking score for experimental follow-up. Candidate pairs were ranked in descending order of calibrated probability. Follow-ing the confidence intervals commonly used in STRING-based interaction interpre-tation [25], LNGCN scores were divided into five practical priority groups: 0 − 0.15 (extremely low), 0 .15 − 0.4 (low), 0 .4 − 0.7 (medium), 0 .7 − 0.9 (high), and 0 .9 − 1.0(extremely high). High-priority candidates were considered suitable for direct valida-tion, whereas medium-priority candidates were interpreted together with orthogonal evidence, such as mass spectrometry abundance, co-expression, subcellular localiza-tion or pathway context. Low-priority candidates were retained mainly as negative or background controls. This strategy enables LNGCN to transform large candidate PPI lists into experimentally testable hypotheses with interpretable confidence estimates. 
+
+## 2.9 Experimental Methods 
+
+2.9.1 Cell culture 
+
+HeLa cells (European Collection of Authenticated Cell Cultures) were maintained in Dulbecco’s Modified Eagle’s Medium (DMEM) (Sigma-Aldrich, #D5671) supple-mented with 10% FBS, 1 mM sodium pyruvate, 1 × MEM non-essential amino acids, 2 mM GlutaMAX, and 100 U/mL and 100 μg/mL penicillin-streptomycin at 37 °C9
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+with 5% CO 2. All cell lines were routinely tested and confirmed mycoplasma-negative. Complete medium composition is in Supplementary Information S11. 
+
+2.9.2 Transfections 
+
+HeLa cells (six million/dish) were seeded on eight 145-mm dishes (four dishes per condition) and transfected the following day with pcDNA4/TO-TPR-2siR-EGFP (for TPR expression) or empty pcDNA4/TO-EGFP (negative control) using Neofect DNA Transfection Reagent. Alternatively, siRNA transfections were performed using Lipo-master 3000 (Vazyme, #TL301-02) at a 25 nM final concentration. Detailed protocols are in Supplementary Information S11. 
+
+2.9.3 Immunoprecipitation 
+
+Immunoprecipitation followed a published protocol (Collis et al., 2007)[38]. Trans-fected cells were washed with cold 1x PBS, harvested, and centrifuged (300 x g, 4 °C, 5 min). Cell pellets were resuspended in ice-cold lysis buffer and incubated on ice for 30 min, pipetting to reduce viscosity every 10 min. Lysates were clarified by centrifu-gation (16,000 x g, 4 °C, 10 min). Following protein quantification via a BCA assay (Yeasen, #20201ES90), equal protein amounts were incubated overnight at 4 °C with anti-GFP magnetic beads (MCE, HY-K0246). The next day, beads were magnetically separated, washed three times with dilution buffer, and proteins were eluted in 1 ×
+
+SDS sample buffer at 95 °C for 10 min. The lysis, dilution and SDS sample buffer compositions are detailed in Supplementary Information S11. 
+
+2.9.4 Immunoblotting 
+
+Whole-cell extracts were prepared in 1 × SDS sample buffer, sonicated (Xiaomei Chaosheng Instruments, XM-650T, China), and centrifuged (16,000 × g, 4 °C, 30 min). Protein concentrations were determined using a BCA assay. Proteins were sepa-rated via SDS-PAGE and transferred to PVDF membranes (Millipore, #IPFL00010). Membranes were blocked in 5% milk-PBST for 30 min at room temperature. Pri-mary antibodies were diluted in 1% (w/v) milk-PBST and incubated overnight at 4 °C.Secondary antibodies were diluted in the same buffer and incubated for 1 h at room temperature. Signals were detected using FG Super Sensitive ECL Lumines-cence Reagent (Meilunbio, #MA0186). Details of antibodies and SDS sample buffer are available in Supplementary Information S11. 
+
+# 3 Results 
+
+## 3.1 Benchmark performance and robustness of LNGCN 
+
+We first evaluated whether LNGCN could support high-throughput PPI screen-ing across balanced, imbalanced and cross-species settings. Model performance was assessed using AUPRC, accuracy, precision, recall, F1 score, Matthews correlation coefficient (MCC), AUROC (ROC curve) and precision-recall curve (PR curve). Because candidate screening is commonly affected by class imbalance, AUPRC and 10 
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+MCC were emphasized as practical indicators of whether true interactions could be retained for downstream prioritization. a
+
+cb
+
+d
+
+e
+
+Fig. 2 : Model performance evaluation: (a) Benchmark ROC and PR curves; (b) ROC curve comparison between our model and two existing methods on the balanced dataset; (c) PR curve comparison between our model and RF2PPI on the imbalanced dataset; (d) ROC and PR curves of LNGCN on highly imbalanced datasets; (e) ROC and PR curves for evaluating the generalization performance of LNGCN on the yeast dataset. 11 
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+Table 2 : Performance comparison under the same benchmark test dataset Method AUPRC AUROC Accuracy Precision Recall F1-Score MCC LNGCN 0.9823 0.9829 0.9468 0.9417 0.9525 0.9471 0.8936 
+
+PIPR 0.5091 0.4815 0.4720 0.4840 0.8465 0.6159 -0.0845 SWING 0.6426 0.6455 0.6010 0.5937 0.6400 0.6160 0.2027 
+
+Table 3 : Performance comparison under the same dataset Method AUPRC AUROC Accuracy Precision Recall F1-Score MCC RF2-PPI 0.4073 0.7449 0.9247 0.8918 0.2033 0.3312 0.4051 LNGCN 0.8935 0.9863 0.9544 0.6816 0.9424 0.7909 0.7788 
+
+On the STRING [25] human benchmark dataset, five-fold cross-validation showed stable performance. LNGCN achieved an average AUPRC of 0 .9806 ± 0.0046 and an average AUROC of 0 .9805 ± 0.0051 on the independent test sets (Figure 2a), with an F1 score of 93 .93% and an MCC of 0 .8787. The small cross-fold variation indicates that the protocol produced robust ranking-relevant predictions rather than depending on a single favorable partition. Detailed fold-level results are provided in Supplementary Information S9. To place this performance in context, we compared LNGCN with PIPR [39], a Siamese residual recurrent convolutional model, and SWING [40], a sliding-window interaction language model. Under the same benchmark setting, LNGCN achieved higher values across all major metrics (Table 2, Figure 2b). In fold 5, LNGCN obtained higher metrics, whereas PIPR [39] and SWING [40] showed lower AUROC and MCC values. These results indicate that residue-level structural graphs and continuous-time representation learning improved discrimination between interacting and non-interacting pairs. We next evaluated LNGCN under a highly imbalanced 1:10 human PPI dataset from Zhang et al. [27], which better approximates realistic screening settings where true positives are sparse. Compared with RF2-PPI [27], LNGCN achieved a sub-stantially higher AUPRC (0 .8935 versus 0 .4073) and AUROC (0 .9863 versus 0 .7449) (Table 3, Figure 2c). Although RF2-PPI [27] showed higher precision, its recall was low (0 .2033), indicating that many true interactions were missed. LNGCN achieved a recall of 0 .9424, F1 score of 0 .7909 and MCC of 0 .7788, supporting its utility as a prioritization tool where retaining true candidate interactions is often more important than maximizing early precision alone. To further evaluate robustness under imbalanced training conditions, LNGCN was retrained using five-fold cross-validation on the imbalanced dataset. The retrained models achieved an average AUPRC of 0 .7523, AUROC of 0 .9427 and accuracy of 0.9390 (Figure 2d). Although performance decreased relative to the balanced bench-mark, LNGCN retained useful screening performance under a more challenging class distribution. Cross-species evaluation on yeast further showed an average AUPRC of 12 
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+0.9372 and AUROC of 0 .9352 across five folds (Figure 2e), with precision and recall of 0 .8511 and 0 .8797, respectively. These results suggest that LNGCN captured trans-ferable interaction patterns rather than human-specific dataset regularities. Detailed analyses are provided in Supplementary Information S9. 
+
+## 3.2 Component contribution and calibrated probability estimation 
+
+We performed ablation experiments to determine whether the main architectural com-ponents contributed to robust candidate scoring. Five variants were evaluated by removing: (A) the CfC preprocessing module, (B) the LNN module from the distance-aware graph driver, (C) the LNN dense layer, (D) the compensation mechanisms, and (E) both the CfC and LNN components. On the human benchmark, removing continuous-time components reduced perfor-mance (Figure 3a). The full model achieved an MCC of 0 .8936, whereas removing CfC reduced MCC by approximately 6%, removing the graph-driven LNN module reduced it by approximately 8%, and removing both CfC and LNN reduced it by approximately 12%. Cross-species ablation on yeast showed a similar trend (Figure 3b), indicat-ing that feature compression and continuous-time graph evolution jointly support transferable PPI representations. Quantitative component analysis further supported this interpretation. On the human test set, the estimated AUROC contribution was approximately 36% for CfC, 54% for the LNN module, 7% for the LNN dense layer and 3% for compensation mechanisms (Figure 3c). A comparable pattern was observed on yeast (Figure 3d). Thus, the graph-driven LNN module contributed most strongly, while CfC provided an important preprocessing step for compressing high-dimensional residue features without discarding the radial distance signal. Because LNGCN is intended for candidate ranking rather than only binary classifi-cation, we next assessed probability calibration. A calibration dataset containing 3,000 positive and 3,000 negative samples [27, 29] was constructed, and Platt [17, 18], Beta [19, 20], Isotonic [18, 21, 22] and Boosting [18, 23, 24] calibration methods were eval-uated under five-fold cross-validation. All calibration strategies maintained AUROC values above 0 .8971 and AUPRC values above 0 .8486 (Figure 3e). Isotonic [18, 21, 22] and Boosting [18, 23, 24] calibration achieved low expected calibration error (ECE), Beta calibration [19, 20] showed strong recall (0 .9257 ± 0.0364), and Platt calibration [17, 18] achieved the highest AUROC (0 .9142 ±0.0113) and AUPRC (0 .8770 ±0.0178). Since no single method was optimal across all criteria, LNGCN used hierarchical ensemble calibration to generate final interaction probabilities for confidence-guided candidate prioritization. 13 
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+c
+
+a
+
+b
+
+d
+
+eFig. 3 : Ablation experiments and calibration evaluation: (a) Performance radar chart and variance heatmap on the test set in ablation experiments; (b) Performance radar chart and variance heatmap on the yeast dataset in ablation experiments; (c) Quanti-tative analysis of component contribution on the test dataset; (d) Quantitative analysis of component contribution on the yeast dataset; (e) Model calibration assessment: Radar charts of calibration strategies and expected calibration error (ECE) heatmaps at each fold. 
+
+## 3.3 Biological case studies for mechanism-informed candidate interpretation 
+
+We next examined whether LNGCN scores could be interpreted in biologically mean-ingful settings beyond standard classification. Three out-of-sample case studies were 14 
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+selected to test mechanism-informed relative scoring across ternary-complex assembly, phosphorylation-associated signaling and oligomeric-state-dependent binding. a 
+
+> bc
+
+Fig. 4 : Case Studies on Protein-Protein Interaction Prediction: (a) Predicted inter-actions among FGFR1, α-Klotho, and FGF23; (b) Predicted interaction probabilities between Tdk1 oligomer and Bdf1/Bdf2; (c) Predicted interaction probabilities between SHP2 and 22 substrates. First, we used the FGF23-FGFR1c-α-Klotho ternary complex (PDB: 5W21) to examine whether LNGCN could resolve interaction levels within a multi-protein assembly. In this system, α-Klotho functions as a non-enzymatic scaffold for the signaling-active FGF23-FGFR1c complex rather than supporting a simple binary interaction [41]. LNGCN assigned a low probability to direct FGFR1-FGF23 interac-tion (0 .1613), but high probabilities to FGFR1-α-Klotho and α-Klotho-FGF23 (0 .8370 and 0 .8017) (Figure 4a). When FGFR1 was evaluated in the context of α-Klotho against FGF23, the probability increased to 0 .8238. These results are consistent with scaffold-mediated assembly and show mechanism-informed relative scoring within a complex. Second, we evaluated LNGCN on literature-supported SHP2-associated signal-ing interactions. SHP2 recognizes phosphotyrosine-containing substrates, making this system useful for testing whether calibrated LNGCN scores are consistent with PTM-relevant signaling knowledge. Because ESM-IF1 [31] has limited ability to process phosphorylated structures directly, we used backbone structural features from unmod-ified conformations while incorporating modification-specific residue features. Among 22 candidate SHP2-associated pairs, 21 exceeded the medium-probability threshold of 0.4 and were supported by literature evidence (Figure 4c). High-probability predictions included KRAS, HRAS and NRAS (0 .7949-0 .7984) [45], EGFR and HER2 (0 .6977 and 0.7096) [46–48], Src, JAK2 and PTK2B/PTK2 [51–55], and GRB2, STAT1/STAT3 and IRS1 [59–68]. These results indicate biologically coherent scoring of SHP2-associated signaling pairs rather than direct validation of phosphorylation-dependent binding. More analyses are provided in Supplementary Information S10. 15 
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+Third, we evaluated the yeast Tdk1-Bdf1 system [69, 70] as a state-dependent interaction propensity ranking case. LNGCN assigned a relatively low probability to the Bdf1-Tdk1 monomer interaction (0 .2957), which increased for the trimeric state (0 .4627) and slightly decreased for the tetrameric state (0 .4467) (Figure 4b). This trend is consistent with experimental evidence that Tdk1 requires trimerization for effective Bdf1 binding. Across conformations, Bdf1 also showed higher predicted probabilities than Bdf2 [69], suggesting that LNGCN can reflect oligomeric-state and paralog-specific interaction preferences. Detailed mechanistic analyses are provided in Supplementary Information S11. 
+
+## 3.4 Experimental prioritization of TPR-associated interactions 
+
+Finally, we evaluated whether LNGCN could support target-centered experimental candidate prioritization. We focused on nucleoporin TPR [42] and selected 10 candi-date proteins from mass spectrometry interaction data [43], providing a direct test of whether calibrated probabilities can guide downstream validation. Among the 10 candidates, the known NUP153-TPR [44] interaction received the highest probability (0 .7971), and the reported GANP-TPR [43] interaction also received a high score (0 .6765) (Figure 5a), showing that LNGCN recovered established TPR-associated partners. We then focused on two moderate-probability candidates without prior direct validation: ELAVL1-TPR and RALY-TPR, with predicted probabilities of 0 .5893 and 0 .4377, respectively. To assess these candidates, knockdown-based antibody specificity tests and co-immunoprecipitation assays were performed. In HeLa cells transfected with control or target-specific siRNAs, immunoblotting showed reduced RALY and ELAVL1 sig-nals at their expected molecular weights after knockdown (Figure 5b), supporting antibody specificity. Anti-GFP co-immunoprecipitation showed enrichment of RALY and ELAVL1 in TPR-GFP precipitates relative to the GFP empty-vector con-trol (Figure 5c), while input immunoblots confirmed protein presence in lysates. Structural schematic representations of validated interaction pairs are illustrated in Figure 5d-Figure 5g, respectively. 16    
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint ed
+> abc
+> fg
+
+Fig. 5 : Analysis and Validation of TPR-Associated Protein-Protein Interactions: (a) Predicted interaction probabilities between 10 proteins and TPR; (b) Representative immunoblot analysis of HeLa cell lysates; (c) Co-immunoprecipitation assay targeting TPR-GFP; (d) Schematic diagram of the NUP153-TPR interaction; (e) Schematic diagram of the GANP-TPR interaction; (f) Schematic diagram of the ELAVL1-TPR interaction; (g) Schematic diagram of the RALY-TPR interaction. Notably, RF2-PPI [27] assigned low scores to ELAVL1-TPR and RALY-TPR (0 .2090 and 0.2861), whereas LNGCN prioritized both candidates and the pre-dictions were experimentally supported. Thus, LNGCN not only recovered known TPR-associated interactions but also prioritized candidate PPIs that may be missed by existing methods. Complementary analyses of FGF23-FGFR1c-α-Klotho, Tdk1–Bdf1/Bdf2 and SHP2, together with TPR experimental validation, support LNGCN as a calibrated protocol for mechanism-informed scoring, candidate ranking and hypothesis-driven experimental follow-up. Distinct from standard binary clas-sification models, LNGCN is optimized for ranking-focused high-throughput PPI screening. 
+
+# 4 Discussion and Conclusion 
+
+In this study, we developed LNGCN, a distance-aware continuous-time graph protocol for high-throughput PPI prediction and prioritization of experimental candidates. This workflow combines multimodal sequence-structure feature extraction, continuous-time residue graph modeling, and hierarchical probability calibration to generate effec-tive interaction scores that can be used for PPI screening. This positioning is crucial 17 
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+because large-scale PPI screening not only requires accurate discrimination between interacting and non-interacting pairs, but also requires interpretable scores to guide experimental screening. The core module of LNGCN addresses a key limitation of conventional graph-based PPI models: their reliance on discrete neighborhood aggregation, which can blur residue-level spatial heterogeneity and promote over-smoothing in deeper layers. To preserve structural hierarchy, LNGCN couples graph convolutional neighborhood information with residue radial distance as node-specific driving signals in an LNN-ODE system. This design allows each residue representation to evolve continuously under both local topology and its spatial position within the protein, thereby inte-grating sequence- and structure-derived features while maintaining spatially distinct residue states. Before graph evolution, the CfC-based preprocessing module com-presses high-dimensional residue descriptors while preserving critical radial spatial signals. After prediction, a hierarchical ensemble calibration module converts raw outputs into interpretable interaction probabilities for confidence-based candidate ranking. Benchmark results validate the framework’s robustness. On human balanced datasets, LNGCN achieved AUROC and AUPRC over 0 .98 with low cross-fold varia-tion. Under a highly imbalanced 1 : 10 setting, it maintained strong recall and AUPRC, suited for real PPI networks. Cross-species tests on yeast yielded AUPRC and AUROC values above 0 .90, proving generalized interaction pattern learning. Ablation exper-iments confirmed CfC and LNN modules deliver complementary performance gains in feature compression and continuous structural representation. A core strength lies in its integrated calibration pipeline. Raw model scores lack quantitative biological meaning, but hierarchical ensemble calibration produces more interpretable interac-tion probabilities. This makes the framework suitable not only for large-scale screening, but also for confidence-guided ranking of candidate PPIs before experiment validation. The biological case studies highlight the protocol’s practical utility. First, LNGCN delivers mechanism-informed relative ranking: it distinguishes weak direct FGFR1–FGF23 binding from strong α-Klotho-mediated interactions in the ternary hormone-signaling complex, consistent with known assembly mechanisms. Second, most medium- or higher-scoring SHP2 signaling pairs align with published literature, reflecting coherent scoring for PTM-related interactions. Third, its state-dependent interaction propensity ranking accurately captures oligomer-driven binding shifts in yeast Tdk1-Bdf1/Bdf2, showing sensitivity to high-order protein structures. Most importantly, LNGCN prioritizes TPR interactors from mass spectrometry data: its high-confidence hits are experimentally validated, and medium-ranked ELAVL1-TPR, RALY-TPR interactions are also confirmed in co-IP assays. Collectively, LNGCN acts as a reliable computational tool for large-scale PPI prediction and experimental candidate prioritization. Several limitations remain. First, the current framework focuses on binary inter-action prediction and does not explicitly model condition-specific factors such as post-translational modification state, subcellular localization or disease context. Second, cross-species validation was performed only on yeast, and broader evalua-tion across additional organisms will be needed to establish generalizability. Third, 18 
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+although LNGCN introduces continuous-time representation dynamics, the current inputs are still static protein structures. Future extensions could incorporate molec-ular dynamics trajectories, where each conformational frame is represented as a time-indexed residue graph and the driving signal depends on instantaneous residue position. Such an extension may allow LNGCN to model conformationally regulated PPIs more realistically while narrowing the experimental search space for dynamic interaction mechanisms. Overall, LNGCN offers a scalable, interpretable protocol for structure-based PPI prediction and calibrated candidate prioritization. Its combination of benchmark performance, cross-species robustness and experiment-supported discovery suggests that continuous-time graph learning can be a useful strategy for computational PPI screening and mechanism-oriented biological investigation. 
+
+# 5 Conflicts of interest 
+
+The authors declare no competing interests. 
+
+# 6 Funding 
+
+This work was supported by the International Scientific Research Cooperation Seed Fund of International Campus, Zhejiang University, for the project entitled ”Arti-ficial Intelligence-Assisted Molecular Dynamics Simulation and Its Application and Validation in BK Channels”. 
+
+# 7 Data availability 
+
+The source datasets used in this study are publicly available from the STRING database (https://string-db.org/), UniProt database (https://www. uniprot.org/), Negatome database (https://mips.helmholtz-muenchen.de/proj/ppi/ negatome/), BioGRID database (https://thebiogrid.org/), and AlphaFold Database (https://alphafold.ebi.ac.uk/). The processed datasets generated in this study have been deposited in github (https://github.com/yueming521/LNGCN main.git). 
+
+# 8 Code availability 
+
+The custom code for the LNGCN model, data processing, and analysis pipelines used in this study are publicly available on GitHub (https://github.com/yueming521/ LNGCN main.git) to ensure long-term availability. 
+
+# 9 Author contribution 
+
+Y.X. , Y.C. , Y.K. and M.K. conceived the project. Y.C. , Y.K. and M.K. supervised the entire study. Y.C. and Y.K. supervised all model-related work, and M.K. super-vised all biological experiments. Y.X. co-designed the model architecture with J.P. , J.L. and M.Z.. Y.X., J.P. and Y.Q. jointly designed the data features and carried 19 
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+out model construction and ablation experiments. Y.X., Y.Z., Y.H., J.X. and X.Z. explored specific application scenarios and conducted downstream functional analyses. Y.Z. completed the experimental validation of PPIs. R.F. and Q.Q. generated all result visualisations and provided additional support for code implementation and debug-ging. M.Z. , J.Z. and Y.Y. carried out data quality control and cross-checking. Y.X. drafted the model section, whilst Y.Z. drafted the experimental section. All authors contributed comments and reviewed the final version. 
+
+# 10 Acknowledgements 
+
+We would like to thank students Q.Xu (Zhejiang University) and S.Su (Zhejiang University) for their valuable technical support during the data analysis. We also acknowledge the support from the Cross Lung Research Alliance (CLRA) Hub (where Y.K, Y.C, Y.X, J.P, and Y.Q are affiliated), the AI for Life-Course Epidemiology of Stress, Infection, and Healthy Aging (SHENG AI) Hub (where Y.C, Q.Q, and R.F are affiliated), and the Center for Biomedical System & Informatics, where all authors of this study other than Y.K, M.K, and Y.H are affiliated. 
+
+# References 
+
+[1] Wetie, A. G. N., Sokolowska, I., Woods, A. G., Roy, U. & Loo, J. A. Investigation of stable and transient protein-protein interactions: past, present, and future. 
+
+Proteomics 13 , 538–557 (2013). [2] Jumper, J., Evans, R., Pritzel, A. et al. Highly accurate protein structure prediction with AlphaFold. Nature 596 , 583–589 (2021). [3] Zhao, S., Cui, Z., Zhang, G., Gong, Y. & Su, L. MGPPI: multiscale graph neural networks for explainable protein-protein interaction prediction. Front. Genet. 15 ,1440448 (2024). [4] Gainza, P., Bunker, R. D., Townson, S. A. & Castle, J. C. Machine learning to predict de novo protein-protein interactions. Trends Biotechnol. (2025). [5] Sun, M., Zhao, S., Gilvary, C. et al. Graph convolutional networks for com-putational drug development and discovery. Brief. Bioinform. 21 , 919–935 (2020). [6] Kipf, T. N. & Welling, M. Semi-supervised classification with graph convolutional networks. In ICLR (2017). [7] Yuan, Q., Chen, J., Zhao, H. et al. Structure-aware protein-protein interaction site prediction using deep graph convolutional network. Bioinformatics 38 , 125–132 (2021). [8] Jha, K., Saha, S. & Singh, H. Prediction of protein-protein interaction using graph neural networks. Sci. Rep. 12 , 8360 (2022). 20 
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+[9] Torng, W. & Altman, R. B. Graph convolutional neural networks for predicting drug-target interactions. J. Chem. Inf. Model. 59 , 4131–4149 (2019). [10] Zhai, Z., Xu, S., Ma, W., Niu, N. & Qu, C. LGS-PPIS: a local-global structural information aggregation framework for predicting protein-protein interaction sites. Proteins 93 , 716–727 (2025). [11] Cui, J., Yang, S., Yi, L., Xi, Q. & Yang, D. Recent advances in deep learning for protein-protein interaction: a review. BioData Min. 18 , 43 (2025). [12] Guo, C., Pleiss, G., Sun, Y. & Weinberger, K. Q. On calibration of modern neural networks. In ICML (2017). [13] Hasani, R., Lechner, M., Amini, A., Rus, D. & Grosu, R. Liquid time-constant networks. AAAI 35 , 7657–7666 (2021). [14] Hasani, R., Lechner, M., Amini, A. et al. Closed-form continuous-time neural networks. Nat. Mach. Intell. 4, 992–1003 (2022). [15] Dahlquist, G. A special stability problem for linear multistep methods. BIT 3,27–43 (1963). [16] Chen, R. T. Q., Rubanova, Y., Bettencourt, J. & Duvenaud, D. Neural ordinary differential equations. In NeurIPS (2018). [17] Platt, J. Probabilistic outputs for support vector machines and comparisons to regularized likelihood methods. In Advances in Large Margin Classifiers 61–74 (1999). [18] Niculescu-Mizil, A. & Caruana, R. Predicting good probabilities with supervised learning. In Proc. 22nd Int. Conf. Mach. Learn. 625–632 (2005). [19] Kull, M., Silva Filho, T. M. & Flach, P. Beyond sigmoids: how to obtain well-calibrated probabilities from binary classifiers with beta calibration. Electron. J. Stat. 11 , 5052–5080 (2017). [20] Kull, M., Silva Filho, T. M. & Flach, P. Beta calibration: a well-founded and easily implemented improvement on logistic calibration for binary classifiers. In 
+
+AISTATS 623–631 (2017). [21] Zadrozny, B. & Elkan, C. Transforming classifier scores into accurate multiclass probability estimates. In ACM SIGKDD 694–699 (2002). [22] Barlow, R. E., Bartholomew, D. J., Bremner, J. M. & Brunk, H. D. Statistical Inference under Order Restrictions (Wiley, 1972). [23] Friedman, J. H. Greedy function approximation: a gradient boosting machine. 
+
+Ann. Stat. 29 , 1189–1232 (2001). 21 
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+[24] Ferri, C., Hern´ andez-Orallo, J. & Modroiu, R. An experimental comparison of performance measures for classification. Pattern Recognit. Lett. 30 , 27–38 (2009). [25] Szklarczyk, D. et al. STRING v11: protein-protein association networks with increased coverage, supporting functional discovery in genome-wide experimental datasets. Nucleic Acids Res. 47 , D607–D613 (2019). [26] Bateman, A. et al. UniProt: the universal protein knowledgebase in 2021. Nucleic Acids Res. 49 , D480–D489 (2021). [27] Zhang, J. et al. Predicting protein-protein interactions in the human proteome. 
+
+Science 390 , eadt1630 (2025). [28] Oughtred, R. et al. The BioGRID database: a comprehensive biomedical resource of curated protein, genetic, and chemical interactions. Protein Sci. 30 , 187–200 (2021). [29] Blohm, P., Frishman, G., Smialowski, P., Goebels, F. & Wachinger, B. Negatome 2.0: a database of non-interacting proteins derived by literature mining, manual annotation and protein structure analysis. Nucleic Acids Res. 42 , D396–D400 (2014). [30] Lin, Z., Akin, H. & Rao, R. Language models of protein sequences at the scale of evolution enable accurate structure prediction. bioRxiv (2022). [31] Hsu, C. et al. Learning inverse folding from millions of predicted structures. In 
+
+PMLR 162 , 8946–8970 (2022). [32] Kabsch, W. & Sander, C. Dictionary of protein secondary structure: pattern recognition of hydrogen-bonded and geometrical features. Biopolymers 22 , 2577– 2637 (1983). [33] Mitternacht, S. FreeSASA: an open source C library for solvent accessible surface area calculations. (2016). [34] Kawashima, S., Ogata, H. & Kanehisa, M. AAindex: amino acid index database. 
+
+Nucleic Acids Res. 27 , 368–369 (1999). [35] Kawashima, S. & Kanehisa, M. AAindex: amino acid index database. Nucleic Acids Res. 28 , 374 (2000). [36] Kawashima, S., Pokarowski, P., Pokarowska, M., Kolinski, A. & Katayama, T. AAindex: amino acid index database, progress report 2008. Nucleic Acids Res. 
+
+36 , D202–D205 (2008). [37] Breiman, L. Bagging predictors. Mach. Learn. 24 , 123–140 (1996). 22 
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+[38] Collis, S., Barber, L. & Clark, A. HCLK2 is essential for the mammalian S-phase checkpoint and impacts on Chk1 stability. Nat. Cell Biol. 9, 391–401 (2007). [39] Chen, M., Ju, C. J.-T., Zhou, G., Chen, X., Zhang, T. et al. Multifaceted protein-protein interaction prediction based on Siamese residual RCNN. Bioinformatics 
+
+35 , i305–i314 (2019). [40] Siwek, J. C., Omelchenko, A. A., Chhibbar, P. et al. Sliding Window Interaction Grammar (SWING): a generalized interaction language model for peptide and protein interactions. Nat. Methods 22 , 1707–1719 (2025). [41] Chen, G., Liu, Y., Goetz, R. et al. α-Klotho is a non-enzymatic molecular scaffold for FGF23 hormone signalling. Nature 553 , 461–466 (2018). [42] Singh, D., Soni, N., Hutchings, J. et al. The molecular architecture of the nuclear basket. Cell 187 , 5267–5281 (2024). [43] Kosar, M., Giannattasio, M., Piccini, D. et al. The human nucleoporin Tpr protects cells from RNA-mediated replication stress. Nat. Commun. 12 , 3937 (2021). [44] Hase, M. E. & Cordes, V. C. Direct interaction with nup153 mediates binding of Tpr to the periphery of the nuclear pore complex. Mol. Biol. Cell 14 , 1923–1940 (2003). [45] Bunda, S., Burrell, K., Heir, P., Zeng, L. & Alamsahebpour, A. Inhibition of SHP2-mediated dephosphorylation of Ras suppresses oncogenesis. Nat. Commun. 
+
+6, 8859 (2015). [46] Zhou, X. & Agazie, Y. M. Molecular mechanism for SHP2 in promoting HER2-induced signaling and transformation. J. Biol. Chem. 284 , 12226–12234 (2009). [47] Hartman, Z., Geldenhuys, W. J. & Agazie, Y. M. A specific amino acid context in EGFR and HER2 phosphorylation sites enables selective binding to the active site of Src homology phosphatase 2 (SHP2). J. Biol. Chem. 295 , 3563–3575 (2020). [48] Zhan, Y., Counelis, G. J. & O’Rourke, D. M. The protein tyrosine phosphatase SHP-2 is required for EGFRvIII oncogenic transformation in human glioblastoma cells. Exp. Cell Res. 315 , 2343–2357 (2009). [49] Bennett, A. M., Tang, T. L., Sugimoto, S., Walsh, C. T. & Neel, B. G. Protein-tyrosine-phosphatase SHPTP2 couples platelet-derived growth factor receptor β
+
+to Ras. Proc. Natl Acad. Sci. USA 91 , 7335–7339 (1994). [50] Perrinjaquet, M., Vilar, M. & Ib´ a˜ nez, C. F. Protein-tyrosine phosphatase SHP2 contributes to GDNF neurotrophic activity through direct binding to phospho-Tyr687 in the RET receptor tyrosine kinase. J. Biol. Chem. 285 , 31867–31875 23 
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+(2010). [51] Zhu, S., Bjorge, J. D. & Fujita, D. J. PTP1B contributes to the oncogenic prop-erties of colon cancer cells through Src activation. Cancer Res. 67 , 10129–10137 (2007). [52] Ali, S., Nouhi, Z., Chughtai, N. & Ali, S. SHP-2 regulates SOCS-1-mediated Janus kinase-2 ubiquitination/degradation downstream of the prolactin receptor. 
+
+J. Biol. Chem. 278 , 52021–52031 (2003). [53] Zehender, A., Huang, J., Gy¨ orfi, A. H. et al. The tyrosine phosphatase SHP2 controls TGF β-induced STAT3 signaling to regulate fibroblast activation and fibrosis. Nat. Commun. 9, 3259 (2018). [54] Chauhan, D., Pandey, P., Hideshima, T. et al. SHP2 mediates the protective effect of interleukin-6 against dexamethasone-induced apoptosis in multiple myeloma cells. J. Biol. Chem. 275 , 27845–27850 (2000). [55] Khare, S., Holgren, C. & Samarel, A. M. Deoxycholic acid differentially regulates focal adhesion kinase phosphorylation: role of tyrosine phosphatase ShP2. Am. J. Physiol. Gastrointest. Liver Physiol. 291 , G1100–G1112 (2006). [56] Chong, Z. Z., Lin, S. H., Kang, J. Q. & Maiese, K. The tyrosine phosphatase SHP2 modulates MAP kinase p38 and caspase 1 and 3 to foster neuronal survival. 
+
+Cell Mol. Neurobiol. 23 , 561–578 (2003). [57] Yu, L., Min, W., He, Y., Qin, L. & Zhang, H. JAK2 and SHP2 reciprocally regulate tyrosine phosphorylation and stability of proapoptotic protein ASK1. J. Biol. Chem. 284 , 13481–13488 (2009). [58] Betanzos, M. F., Federspiel, J. D., Palubinsky, A. M., McLaughlin, B. & Liebler, D. C. Dynamic phosphorylation of apoptosis signal regulating kinase 1 (ASK1) in response to oxidative and electrophilic stress. Chem. Res. Toxicol. 29 , 2175–2183 (2016). [59] Ahmed, Z., Lin, C. C., Suen, K. M. et al. Grb2 controls phosphorylation of FGFR2 by inhibiting receptor kinase and Shp2 phosphatase activity. J. Cell Biol. 200 ,493–504 (2013). [60] Cunnick, J. M., Mei, L., Doupnik, C. A. & Wu, J. Phosphotyrosines 627 and 659 of Gab1 constitute a bisphosphoryl tyrosine-based activation motif (BTAM) conferring binding and activation of SHP2. J. Biol. Chem. 276 , 24380–24387 (2001). [61] Arnaud, M., Mzali, R., Gesbert, F. et al. Interaction of the tyrosine phosphatase SHP-2 with Gab2 regulates Rho-dependent activation of the c-fos serum response element by interleukin-2. Biochem. J. 382 , 545–556 (2004). 24 
+
+> .CC-BY-NC-ND 4.0 International license made available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is The copyright holder for this preprint this version posted June 25, 2026. ;https://doi.org/10.64898/2026.04.30.721835 doi: bioRxiv preprint
+
+[62] Kuhn´ e, M. R., Zhao, Z., Rowles, J., Shen, S. H. & Fischer, E. H. Dephosphoryla-tion of insulin receptor substrate 1 by the tyrosine phosphatase PTP2C. J. Biol. Chem. 269 , 15833–15837 (1994). [63] Goldstein, B. J., Bittner-Kowalczyk, A., White, M. F. & Harbeck, M. Tyrosine dephosphorylation and deactivation of insulin receptor substrate-1 by protein-tyrosine phosphatase 1B. J. Biol. Chem. 275 , 4283–4289 (2000). [64] Wu, T. R., Hong, Y. K., Wang, X. D. et al. SHP-2 is a dual-specificity phosphatase involved in Stat1 dephosphorylation at both tyrosine and serine residues in nuclei. 
+
+J. Biol. Chem. 277 , 47572–47580 (2002). [65] Wang, C. Z., Su, H. W., Hsu, Y. C., Shen, M. R. & Tang, M. J. A discoidin domain receptor 1/SHP-2 signaling complex inhibits α2β1-integrin-mediated sig-nal transducers and activators of transcription 1/3 activation and cell migration. 
+
+Mol. Biol. Cell 17 , 2839–2852 (2006). [66] Burks, J. & Agazie, Y. M. Modulation of α-catenin Tyr phosphorylation by SHP2 positively effects cell transformation induced by the constitutively active FGFR3. 
+
+Oncogene 25 , 7166–7179 (2006). [67] Zhao, R. & Zhao, Z. J. Dissecting the interaction of SHP-2 with PZR, an immunoglobulin family protein containing immunoreceptor tyrosine-based inhibitory motifs. J. Biol. Chem. 275 , 5453–5459 (2000). [68] Ryu, H. H., Kim, S. Y. & Lee, Y. S. Connecting the dots between SHP2 and glutamate receptors. Korean J. Physiol. Pharmacol. 24 , 129–135 (2020). [69] Hua, Y., Zhang, J., Yang, M. et al. A meiotic driver hijacks an epigenetic reader to disrupt mitosis in noncarrier offspring. Proc. Natl Acad. Sci. USA 121 ,e2408347121 (2024). [70] Hua, Y., Zhang, J., Yang, M. et al. Structural duality enables a single protein to act as a toxin-antidote pair for meiotic drive. Proc. Natl Acad. Sci. USA 121 ,e2408618121 (2024). 25
