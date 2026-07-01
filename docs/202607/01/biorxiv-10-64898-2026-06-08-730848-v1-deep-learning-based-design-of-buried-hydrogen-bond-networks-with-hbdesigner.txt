@@ -1,0 +1,675 @@
+Title: Deep learning based design of buried hydrogen bond networks with HBDesigner
+
+URL Source: https://www.biorxiv.org/content/10.64898/2026.06.08.730848v1.full.pdf
+
+Published Time: Wed, 01 Jul 2026 21:22:32 GMT
+
+Number of Pages: 42
+
+Markdown Content:
+1
+
+# Deep learning based design of buried hydrogen bond 1
+
+# networks with HBDesigner 2
+
+Henry Dieckhaus* 1,2 , Brock T. Harvey* 1, Tomiris Mulikova* 1, Jessica T. Horenstein 1,3 , Nathan 3I. Nicely 3, Nicholas Z. Randolph 1,4 , Brian Kuhlman ‡1,4,5 
+
+45 
+
+> 1
+
+Department of Biochemistry and Biophysics, School of Medicine, University of North 6Carolina at Chapel Hill, Chapel Hill, North Carolina, USA 7 
+
+> 2
+
+Division of Chemical Biology and Medicinal Chemistry, Eshelman School of Pharmacy, 8University of North Carolina at Chapel Hill, Chapel Hill, North Carolina, USA 9 
+
+> 3
+
+Department of Pharmacology, School of Medicine, University of North Carolina at Chapel 10 Hill, Chapel Hill, North Carolina, USA 11  
+
+> 4
+
+Department of Bioinformatics and Computational Biology, School of Medicine, University 12 of North Carolina at Chapel Hill, Chapel Hill, North Carolina, USA 13  
+
+> 5
+
+Lineberger Comprehensive Cancer Center, School of Medicine, University of North 14 Carolina at Chapel Hill, Chapel Hill, North Carolina, USA 15 16 17 18 19 * these authors contributed equally to this work 20 
+
+> ‡
+
+Corresponding author: bkuhlman@email.unc.edu 21 
+
+22 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+2
+
+Abstract: 23 Accurate design of hydrogen-bonding (H-bonding) interactions is a longstanding goal in 24 protein design, as they can facilitate specific protein-protein interactions while improving 25 the solubility of the proteins in the unbound state. Despite this, computational design of H-26 bond networks remains underexplored in the deep learning era. Here, we present 27 HBDesigner, a novel algorithm for H-bond network design. Through a combination of deep 28 learning-based sampling and atomistic energy scoring, HBDesigner outperforms existing 29 tools in designing connected H-bond networks onto protein sca_olds. We demonstrate the 30 usefulness of HBDesigner by creating monomeric proteins with buried polar interactions 31 and homodimers with extended interface H-bond networks, and by installing specificity 32 into a family of homologous heterodimers where prior design tools fail to do so. The ability 33 to design H-bond networks into arbitrary protein sca_olds should be broadly useful for a 34 wide range of design applications. 35 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+3
+
+Introduction 36 
+
+Hydrogen bonds (H-bonds) play a critical role in dictating protein structure and function. 37 Enzymes use H-bonds to preorganize key groups for catalysis, enhancing e_iciency by 38 reducing the entropic cost of binding 1. Binding a_inity 2 and specificity 3 of protein-protein 39 interactions can also be driven by H-bonding contacts, which require precise geometric 40 compatibility between subunits 4. For minibinders and protein-based nanoparticles, 41 increasing interface polarity can enhance solubility and reduce aggregation 5.42 Despite these factors, tools for de novo protein design have historically struggled to design 43 protein pockets and interfaces with H-bonding networks comparable in complexity to those 44 observed in naturally occurring proteins 4,6 . This is a challenging design problem because H-45 bonds are only energetically favorable within a small range of distances and angles 7, and 46 because buried unsatisfied heavy polar atoms (BUHs) are highly unfavorable 8. Even in the 47 era of deep learning (DL) based protein design, most de novo binder design campaigns still 48 rely on hydrophobic contacts to achieve strong experimental success rates 4,9,10 . This strategy 49 can limit the scope of viable targets, while many therapeutically relevant target classes such 50 as antigen-antibody complexes exhibit polar interfaces 11 .51 Previous e_orts to design buried H-bond networks led to the Rosetta HBNet protocol 12 ,52 which searches for combinations of sidechain rotamers capable of H-bonding when 53 installed onto a given backbone. This approach has been successfully applied to several de 54 novo systems, including pH-sensitive assemblies 13 and transmembrane b-barrels 14 . A later 55 
+
+update replacing exhaustive network enumeration with Monte Carlo sampling (MC HBNet) 56 improved its performance on large, asymmetric systems 8, facilitating the design of 57 orthogonal heteromeric interfaces 15 . While e_ective, MC HBNet su_ers from a few 58 limitations, including a reliance on fixed rotamer libraries and di_iculty modeling long, 59 flexible amino acids. More recently, DL design tools such as ProteinMPNN 16 and PIPPack 17 
+
+60 have demonstrated significant advancements in sequence design and sidechain packing, 61 respectively, in comparison to empirical methods such as Rosetta. ProteinMPNN in 62 particular has been used to improve the polarity of designed protein-protein interfaces 5.63 However, these and other DL design tools lack the atomistic energy function necessary to 64 explicitly model H-bond geometry, so they cannot be readily adapted to design H-bond 65 networks with high connectivity or specific amino acid compositions. 66 We hypothesized that a DL approach could be used to improve the speed and accuracy of 67 H-bond network design. Here, we introduce HBDesigner, a fixed-backbone protein design 68 algorithm trained to install H-bond networks onto protein sca_olds. Our method integrates 69 recent advancements in DL based sequence design and sidechain packing with the 70 atomistic scoring capabilities of the Rosetta energy function. We demonstrate its e_icacy at 71 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+4installing designable buried polar networks through several in silico benchmarks on diverse 72 sets of native and de novo designed proteins. We then apply our method to design de novo 73 proteins with buried H-bond networks integrated into their cores and interfaces, 74 demonstrating high experimental success rates. Finally, we demonstrate the capability of 75 HBDesigner to enhance binder specificity by designing and validating a family of 76 homologous heterodimers with interface networks that impart specificity into otherwise 77 promiscuous sca_olds. 78 79 
+
+Results: 80 
+
+Modeling hydrogen bond networks in silico 81 We sought an algorithm that receives a protein backbone as input and rapidly samples 82 energetically favorable H-bond networks. To achieve this, we formulated HBDesigner as a 83 three-step procedure (Fig. 1A). The first two steps use graph neural networks to encode the 84 backbone structure into a protein graph. The design model (Fig. 1A, top) autoregressively 85 predicts the position and the amino acid identities of only the network residues. This is 86 distinct from inverse folding models such as ProteinMPNN, which decode the entire 87 sequence, and it enables more rapid network sampling. The packing model (Fig. 1A, middle) 88 then predicts the sidechain chi angles for residues in the network. The third step, the scoring 89 module (Fig. 1A, bottom) , uses PyRosetta to rapidly minimize, score, and rank the predicted 90 networks. 91 HBDesigner was trained on a dataset of over 1.7 million high-quality native sidechain H-bond 92 networks curated from an August 2021 snapshot of the Protein Data Bank 18 . PyRosetta 19 was 93 used to optimize and detect networks of H-bonds with favorable geometry to use for training 94 
+
+(Fig. 1B) . To provide fine-grained control over network design, HBDesigner was trained to use 95 di_erent types of conditioning information, which can be provided at inference time. 96 Sequence conditioning (Fig. 1C) specifies the desired amino acid composition of designed 97 networks, while virtual guide atom conditioning (Fig. 1D) specifies an approximate center-98 of-mass for the designed networks in 3D space. The model can also condition on one or 99 more existing polar residues to be used to anchor predicted networks (Fig. 1E). 100 
+
+HBDesigner produces native -like, well -packed networks 101 
+
+We first evaluated HBDesigner by generating H-bond networks for our test set of native 102 protein backbones. When sampled unconditionally, the design model closely reproduced 103 the amino acid distribution of native H-bond networks (Fig. 2A, blue and gold) . Generating 104 designs with a low sampling temperature (Fig. 2A, green) resulted in a modest increase in 105 small hydroxyl and acidic residues at the expense of aromatic and amidic residues. Packing 106 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+5methods were evaluated by repacking native networks onto their original backbones without 107 any surrounding sequence context. The HBDesigner packing model produced higher 108 rotamer recovery and lower root-mean-square deviation (RMSD) than the other two methods 109 tested, the DL-based packing model PIPPack and the Rosetta PackRotamersMover (Fig. 2B, 110 
+
+left and middle) . Rotamer recovery and RMSD were slightly improved by the use of recycling 111 
+
+(Fig. 2B, left and middle, pink) , while postprocessing with the Rosetta MinMover was 112 essential to avoid clashing and disfavored Rosetta energy scores (Fig. 2B, right, orange) .113 This also improved rotamer recovery at the cost of a slight increase in RMSD. 114 
+
+HBDesigner e<ectively improves designed protein polarity in silico 115 
+
+To evaluate HBDesigner in the context of an actual design campaign, we ran a refolding 116 benchmark on a large library of native and de novo generated backbones (Fig. 2C) . In brief, 117 we designed sequences for each backbone using either a) HBDesigner followed by 118 ProteinMPNN to design the remaining sequence, b) ProteinMPNN alone, or c) ProteinMPNN 119 with amino acid biasing enabled to encourage buried polar residues (referred to as b-120 ProteinMPNN). We then refolded all sequences using AlphaFold3 20 (AF3), then minimized 121 and scored all successfully refolded designs with PyRosetta to assess their polarity and H-122 bonding. On a test set of 532 native monomer backbones, we found that sequences 123 designed with ProteinMPNN had significantly less polar cores after refolding than those of 124 the native proteins (Fig. 2D, green and orange). Generating even small (3-residue) buried 125 networks with HBDesigner prior to design with ProteinMPNN resulted in a marked increase 126 in core polarity (Fig. 2D, purple) and an accompanying increase in buried H-bonds (Fig. 2E, 127 
+
+purple and orange) . Importantly, simply increasing the core polarity using amino acid 128 biasing generated fewer buried H-bonds than HBDesigner (Fig. 2E, pink) , indicating that our 129 method was indeed yielding designs enriched with productive H-bonding motifs. Upon 130 visual inspection, we observed that HBDesigner more often generated highly connected 131 networks with branched interactions, rather than the isolated H-bonds common to b-132 ProteinMPNN (Fig. 2F, top) . In other cases, HBDesigner installed a novel network into a 133 pocket that b-ProteinMPNN would otherwise keep nonpolar (Fig. 2F, bottom) . These 134 findings were replicated on an additional set of 726 de novo monomer backbones (Extended 135 
+
+Data Fig. 1A) , as well as 690 de novo heterodimers (Extended Data Fig. 1B) , where 136 HBDesigner produced more buried core or interface H-bonds, respectively, than the other 137 methods. 138 Using the same refolding test, we also compared HBDesigner to the Rosetta MC HBNet 139 protocol. We applied each method to design 5 buried networks per sca_old for our libraries 140 of de novo monomer and heterodimer backbones and evaluated them with various metrics, 141 including saturation , which is the fraction of total H-bond donor/acceptor sites in a given set 142 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+6of residues that are engaged in H-bonding 8. We then designed sequences around each 143 network with ProteinMPNN and assessed their refoldability by AF3 pLDDT. For each method, 144 we also calculated sca<old recovery percentage , which is the percentage of backbones in 145 the library with a designed H-bond network that was fully recapitulated after refolding. We 146 found that the two methods produce similar results when used to design monomer cores 147 
+
+(Table 1, top) , with HBDesigner producing better AF3 pLDDT and saturation but MC HBNet 148 achieving better sca_old recovery and finding more networks. When used to design 149 heterodimer interfaces (Table 1, bottom) , however, HBDesigner achieves slightly better 150 scores on all metrics. 151 
+
+We next sought to characterize the upper limits of H-bond network design with HBDesigner 152 and AF3. To do this, we repeated the above refolding test and generated designs including 153 buried networks of 2-6 residues, then assessed their sca_old recovery scores as a function 154 of network size. We observed that networks designed across heterodimer interfaces were 155 less recoverable than those designed into monomer cores (Fig. 2G, red and pink bars) . We 156 also found that sca_old recovery decreased sharply with increasing network size, as over 157 70% of monomer sca_olds could accommodate a 2-residue network in the core, compared 158 to less than 4% for 6-residue networks (Fig. 2G, red bars) .159 
+
+HBDesigner improves predicted binding specificity in otherwise promiscuous sca<olds 160 
+
+Next, we wished to test our hypothesis that installing H-bond networks into protein-protein 161 interfaces with HBDesigner could impart improved binding specificity. We collected 19 de 162 novo designed heterodimers from prior design e_orts and generated a family of 10 highly 163 similar backbones (template modeling [TM] score>0.9) for each sca_old using partial 164 RFdi_usion 21 . We designed sequences for each backbone using ProteinMPNN, with and 165 without first installing a 4-residue network across the interface using HBDesigner. We then 166 generated all possible A/B subunit pairs within each family and refolded them with AF3, 167 using the interface predicted template modeling (ipTM) confidence score as a proxy for 168 predicted binding. When designed only with ProteinMPNN, the correctly paired dimers 169 received high ipTM scores (median=0.90), but the mispaired dimers also received moderate 170 ipTMs (median=0.73), indicating only modest specificity for the designed dimer interactions 171 
+
+(Fig. 2H, left) . When using HBDesigner, the correctly paired dimers produced only slightly 172 lower ipTMs (median=0.88), while the mispaired dimers received significantly worse scores 173 (median=0.51), indicating higher predicted specificity (Fig. 2H, right) .174 
+
+Design and characterization of de novo monomers with polar cores 175 
+
+As an initial experimental test of our model, we designed a set of small (80-120 residue), de 176 novo monomeric proteins, using HBDesigner to install a single H-bond network of 3-6 177 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+7residues into the core of each protein. We selected 19 designs with a range of buried polar 178 surface area percentages (bpSA%) for expression and characterization by circular dichroism 179 (CD). Of these, 12 were found to be well-expressed, stable, and folded with a CD curve 180 consistent with the designed fold (Fig. 3A -C, Extended Data Fig. 2) . Notably, the successful 181 designs included a diverse range of network topologies and amino acid compositions. 182 Helical bundles had the highest expression success rate (9 of 11 designs), while mixed a/b183 
+
+folds were moderately successful (2 of 4), and all b-sheet -rich designs (0 of 4) failed (Fig. 184 
+
+3D) . While designs with the highest bpSA% were the least likely to express well, they also 185 typically had the most b-sheet character ( Fig. 3D) . We also observed that seven of the twelve 186 
+
+purified designs were folded up to >95°C (Fig. 3C, Extended Data Fig. 2) , despite having 187 significantly more polar cores than typical designs produced by ProteinMPNN (Fig. 3D) .188 We solved the crystal structure for Design JH1 (PDB: 13JM, 2.1 Å resolution), a four-helix 189 bundle with an extended network centered around a buried arginine (Fig. 3A, top) . Under 190 crystallization conditions, the protein forms a domain swap dimer in which the loop 191 connecting helix 1 and 2 forms an extended conformation that results in helix 1 from chain A 192 partnering with helices 2-4 of chain B (Fig. 3E) . In solution at a lower concentration, JH1 193 exists in a monomer-dimer equilibrium as evidenced by size exclusion chromatography 194 
+
+(Extended Data Fig. 3A) . Aside from the alternate conformation observed for loop 1, each 195 four-helix unit in the crystal structure closely aligns with the design model (RMSD Ca = 0.93 Å, 196 
+
+RMSD net = 0.53 Å), allowing a direct comparison of the designed and experimentally 197 determined H-bond networks (Fig. 3E) . As designed, R86 is buried in the protein core and 198 forms H-bonds with the sidechains of E36, N63, and Q66, as well as T10 coming from the 199 helix on the opposite chain. One interaction in the crystal structure that is not captured in 200 the design model is a structural water that bridges between Y17 on helix 1 and the designed 201 hydrogen bond network (Fig. 3E, bottom) . Interestingly, AF3 predicts that the protein will 202 domain swap when predicted as a dimer, potentially reflecting strain in loop 1 when the 203 protein folds into a monomer (Extended Data Fig. 3B). 204 
+
+Design and characterization of de novo homodimers with highly polar interfaces 205 
+
+To examine the ability of HBDesigner to design interfaces with buried hydrogen bonds, we 206 generated de novo homodimer backbones of 200-400 amino acids and used HBDesigner to 207 introduce H-bond networks consisting of two, three, or four polar residues across each 208 interface. Rather than installing a single symmetric network, we instead chose to design 209 asymmetric networks and symmetrize them across the interface, meaning that two copies 210 of each network are present in each interface (Fig. 4A) . This enabled us to more easily cover 211 a large portion of the interface with our networks. We expressed 22 homodimers and 212 characterized them with mass photometry (MP) to determine their propensity to form 213 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+8dimeric complexes (Fig. 4C, Extended Data Fig. 4) . The proteins were produced as fusions 214 with maltose-binding protein to allow easy detection with MP. All 22 designs expressed well, 215 and 15 were found to be primarily dimeric by mass photometry at a concentration of 50 nM. 216 Among the remaining designs, three were a mixture of monomer and dimer, and one showed 217 additional peaks at higher mass (Extended Data Fig. 4) . Assessment of interface polarity 218 revealed that our designed interfaces were more polar on average than those produced by 219 ProteinMPNN, while still less polar than native homodimers (Fig. 4B) . The one exception was 220 design S2H, which had a 62% polar interface by surface area due to additional backbone-221 backbone H-bonds from extensive b-strand pairing (Extended Data Fig. 4) .222 Encouraged by the high success rate of our initial campaign, we next sought to design even 223 more polar homodimer interfaces. To do this, we combined successfully folded single-224 network designs with alternate HBDesigner networks for each corresponding backbone. We 225 selected nine designs from the resulting multi-network candidates. Again, all of the designs 226 expressed well. When analyzed by mass photometry (Fig. 4 D, Extended Data Fig. 5) , we 227 observed that three of our designs were mostly dimeric, three were mostly monomeric, and 228 three were in equilibrium between monomer and dimer. Across the single- and multi-229 network campaigns, we observed that more polar interfaces were less likely to be successful 230 
+
+(Fig. 4B) .231 We solved high-resolution crystal structures for three of our homodimer designs, S2B (PDB: 232 35SL, 1.80 Å resolution), S3G (13FC, 1.79 Å), and S4A (35SB, 1.83 Å) (Fig. 4E -G) . All three 233 structures show close agreement with the design models in terms of overall fold and 234 interface orientation. In design S2B (Fig. 4E) , the network topology remained mostly intact, 235 with minor rearrangements in sidechain geometry and H-bond donor/acceptor pairing 236 (RMSD Ca = 1.74 Å, RMSD net = 1.88 Å). These changes were enabled by a small shift of the C -237 
+
+terminal helix of each subunit toward the opposite chain, as well as two structural waters 238 integrated into the designed network. One of these was found bridging the central Y43 and 239 R47 residues, and one between R47 and solvent-exposed E72. The crystal structure of 240 design S3G (Fig. 4F) showed nearly perfect agreement with the design model (RMSD Ca = 0.83 241 
+
+Å, RMSD net = 0.22 Å), including correct recovery of all network residue rotamers. This 242 network, which was more linear and comprised of less flexible residues than that of S2B, 243 showed no structural water intrusions. Design S4A (Fig. 4G) included a five-residue network 244 with partial solvent exposure and several longer, more flexible sidechains. In the crystal 245 structure, there are four homodimers per asymmetric unit, and alternative conformations 246 are observed for the network in the four homodimers. The network formed between chain D 247 and chain C most closely resembles the design model, with R37 chain D burying its 248 guanidinium group and forming hydrogen bonds with S27 chain C and E30 chain C, as 249 designed (RMSD Ca = 0.66 Å, RMSD net = 1.03 Å). 250 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+9
+
+Design and characterization of de novo heterodimers with improved binding selectivity 251 
+
+Finally, encouraged by the results of our in silico specificity test (Fig. 2 H), we designed an 252 experiment to assess whether installing H-bond networks across a designed interface could 253 impart binding specificity among otherwise promiscuous binding partners. To do this, we 254 reanalyzed the heterodimers from the in silico test to identify families of heterodimers with 255 high predicted specificity when designed with HBDesigner followed by ProteinMPNN (Fig. 256 
+
+5B, top) and low predicted specificity when designed with ProteinMPNN alone (Fig. 5B, 257 
+
+bottom) . From this, we identified a set of 6 homologous heterodimers (Fig. 5A) , which we 258 expressed and tested for binding using ELISA. As predicted from AF3 crossdocking, the 259 ProteinMPNN heterodimers showed high binding a_inity for both their intended design 260 partners and their o_-target partners (Fig. 5C, bottom) . The HBDesigner heterodimers, on 261 the other hand, had significantly improved specificity for their intended design partners, at 262 the cost of diminished on-target a_inity (Fig. 5C, top) . Our best-performing design, HBDes3, 263 showed 110 nM on-target a_inity with 100-fold specificity over its cognate o_-target 264 partners. These results indicate that HBDesigner and AF3 can be used to explicitly design 265 specific binding between protein subunits with highly similar folds and interface shapes. 266 
+
+267 
+
+Discussion 268 
+
+This study was motivated by the hypothesis that a task-specific deep learning (DL) approach 269 to hydrogen-bonding network design could o_er advantages over both empirical methods 270 and generalist DL methods by combining aspects of each. In this work, we have 271 demonstrated that this approach, which we call HBDesigner, enables rapid design of H-bond 272 networks into arbitrary protein backbones. On an in silico benchmark of over 2000 native and 273 de novo backbones, our method produced buried H-bond networks more reliably than 274 ProteinMPNN while o_ering similar or better speed and designability compared to MC 275 HBNet. Our experimental results further validate our method by showing how HBDesigner 276 can be readily applied to common design tasks, including installation of H-bond networks 277 into protein cores and both symmetric and asymmetric interfaces. 278 We developed HBDesigner as a drop-in module intended for use in the early steps of the in 279 
+
+silico design pipeline. In the experiments described above, we treat H-bond networks as 280 privileged motifs akin to enzyme active sites and follow installation of the network with 281 sequence design for the rest of the protein. In this setting, we observed that ProteinMPNN 282 was often able to extend networks introduced by HBDesigner (Fig. 3A and Fig. 4 C-D, tan 283 
+
+sticks) with additional polar residues. This behavior enabled us to design large (6+ residue) 284 networks starting from seed networks of only 3-4 residues. We also observed that AF3 is 285 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+10 capable of modeling H-bonding interactions, with some caveats. While 3 of our 4 crystal 286 structures showed sub-Ångstrom agreement with the design model by C a RMSD, we often 287 
+
+observed subtle sidechain rearrangements, especially at more solvent-exposed positions 288 
+
+(Fig. 3E and Fig. 4E -G) . On the other hand, the domain swap observed in design JH1 is 289 correctly predicted by AF3 (Extended Data Fig. 3B) when prompted to fold it as a dimer. This 290 is consistent with prior work which found that AF2 could be used to predict homo-291 oligomerization across the proteome 22 . Future design e_orts might benefit from the 292 inclusion of a filter to exclude such dimerization-prone designs. 293 The folding stability of water-soluble proteins is driven largely by the hydrophobic e_ect 294 wherein nonpolar residues are hidden from water in the core and polar residues are oriented 295 toward water at the surface 23 . We observed during our monomer design campaign that the 296 cores of native proteins were more polar than those of ProteinMPNN-designed homologues 297 
+
+(Fig. 3D) . De novo designed proteins are often hyperstable, while many native proteins are 298 only marginally stable 4. It is therefore reasonable to hypothesize that the increased polarity 299 of native protein cores may be responsible for their decreased stability. Despite this 300 expectation, seven of the monomer designs were stable above 95°C while possessing 301 native-like core polarity (Fig. 3C, Extended Data Fig. 2). These findings suggest that elevated 302 core polarity does not necessarily preclude hyperstability. This is consistent with recent 303 rational design e_orts incorporating buried charged residues into artificial coiled coils 24 . On 304 the other hand, only one of the six most polar monomer designs JH1 was successfully 305 characterized (Fig. 3D) , and it demonstrated an unexpected domain swap and two-stage 306 melting curve (Fig. 3C, top) . However, most of the failed designs were those with b-sheet -307 
+
+rich folds, which are known to be more di_icult to express than helix-rich designs 4,10 . It is 308 therefore possible these designs may have failed for other reasons than their polarity, such 309 as aggregation during folding. 310 While HBDesigner does not explicitly model water, it does implicitly account for it with some 311 of its metrics, such as saturation and BUHs. Despite this, structural water intrusions into our 312 designed networks occurred in two of the crystal structures we solved, those of monomer 313 JH1 (Fig. 3E, bottom) and homodimer S2B (Fig. 4E) . This indicates that water can play an 314 important role in network packing and plasticity, and that including explicit water in design 315 may improve the accuracy of our design models. Encouragingly, recent work on GPCR 316 redesign has suggested that solvent-mediated H-bonding interactions are both designable 317 and important for allosteric signaling 25 . Still, our results also show that certain networks can 318 tolerate modest rearrangements without losing stability or disrupting the overall fold. This is 319 consistent with prior work on cold unfolding proteins, which observed similar plasticity in a 320 designed partially hydrophilic core 26 .321 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+11 Design of polar interfaces has been recognized as a longstanding challenge in protein 322 design 27 ,28 . Based on this precedent, we expected that more polar interfaces would be more 323 di_icult to design. Indeed, we observed lower dimerization success rates for more polar 324 homodimer designs, with a 33% success rate for the top half (5 of 15), compared to 81% (13 325 of 16) for the bottom half (Fig. 4B) . Several of our designs achieved similar interface polarity 326 scores to those of the native obligate homodimers (Fig. 4B) , demonstrating that de novo 327 designed oligomers can tolerate native-like interface polarity. Most of our designs relied 328 upon parallel or antiparallel helical packing commonly found in de novo designed 329 assemblies 10,29 , while two designs used b-strand pairing to form either part (S2G) or all (S2H) 330 
+
+of the interface (Extended Data Fig. 4) . This enabled elevated interface polarity (33% and 331 62% for S2G and S2H, respectively) despite relatively small sidechain H-bond networks. 332 However, we observed significant oligomerization of both proteins by mass photometry, 333 particularly S2H (Extended Data Fig. 4). Recent work on de novo binder design has 334 highlighted b-strand pairing as a strategy for improv ing binder specificity toward certain 335 
+
+targets 30 , although this relies on the target having exposed b-strands with non -canonical 336 
+
+geometry to avoid aggregation. Our approach serves as an orthogonal strategy for achieving 337 polar interfaces primarily through sidechain-sidechain interactions, which is amenable to 338 any backbone topology and therefore more generalizable. 339 Our heterodimer specificity experiment (Fig. 5) was motivated by the hypothesis that, for 340 su_iciently similar sca_olds, H-bond networks could o_er a way to impart specificity where 341 shape complementarity and nonpolar packing may fail. Our results support this premise, as 342 the HBDesigner-generated heterodimers displayed improved specificity despite sharing 343 nearly identical predicted structures (TM score>0.95) and highly similar sequences 344 (sequence identity>60%) with their nonspecific ProteinMPNN counterparts (Fig. 5A) . This is 345 consistent with prior work using MC HBNet to design specificity into coiled coil 346 assemblies 3,15,31 . We also observed reduced on-target a_inity in the HBDes series (Fig. 5C) ,347 which suggests that there may be a trade-o_ between a_inity and specificity with respect to 348 interface polarity. Consistent with this observation, prior work has found that obligate 349 homodimers typically possess more hydrophobic interfaces than transient ones 32,33 . Still, 350 given that these designs were obtained from a one-shot design e_ort, it is likely that their 351 a_inity could be improved with more extensive iterative design techniques 34,35 .352 The AF3 ipTM score and its derivatives are a commonly used proxy for binding likelihood, and 353 they have been shown to be moderately discriminative between binders and nonbinders 354 across many targets 31,34,36 . We therefore hypothesized that ipTM could be used to predict 355 specificity by screening on-target and o_-target A/B subunit pairs. Indeed, the ipTM scores 356 correctly predict that the HBDes series will show reduced o_-target binding compared to the 357 MPNN series (Fig. 5B -C) . However, while the on-target ipTM is nearly identical for HBDes 358 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+12 (0.90-0.91) and MPNN (0.91-0.93) designs, the on-target binding is 10- to 100-fold lower for 359 most HBDes pairs. In this one limited example, AF3 ipTM served as a useful specificity 360 screening tool but was unable to distinguish between weak and strong binders. 361 One limitation of our current approach is that it cannot be conditioned with specific atomic 362 motifs, which would allow more fine-grained control of the designed network geometry. This 363 would be useful for design of, for example, pH-sensitive networks, which require specific 364 histidine-centered donor-acceptor configurations 13,37 . Our method also does not model 365 ligands, which would enable sca_olding of ligand-binding proteins through intramolecular 366 H-bonds 38 . These aspects represent interesting directions for future model development. It 367 has been shown that small backbone movements can have large impacts on sidechain H-368 bonding 8. As such, HBDesigner might benefit from allowing for backbone flexibility during 369 sampling. Finally, HBDesigner uses idealized sidechain bond lengths and angles, which may 370 limit its ability to sample realistic network geometry. Future work might consider employing 371 an all-atom approach similar to that of the stochastic denoising model PLACER 39 .372 This work includes only some of the possible applications for our design method. It could 373 also be used to modify an existing design by grafting networks into an existing sequence, or 374 to perform one-sided interface design (e.g., binder design). To facilitate use in these di_erent 375 design scenarios, networks can be generated with HBDesigner according to various criteria, 376 including size, amino acid composition, and burial, which is di_icult to achieve with 377 generalist sequence design tools. Given its speed, e_icacy, and easy integration into 378 established protein design workflows, we expect that HBDesigner will be broadly useful for 379 various applications. At the same time, we hope that our experimental design e_orts have 380 demonstrated that design of buried H-bond networks is tractable with modern protein 381 design tools, opening new avenues for more ambitious design objectives. 382 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+13 
+
+Methods 383 
+
+Dataset curation 384 
+
+For model training and validation, we curated a modified version of the ProteinMPNN 385 dataset 16 , which is a snapshot of the Protein Data Bank from August 2021 containing only 386 protein chains with all ligands, nucleotides, solvent, and cofactor atoms removed. Biological 387 assemblies solved by x-ray crystallography or cryo-EM with resolution £ 3.5 Å and 10 -10,000 388 
+
+total residues with ³25% of residues resolved were collected. Sidechains were decomposed 389 
+
+into chi angles and rebuilt using idealized bond lengths and angles. PyRosetta 19 was used to 390 add and optimize polar hydrogens. Sidechain-sidechain H-bonds were calculated using the 391 Rosetta REF2015 energy function 40 and used as edges to construct an H-bond graph for each 392 assembly (Fig. 1B) . H-bond networks were identified using connected-component analysis, 393 and those with 2-6 residues were retained. To avoid transient surface networks, we kept only 394 networks for which ³50% of residues were buried (>4.0 weighted sidechain neighbors as 395 
+
+determined by the PyRosetta LayerSelector). The curated assemblies were split chain-wise 396 into sequence clusters (30% sequence identity) following the splits from ProteinMPNN. This 397 resulted in 19,916/1,209/1,247 clusters assigned to the training/validation/test sets, 398 respectively, containing 84,388/4,003/3,872 chains with 1,767,365/98,078/84,019 H-bond 399 networks. 400 
+
+Training procedure 401 
+
+During training, we cycle through a shu_led list of sequence clusters and sample a random 402 assembly from each cluster, then sample a random H-bond network for each assembly. 403 Each assembly-network pair constitutes one training example. The sequence and sidechain 404 coordinates of all non-network residues are cleared prior to featurization. We train both the 405 design and packing model using PyTorch 41 for 200,000 optimizer steps using a batch size of 406 10,000 tokens. We use the Adam optimizer with the Noam learning rate schedule 42 with a 407 warmup period of 4,000 steps followed by an exponential decay for the remainder of training. 408 
+
+Design model architecture 409 
+
+The design model (Fig. 1A, top) is implemented as a message passing neural network 410 (MPNN) in which protein residues are represented as nodes in the molecular graph, with 411 edges connecting residues to their 30 nearest neighbors (assigned based on C b-Cb412 
+
+distances). Geometric information derived from the backbone structure is encoded as a 413 combination of node- and edge-level features. Conditioning information influences the 414 model at each layer through conditional features. See Supplementary Table 1 for a 415 summary of all input features. 416 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+14 The architecture of the design model is summarized in Extended Data Fig. 6A . The initial 417 node features for each residue consist of backbone dihedrals and a partially masked amino 418 acid sequence. To generate initial edges between residues, pairwise distances between 419 neighboring backbone atoms (N, C, O, C a, and virtual C b) are each encoded with 16 radial 420 
+
+basis functions (RBFs) evenly spaced from 0 Å to 20 Å. The other edge feature is an encoding 421 of relative sequence (or chain) separation of neighbors within ± 32 residues. The node and 422 
+
+edge features are then updated with three sequential message passing layers which 423 propagate node and edge updates throughout the molecular graph. These layers use a 424 similar message passing scheme to the decoder layers from ProteinMPNN. Prior to each 425 message passing step, vectors encoding the various forms of conditional information are 426 used to update the nodes using a simple node conditioning block, where 𝑛 ! is the node 427 embedding and 𝐶 ! is the conditioning vector: 428 
+
+𝑛 ′! = 𝐿𝑖𝑛𝑒𝑎𝑟 (𝐶𝑜𝑛𝑐𝑎𝑡𝑒𝑛𝑎𝑡𝑒 .𝑛 !, 𝐿𝑖𝑛𝑒𝑎𝑟(𝐶 !)1) 429 Two output predictions are calculated from the final node representations: 1) a binary 430 prediction of whether each residue is in the network, and 2) a categorical prediction of the 431 amino acid identity of each network residue. 432 
+
+Design model training 433 
+
+To avoid overfitting, we apply random Gaussian noise to the backbone coordinates with a 434 standard deviation of 0.2 Å, as introduced by ProteinMPNN. For each training example of a 435 network with N residues, a decoding step is randomly sampled such that T residues are 436 masked and must be predicted, where 𝑇 ∈ {1, … , 𝑁 }. To save memory, only protein chains 437 containing one or more network residues are provided to the model during training. The 438 design model was trained using a weighted sum of positional and sequence loss terms: 439 
+
+𝐿 "#$ = 𝑤 %&$ 𝐿 %&$ + 𝑤 $#' 𝐿 $#' 440 Where 𝐿 %&$ is a binary negative log likelihood loss: 441 
+
+𝐿 %&$ = − 1
+
+𝑁 < 𝑝 ! ∙ log (𝑝 (C ) 
+
+> )
+> !*+
+
+442 Where 𝑝 ! is the ground-truth probability and 𝑝 (C is the predicted probability of residue position 443 
+
+𝑖 to participate in an H-bond network of N residues. We define 𝑝 ! as a uniform distribution 444 across the masked residue positions with all other positions set to zero. We formulate 𝐿 $#' 445 as a multi-class focal loss 43 :446 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+15 
+
+𝐿 $#' = − 1
+
+𝐶 
+
+1
+
+𝑁 < < 𝑝 !, (1 − 𝑝 (-D) . ∙ 𝑙𝑜𝑔(𝑝 (-D) 
+
+> )
+> !*+
+> /
+> ,*+
+
+447 Where 𝑝 ! is the ground-truth probability (binary label) and 𝑝 (-D is the predicted probability of 448 
+
+amino acid 𝑗 at position 𝑖 , where C is the number of valid amino acid types. For our 449 production models, we set 𝑤 %&$ = 𝑤 $#' = 1 and 𝛾 = 2 based on results of hyperparameter 450 tuning. The design model includes 1.27M trainable parameters and can be trained in 10 451 hours on an A100 GPU. 452 
+
+Design model conditioning 453 
+
+We sought to train one general-purpose design model capable of supporting both 454 conditional and unconditional generation. To do this, we randomly provide or mask each 455 type of conditioning information for each training example. Virtual guide atom features are 456 sampled 50% of the time, while full and partial sequence conditioning are each sampled 457 10% of the time. The guide atom and sequence conditioning features are sampled 458 independently, so both or neither may be provided for some examples. 459 Sequence conditioning (Fig. 1C) enables residue-level control over the amino acid 460 composition of the network. This information is encoded as a vector of 20 weights, one for 461 each amino acid, expressing the amino acid composition of the network. When encoding 462 the full sequence of a network, this would be expressed as 𝑝 ! = 0!
+
+> )
+
+, where 𝑐 ! is the number of 463 residues with amino acid type 𝑖 for a network of size 𝑁 , and ∑ 𝑝 ! 
+
+> 12
+> !*+
+
+= 1 . This formulation also 464 
+
+allows us to encode partial sequence conditioning for networks where the amino acid type 465 of one or more residues may be unknown. To encode an unknown residue, we simply spread 466 the probability for that residue equally across all valid polar amino acids. This scheme also 467 supports ambiguous (e.g., “either GLU or ASP”) sequence conditioning. 468 The virtual guide atom (Fig. 1D) encodes an approximate center-of-mass for the network in 469 3-dimensional space, inspired by the ORI token from RFdi_usion2 44 . During training, this 470 virtual atom is generated by calculating the centroid of the C b atoms of the network, then 471 
+
+sampling a point from a normal distribution located at the centroid with a standard deviation 472 of 4 Å. We then calculate pairwise distances between the virtual atom and all C b atoms in 473 
+
+the protein and encode them with RBFs, as previously described. 474 
+
+Packing model architecture 475 
+
+The HBDesigner packing model (Fig . 1A, middle ) uses a similar architecture to the design 476 model, with a few changes (Extended Data Fig. 6B) . Most notably, it does not accept 477 conditional information, since the network residues have already been assigned, so each 478 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+16 decoder block includes only a message passing step. The packing model also uses 479 recycling, a procedure wherein the predicted sidechain angles are recycled back through the 480 model multiple times (in our case, three times) to allow further refinement 17 . We introduce 481 an additional node feature to encode the sine and cosine of these predicted sidechain 482 dihedrals. Pairwise distance RBFs for these sidechain heavy atoms with respect to all 483 neighboring atoms are also added to the edge features. All chi angles are zeroed out and 484 used to rebuild the sidechains prior to the first pass through the model. The final node 485 representations are used to predict the sine and cosine of the chi angles, and sidechains are 486 then constructed using idealized bond lengths and angles. 487 
+
+Packing model training 488 
+
+Similar to the design model, we apply random Gaussian noise to the backbone coordinates, 489 in this case with a standard deviation of 0.02 Å. To save memory, input proteins are cropped 490 to include only residues within 10 Å of the network centroid (calculated with C b atoms). 491 
+
+Unlike the design model, amino acid types of all network residues are provided unmasked 492 for every training example. During training, the number of recycles 𝑟 for each example is 493 uniformly sampled, 𝑟 ∈ {0, 1, 2, 3}. The packing model was trained on a weighted sum of 494 multiple loss terms: 495 
+
+𝐿 %304 = 𝑤 5$# 𝐿 5$# + 𝑤 5$" 𝐿 5$" + 𝑤 063$ 7𝐿 063$ 7 + 𝑤 &8! 𝐿 &8! 496 Where 𝐿 5$# is the mean-squared-error of the predicted chi angle sine ( 𝑥 (C ) and cosine (𝑦 (C), 497 
+
+reweighted by chi angle abundance factor 𝑀 9! , with an added normalization penalty 𝐿 :&85 :498 
+
+𝐿 5$# = − 1
+
+𝑁 < 𝑀 9! (𝑥 ! − 𝑥 (C ) 1 + 𝑀 9! (𝑦 ! − 𝑦 (C ) 1
+
+> )
+> !*+
+
++ 𝑤 :&85 𝐿 :&85 499 
+
+𝐿 :&85 = PQ(𝑥 (C 1 + 𝑦 (C1) − 1P 500 The chi abundance factor is obtained by calculating the number of chi angles 1-4 present in 501 each batch ( 𝑁 9, ), then converting this to a relative weight ( 𝑀 9! ) such that rare chi angles 502 receive larger weights: 503 
+
+𝑚 9! = ∑ 𝑁 9, 
+
+> ;
+> ,*+
+
+𝑁 9! 
+
+504 
+
+𝑀 9! = 6 𝑚 9! 
+
+∑ 𝑚 9, 
+
+> ;
+> ,*+
+
+505 
+
+𝐿 5$" is the mean-squared-deviation of the predicted sidechain coordinates ( 𝑧 (C):506 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+17 
+
+𝐿 5$" = − 1
+
+𝑁 <(𝑧 ! − 𝑧 (C) 1
+
+> )
+> !*+
+
+507 
+
+𝐿 063$ 7 is a clash loss adapted from OpenFold 45 penalizing overlap of van der Waals radii of 508 predicted sidechain atoms with other backbone and sidechain atoms: 509 
+
+𝐿 063$ 7 = − 1
+
+𝑁 1 < < 𝑅𝑒𝐿𝑈(𝑙𝑏 !, − 𝑡𝑜𝑙 − 𝑑 (-
+
+Y ) 
+
+> )
+> ,*+
+> )
+> !*+
+
+510 Where 𝑙𝑏 !, is the allowed lower bound of interatomic distances based on vdW radii, 𝑡𝑜𝑙 is an 511 overlap tolerance (set to 1.5 Å), and 𝑑 (
+
+Z is the predicted interatomic distance between atoms 512 
+
+𝑖 and 𝑗 . 𝐿 &8! is an orientation loss calculated on the mean-squared-deviation of the pairwise 513 distances between all predicted sidechain atoms in each network: 514 
+
+𝐿 &8! = − 1
+
+𝑁 1 < <(𝑑 !, − 𝑑 (-
+
+Y ) 1
+
+> )
+> ,*+
+> )
+> !*+
+
+515 516 For our production model, we use 𝑤 5$# = 𝑤 5$" = 1.0, 𝑤 063$ 7 = 𝑤 &8!#:< = 0.2, and 𝑤 :&85 =517 
+
+0.1. The packing model includes 1.21M trainable parameters and can be trained in ~40 hours 518 on an A100 GPU. 519 
+
+Scoring module implementation 520 
+
+HBDesigner uses PyRosetta to minimize and score the predicted networks (Fig. 1A, 521 
+
+bottom) . The MinMover class is used with a tolerance of 1e-6 and maximum of 1,000 522 
+
+lbfgs_armijo_nonmonotone minimizer iterations. Cartesian minimization is enabled using 523 the full REF2015 score function, and all atoms are fixed except the sidechain atoms of the 524 network residues. Minimized networks are first checked for validity, meaning that all network 525 residues are participating in a single contiguous network of sidechain-sidechain H-bonds. If 526 valid, the network is scored with the metrics described in the MC HBNet paper 8, which are 527 intended to reward highly connected, energetically favorable networks. These metrics 528 include buried unsatisfied heavy polar atoms (BUHs) and buried unsatisfied polar hydrogens 529 (BUPHs), saturation, and the HBNet Score. Saturation estimates the fraction of potential H-530 bonding donor/acceptor sites being satisfied by H-bonds in a set of residues for a given 531 geometry. HBNet Score is the di_erence in energy between the minimized network and an 532 equivalent backbone with all residues replaced by glycine. 533 
+
+HBDesigner inference 534 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+18 Once trained, HBDesigner can be applied to new proteins in inference mode. Given an input 535 backbone and, if applicable, conditioning information, the design model is repeatedly 536 sampled to collect many unique potential networks (typically 100-1,000 per backbone). In 537 sampling mode, the design model autoregressively assigns network residues until the 538 desired network size has been reached. At each decoding step, the position of the next 539 network residue is predicted, then its amino acid identity is assigned. On subsequent steps, 540 these decoded residues are used to update the node embeddings which are fed back into 541 the model, now representing a partially decoded network. Once fully sampled, the 542 backbones are cropped, and their network sidechains are predicted with the HBDesigner 543 packing model. They are then minimized and scored with various H-bonding metrics using 544 PyRosetta, as described above. Any predictions that fail to form contiguous networks of H-545 bonds are discarded, and additional filters (e.g., saturation) can be used to further trim the 546 set of returned networks. By default, we follow the MC HBNet convention and return only 547 networks with £0 BUHs, £5 BUPHs, ³0.5 saturation, and £0 REU HBNet Score. Networks are 548 
+
+then sorted by these same metrics, prioritized in the order written, and the top K networks 549 are returned. As shown in Table 1 , total runtime for HBDesigner is under 10 seconds per 550 sca_old for most common use cases. 551 
+
+Native network repacking test 552 
+
+To assess the e_icacy of di_erent packing methods, we tested their ability to repack native 553 networks on their native backbones without additional sequence context (Fig. 2B) . We 554 calculated rotamer recovery by considering any prediction within ± 10 ° of the native 555 
+
+sidechain as successful. The mentioned Rosetta packing method used the PackRotamers 556 mover with only H-bond (hbond_sc) and repulsive (fa_rep) terms enabled with -ex1 -ex2 -ex3 557 rotamer sampling, which gave the best performance at a reasonable runtime. The PIPPack 558 comparison was done using 3 recycles and an ensemble of 3 models with no 559 postprocessing. 560 
+
+Refolding benchmark 561 
+
+We evaluated HBDesigner and comparable methods using the refolding test outlined in Fig. 562 
+
+2C , applied to three di_erent sets of sca_olds. We obtained 532 native monomeric domains 563 of 50-200 residues from the HBDesigner test set by randomly sampling one representative 564 from each qualifying sequence cluster. We also generated 726 de novo monomeric domains 565 of 80-120 residues using RFdi_usion 46 with fold conditioning based on secondary structures 566 from native monomers of the same size from the test set clusters. Finally, we generated 690 567 de novo heterodimers of 200-300 total residues using unconditional generation with 568 RFdi_usion. The de novo generated sca_olds were filtered for suitable secondary structure 569 using STRIDE 47 to ensure ³50% helix/sheet content and ³10% turn/coil content. The de novo 570 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+19 monomers were further filtered by checking that ³12% of the residues were buried to ensure 571 
+
+a well-defined core for network design. The de novo heterodimers were filtered with the 572 Rosetta InterfaceAnalyzer 27 to include only pairs with 500Å ≤ dSASA ≤ 20 00 Å, to avoid 573 
+
+tangential interfaces and entwined topologies. 574 We ran HBDesigner in unconditional sampling mode on each set of sca_olds and collected 575 the top 5 networks each for network sizes of 2-6 residues. Sampling parameters for 576 HBDesigner are outlined in Supplementary Table 2 . Large networks required more samples 577 to find su_icient high-quality networks, at the cost of slightly increased runtime. We also 578 utilized a low-noise version of the design model for larger networks based on better results 579 in empirical testing. All polar amino acids were allowed, and at least one core residue was 580 required in each network to ensure su_icient burial. 581 We used LigandMPNN 48 to generate 4 sequences per network, provided the HBDesigner 582 network as both sequence and structural context (using the --583 
+
+ligandmpnn_use_side_chain_context flag). De novo monomer and heterodimer runs used 584 sampling temperatures of 0.2 and 0.1, respectively, sampled with the LigandMPNN model 585 trained with 0.1 Å backbone noise. For the native monomers, we re-trained ProteinMPNN 16 
+
+586 using the reported training splits with 0.2 Å noise to avoid data leakage, since the default 587 checkpoint is trained on all sequence clusters. We then refolded all sequences using a high-588 throughput AlphaFold3 20 procedure using no MSAs or templates, 1 model seed, 1 di_usion 589 sample, and 1 recycle. All successfully refolded sequences (pLDDT ³ 80 or ipTM ³ 0.7 and 590 
+
+RMSD Ca £ 2.0 Å) were then minimized with PyRosetta, and buried H -bonds were calculated 591 
+
+for each design. For the sca_old recovery test (Fig . 2G), we consider a sca_old successfully 592 recovered if any of the 20 designed sequences (4 per network) is well-folded (see above) and 593 also recovers all designed network H-bonds with an RMSD net £ 1.5 Å.594 
+
+Comparison with literature methods 595 
+
+To compare with baseline ProteinMPNN (Fig. 2D -E) , we used the settings outlined above to 596 generate 4 full sequences for each sca_old. To implement a bias toward buried polar amino 597 acids in ProteinMPNN, we add a constant bias favoring all amino acids capable of sidechain 598 H-bonding (DEHKNQRSTWY) to all buried (or interface) positions. We tuned the value of this 599 bias term to align the fraction of buried polar residues with those produced by HBDesigner 600 for each sca_old set. This resulted in bias terms of 1.5, 1.0, and 0.5 for native monomers, de 601 novo monomers, and de novo heterodimers, respectively. The Rosetta MC HBNet protocol 8
+
+602 was run in PyRosetta using settings configured to match HBDesigner as closely as possible, 603 including network size, minimum burial, number of core residues, and ranking criteria. 604 Rotamer sampling levels -ex1 -ex2 were used, and 10,000 Monte Carlo samples were drawn 605 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+20 for each sca_old. Interface design used the HBNetStapleInterface class to ensure cross-606 chain networks. 607 
+
+Computational binding specificity test 608 
+
+To assess the impact of HBDesigner on binding specificity (Fig. 2H) , we first obtained a set 609 of designable de novo heterodimer sca_olds by generating backbones with RFdi_usion, then 610 designing sequences with ProteinMPNN and refolding them with AlphaFold3. From those 611 heterodimers with high confidence values (ipTM > 0.8, pTM > 0.7), we collected 19 structures 612 with diverse interface geometries. These were used as seeds for RFdi_usion partial di_usion, 613 where we used partial_T = 5 with default settings to generate 10 highly similar backbones 614 from each seed, producing 190 total sca_olds. We then designed a single full sequence for 615 each backbone using the LigandMPNN model v_32_010_25 , omitting cysteine residues, and 616 using a temperature of 0.1. When using HBDesigner, we generated networks of 4 residues 617 with a minimum burial of 3.0 weighted sidechain neighbors and up to 2,000 samples per 618 backbone, keeping the top 30 networks found. LigandMPNN was then used to design the 619 remaining sequence with the same settings as above, except with the network residues 620 provided as context. Within each backbone family, we selected the top-ranked non-621 redundant network for each backbone, meaning that no two family members had more than 622 2 shared network positions. We then assembled all possible pairs of A/B subunit sequences 623 (190 for correct pairing, 1,710 for mispairing) and predicted each heterodimer using 624 AlphaFold3, as described above. To assess interface confidence, we use the interface 625 predicted template modeling (ipTM) score, which has been shown to correlate with DockQ 626 score and other measures of interface quality 49 .627 
+
+Computational design of de novo monomers 628 
+
+We obtained de novo monomer backbones of 80-120 residues using RFdi_usion, generating 629 1,000 backbones each with four di_erent settings: 1) unconditional generation, 2) fold-630 conditioning on native monomer folds, 3) using the monomer_ROG potential, 4) using 631 
+
+monomer_contact potential. Backbones were filtered as described above. HBDesigner was 632 used to design 3-4 residue networks with unconditional sampling, with a minimum burial of 633 4.0 weighted sidechain neighbors and at least 1 network residue in the core. The top 5 634 networks for each backbone were obtained, and LigandMPNN was used as described above 635 to sample 4 sequences per network. This produced a total of 16,202 H-bond networks with 636 64,808 unique sequences, which were then refolded with AlphaFold3 and filtered with 637 various metrics. 638 First, we filtered for highly confident, self-consistent backbones (pLDDT ³ 80, RMSD Ca £ 1.0 639 
+
+Å), which left 30,572 designs. Next, we minimized each design with PyRosetta and checked 640 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+21 whether all HBDesigner-predicted H-bonds were recovered in the refolded structure. We 641 also removed any designs with RMSD net > 1.0 Å. This left 3,245 high -quality designs, which 642 
+
+we filtered further by BUHs (<5) and core polarity (>28%). Finally, we analyzed the remaining 643 544 designs with PLACER, a model trained to predict sidechain flexibility 39 . We generated an 644 ensemble of 50 samples for each design and filtered for high H-bond recovery ( ³ 80%) and 645 
+
+low RMSD net (£ 0.5 Å), leaving a final set of 271 designs. From these, we selected 19 designs 646 
+
+for expression and characterization based on visual inspection of network quality and 647 centrality, as well as structural diversity. 648 
+
+Calculation of core and interface polarity metrics 649 
+
+The core polarity metric shown in Fig. 2D was calculated by counting the polar amino acids 650 (DEHKNQRSTWY) found in the core and dividing them by the total number of residues in the 651 core. Only those designs that refolded well (pLDDT ³ 80, RMSD Ca £ 2.0) with ³10 core 652 
+
+residues were included to avoid counting disordered proteins. For interface polarity 653 
+
+(Extended Data Fig. 1B) , we used the InterGroupInterfaceByVectorSelector to select 654 interface residues. Only designs with ipTM ³ 0.7 and RMSD Ca £ 2.0 and ³20 interface residues 655 
+
+were included. Buried core H-bonds (Fig. 2E, Extended Data Fig. 1A) were calculated as all 656 sidechain-sidechain or sidechain-backbone H-bonds including at least one core residue 657 after minimization. Buried interface H-bonds (Extended Data Fig. 1B) had the added 658 constraint that each bond had to connect residues in two di_erent chains. 659 When assessing the core polarity of our tested designs (Fig. 3C) , we obtained more 660 informative results using a di_erent metric, percent buried polar surface area (bSA%), which 661 we formulated to capture the contribution of each individual atom rather than each residue. 662 To calculate this, we used PyRosetta to select all core and boundary residues (SASA < 40). 663 We then calculated the SASA for each residue and subtracted it from the theoretical 664 maximum to get an estimated per-residue absolute buried surface area (bSA). We then 665 calculated the bSA for an equivalent poly-glycine backbone and subtracted this value for 666 each residue to remove backbone contributions. We repeated this calculation, including 667 only polar atoms, and divided polar bSA by total bSA to get bSA%. For interface polarity (Fig. 668 
+
+4C) , we use the InterfaceAnalyzer to calculate polar and total dSASA, then divide these to 669 get percent polar dSASA, which includes both sidechain and backbone contributions. To 670 compare our designs to native homodimers, we obtained a curated dataset of 671 experimentally validated obligate homodimers (n=122) from ref 22 . Since our designs were 672 nearly all helical, we selected only those native homodimers with primarily helical interfaces 673 (³50% of interface residues assigned helical by STRIDE 47 ). This left us with 47 validated 674 
+
+native helical homodimers for comparison. 675 
+
+Computational design of de novo homodimers 676 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+22 We generated de novo homodimer backbones of 60-120 residues by RFdi_usion using C2 677 symmetry and auxiliary potential olig_contacts , with intrachain and interchain weights set to 678 0.4 and 0.2, respectively. The resulting sca_olds were filtered by radius of gyration to ensure 679 backbones were compact, and any designs with entwined topologies were removed. We ran 680 HBDesigner to design two-, three-, and four-residue networks across the interface, 681 collecting the top 15 networks per sca_old. We used symmetry constraints (flag --682 
+
+symm_chains A,B) to select only networks which could be symmetrized across the interface 683 without introducing clashes. This means that, for example, each three-residue network 684 design actually has two copies of that network including six total residues. All polar residues 685 were allowed, with a minimal burial value of 3.0 weighted sidechain neighbors in the 686 interface. 687 To design the remaining sequence, LigandMPNN was used to generate 5 sequences per 688 network, providing the HBDesigner network as sequence context. We used a sampling 689 temperature of 0.1 and --homo_oligomer flag turned on to automatically set symmetric 690 residues and equal symmetry weights. We then refolded all sequences using AlphaFold3, as 691 previously described. All successfully refolded sequences (average pLDDT ≥ 80, ipTM ≥ 0.8, 692 RMSD Cα ≤ 2 Å) were minimized with PyRosetta and filtered based on full recovery of the 693 designed H-bond network. 694 Multi-network designs were generated by collecting all single-network designs that passed 695 all design filters and attempting to graft in an additional network sampled for the same 696 backbone. To avoid steric clashes, combined networks were rejected if any sidechain heavy 697 atoms from individual networks were separated by less than 3 Å, or if any positions would be 698 occupied by both networks at once. An additional round of sequence design, refolding, and 699 filtering was then performed as described above. 700 
+
+Protein expression and purification 701 
+
+DNA sequences were ordered as gene fragments from Twist Bioscience and inserted into a 702 Pet28(b) vector for expression containing a N-terminal His-tag and PreScission protease 703 cleavage site. Plasmid vector for homodimer proteins contained a N-terminal His-tag, 704 Maltose-binding protein (MBP), and PreScission protease cleavage site. Heterodimer 705 plasmid vector contained a N-terminal His-tag and AviTag or FLAG-tag. DNA constructs 706 were transformed into BL21(DE3) Escherichia coli cells with 50 ng DNA and plated onto LB 707 agar plates supplemented with 50 μg/mL Kanamycin selection antibiotic and incubated 708 overnight at 37°C. Transformed colonies were picked and inoculated into 5 mL LB 709 supplemented with 50 μg/mL Kanamycin selection antibiotic overnight at 37°C with shaking 710 at 225 rpm. For small scale expression, 2 mL of overnight culture was added to 100 mL fresh 711 TB supplemented with 50 μg/mL Kanamycin selection antibiotic and 800 μL of 50% glycerol. 712 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+23 For large scale expression, 15-20 mL of overnight culture was added to 1 L fresh TB 713 supplemented with 50 μg/mL Kanamycin selection antibiotic and 8 mL of 50% glycerol. Cells 714 were cultured at 37°C for 2-3 hours or until an optical density of 600 nm of 0.7-0.8 was 715 measured. Protein expression was induced by addition of Isopropyl β-D-1-716 thiogalactopyranoside (IPTG) at a final concentration of 750 μM, followed by incubation 717 overnight at 16°C with shaking at 225 rpm. Cells were pelleted by centrifugation and stored 718 at -20°C. 719 Cell pellets were thawed at room temperature and lysed with Lysis Bu_er (50 mM Tris, 500 720 mM NaCl, 10 mM Imidazole, pH 8.0) supplemented with 1X PMSF, 1X Bestatin, 1X Leupeptin, 721 1X Pepstatin, 1X B-PER, 1 mg/mL Lysozyme, and 0.145 μL/ 1 mL Benzonase by shaking 1-2 722 hrs at 25°C. Lysate was centrifuged at 15,000 rpm for 30 min and passed through a 5 μm 723 Titan3 syringe filter (Thermo Fisher, 45025-NN). Expressed protein was purified by Nickel 724 purification. For purification of proteins from small scale production, briefly, batch binding 725 of filtered lysate was performed by incubating with Ni-Penta Agarose 6 (Marvelgent 726 Biosciences, 11-0228) at 4°C for 1-2 hrs with gentle rocking. Resin was collected in 24-well 727 Whatman Uniplate filter plate (Whatman, 7700-9904) and centrifuged for 1 min at 25°C at 728 250 × g. Resin was then washed sequentially with High Salt Bu_er (50 mM Tris, 1 M NaCl, 25 729 mM Imidazole, pH 8.0) and 1X PBS (pH 7.4) by centrifugation for 1 min at 25°C at 250 × g. 730 Protein was eluted by Elution Bu_er (1X PBS, 500 mM Imidazole, pH 7.4) and centrifugation 731 for 1 min at 25°C at 250 × g. Eluted protein was concentrated via 10 kDa MWCO 0.5 mL 732 Amicon concentrator (Millipore Sigma, UFC501096) and centrifugation at 14,000 × g. 733 Concentrated protein was bu_ered exchanged into PBS via 0.5 mL 7k MWCO Zeba Spin 734 Desalting Column (Thermo Fisher, 89882) following the manufacturer’s protocol. In brief, for 735 purification of proteins from large scale production, batch binding of filtered lysate was 736 performed by incubating with Ni-Penta Agarose 6 (Marvelgent Biosciences, 11-0228) at 4°C 737 for 1-2 hrs with gentle rocking. Resin was collected in poly-prep columns and washed with 738 10 bed volumes (BV) High Salt Bu_er and 10 BV 1X PBS, and eluted with Elution Bu_er. 739 For JH1 crystallization experiments, PreScission protease was added to purified protein at a 740 1:100 mg ratio, then transferred to a 1 kDa dialysis bag and dialyzed against 1xPBS 5 mM BME 741 bu_er. For homodimer crystallization experiments, PreScission protease was added to 742 purified protein at a 1:50-1:250 mg ratio in Protease Cleavage Bu_er (50 mM Tris HCl, 150 743 mM NaCl, 1 mM 2-Mercaptoethanol, pH 7) and rocked overnight at 4°C. Nickel purification 744 was used to remove cleaved tag and uncleaved protein, as previously described. GST-tagged 745 PreScission protease was removed by gluthathione resin. 746 
+
+Protein crystallography and model refinement 747 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+24 Following protease cleavage, proteins were purified by gel filtration via S75 Superdex column 748 in Crystallization Bu_er (20 mM Tris, 100 mM NaCl, pH 7.4) at 4°C and concentrated as 749 described above. Using the sitting drop vapor di_usion method, crystallization screens were 750 set up via Mosquito liquid handler (SPT Labtech) with drops consisting of 150 μL protein and 751 150 μL reservoir solution. Crystal screens were placed at 20°C and checked regularly. JH1 752 protein crystals were obtained by crushing the initial crystal solution formed using SG-1 753 (Molecular Dimensions) screening solution and seeding in the same mother solution (20% 754 w/v PEG 3350, 0.2 M MgCl2*6H2O). Protein crystals were cryoprotected for x-ray di_raction 755 by sequential mixing with 6.25%, 12.5%, and 25% polyethylene glycol, prepared from serial 756 dilution of polyethylene glycol and reservoir diluent at a 1:1 ratio, then flash frozen by 757 submersion in liquid nitrogen. 758 Protein crystal x-ray di_raction data was collected at SouthEast Regional Collaborative 759 Access Team (SER -CAT) with the Beamline 22-ID-D synchrotron. Di_raction data was 760 reduced using PROTEUM5 (Bruker, 2025.6-0) and the solution was solved by Molecular 761 Replacement in PHASER-MR by using the AlphaFold3 prediction as the starting model. 762 Iterative model refinement was performed using Phenix (2.0.5936) and model building was 763 done with Coot (WinCoot 0.9.8.92). Data collection and refinement statistics are provided 764 in Supplementary Table 3 .765 
+
+Circular dichroism (CD) 766 All protein samples were diluted to 20 μM in 1xPBS. The measurements were obtained using 767 
+
+a JASCO-1500 instrument in a 1 mm cuvette. The CD spectra was measured from 260 nm to 768 190 nm at 25°C. The melting temperature curve was obtained by measuring CD signal at 222 769 nm from 5°C to 95°C in 1C steps. 770 
+
+Homodimer mass photometry 771 
+
+Mass photometry was performed on a Refeyn OneMP instrument. Protein solutions were 772 prepared at a concentration of 100 nM in PBS immediately prior to measurement. Droplet-773 dilution was performed by addition of equivalent volume to PBS on a glass coverslip. Videos 774 were collected for 60 s and analyzed by DiscoverMP software (Reyfen) to determine the 775 number of binding events. Protein size was calculated using Thermo Fisher NativeMark 776 Protein Standard (Thermo Fisher, LC0725). 777 
+
+Heterodimer computational specificity screening 778 
+
+To identify families of de novo heterodimers for expression, we reexamined the results of the 779 computational specificity test as follows. Within each family, we first selected backbones 780 for which both the ProteinMPNN and HBDesigner sequences had high on-target ipTMs 781 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+25 (³0.75). We then cross -referenced these hits with one another, looking for pairs of 782 
+
+backbones for which the o_-target ipTMs were high ( ³0.75) for the ProteinMPNN sequences, 783 
+
+but low ( £0.50) for the HBDesigner sequences. The top 5 cliques of compatible backbones 784 
+
+were then further screened by running each subunit through AlphaFold3 as a monomer and 785 as a homodimer. Any subunit with monomer pLDDT < 80 or homodimer ipTM > 0.5 was 786 penalized, and the clique with the fewest penalties was selected for expression. 787 
+
+Heterodimer biotinylation and ELISA binding assay 788 
+
+Purified protein was bu_er exchanged into 10 mM Tris at pH 8.1. For biotinylation, 40 μM of 789 protein was mixed with BiomixA, BiomixB, and BirA, brought to a final volume of 135 μL with 790 DI H2O, and incubated at room temperature. To remove reaction components, the mixture 791 was repeatedly concentrated via 10 kDa MWCO 0.5 mL Amicon concentrator and diluted 792 with bu_er. 793 ELISA plates were prepared by coating 96-well MaxiSorp plates (Thermo Fisher, 439454) with 794 50 μL of 1 μg/mL Neutravidin overnight at 4°C, then washed with 0.05% Tween-20 in 795 phosphate bu_ered saline (PBST) the following day. Blocking was performed with 1% casein 796 for 1 hr at room temperature with gently shaking. Plates were then treated with 100 nM of 797 biotinylated protein for 1.5 hrs with gently shaking and thoroughly washed with PBST. Plates 798 were subsequently treated with protein in PBST with 0.1% casein for 45 minutes, rinsed, and 799 incubated with a 1:5,000 dilution of HRP anti-DYKDDDDK antibody (Biolegend, 637311) in 800 PBST with 0.01% casein for 30 min. Plates were then rinsed with PBST, and 50 μL per well of 801 TMB substrate (Biolegend, 421101) was added and incubated for approximately 20 minutes. 802 The reaction was stopped by addition of 50 μL of 1 N HCL, and absorbance was immediately 803 measured at 450 nm with a reference wavelength of 570 nm. 804 805 
+
+Data and Software Availability 806 
+
+The code and model weights for HBDesigner are available on GitHub 807 (https://github.com/RosettaCommons/HBDesigner). The sequences and design models of 808 all expressed proteins are provided as supplementary data. Crystal structures of the 809 designed proteins have been deposited in the Protein Data Bank under accession codes 810 13JM, 13FC, 35SL, and 35SB. 811 812 
+
+Acknowledgements 813 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+26 This work was supported by NIH grant R35GM131923 (B.K.), NSF grant MCB-2319819 (B.K.), 814 and NSF fellowship DGE-2040435 (H.D., N.Z.R.), and by a Pre-doctoral Fellowship from the 815 American Foundation for Pharmaceutical Education (H.D.). This work utilized the resources 816 of the UNC Longleaf computing cluster. The authors would like to thank Rachel Clune and 817 Hope Woods from the Rosetta Commons for their assistance in maintaining HBDesigner. 818 Protein crystallization and data collection were performed in the UNC Protein Expression 819 and Purification & Macromolecular Crystallography core lab supported by National Cancer 820 Institute of the National Institutes of Health under award number P30CA016086. We would 821 also like to acknowledge Dr. John Sondek’s lab, particularly Dr. Stuart Endo-Streeter for the 822 technical assistance in data reduction, and Matthew Hvasta from Dr. Brian Kuhlman’s lab, 823 for the technical assistance in molecular replacement. 824 825 
+
+Author contributions 826 
+
+H.D., B.T.H., T.M., and B.K. conceptualized the study. H.D. and N.Z.R. wrote the software, 827 and H.D. performed the computational experiments. J.T.H., H.D., and T.M. designed the 828 monomers, and J.T.H. and T.M. characterized the monomers. T.M. and N.I.N. solved the JH1 829 crystal structure. B.T.H. designed and characterized the homodimers and solved the 830 homodimer crystal structures with assistance from N.I.N. H.D. and B.T.H. designed the 831 heterodimers, and B.T.H. performed the heterodimer binding experiments. H.D., B.T.H., and 832 T.M. made the figures and wrote the manuscript, and all authors contributed to review and 833 editing. B.K. supervised the project. 834 
+
+835 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+27 
+
+Figures 836 
+
+837 
+
+Figure 1: Modeling hydrogen -bonding networks with HBDesigner. A) The HBDesigner 838 algorithm consists of three steps. First, the design model encodes the backbone structure 839 into a graph and assigns amino acid identities to a small cluster of residues (top). Second, 840 the packing model predicts sidechain chi angles based on local backbone geometry 841 (middle). Third, the scoring module (bottom) calculates atomistic energy terms and ranks 842 the resulting networks. B) H-bonds were identified in native proteins using Rosetta and 843 collected into graphs to represent individual H-bond networks. Pairs of sca_olds and 844 networks were then randomly sampled during training. C) Sequence conditioning may be 845 provided to specify desired amino acid composition in the predicted networks. 846 Unconditional sampling (top) produces diverse networks potentially including all polar 847 amino acids, while conditional sampling (bottom) produces networks matching the 848 specified sequence composition. D) A virtual guide atom (pink sphere) may be provided to 849 denote the approximate centroid of the desired networks. This can be used to shift the 850 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+28 sampling toward a certain region (bottom) which may be neglected by unconditional 851 sampling (top). E) One or more fixed anchor residues (pink) may be provided as initial seeds 852 for residue decoding. This enables one-sided design of binder interfaces or extension of 853 existing H-bond networks. 854 
+
+855 
+
+.CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint 29 856 
+
+Figure 2: HBDesigner produces native -like, designable hydrogen bond networks when 857 
+
+evaluated on a diverse set of unseen scaVolds. A) Relative abundance of each polar 858 amino acid in test set native H-bond networks compared to networks generated by the 859 HBDesigner sequence design model with either high (T=1.0) or low (T=0.1) sampling 860 temperature (n=525). B) Sidechain packing statistics for di_erent packing models, evaluated 861 by repacking test set native H-bond networks without native sequence context (n=1,011). C) 862 Workflow of the refolding benchmark used to evaluate the performance of HBDesigner and 863 other methods. D) Percentage of polar core residues found in a diverse set of native protein 864 monomers (n=642), compared to sequences designed for the same backbones using either 865 ProteinMPNN, HBDesigner or b-ProteinMPNN. E) Comparison of buried hydrogen bonds 866 involving sidechains detected in native monomers (n=642) and sequences designed by 867 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+30 either HBDesigner, ProteinMPNN or ProteinMPNN biased toward buried polar residues (b-868 ProteinMPNN). F) Example of a nonpolar buried pocket in a native monomer (top) and a de 869 novo heterodimer interface (bottom) which were redesigned to be more polar using b-870 ProteinMPNN (middle) or HBDesigner (right). G) Sca_old recovery percentages for designed 871 core and interface H-bond networks of di_erent sizes obtained after sequence design and 872 refolding, evaluated on de novo generated monomer (core, red, n=726) and heterodimer 873 (interface, pink, n=690) backbones. H) Distribution of AlphaFold3 interface predicted 874 template modeling (ipTM) scores obtained for de novo heterodimers predicted with subunits 875 correctly paired (gold, n=190) or mispaired (blue, n=1,710) after sequence design with- or 876 without HBDesigner. Dashed lines indicate quartiles for each distribution. 877 
+
+878 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+31 
+
+879 
+
+Figure 3: De novo design and validation of monomers with highly polar cores. A) Design 880 models of selected successful monomer designs with di_erent folds and network 881 geometries. Insets show designed H-bond networks comprised of residues introduced by 882 HBDesigner (blue) and ProteinMPNN (tan). B) Circular dichroism (CD) spectra and C) 883 temperature melts of the selected monomers. D) Core polarity, calculated as the percentage 884 of buried surface area originating from polar atoms, for the tested designs (n=19), native 885 monomers (n=642), and ProteinMPNN designs (n=629). Designs that could be expressed, 886 purified, and validated by CD were considered successful. Marker shapes denote the fold 887 type of each design as assessed by visual inspection. E) Comparison of the design model 888 (white) and crystal structure (green) for design JH1 (PDB: 13JM, 2.1 Å). The second chain of 889 the crystal structure is colored in taupe. Structural waters are shown as red spheres and the 890 aligned root-mean-squared deviation of the C a atoms (RMSD Ca) and the network sidechain 891 
+
+heavy atoms (RMSD net ) are reported. 892 
+
+893 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+32 
+
+894 
+
+Figure 4: De novo designed obligate homodimers with highly polar interfaces. A) 895 Workflow for two-sided homodimer interface design using HBDesigner. Networks were 896 generated by HBDesigner, then symmetrized by copying the network across the asymmetric 897 
+
+.CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint 33 unit prior to downstream design and refolding. B) Interface polarity, calculated as a 898 percentage of total change in solvent-accessible surface area upon binding, for the tested 899 designs (n=31), native obligate homodimers (n=47), and ProteinMPNN designs (n=92). 900 Designs were considered successful if measured as >50% dimeric by mass photometry. 901 Marker shapes denote the fold type of each design as assessed by visual inspection. C-D) 902 Design models (left) and mass photometry (MP) plots (right) for selected homodimer designs 903 with C) single and D) multiple H-bond networks. Insets (middle) show designed H-bond 904 networks comprised of residues introduced by HBDesigner (blue) and ProteinMPNN (tan). 905 MP plots are labeled with expected mass for each protein expressed as an MBP fusion. E-G) 906 Comparison of design models with crystal structures obtained for homodimer designs S2B 907 (PDB: 35SL, 1.80 Å), S3G (13FC, 1.79 Å), and S4A (35SB, 1.83 Å). The design models are 908 
+
+shown in white and pink, and the crystal structures are shown in green and blue. Structural 909 water molecules are shown as red spheres. The aligned root-mean-squared deviation of the 910 Ca atoms (RMSD Ca) and the network sidechain heavy atoms (RMSD net ) are reported for each 911 
+
+design. 912 
+
+913 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+34 
+
+914 
+
+Figure 5: De novo design and validation of heterodimeric proteins with enhanced 915 
+
+subunit pairing specificity. A) Workflow used to generate structurally similar heterodimers 916 using either HBDesigner (top) or ProteinMPNN (bottom). Design models shown are 917 AlphaFold3 predictions with hydrogens optimized by Rosetta. B) Heatmaps showing 918 predicted interface confidence (ipTM) for each combination of heterodimer subunits for the 919 HBDesigner (top) and ProteinMPNN (bottom) sets of designs. C) Binding curves measured 920 by ELISA (n=3) for the HBDesigner (top) and ProteinMPNN (bottom) sets of designs. Each 921 subplot is labeled with the identity of the immobilized “A” subunit, while the curve colors 922 indicate the identity of the “B” subunit. 923 
+
+924 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+35 
+
+Tables 925 
+
+Table 1: Performance comparison of HBDesigner and MC HBNet. Runtimes are reported as 926 mean ± standard deviation for each method. The best score reported on each dataset is 927 
+
+bolded for each metric. 928 
+
+De Novo Monomers Method Runtime (s) Networks Found Top-5 Saturation AF3 pLDDT Sca_old Recovery (%) HBDesigner 7.6 ± 0.6 8.9 0.69 79 45 MC HBNet 5.5 ± 1.9 13.5 0.65 76 51 
+
+De Novo Heterodimers Method Runtime (s) Networks Found Top-5 Saturation AF3 ipTM Sca_old Recovery (%) HBDesigner 9.3 ± 0.7 11.2 0.72 0.59 32 
+
+MC HBNet 28 ± 6 7.7 0.69 0.58 29 MC HBNet* 7 ± 2 5.2 0.68 0.58 22 
+
+* Run with a more restrictive MoveMap only allowing interface residues to be designed. 929 
+
+930 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+36 
+
+References: 931 1. Hennefarth, M. R. & Alexandrova, A. N. Advances in optimizing enzyme electrostatic 932 preorganization. Curr. Opin. Struct. Biol. 72 , 1–8 (2022). 933 2. Gainza, P. et al. De novo design of protein interactions with learned surface 934 fingerprints. Nature 617 , 176–184 (2023). 935 3. Chen, Z. et al. Programmable design of orthogonal protein heterodimers. Nature 936 
+
+565 , 106–111 (2019). 937 4. Kortemme, T. De novo protein design-From new structures to programmable 938 functions. Cell 187 , 526–544 (2024). 939 5. de Haas, R. J. et al. Rapid and automated design of two-component protein 940 nanomaterials using ProteinMPNN. Proc Natl Acad Sci USA 121 , e2314646121 941 (2024). 942 6. Khramushin, A., Elizarova, E. & Correia, B. E. De novo engineering of protein 943 interactions: Retrospective and current advances. Curr. Opin. Struct. Biol. 97 ,944 103240 (2026). 945 7. O’Meara, M. J. et al. Combined covalent-electrostatic model of hydrogen bonding 946 improves structure prediction with Rosetta. J. Chem. Theory Comput. 11 , 609–622 947 (2015). 948 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+37 8. Maguire, J. B., Boyken, S. E., Baker, D. & Kuhlman, B. Rapid sampling of hydrogen 949 bond networks for computational protein design. J. Chem. Theory Comput. 14 ,950 2751–2760 (2018). 951 9. Cao, L. et al. Design of protein-binding proteins from the target structure alone. 952 
+
+Nature 605 , 551–560 (2022). 953 10. Fox, D. R., Taveneau, C., Clement, J., Grinter, R. & Knott, G. J. Code to complex: AI-954 driven de novo binder design. Structure 33 , 1631–1642 (2025). 955 11. Peng, H.-P., Lee, K. H., Jian, J.-W. & Yang, A.-S. Origins of specificity and affinity in 956 antibody-protein interactions. Proc Natl Acad Sci USA 111 , E2656-65 (2014). 957 12. Boyken, S. E. et al. De novo design of protein homo-oligomers with modular 958 hydrogen-bond network-mediated specificity. Science 352 , 680–687 (2016). 959 13. Boyken, S. E. et al. De novo design of tunable, pH-driven conformational changes. 960 
+
+Science 364 , 658–664 (2019). 961 14. Vorobieva, A. A. et al. De novo design of transmembrane β barrels. Science 371 ,962 (2021). 963 15. Bermeo, S. et al. De novo design of obligate ABC-type heterotrimeric proteins. Nat. 964 
+
+Struct. Mol. Biol. 29 , 1266–1276 (2022). 965 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+38 16. Dauparas, J. et al. Robust deep learning-based protein sequence design using 966 ProteinMPNN. Science 378 , 49–56 (2022). 967 17. Randolph, N. Z. & Kuhlman, B. Invariant point message passing for protein side 968 chain packing. Proteins (2024) doi:10.1002/prot.26705. 969 18. Berman, H. M. et al. The protein data bank. Nucleic Acids Res. 28 , 235–242 (2000). 970 19. Chaudhury, S., Lyskov, S. & Gray, J. J. PyRosetta: a script-based interface for 971 implementing molecular modeling algorithms using Rosetta. Bioinformatics 26 ,972 689–691 (2010). 973 20. Abramson, J. et al. Accurate structure prediction of biomolecular interactions with 974 AlphaFold 3. Nature 630 , 493–500 (2024). 975 21. Vázquez Torres, S. et al. De novo design of high-affinity binders of bioactive helical 976 peptides. Nature 626 , 435–442 (2024). 977 22. Schweke, H. et al. An atlas of protein homo-oligomerization across domains of life. 978 
+
+Cell 187 , 999-1010.e15 (2024). 979 23. Qing, R. et al. Protein design: from the aspect of water solubility and stability. 980 
+
+Chem. Rev. 122 , 14085–14179 (2022). 981 24. Baumgart, M. et al. Design of buried charged networks in artificial proteins. Nat. 982 
+
+Commun. 12 , 1895 (2021). 983 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+39 25. Chen, K. Y. M. et al. Computational design of highly signalling-active membrane 984 receptors through solvent-mediated allosteric networks. Nat. Chem. 17 , 429–438 985 (2025). 986 26. Pulavarti, S. V. S. R. K. et al. From protein design to the energy landscape of a cold 987 unfolding protein. J. Phys. Chem. B 126 , 1212–1231 (2022). 988 27. Stranges, P. B. & Kuhlman, B. A comparison of successful and failed protein 989 interface designs highlights the challenges of designing buried hydrogen bonds. 990 
+
+Protein Sci. 22 , 74–82 (2013). 991 28. Gainza, P., Bunker, R. D., Townson, S. A. & Castle, J. C. Machine learning to predict 992 de novo protein-protein interactions. Trends Biotechnol. 43 , 3056–3070 (2025). 993 29. Listov, D., Goverde, C. A., Correia, B. E. & Fleishman, S. J. Opportunities and 994 challenges in design and optimization of protein function. Nat. Rev. Mol. Cell Biol. 995 
+
+25 , 639–653 (2024). 996 30. Sappington, I. et al. Improved protein binder design using β-pairing targeted 997 RFdiffusion. Nat. Commun. 17 , 1101 (2026). 998 31. Baryshev, A. et al. Massively parallel measurement of protein-protein interactions 999 by sequencing using MP3-seq. Nat. Chem. Biol. 20 , 1514–1523 (2024). 1000 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+40 32. Nooren, I. M. A. & Thornton, J. M. Structural characterisation and functional 1001 significance of transient protein-protein interactions. J. Mol. Biol. 325 , 991–1018 1002 (2003). 1003 33. Sidhanta, S. P. D., Sowdhamini, R. & Srinivasan, N. Comparative analysis of 1004 permanent and transient domain-domain interactions in multi-domain proteins. 1005 
+
+Proteins 93 , 197–208 (2025). 1006 34. Pacesa, M. et al. One-shot design of functional protein binders with BindCraft. 1007 
+
+Nature 646 , 483–492 (2025). 1008 35. Nallathambi, A. & Kuhlman, B. Automated Deep Learning-Based Pipelines for Multi-1009 Objective De Novo Protein Design. Curr. Protoc. 5, e70208 (2025). 1010 36. Overath, M. D. et al. Predicting Experimental Success in De Novo Binder Design: A 1011 Meta-Analysis of 3,766 Experimentally Characterised Binders. BioRxiv (2025) 1012 doi:10.1101/2025.08.14.670059. 1013 37. Ahn, G. et al. Computational design of pH-sensitive binders. BioRxiv (2025) 1014 doi:10.1101/2025.09.29.678932. 1015 38. Lu, L. et al. De novo design of drug-binding proteins with predictable binding energy 1016 and specificity. Science 384 , 106–112 (2024). 1017 39. Anishchenko, I. et al. Modeling protein-small molecule conformational ensembles 1018 with PLACER. Proc Natl Acad Sci USA 122 , e2427161122 (2025). 1019 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+41 40. Alford, R. F. et al. The Rosetta All-Atom Energy Function for Macromolecular 1020 Modeling and Design. J. Chem. Theory Comput. 13 , 3031–3048 (2017). 1021 41. Paszke, A. et al. PyTorch: An Imperative Style, High-Performance Deep Learning 1022 Library. arXiv (2019) doi:10.48550/arxiv.1912.01703. 1023 42. Vaswani, A. et al. Attention is all you need. arXiv (2017) 1024 doi:10.48550/arxiv.1706.03762. 1025 43. Lin, T.-Y., Goyal, P., Girshick, R., He, K. & Dollár, P. Focal Loss for Dense Object 1026 Detection. arXiv (2017) doi:10.48550/arxiv.1708.02002. 1027 44. Ahern, W. et al. Atom-level enzyme active site scaffolding using RFdiffusion2. Nat. 1028 
+
+Methods 23 , 96–105 (2026). 1029 45. Ahdritz, G. et al. OpenFold: retraining AlphaFold2 yields new insights into its 1030 learning mechanisms and capacity for generalization. Nat. Methods 21 , 1514–1524 1031 (2024). 1032 46. Watson, J. L. et al. De novo design of protein structure and function with 1033 RFdiffusion. Nature 620 , 1089–1100 (2023). 1034 47. Frishman, D. & Argos, P. Knowledge-based protein secondary structure 1035 assignment. Proteins 23 , 566–579 (1995). 1036 
+
+> .CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint
+
+42 48. Dauparas, J. et al. Atomic context-conditioned protein sequence design using 1037 LigandMPNN. Nat. Methods 22 , 717–723 (2025). 1038 49. Genz, L. R., Nair, S., Nagar, N. & Topf, M. Assessing scoring metrics for AlphaFold2 1039 
+
+and AlphaFold3 protein complex predictions. Protein Sci. 34 , e70327 (2025). 1040 
+
+.CC-BY-NC-ND 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 11, 2026. ;https://doi.org/10.64898/2026.06.08.730848 doi: bioRxiv preprint

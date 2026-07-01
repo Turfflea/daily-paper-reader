@@ -1,0 +1,270 @@
+Title: Neural networks learn forward dynamics when freed from numerical integration
+
+URL Source: https://www.biorxiv.org/content/10.64898/2026.05.27.728310v1.full.pdf
+
+Published Time: Wed, 01 Jul 2026 21:22:02 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+1
+
+# Neural networks learn forward dynamics when 1
+
+# freed from numerical integration 2
+
+Serhii Bahdasariants 1, Sergiy Yakovenko 2,3,4,5,6* 
+
+3
+
+> 1
+
+Department of Mechanical Engineering, Carnegie Mellon University, Pittsburgh, PA 4
+
+> 2
+
+Department of Human Performance, West Virginia University, Morgantown, WV 5
+
+> 3
+
+Rockefeller Neuroscience Institute, West Virginia University, Morgantown, WV, USA 6
+
+> 4
+
+Department of Neuroscience, West Virginia University, Morgantown, WV, USA 7
+
+> 5
+
+Department of Mechanical, Materials and Aerospace Engineering, Benjamin M. Statler College 8of Engineering and Mineral Resources, West Virginia University, Morgantown, WV, USA 9
+
+> 6
+
+Department of Chemical and Biomedical Engineering, B.M. Statler College of Engineering and 10 Mineral Resources, West Virginia University, Morgantown, WV, USA 11 *Corresponding author: Sergiy Yakovenko 12 
+
+Email: seyakovenko@mix.wvu.edu 13 
+
+Competing Interest Statement: The authors declare no competing interests. 14 
+
+Keywords: human-machine interfaces, physics-informed neural networks, forward dynamics 15 
+
+.CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint 2
+
+## ABSTRACT 16 
+
+Seamless interaction between humans and machines requires interfaces that remain robust to the 17 variability inherent in biological signals and physical environments. Advanced human-machine 18 interfaces (HMIs) increasingly rely on machine learning to predict or control limb dynamics. These 19 systems must learn input-to-output mappings between control variables and limb state, such as the 20 mapping from muscle forces or joint torques acting about segmented arm joints to limb posture 21 over time. Such statistical input-to-output transformations can result in numerical instability of 22 predicted musculoskeletal kinematics and dynamics. Achieving the robustness of biological motor 23 control requires solving both forward and inverse dynamics problems; however, these problems 24 are computationally asymmetric because they entail opposing operations–integration and 25 differentiation. Since we have previously shown that neural networks solve the inverse dynamics 26 problem when trained to map kinematic to dynamic signals during reaching, we hypothesized that 27 representing separately the approximation of equations of motion (EOM) and their temporal 28 numerical integration may capture the relevant computational structure of the forward dynamics 29 problem. We tested this hypothesis by comparing a conventional direct-mapping recurrent neural 30 network (RNN) with a two-stage model, the artificial physics engine (APE). When predicting the 31 state of a two-segment system under external perturbations not encountered during training, the 32 direct-mapping, monolithic model produced large prediction errors inconsistent with the expected 33 interaction torque, whereas the APE maintained low error and remained stable under novel initial 34 conditions and perturbations. Mapping system dynamics in the terms of the EOM improves 35 robustness against intrinsic and extrinsic sources of variability by imposing a causal, physics-based 36 structure on HMI design. 37 
+
+## INTRODUCTION 38 
+
+The difficulty of modeling complex dynamics is not determined solely by the underlying physics, 39 but also by the representation in which those dynamics are expressed. Those representations can 40 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+3differ markedly in compactness, stability, and computational tractability. For example, in 41 biomechanics, the equations of motion (EOM) can be expressed with Newton-Euler, Lagrange, and 42 Kane’s methods, among others, to capture the input–output relationships as state-evolution 43 problems that require temporal integration (Featherstone, 2008; Yamaguchi, 2005). In control 44 theory, the difference between instantaneous algebraic mappings ( 𝑢 → 𝑥 ) and state-evolution 45 equations ( 𝑥 ̇ = 𝑓(𝑥, 𝑢) ) separates input-output models without explicit internal state from those 46 with explicit evolution of internal system state (Kalman, 1963). Many machine-learning approaches 47 to movement decoding are formulated in the former way, as direct mappings from measured signals 48 to outputs, rather than as explicit models of state evolution (Glaser et al., 2020; Mathis et al., 2024). 49 While the approximation of system dynamics improves with network depth and the sufficient 50 representation of state behavior within the training dataset (Bengio, 2009), this representation may 51 not be well-suited. 52 In our previous studies developing movement control algorithms for intuitive human-machine 53 interfaces (HMI), we have achieved real-time performance in arm and hand simulations with 54 optimized musculoskeletal transformations (Sobinov et al., 2017) optimizing Hill-type muscle 55 models with traditional polynomial and, later, ANN representations (Gritsenko et al., 2016; Smirnov 56 et al., 2021; Sobinov et al., 2020). The segmental forward dynamics were computed using an 57 optimized physics engine, MuJoCo (Todorov et al., 2012), and the decoding of EMG signals into 58 torques, based on the muscle intrinsic state and joint-angle-dependent moment arms, was used to 59 map the EMG signals to the intended movement. This type of mapping can be captured with 60 physics-informed neural networks (PINNs) that enforce governing physics equations directly in the 61 loss function (Raissi et al., 2019). While PINN formulations can represent both forward and inverse 62 dynamics by constraining differential equations (by minimizing explicitly stated loss terms derived 63 from the governing physical equations), their optimization may become challenging for noisy, 64 partially observed, nonstationary real-time biomechanics (Cuomo et al., 2022; Karniadakis et al., 65 2021). Encoding movement features with PINNs requires full-motion motifs, thereby limiting its 66 applications to state prediction (Taneja et al., 2024). Alternatively, physics-informed recurrent 67 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+4dynamics, captured by RNNs, are similar to causal integration and local state evolution in cortical 68 (Lillicrap and Scott, 2013) and cerebellar dynamics (Miall et al., 1993; Miall and Wolpert, 1996), as 69 well as the recursive estimation needed for the sensorimotor loop (Kording et al., 2004; Todorov 70 and Jordan, 2002). However, while the corresponding motion equations for arm and hand inverse 71 dynamics can be represented within even a shallow ANN (Manukian et al., 2023), without MuJoCo, 72 the forward simulations of similar complexity have not yet been achieved using machine learning. 73 Several prominent studies have demonstrated gesture-based control for up to 10 degrees of 74 freedom (DOFs); however, the continuous robust decoding is typically limited to only 2-3 DOFs 75 (Ajiboye et al., 2017; Collinger et al., 2013; Hochberg et al., 2012; Sussillo et al., 2016). Therefore, 76 despite evidence that limb-dynamic computations can be embedded even in shallow neural 77 networks, producing physics-constrained forward online inference remains challenging. 78 In this study, we test the hypothesis that simulation instability in forward dynamic transformation 79 arises from a monolithic ANN implicitly conflating the approximation of the EOM with the 80 computationally demanding process of numerical integration. We implement the artificial physics 81 engine (APE), a decoupled physics-informed recurrent forward-dynamics architecture composed 82 of two distinct modules: (1) an ANN trained only to approximate the terms in the EOM (a forward 83 dynamical mapping), and (2) a dedicated, external numerical integrator that handles the state 84 update. We used perturbations that were not included in the training as evidence of learning not 85 only the input-output mapping but also embedding body mechanics, with interaction torques 86 propagating along the segmented structure. Evidence of embedded physics in neural computations 87 opens opportunities to formulate accurate and adaptable internal models of body structure for HMI. 88 
+
+## MATERIALS AND METHODS 89 
+
+Dataset generation 90 
+
+A planar, two-segment model of an upper-limb with shoulder and elbow joints (Fig. 1a) was 91 implemented in Simulink (MathWorks, MATLAB R2025a, Natick, MA). Each segment was 92 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+5represented as a uniform-density rigid cylinder; segment lengths and masses were scaled to a 93 nominal adult (75 kg, 1.75 m) using standard anthropometric fractions (Winter, 2009). Segmental 94 motion was described with coupled EOM: 𝑀 (𝑞)𝑞̈ + 𝐶(𝑞, 𝑞̇) + 𝐺(𝑞) = 𝜏 , where joint angles, 95 velocities, and accelerations ( 𝑞 , 𝑞 ̇ , 𝑞̈ ) modulate posture-dependent inertia matrix ( M), Coriolis and 96 centrifugal forces ( C), and gravity vector ( G). 97 98 
+
+Figure 1 . Comparison of the artificial physics engine and a direct mapping model in two-joint arm 99 
+
+movements. (a) Schematic of the planar two-segment arm model used in simulations, representing shoulder 100 
+
+(𝑞 !") and elbow ( 𝑞 #$ ) joint angles in the sagittal plane. Angles are referenced relative to an extended arm 101 
+
+posture (defined as 0º, equivalent to 180 deg in conventional coordinates). ( b) Block diagrams illustrating the 102 
+
+three modeling approaches. The ground-truth physics engine (middle, gray) computes joint kinematics by 103 
+
+integrating accelerations derived from the EOM. The APE (top, red) employs an RNN to learn mapping from 104 
+
+the current torques and previous kinematic state to instantaneous joint accelerations, which are then externally 105 
+
+integrated to predict the movement trajectory. In contrast, the direct mapping model (bottom, blue) uses an 106 
+
+RNN to map the torques directly to joint angles without an explicit integration step. ( c) Representative single-107 
+
+trial predictions of shoulder and elbow angles during an unperturbed trial (left) and a trial with an external 108 
+
+torque perturbation (right). The APE’s predictions (red lines) closely track the ground-truth trajectories from 109 
+
+the physics engine (dashed gray lines), while the direct mapping model (blue lines) shows substantial error. 110 
+
+Motion of the arm in a sagittal plane, subject to gravity, was simulated between three 111 nonoverlapping sets of targets arranged radially on a circle within the reachable workspace (radius 112 = 0.5 × forearm length). The training, testing, and validation movement sets were organized as 113 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+6start–end pairs between all target vertices ( 𝑛 !"#$% = 13 resulting in 132 movements; 𝑛 !&'! = 11 114 resulting in 90 movements, and 𝑛 (#)$* = 8 resulting in 42 movements). Each movement was a 115 straight-line endpoint path with bell-shaped velocity (Morasso, 1981) specified in Cartesian space 116 and converted to joint space using inverse kinematics. We solved the inverse dynamics problem to 117 compute shoulder and elbow torques using analytically derived joint angles, velocities, and 118 accelerations. Backward Euler with a simulation step size 𝛥𝑡 of 1 μs provided sufficient temporal 119 resolution to ensure numerical stability and accuracy. To generate movements with imposed brief 120 perturbations, we added a Gaussian pulse (curtailed to a 3-sigma kernel, set to 50-100 ms) to either 121 of the joint torques, randomizing the joint and direction. The changed trajectory was then computed 122 by numerically integrating the EOM with a temporal resolution of 1 μs. The pulse amplitude was 123 set to 5–15% of the peak-to-peak range of that joint’s unperturbed torque in the corresponding 124 movement. The perturbation onset was drawn uniformly from 20–80% of the movement duration, 125 with timing constrained to remain within that range. The perturbed movements between 8 targets 126 were included in the training process only as validation trials, used to monitor training progress and 127 detect potential overfitting, but not to update weights. The dataset with perturbed movements 128 generated for 11 test targets was used to evaluate whether the trained RNN models appropriately 129 embedded the segmental dynamics accounting for the interaction torque in movements with 130 perturbations. 131 
+
+Model training 132 
+
+We used three models in this study: two RNNs and a standard mechanical model of a two-segment 133 system, described above (Fig. 1b). The APE (top panel) was trained to predict instantaneous joint 134 accelerations from the current torques and the preceding kinematic state, computed on the 135 previous iteration. For each instance ( 𝑡 ), the input consisted of current shoulder and elbow torques 136 (𝜏 ', 𝜏 &) paired with the prior joint angles and velocities ( 𝑞 '+, 𝑞 &) , 𝑞 ̇'+, 𝑞̇ &) ), at time 𝑡 − Δ𝑡 , yielding a 6-137 dimensional input vector. The target output was the predicted acceleration vector ( 𝑞 ̈'+, 𝑞 ̈&) ) at 𝑡 . The 138 network was configured as a single long short-term memory (LSTM) layer (16 hidden units) that 139 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+7processes each time step independently, followed by a linear 2-unit regression head. Input 140 normalization was disabled, and L2-norm gradient clipping was set to 1. The second RNN, a direct 141 mapping model (bottom panel), was trained to map joint torques directly to the current joint angles, 142 omitting kinematic inputs. This network had the same architecture as the first network. Both RNNs 143 were trained with the Adam solver to minimize root-mean-square error (RMSE) over the output 144 accelerations (initial learning rate 3×10 -3 , with a piecewise schedule reducing the rate by a factor 145 of 2/3 every 50 epochs), using mini-batches of 8192 samples and shuffling the data within each 146 epoch for up to 150 epochs. Performance on a validation set was monitored, and the model weights 147 corresponding to the lowest validation RMSE were retained. 148 
+
+Simulating dynamics with neural networks 149 
+
+After training, the networks were used in their respective models (APE or direct mapping) to predict 150 joint angles across tests in unperturbed and perturbed movement conditions. Movements spanned 151 all ordered start-end pairs among 11 targets not seen during training. For the APE, the prediction 152 for a given movement was initialized with its initial kinematic state (the first sample of the reference 153 data). At each subsequent step, the embedded network used the current torques and the kinematic 154 state from the previous iteration step to predict the instantaneous joint accelerations. Joint velocities 155 and angles were then updated using explicit Euler integration ( 𝛥𝑡 = 0.1 ms) of the predicted 156 accelerations. This ‘predict–integrate’ cycle, in which the newly computed state becomes the input 157 to the next step, was repeated until the end. Importantly, except for the first state-initialization step, 158 reference kinematic data were not used in this process. State estimation relied solely on 159 numerically integrating the network-predicted accelerations, driven by the torque stream. For the 160 direct RNN, the instantaneous torques were the only inputs used to predict joint kinematics. 161 Predictions were generated independently for each point over the entire movement without explicit 162 numerical integration. 163 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+8
+
+Statistical analysis 164 
+
+The normality of the RMSE distributions for each model and simulated movement type 165 (perturbed/unperturbed) was assessed using the Lilliefors test. Because most data distributions 166 were nonnormal, a nonparametric Kruskal-Wallis test was used to assess whether significant 167 differences existed among the groups. Pairwise comparisons were conducted using a post-hoc test 168 with Dunn-Sidak correction to identify which specific groups differed from one another. All statistical 169 analyses were performed in Statistics and the Machine Learning Toolbox (MathWorks), with the 170 significance level set at 𝛼 = 0.05. 171 
+
+## RESULTS 172 
+
+In this study, we show that simulating forward dynamics with neural networks requires decoupling 173 state-dependent dynamics from numerical integration. Monolithic, direct-mapping models conflate 174 these computational steps, increasing representational complexity and failing to approximate 175 perturbed movements. By contrast, the decoupled architecture of our APE model isolates the 176 equations of motion and delegates state integration to an external solver. This modular approach 177 reduces prediction error compared with the monolithic baseline. APE generalizes to novel initial 178 conditions, unseen perturbations, while exhibiting emergent intersegmental dynamics, confirming 179 that the model internalizes the system’s physics rather than memorizing trajectories. 180 
+
+Direct mapping 181 
+
+Under matched training protocols, the direct model, with end-to-end mapping from joint torques to 182 joint angles, yielded substantially higher prediction errors than the modular APE model. As 183 illustrated by examples of both unperturbed and perturbed movements (Fig. 1c), the direct model 184 performed poorly at generalizing across trials and failed to associate input torques with the 185 corresponding movement evolution. Lacking initial conditions, it could not associate initial torque 186 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+9values with the appropriate starting state. This limitation arises in part from the system’s inherent 187 mechanical redundancy, where numerous torque combinations can yield the same joint angle. 188 Across 90 unperturbed trajectories, the RMSE (mean ± s.d.) was 15.74 ± 6.17° for the shoulder 189 and 12.04 ± 3.96° for the elbow (Fig. 2a, blue). Under external perturbations, the network performed 190 similarly poorly, yielding RMSE values of 15.71 ± 6.17° for the shoulder and 12.20 ± 4.07° for the 191 elbow (Fig. 2b, blue). These errors did not differ significantly from those in the unperturbed condition 192 (p > 0.05, post hoc pairwise comparisons with the Dunn–Sidak correction following the Kruskal– 193 Wallis test). 194 195 
+
+Figure 2. The direct mapping model underperforms relative to APE, the modular model, as illustrated 196 
+
+by predicted shoulder and elbow angle RMSE (μ, IQR) across all test trials . Each point represents a 197 
+
+single trial. ( a) The comparison between the direct model (blue) and APE (red) are shown for 90 unperturbed 198 
+
+trials. The APE reduced prediction errors by approximately 11-fold for the shoulder and 5-fold for the elbow 199 
+
+compared with the direct mapping model. ( b) This high level of accuracy was maintained across 90 perturbed 200 
+
+trials, with APE performance remaining statistically indistinguishable from that in the unperturbed condition. In 201 
+
+contrast, the direct mapping model exhibited consistently high errors that also did not differ significantly 202 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+10 
+
+between unperturbed and perturbed conditions. Asterisks (*) indicate significant differences between the two 203 
+
+models (p < 0.01, Kruskal–Wallis test). 204 
+
+Decoupling physics from integration 205 
+
+The APE model was configured to treat the mapping as an initial value problem and yielded 206 significantly more accurate and robust predictions than the direct mapping approach. Figure 1c 207 shows representative examples where APE predictions (red) closely tracked reference trajectories 208 during both unperturbed and perturbed trials. The APE achieved mean RMSE values of 1.38 ± 209 0.83° for the shoulder and 2.50 ± 0.86° for the elbow in unperturbed trials, representing an 11-fold 210 and 5-fold reduction in error compared to the direct mapping approach (Fig. 2a; p < 0.01, post-hoc 211 pairwise comparison with Dunn-Sidak correction). The model maintained high accuracy when 212 external perturbations were applied, with error values of 1.39 ± 0.84° for the shoulder and 2.50 ± 213 0.87° for the elbow that were not significantly different from unperturbed conditions (Fig. 2b; p > 214 0.05, post-hoc pairwise comparison with Dunn-Sidak correction). This stability, maintained even 215 when faced with new initial conditions and substantial external perturbations (no external 216 perturbations were seen during training), suggests that the model had internalized the system’s 217 EOM. 218 
+
+Predicting complex intersegmental dynamics 219 
+
+To test whether APE internalized the EOM, we evaluated its prediction of intersegmental dynamics 220 during untrained, perturbed trajectories. Figure 3 illustrates a representative trial. A transient elbow 221 perturbation (bottom panel, gray circle) induces a compensatory shoulder acceleration via inertial 222 coupling. In learning the forward mapping (𝜏 !, 𝑞 !,-, 𝑞 ̇!,-) → 𝑞̈ !, this interaction is governed by the 223 mass matrix 𝑀 (𝑞 ) ∈ ℝ%×%. For the two-link system, the mass matrix is defined as: 224 
+
+𝑀 (𝑞 ) = :𝑀 -- 𝑀 -/ 
+
+𝑀 /- 𝑀 // 
+
+;225 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+11 Consequently, the shoulder torque, 𝜏 - = 𝑀 --𝑞 ̈- + 𝑀 -/ 𝑞̈ /, depends directly on elbow acceleration 226 (𝑞 ̈/). APE accurately predicted this coupled shoulder response (top panel, gray circle) despite 227 training exclusively on unperturbed movements, confirming the network embedded the physical 228 equations governing the system. 229 230 
+
+Figure 3. The APE predicts intersegmental dynamics. Shown is a representative trial demonstrating the 231 
+
+APE’s ability to predict the mechanical coupling between joints. The plots show shoulder (top) and elbow 232 
+
+(bottom) accelerations for an unperturbed movement (dashed black line) and a perturbed movement with the 233 
+
+APE’s prediction (solid red line). A transient torque perturbation was applied to the elbow (bottom, gray shaded 234 
+
+region), causing a coupled, compensatory acceleration at the shoulder due to interaction torques (top, gray 235 
+
+shaded region). The APE’s prediction accurately captures this compensation (see ∆𝑞 ̈!" in the circular insert), 236 
+
+indicating that the network successfully embedded the system’s underlying EOM. 237 
+
+## DISCUSSION 238 
+
+In this study, we demonstrate that decoupling the process of integration from the equations of 239 motion, rather than simulating a direct trajectory mapping, provides a more computationally 240 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+12 tractable formulation for forward dynamics learning. We hypothesized that the predictive instability 241 of monolithic neural networks in forward dynamic simulations stems from conflating two distinct 242 computational steps: (1) approximating physical laws and (2) performing numerical integration. 243 When these processes are entangled, structural inaccuracies are recursively embedded during 244 implicit integration, driving a ‘vicious cycle’ of error accumulation. To resolve this, we developed an 245 artificial physics engine (APE) that explicitly decouples these processes. Using a shallow RNN to 246 approximate the instantaneous accelerations of a limb model—and delegating numerical 247 integration to a dedicated external solver—the APE achieved a five- to tenfold improvement in 248 predictive accuracy over traditional monolithic networks. This physics-embedded architecture not 249 only generalized robustly to unencountered initial conditions and perturbations but also 250 successfully reproduced complex, interaction-torque-driven intersegmental dynamics, confirming 251 the true embedding of underlying mechanical laws. Ultimately, these findings support the broader 252 
+
+principle that the computational tractability of learning movement dynamics depends not only on 253 
+
+network capacity, but also on the representation in which the problem is posed. 254 The primary limitation of our study is the reliance on a simple two-segment mechanical model to 255 represent the upper arm and forearm movement within a vertical plane. While this model does not 256 provide sufficient detail to simulate fine motor tasks, such as hand-object manipulation, finger 257 coordination, and detailed contact mechanics, it is sufficient to probe whether a learning system 258 captures coupled multi-joint dynamics. Two-segment models remain valuable because they 259 incorporate multi-segment coupling; their dynamics include inertial, Coriolis, and centripetal 260 interaction terms absent in single-joint movements. This level of modeling is often sufficient to 261 determine whether a method captures the essential properties of a coupled articulated structure 262 and is commonly used to represent human biomechanics during planar reaching, describing how 263 torque terms, including intersegmental interaction terms, shape movement (Gritsenko et al., 2009; 264 Hollerbach and Flash, 1982). Similar mechanical complexity is also relevant to gross locomotor 265 modeling that captures coordination and energetics (Darici and Kuo, 2022; Faraji and Ijspeert, 266 2017; Lin et al., 2020; Saunders et al., 1953; Taga et al., 1991), with applications in prosthetics. 267 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+13 The 2-DOF model employed in this study represents the simplest mechanism suitable for the 268 testing embedded multijoint physics. 269 
+
+Biomimetic learning of system dynamics via prediction error 270 
+
+The APE’s acquisition of the system dynamics of the double pendulum mimicked the hypothesized 271 acquisition of bodily dynamics by the internal forward model within the CNS. Such a process is 272 driven by sensory prediction errors, computed by comparing expected and actual outcomes. In the 273 biological motor system, the forward internal model processes the efference copy of the motor 274 command and generates a prediction of the expected sensory consequences, such as the 275 dynamics of the effector (Wolpert and Flanagan, 2001); our artificial engine used an analogous 276 process: the RNN processed the torque command and generated a prediction of the pendulum’s 277 dynamics, with the actual dynamics reported by the physics engine serving as the ‘sensory’ 278 feedback. The discrepancy between predicted and sensory feedback constituted the sensory 279 prediction errors. These errors are widely believed to drive synaptic modification within the 280 biological circuits forming the forward internal model (Shadmehr et al., 2010). Analogously, in the 281 neural network within the APE, prediction errors were used to tune the weight matrices via a 282 learning rule. This error-driven tuning enabled the APE to accurately respond to unseen external 283 perturbations, functionally replicating the entrained adaptive responses well-documented in 284 biological motor control studies, for example, force-field learning paradigms (Shadmehr and 285 Mussa-Ivaldi, 1994; Thoroughman and Shadmehr, 2000). 286 
+
+Overcoming learning and simulation challenges 287 
+
+A primary obstacle to designing accurate and stable noninvasive HMIs is the non-stationary 288 relationship between EMG signals and movement (see Scheme and Englehart, 2011 for review), 289 as these signals are continuously modulated by intrinsic and extrinsic factors in real-time. For 290 conventional data-driven models that learn this direct mapping, non-stationarity poses a critical 291 problem known in deep learning as covariate shift , where the statistical distribution of the input data 292 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+14 in real-world use differs from the distribution of the data used to train the model (Vidovic et al., 293 2016, 2014). This shift results in low, hard-to-learn performance that may degrade as the interface 294 parameters change, leading to the need for frequent recalibrations. The evidence of out-of-sample 295 prediction of interaction torques with APE indicates that the network simulates a causal, physical 296 relationship between applied forces and resulting motion. 297 However, the current APE implementation, which was focused on high physical precision, has not 298 achieved real-time performance (using a standard personal computer) with the implementation 299 limited to the choice of a fixed-step explicit Euler integrator to propagate the system’s state. To 300 ensure numerical stability and accuracy when simulating the complex, nonlinear, and sometimes 301 stiff dynamics of the two-segment arm, a small, fixed time step ( 𝛥𝑡 = 0.1 ms) was necessary, but 302 incompatible with the strict time budgets of interactive applications like prosthetic control or virtual 303 reality. The typical goal for a full simulation and rendering cycle should be less than 33 ms to 304 maintain the illusion of smooth motion (Dinev et al., 2018), with the physical simulation loop latency 305 under 16 ms (Erez et al., 2015), and even shorter latencies for the accurate computations of muscle 306 models. An important future direction for this work is, therefore, to transition the APE from a fixed-307 step to an adaptive step-size integration scheme. Such predictive allocation of computational 308 resources is computationally biomimetic, since biological motor control is inherently dynamic, 309 allocating neural resources to meet task demands (Todorov, 2004). 310 An alternative to the numerical solver is an architecturally suitable neural network, such as a 311 residual neural network. Characterized by skip connections of the form ℎ)0- = ℎ) + 𝑓 (ℎ )),312 where ℎ) is the hidden state at layer 𝑙 (representing a discrete step of numerical integration) 313 and 𝑓 is a learned transformation modeling system dynamics, a residual network is mathematically 314 equivalent to the forward Euler discretization of an underlying ODE (also see Chen et al., 2019; He 315 et al., 2015). Hence, the APE could, in principle, be formulated as a two-stage neural architecture: 316 (1) a recurrent network to approximate the EOM, and (2) a residual network trained to perform the 317 temporal integration. Whether a fully neural, two-stage APE offers practical advantages over the 318 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+15 current hybrid approach for HMI applications—which combines a neural network approximation of 319 the motion equations with a classical integrator—remains an open question. 320 In this study, we propose a novel framework for embedding forward dynamics within shallow neural 321 networks that encode the formulation of mechanics separately from its integration. We tested our 322 hypothesis that the decoupled architecture can learn the multisegmental physics of interactions by 323 generalizing observed movement, without the explicit exposure to perturbations. The accurate and 324 stable representation of dynamics in this framework establishes a viable technical path for the 325 broader strategy of embedding internal forward models in advanced HMIs. 326 
+
+## ACKNOWLEDGMENTS 327 
+
+This work was supported by the Air Force Office of Scientific Research (Award No. FA9550-24-1-328 0208), the West Virginia Foundation Distinguished Doctoral Scholarship Program, the West 329 Virginia University Center for Foundational Neuroscience Research and Education, and the West 330 Virginia University Stroke and Alzheimer’s Disease-Related Dementias (ADRD) T32 Program. S.B. 331 also acknowledges the NeuroMechatronics Lab for their valuable advice and comments. 332 
+
+## REFERENCES 333 
+
+Ajiboye AB, Willett FR, Young DR, Memberg WD, Murphy BA, Miller JP, Walter BL, Sweet JA, 334 Hoyen HA, Keith MW, Peckham PH, Simeral JD, Donoghue JP, Hochberg LR, Kirsch RF. 335 2017. Restoration of reaching and grasping movements through brain-controlled muscle 336 stimulation in a person with tetraplegia: a proof-of-concept demonstration. The Lancet 337 
+
+389 :1821–1830. DOI: https://doi.org/10.1016/S0140-6736(17)30601-3 338 Bengio Y. 2009. Learning Deep Architectures for AI. Foundations and Trends® in Machine 339 Learning 2:1–127. DOI: https://doi.org/10.1561/2200000006 340 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+16 Chen RTQ, Rubanova Y, Bettencourt J, Duvenaud D. 2019. Neural Ordinary Differential Equations. 341 arXiv:1806.07366 [cs, stat]. 342 Collinger JL, Wodlinger B, Downey JE, Wang W, Tyler-Kabara EC, Weber DJ, McMorland AJC, 343 Velliste M, Boninger ML, Schwartz AB. 2013. High-performance neuroprosthetic control by 344 an individual with tetraplegia. The Lancet 381 :557–564. DOI: 345 https://doi.org/10.1016/S0140-6736(12)61816-9, PMID: 23253623 346 Cuomo S, Di Cola VS, Giampaolo F, Rozza G, Raissi M, Piccialli F. 2022. Scientific machine 347 learning through physics–informed neural networks: where we are and what’s next. Journal 348 of Scientific Computing 92 :88. DOI: https://doi.org/10.1007/s10915-022-01939-z 349 Darici O, Kuo AD. 2022. Humans optimally anticipate and compensate for an uneven step during 350 walking. eLife 11 :e65402. DOI: https://doi.org/10.7554/eLife.65402 351 Dinev D, Liu T, Kavan L. 2018. Stabilizing Integrators for Real-Time Physics. ACM Transactions 352 on Graphics 37 :1–19. DOI: https://doi.org/10.1145/3153420 353 Erez T, Tassa Y, Todorov E. 2015. Simulation tools for model-based robotics: Comparison of Bullet, 354 Havok, MuJoCo, ODE and PhysX. 2015 IEEE International Conference on Robotics and 355 
+
+Automation (ICRA) . IEEE. p. 4397–4404. DOI: 356 https://doi.org/10.1109/ICRA.2015.7139807 357 Faraji S, Ijspeert AJ. 2017. 3LP: A linear 3D-walking model including torso and swing dynamics. 358 The International Journal of Robotics Research 36 :436–455. DOI: 359 https://doi.org/10.1177/0278364917708248 360 Featherstone R. 2008. Rigid body dynamics algorithms. Springer. 361 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+17 Glaser JI, Benjamin AS, Chowdhury RH, Perich MG, Miller LE, Kording KP. 2020. Machine 362 Learning for Neural Decoding. eneuro 7:ENEURO.0506-19.2020. DOI: 363 https://doi.org/10.1523/ENEURO.0506-19.2020 364 Gritsenko V, Hardesty RL, Boots MT, Yakovenko S. 2016. Biomechanical constraints underlying 365 motor primitives derived from the musculoskeletal anatomy of the human arm. PLoS ONE 366 
+
+11 :1–18. DOI: https://doi.org/10.1371/journal.pone.0164050 367 Gritsenko V, Yakovenko S, Kalaska JF. 2009. Integration of predictive feedforward and sensory 368 feedback signals for online control of visually guided movement. Journal of 369 Neurophysiology 102 :914–930. DOI: https://doi.org/10.1152/jn.91324.2008, PMID: 370 19474166 371 He K, Zhang X, Ren S, Sun J. 2015. Deep Residual Learning for Image Recognition. DOI: 372 https://doi.org/10.48550/ARXIV.1512.03385 373 Hochberg LR, Bacher D, Jarosiewicz B, Masse NY, Simeral JD, Vogel J, Haddadin S, Liu J, Cash 374 SS, van der Smagt P, Donoghue JP. 2012. Reach and grasp by people with tetraplegia 375 using a neurally controlled robotic arm. Nature 485 :372–375. DOI: 376 https://doi.org/10.1038/nature11076, PMID: 22596161 377 Hollerbach JM, Flash T. 1982. Dynamic interactions between limb segments during planar arm 378 movement. Biological Cybernetics 44 :67–77. DOI: https://doi.org/10.1007/BF00353957 379 Kalman RE. 1963. Mathematical Description of Linear Dynamical Systems. Journal of the Society 380 for Industrial and Applied Mathematics Series A Control 1:152–192. DOI: 381 https://doi.org/10.1137/0301010 382 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+18 Karniadakis GE, Kevrekidis IG, Lu L, Perdikaris P, Wang S, Yang L. 2021. Physics-informed 383 machine learning. Nature Reviews Physics 3:422–440. DOI: 384 https://doi.org/10.1038/s42254-021-00314-5 385 Kording KP, Wolpert DM, Körding KP, Wolpert DM. 2004. Bayesian integration in sensorimotor 386 learning. Nature 427 :244–247. DOI: https://doi.org/10.1038/nature02169, PMID: 387 14724638 388 Lillicrap TP, Scott SH. 2013. Preference distributions of primary motor cortex neurons reflect control 389 solutions optimized for limb biomechanics. Neuron 77 :168–179. DOI: 390 https://doi.org/10.1016/j.neuron.2012.10.041, PMID: 23312524 391 Lin B, Zhang Q, Fan F, Shen S. 2020. A damped bipedal inverted pendulum for human–structure 392 interaction analysis. Applied Mathematical Modelling 87 :606–624. DOI: 393 https://doi.org/10.1016/j.apm.2020.06.027 394 Manukian M, Bahdasariants S, Yakovenko S. 2023. Artificial physics engine for real-time inverse 395 dynamics of arm and hand movement. PLOS ONE 18 :e0295750. DOI: 396 https://doi.org/10.1371/journal.pone.0295750 397 Mathis MW, Perez Rotondo A, Chang EF, Tolias AS, Mathis A. 2024. Decoding the brain: From 398 neural representations to mechanistic models. Cell 187 :5814–5832. DOI: 399 https://doi.org/10.1016/j.cell.2024.08.051 400 Miall RC, Weir DJ, Wolpert DM, Stein JF. 1993. Is the cerebellum a Smith predictor? Journal of 401 Motor Behavior 25 :203–216. DOI: https://doi.org/10.1080/00222895.1993.9942050 402 Miall RC, Wolpert DM. 1996. Forward Models for Physiological Motor Control. Neural Networks 403 
+
+9:1265–1279. DOI: https://doi.org/10.1016/S0893-6080(96)00035-4 404 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+19 Morasso P. 1981. Spatial control of arm movements. Experimental Brain Research 42 . DOI: 405 https://doi.org/10.1007/BF00236911 406 Raissi M, Perdikaris P, Karniadakis GE. 2019. Physics-informed neural networks: A deep learning 407 framework for solving forward and inverse problems involving nonlinear partial differential 408 equations. Journal of Computational Physics 378 :686–707. DOI: 409 https://doi.org/10.1016/j.jcp.2018.10.045 410 Saunders JB, Inman VT, Eberhart HD. 1953. The major determinants in normal and pathological 411 gait. The Journal of bone and joint surgery American volume 35-A :543–558. PMID: 412 13069544 413 Scheme E, Englehart K. 2011. Electromyogram pattern recognition for control of powered upper-414 limb prostheses: State of the art and challenges for clinical use. The Journal of 415 Rehabilitation Research and Development 48 :643. DOI: 416 https://doi.org/10.1682/JRRD.2010.09.0177 417 Shadmehr R, Mussa-Ivaldi F. 1994. Adaptive representation of dynamics during learning of a motor 418 task. The Journal of Neuroscience 14 :3208–3224. DOI: 419 https://doi.org/10.1523/JNEUROSCI.14-05-03208.1994 420 Shadmehr R, Smith MA, Krakauer JW. 2010. Error Correction, Sensory Prediction, and Adaptation 421 in Motor Control. Annual Review of Neuroscience 33 :89–108. DOI: 422 https://doi.org/10.1146/annurev-neuro-060909-153135 423 Smirnov Y, Smirnov D, Popov A, Yakovenko S. 2021. Solving musculoskeletal biomechanics with 424 machine learning. PeerJ Computer Science 7:e663. DOI: https://doi.org/10.7717/peerj-425 cs.663 426 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+20 Sobinov A, Boots MT, Gritsenko V, Fisher LE, Gaunt RA, Yakovenko S. 2020. Approximating 427 complex musculoskeletal biomechanics using multidimensional autogenerating 428 polynomials. PLOS Computational Biology 16 :e1008350. DOI: 429 https://doi.org/10.1371/journal.pcbi.1008350 430 Sobinov A, Boots MT, Gritsenko V, Mansoori BK, Beringer C, Boninger ML, Yakovenko S. 2017. 431 Decoding motor commands for postural control of a biomimetic myoelectric prosthesis. 432 
+
+Society for Neuroscience Abstracts . p. 642.01. 433 Sussillo D, Stavisky SD, Kao JC, Ryu SI, Shenoy KV. 2016. Making brain–machine interfaces 434 robust to future neural variability. Nature Communications 7:13749. DOI: 435 https://doi.org/10.1038/ncomms13749 436 Taga G, Yamaguchi Y, Shimizu H. 1991. Self-organized control of bipedal locomotion by neural 437 oscillators in unpredictable environment. Biological Cybernetics 65 :147–159. DOI: 438 https://doi.org/10.1007/BF00198086 439 Taneja K, He X, He Q, Chen J-S. 2024. A multi-resolution physics-informed recurrent neural 440 network: formulation and application to musculoskeletal systems. Computational 441 Mechanics 73 :1125–1145. DOI: https://doi.org/10.1007/s00466-023-02403-x 442 Thoroughman KA, Shadmehr R. 2000. Learning of action through adaptive combination of motor 443 primitives. Nature 407 :742–747. DOI: https://doi.org/10.1038/35037588 444 Todorov E. 2004. Optimality principles in sensorimotor control. Nature Neuroscience 7:907–915. 445 DOI: https://doi.org/10.1038/nn1309 446 Todorov E, Erez T, Tassa Y. 2012. MuJoCo: A physics engine for model-based control. 5026– 447 5033. 448 
+
+> .CC-BY 4.0 International license available under a (which was not certified by peer review) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made The copyright holder for this preprint this version posted June 1, 2026. ;https://doi.org/10.64898/2026.05.27.728310 doi: bioRxiv preprint
+
+21 Todorov E, Jordan MI. 2002. Optimal feedback control as a theory of motor coordination. Nature 449 Neuroscience 5:1226–1235. DOI: https://doi.org/10.1038/nn963, PMID: 12404008 450 Vidovic MM-C, Hwang H-J, Amsuss S, Hahne JM, Farina D, Muller K-R. 2016. Improving the 451 Robustness of Myoelectric Pattern Recognition for Upper Limb Prostheses by Covariate 452 Shift Adaptation. IEEE Transactions on Neural Systems and Rehabilitation Engineering 453 
+
+24 :961–970. DOI: https://doi.org/10.1109/TNSRE.2015.2492619 454 Vidovic MM-C, Paredes LP, Han-Jeong Hwang, Amsuuss S, Pahl J, Hahne JM, Graimann B, 455 Farina D, Muller K-R. 2014. Covariate shift adaptation in EMG pattern recognition for 456 prosthetic device control. 2014 36th Annual International Conference of the IEEE 457 
+
+Engineering in Medicine and Biology Society . Presented at the 2014 36th Annual 458 International Conference of the IEEE Engineering in Medicine and Biology Society 459 (EMBC). IEEE. p. 4370–4373. DOI: https://doi.org/10.1109/EMBC.2014.6944592 460 Winter DA. 2009. Biomechanics and Motor Control of Human Movement. John Wiley & Sons, Inc. 461 DOI: https://doi.org/10.1002/9780470549148 462 Wolpert DM, Flanagan JR. 2001. Motor prediction. Current Biology 11 :R729–R732. DOI: 463 https://doi.org/10.1016/S0960-9822(01)00432-8 464 Yamaguchi GT. 2005. Dynamic Modeling of Musculoskeletal Motion. Springer Science &amp; 465 Business Media. 466 467
