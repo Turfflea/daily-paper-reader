@@ -1,0 +1,2583 @@
+Title: CPDA: Class-Conditional Path Distribution Alignment for Unsupervised Time-Series Domain Adaptation
+
+URL Source: https://arxiv.org/pdf/2608.09193v1
+
+Published Time: Tue, 11 Aug 2026 01:55:22 GMT
+
+Number of Pages: 34
+
+Markdown Content:
+## CPDA: Class-Conditional Path Distribution Alignment for Unsupervised Time-Series Domain Adaptation 
+
+Felix Ott 1, Christopher Mutschler 1,2 
+
+> 1
+
+Fraunhofer Institute for Integrated Circuits IIS, 90411 N¨ urnberg, Germany 
+
+> 2
+
+Machine Learning and Positioning Systems Department, University of Technology N¨ urnberg (UTN), 90461 N¨ urnberg 
+
+{felix.ott, christopher.mutschler }@iis.fraunhofer.de 
+
+Abstract 
+
+Unsupervised time-series domain adaptation (DA) addresses the challenge of transferring a classifier from a labeled source domain to an unlabeled target domain under distribu-tion shifts induced by different users, sensors, devices, ac-quisition conditions, or temporal dynamics. Existing meth-ods typically mitigate this shift by aligning marginal feature distributions through adversarial training, optimal transport, or moment-based discrepancies. In this paper, we propose Class-Conditional Path Distribution Alignment ( CPDA ), a non-adversarial discrepancy-based framework that aligns source and target class-conditional latent path distributions rather than only global feature marginals. CPDA introduces a composite signature–spectral kernel that jointly captures pooled semantic features, temporal path structure, frequency-domain information, and low-rank path-signature dynamics, while using source labels and target soft pseudo-labels to per-form class-preserving alignment. We further provide a the-oretical analysis showing that CPDA defines a valid ker-nel discrepancy, admits existing moment-matching methods as restricted cases, and yields a class-conditional target-risk bound. Extensive experiments with CNN, ResNet18, and TCN backbones on 13 different time-series DA benchmarks demonstrate the effectiveness of CPDA against 30 discrep-ancy, adversarial, and pseudo-labeling baselines. 
+
+1 Introduction 
+
+Time-series classification models are increasingly deployed in diverse applications; however, the training and deploy-ment data are collected under different conditions. Distribu-tion shifts may arise from different users, sensors, sampling conditions, or temporal dynamics. This creates a central challenge for time-series DA: a model is trained with labels from a source domain, while only unlabeled data are avail-able from the target domain. The objective is to learn rep-resentations that remain discriminative for the source task while becoming transferable to the target domain. A common strategy in unsupervised DA is to reduce the discrepancy between source and target feature distributions. Existing methods address this problem through a wide range of alignment principles, including moment matching (Borg-wardt et al. 2006; Long et al. 2017; Zhang et al. 2020; Alipour and Tahmoresnezhad 2021; Long et al. 2015), co-variance alignment (Sun, Feng, and Saenko 2017; Chen et al. 2020; Cherian et al. 2012; Sra 2012; Harandi, Salzmann, and Porikli 2014), information-theoretic divergences (Tzeng et al. 2014; Rahman et al. 2020; Shu et al. 2018), optimal transport (Ott et al. 2022a), and adversarial training (Ganin et al. 2016; Liu and Xue 2021; Zhu et al. 2020; Wilson, Doppa, and Cook 2020; Long et al. 2018). Many discrepancy-based methods align source and target domains only at the level of marginal feature distributions, e.g., through domain-confusion losses, MMD-based adapta-tion, or covariance alignment (Tzeng et al. 2014; Long et al. 2015; Sun, Feng, and Saenko 2017). This can be insuffi-cient for time-series DA, as marginal alignment may ignore class structure and incorrectly match target samples with source samples from different classes (Long et al. 2018; Zhu et al. 2020). Moreover, standard feature-level discrepancies often treat learned representations as unordered vectors, dis-carding temporal order, dynamic evolution, and frequency-domain structure. These limitations are critical for time-series, where discriminative information may lie in local transitions, periodic patterns, and class-specific latent trajec-tories rather than only in global feature statistics (He et al. 2023). To address these limitations, we propose CPDA, a non-adversarial discrepancy-based method for time-series DA that uses source labels and target soft pseudo-labels 
+
+to align class-conditional latent path distributions through a composite signature–spectral kernel capturing pooled, tem-poral, spectral, and path-signature information. 
+
+Contributions. The proposed CPDA method makes the following contributions. (1) We introduce CPDA, a class-conditional discrepancy for time-series DA that aligns 
+
+Ps(Z1: T |Y = c) and Pt(Z1: T |Y = c) rather than only the marginal feature distributions, and combine it with target-smoothness regularization through VAT to stabilize pseudo-label-based alignment. (2) We propose a signature–spectral kernel that jointly captures latent temporal paths, local dy-namics, frequency structure, and pooled semantic represen-tations. (3) We derive a class-conditional target-risk bound showing that the target error is controlled by the source risk and the CPDA discrepancy. (4) We show that common discrepancy-based methods such as MMD, CORAL, DAN, and HoMM arise as restricted cases or lower-order projec-tions of the proposed framework. (5) CPDA provides a non-adversarial, stable, and theoretically interpretable alternative to domain-discriminator-based alignment while directly ad-dressing class mismatch and temporal structure. arXiv:2608.09193v1 [stat.ML] 10 Aug 2026 2 Related Work 
+
+A central line of unsupervised DA reduces source–target shift by minimizing explicit discrepancies between feature distributions. DDC encourages domain-invariant represen-tations through a domain-confusion loss (Tzeng et al. 2014), while MMD-based methods compare source and target dis-tributions via RKHS mean embeddings (Borgwardt et al. 2006). DAN extends this principle by applying multi-kernel MMD to deep task-specific layers (Long et al. 2015). A sec-ond group aligns feature statistics directly: CORAL matches covariance matrices (Sun, Feng, and Saenko 2017), Jeffreys-and Stein-CORAL variants use geometry-aware covariance discrepancies (Cherian et al. 2012; Sra 2012; Harandi, Salz-mann, and Porikli 2014), MMCD jointly matches means and covariances (Zhang et al. 2020; Alipour and Tahmores-nezhad 2021), and HoMM extends alignment to higher-order moments (Chen et al. 2020). MMDA (Rahman et al. 2020) combines multiple such discrepancy terms within a deep adaptation objective (Rahman et al. 2020). While these methods are stable and non-adversarial, they typically align marginal vector-valued features and therefore do not explic-itly preserve class-conditional temporal structure. In parallel, adversarial and decision-boundary methods learn transferable representations through domain discrim-ination or classifier disagreement. DANN uses gradient re-versal (Ganin et al. 2016), CDAN conditions the discrimi-nator on class predictions (Long et al. 2018), MCD maxi-mizes classifier discrepancy (Saito et al. 2018), and DIRT-T combines entropy minimization with virtual adversarial training (Shu et al. 2018). DSAN performs local MMD-based subdomain alignment (Zhu et al. 2020), while Co-DATS and CoTMix adapt adversarial and contrastive learn-ing to temporal representations (Wilson, Doppa, and Cook 2020; Eldele et al. 2023), and RAINCOAT combines tem-poral and frequency information under feature and label shifts (He et al. 2023). AdaMatch uses distribution align-ment and confidence-based pseudo-labeling (Berthelot et al. 2022), OVANet addresses universal DA through one-vs-all classification (Saito and Saenko 2021), DANCE performs neighborhood-based clustering (Saito et al. 2020), and Ad-vSKM learns adversarial kernels (Liu and Xue 2021). These methods emphasize conditional and boundary-aware adapta-tion, but most do not explicitly align class-conditional latent paths. Optimal transport estimates sample-level alignment plans, efficiently approximated by Sinkhorn, but typically matches marginal empirical distributions without encoding class-conditional temporal structure. CPDA builds on discrepancy-based DA but addresses two key limitations of prior work: marginal alignment and vector-level feature comparison. Instead of matching only Ps(Z) and Pt(Z), CPDA aligns class-conditional la-tent path distributions using source labels and target soft pseudo-labels. Moreover, its composite signature–spectral kernel captures pooled semantics, temporal path structure, frequency-domain information, and low-rank path-signature dynamics. Thus, MMD, CORAL, DAN, and HoMM can be viewed as restricted cases or lower-order projections of CPDA, while CPDA remains non-adversarial and can be combined with VAT to stabilize pseudo-label-alignment. 
+
+3 Problem Statement 
+
+We consider unsupervised domain adaptation (UDA) for time-series classification. Let X ⊆ RCin ×L denote the in-put space of multivariate time-series with Cin input chan-nels and temporal length L. The label space is Y =
+
+{1, . . . , K }. We are given a labeled source-domain sample 
+
+Ds = {(xsi , y si )}ns 
+
+> i=1
+
+∼ Ps(X, Y ), and an unlabeled target-domain sample Dt = {xtj }nt 
+
+> j=1
+
+∼ Pt(X). The goal is to learn a classifier hθ,ϕ (x) = gϕ(fθ (x)) , where fθ is a time-series feature extractor and gϕ is a classifier, such that the target risk 
+
+Rt(hθ,ϕ ) = E(X,Y )∼Pt
+
+ℓ(hθ,ϕ (X), Y ) (1) is minimized, although target labels are not observed during training. Most discrepancy-based DA methods align marginal fea-ture distributions, Ps(Z) ≈ Pt(Z), where Z = fθ (X) de-notes the learned representation. However, for time-series classification this is often insufficient for three reasons: (i) First, marginal alignment ignores class structure and may align samples from different classes. (ii) Second, standard feature-level discrepancies treat the representation as an un-ordered vector and therefore discard temporal order. (iii) Third, low-order moment matching, such as mean or co-variance matching, may fail to capture non-Gaussian, dy-namic, and frequency-dependent differences between source and target time-series. To address these limitations, we propose Class-Conditional Path Distribution Alignment (CPDA). Instead of aligning only the marginal distributions of vector-valued features, CPDA aligns class-conditional distributions of latent time-series paths: 
+
+Ps(Z1: T |Y = c) ≈ Pt(Z1: T |Y = c), c = 1 , . . . , K. (2) The target-side class condition is estimated using soft pseudo-labels produced by the current classifier. An overview of notations is given in App. A. 
+
+4 Class-Conditional Path Distribution Alignment 
+
+Figure 1 illustrates the CPDA training pipeline. The method uses a shared feature extractor to map source and target time-series into latent temporal paths. These paths are trans-formed into complementary pooled, temporal, spectral, and signature-based representations, which define the compos-ite CPDA kernel. Source labels and target soft pseudo-labels provide class-conditional weights for computing class-wise MMD discrepancies. The resulting CPDA discrepancy is added to the source classification loss and the optional target information maximization term to update the feature extrac-tor and classifier end-to-end. We provide additional theoret-ical details in App. B. 
+
+4.1 Latent Path Representation 
+
+Let the feature extractor map an input time-series x to a latent temporal representation Zθ (x) = ( z1, . . . , z T ), z t ∈
+
+Rd. In convolutional architectures, the flattened feature vec-tor can be reshaped into a latent path Zθ (x) ∈ RT ×d, where Source mini-batch                     
+
+> {(xsi, y si)}Bs i=1
+> Target mini-batch
+> {xtj}Btj=1
+> Feature extractor
+> fθ
+> Feature extractor
+> fθ
+> Latent source paths
+> Zsi= ( zsi, 1, . . . , z si,T )
+> Latent target paths
+> Ztj= ( ztj, 1, . . . , z tj,T )
+> Classifier
+> gϕ
+> Classifier
+> gϕ
+> Source labels
+> ysi
+> Soft pseudo-labels qj(c)
+> Signature–Spectral Path Features
+> ψsig , ψ spec ,ψpath , ψ pool
+> Composite kernel matrices
+> Kss , K tt , K st
+> Class-wise weighted
+> \MMD 2
+> c
+> CPDA discrepancy:
+> bD2CPDA
+> =P
+> cbπt(c)\MMD 2
+> c
+> Training objective
+> L=Lcls +λbD2CPDA
+> +ηLIM +γLVAT
+> Source branch Target branch
+
+Figure 1: Overview of the proposed CPDA methodology. Source and target time-series are mapped to latent temporal paths by a shared feature extractor. CPDA constructs pooled, temporal-path, spectral, and signature-based representations from these latent paths and evaluates a composite kernel. Source labels and target soft pseudo-labels provide class-conditional weights. 
+
+T corresponds to the temporal feature length and d to the number of latent channels. For backbones that output a sin-gle vector, CPDA reduces to a degenerate one-step path, while still preserving its class-conditional distributional in-terpretation. To encode temporal order and dynamics, we define the augmented latent path Aθ (x)t =  tT , z t, ∆zt
+
+, ∆zt = zt −
+
+zt−1, with ∆z1 = 0 . The explicit time coordinate prevents invariance to arbitrary temporal permutations, and the incre-ment term captures local dynamics. 
+
+4.2 Signature–Spectral Path Features 
+
+CPDA compares time-series using a composite kernel de-fined on several complementary path representations. 
+
+Pooled Feature. The pooled latent representation is 
+
+ψpool (x) = 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+zt. (3) 
+
+Path Feature. The flattened augmented path feature is 
+
+ψpath (x) = vec  Aθ (x)1, . . . , A θ (x)T
+
+. (4) This term preserves temporal ordering at the latent-feature level (Kiraly and Oberhauser 2019). 
+
+Spectral Feature. The frequency-domain representation is defined by applying a discrete Fourier transform along the temporal axis: 
+
+ψspec (x) = vec   log  1 + Ft
+
+Zθ (x) 2 , (5) where Ft[·] denotes the Fourier transform along the time di-mension (Oppenheim and Schafer 2014). This term captures periodic and oscillatory structure that may be stable across domains. 
+
+Low-Rank Path-Signature Feature. Let eZθ (x)t = tT , z t
+
+ ∈ Rd+1 . Define increments 
+
+ut = P   eZθ (x)t+1 − eZθ (x)t
+
+, t = 1 , . . . , T − 1, (6) where P ∈ Rr×(d+1) is a fixed random projection matrix. The first-order signature feature is 
+
+S1(x) =  
+
+> T−1
+
+X
+
+> t=1
+
+ut, (7) and the ordered cross-increment interaction feature is 
+
+S2(x) = X 
+
+> 1≤i<j ≤T−1
+
+ui ⊗ uj . (8) The resulting low-rank truncated signature representation is 
+
+ψsig (x) = S1(x), vec( S2(x)) . (9) Higher-order signature terms may also be used, but the second-order version provides a favorable balance between expressiveness and computational cost (Boedihardjo et al. 2016). 
+
+4.3 Composite Signature–Spectral Kernel 
+
+For each representation 
+
+a ∈ { pool , path , spec , sig }, (10) we define a Gaussian kernel 
+
+ka(x, x ′) = exp 
+
+
+
+− ψa(x) − ψa(x′) 22
+
+σ2
+
+> a
+
+
+
+, (11) where ψa(·) denotes the normalized representation. In prac-tice, a multi-kernel Gaussian form is used (Long et al. 2015): 
+
+ka(x, x ′) = 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+exp 
+
+
+
+− ψa(x) − ψa(x′) 22
+
+σ2
+
+> a,m
+
+
+
+. (12) The full CPDA kernel is the nonnegative weighted sum 
+
+kCPDA (x, x ′) = αsig ksig (x, x ′) + αspec kspec (x, x ′)+αpath kpath (x, x ′) + αpool kpool (x, x ′),
+
+(13) where αsig , α spec , α path , α pool ≥ 0. The corresponding reproducing kernel Hilbert space (RKHS) is denoted by 
+
+HCPDA .4.4 Class-Conditional Signature–Spectral MMD 
+
+Let 
+
+qθ,ϕ (c|x) = softmax  gϕ(fθ (x))  
+
+> c
+
+(14) denote the classifier posterior probability for class c. For the source domain, class membership is known through ysi . For the target domain, class membership is approximated using the soft pseudo-labels qθ,ϕ (c|xtj ) (Lee 2013). For each class 
+
+c, define source and target weights 
+
+wsi,c = I[ysi = c], wtj,c = qθ,ϕ (c|xtj ). (15) The normalized class weights are 
+
+¯wsi,c = wsi,c 
+
+Pns 
+
+> i′=1
+
+wsi′,c 
+
+, ¯wtj,c = wtj,c 
+
+Pnt 
+
+> j′=1
+
+wtj′,c 
+
+. (16) The empirical class-conditional mean embeddings (Gretton et al. 2012; Smola et al. 2007) are 
+
+bμs,c =
+
+> ns
+
+X
+
+> i=1
+
+¯wsi,c kCPDA (xsi , ·), bμt,c =
+
+> nt
+
+X
+
+> j=1
+
+¯wtj,c kCPDA (xtj , ·).
+
+(17) The class-conditional CPDA discrepancy is then 
+
+bD2CPDA =
+
+> K
+
+X
+
+> c=1
+
+bπt(c) bμs,c − bμt,c 
+
+> 2
+> HCPDA
+
+, (18) where 
+
+bπt(c) = 1
+
+ntntX
+
+> j=1
+
+qθ,ϕ (c|xtj ) (19) is the estimated target class prior. Equivalently, using kernel matrices, the class-wise empir-ical discrepancy is 
+
+\MMD 2 
+
+> c
+
+=
+
+> ns
+
+X
+
+> i,i ′=1
+
+¯wsi,c ¯wsi′,c kCPDA (xsi , x si′ )+
+
+> nt
+
+X
+
+> j,j ′=1
+
+¯wtj,c ¯wtj′,c kCPDA (xtj , x tj′ )
+
+− 2
+
+> ns
+
+X
+
+> i=1
+> nt
+
+X
+
+> j=1
+
+¯wsi,c ¯wtj,c kCPDA (xsi , x tj ).
+
+(20) Thus, 
+
+bD2CPDA =
+
+> K
+
+X
+
+> c=1
+
+bπt(c) \MMD 2 
+
+> c
+
+. (21) 
+
+4.5 Training Objective 
+
+The source classification loss is 
+
+Lcls = 1
+
+nsnsX
+
+> i=1
+
+ℓCE 
+
+
+
+gϕ
+
+ fθ (xsi ), y si
+
+
+
+. (22) To stabilize target pseudo-labeling and avoid degenerate so-lutions, we optionally use a target information maximization regularizer: 
+
+LIM = 1
+
+ntntX
+
+> j=1
+
+H
+
+
+
+qθ,ϕ (·| xtj )
+
+
+
+− H
+
+ 1
+
+ntntX
+
+> j=1
+
+qθ,ϕ (·| xtj )
+
+
+
+,
+
+(23) where H(·) denotes Shannon entropy. The first term encour-ages confident target predictions, while the second term dis-courages class collapse. The complete CPDA objective is 
+
+LCPDA = Lcls + λ bD2CPDA + ηLIM + γLVAT (24) with hyperparameters λ, η, γ ≥ 0.While we provide the computational complexity in App. C, we give details on the CPDA algorithm in App. D. 
+
+5 Theoretical Analysis 
+
+Proposition 1 (Validity of the CPDA kernel) . Assume that 
+
+αsig , α spec , α path , α pool ≥ 0. (25) 
+
+Then kCPDA is a positive semidefinite kernel. Proof. For each representation ψa, the Gaussian kernel 
+
+ka(x, x ′) = exp 
+
+
+
+− ∥ψa(x) − ψa(x′)∥22
+
+σ2
+
+> a
+
+
+
+(26) is positive semidefinite. A nonnegative weighted sum of positive semidefinite kernels is again positive semidefinite. Therefore, kCPDA = P 
+
+> a
+
+αaka is positive semidefinite. 
+
+Proposition 2 (CPDA as an integral probability metric) . Let 
+
+HCPDA be the RKHS induced by kCPDA . For any class c, the population class-conditional CPDA discrepancy satisfies 
+
+MMD CPDA (P cs , P ct ) = sup   
+
+> ∥f∥HCPDA ≤1
+
+EX∼P cs f (X) − EX∼P ct f (X) , (27) 
+
+where P cs = Ps(X|Y = c) and P ct = Pt(X|Y = c).Proof. By the reproducing property, the kernel mean em-beddings are 
+
+μcs = EX∼P cs kCPDA (X, ·), μct = EX∼P ct kCPDA (X, ·).
+
+(28) For any f ∈ H CPDA ,
+
+EP cs f (X) − EP ct f (X) = ⟨f, μ cs − μct ⟩HCPDA . (29) Taking the supremum over the unit ball and applying Cauchy–Schwarz gives 
+
+sup   
+
+> ∥f∥HCPDA ≤1
+
+⟨f, μ cs −μct ⟩HCPDA = ∥μcs −μct ∥HCPDA . (30) This is exactly the MMD induced by kCPDA .
+
+Theorem 1 (Class-conditional target-risk bound) . Let 
+
+Rt(h) = 
+
+> K
+
+X
+
+> c=1
+
+πt(c)EX∼P ct ℓ h(X), c  (31) 
+
+be the target risk, where πt(c) = Pt(Y = c). Assume that for each class c, the function x 7 → ℓ h(x), c  belongs to 
+
+HCPDA and satisfies ∥ℓ(h(·), c )∥HCPDA ≤ B. Then 
+
+Rt(h) ≤ Rπt 
+
+> s
+
+(h)+ B
+
+> K
+
+X
+
+> c=1
+
+πt(c)MMD CPDA (P cs , P ct ), (32) where 
+
+Rπt 
+
+> s
+
+(h) = 
+
+> K
+
+X
+
+> c=1
+
+πt(c)EX∼P cs ℓ h(X), c  (33) 
+
+is the source class-conditional risk reweighted by target pri-ors. Proof. We decompose the target risk class-wise: 
+
+Rt(h) = 
+
+> K
+
+X
+
+> c=1
+
+πt(c)EX∼P ct ℓ h(X), c . (34) Adding and subtracting the corresponding source class-conditional expectation gives 
+
+Rt(h) = 
+
+> K
+
+X
+
+> c=1
+
+πt(c)EX∼P cs ℓ h(X), c 
+
++
+
+> K
+
+X
+
+> c=1
+
+πt(c)EX∼P ct ℓ h(X), c  − EX∼P cs ℓ h(X), c  .
+
+(35) The first term is Rπt 
+
+> s
+
+(h). For the second term, Proposition 2 and the RKHS norm assumption imply 
+
+EX∼P ct ℓ h(X), c −EX∼P cs ℓ h(X), c 
+
+≤ BMMD CPDA (P cs , P ct ). (36) Therefore, 
+
+Rt(h) ≤ Rπt 
+
+> s
+
+(h)+ B
+
+> K
+
+X
+
+> c=1
+
+πt(c)MMD CPDA (P cs , P ct ). (37) 
+
+Corollary 1 (Equal class priors) . If πs(c) = πt(c) for all 
+
+c, then the reweighted source risk reduces to the standard source risk: Rπt 
+
+> s
+
+(h) = Rs(h). Consequently, 
+
+Rt(h) ≤ Rs(h) + B
+
+> K
+
+X
+
+> c=1
+
+πt(c)MMD CPDA (P cs , P ct ). (38) 
+
+Proof. If πs(c) = πt(c), then 
+
+Rs(h) = 
+
+> K
+
+X
+
+> c=1
+
+πs(c)EX∼P cs ℓ h(X), c 
+
+=
+
+> K
+
+X
+
+> c=1
+
+πt(c)EX∼P cs ℓ h(X), c  = Rπt 
+
+> s
+
+(h).
+
+(39) The result follows directly from Theorem 1. 
+
+Theorem 2 (Effect of pseudo-label error) . Let q(c|x) be the soft target pseudo-label distribution used by CPDA, and let 
+
+ηq = EX∼Pt
+
+∥q(·| X) − pt(·| X)∥1
+
+, (40) 
+
+where pt(c|x) is the true target posterior. Assume the loss is bounded: 0 ≤ ℓ h(X), c  ≤ M . Then replacing the true target class posterior by q(c|x) changes the target risk by at most M η q .Proof. The true conditional target risk can be written as 
+
+Rt(h) = EX∼Pt
+
+> K
+
+X
+
+> c=1
+
+pt(c|X)ℓ h(X), c . (41) The pseudo-label-weighted target risk is 
+
+Rqt (h) = EX∼Pt
+
+> K
+
+X
+
+> c=1
+
+q(c|X)ℓ h(X), c . (42) Therefore, 
+
+|Rt(h) − Rqt (h)| == EX∼Pt
+
+> K
+
+X
+
+> c=1
+
+ pt(c|X) − q(c|X)ℓ h(X), c 
+
+≤ EX∼Pt
+
+> K
+
+X
+
+> c=1
+
+pt(c|X) − q(c|X) ℓ h(X), c 
+
+≤ M EX∼Pt ∥pt(·| X) − q(·| X)∥1 = M η q .
+
+(43) 
+
+Proposition 3 (Connection to existing discrepancy losses) .
+
+CPDA contains several commonly used discrepancy princi-ples as limiting or restricted cases. 1. If class conditioning is removed and only kpool is used, CPDA reduces to standard marginal MMD on pooled features. 2. If a linear kernel is used on pooled features, CPDA re-duces to first-order mean matching. 3. If a linear kernel is used on centered quadratic feature maps, the induced MMD equals covariance matching, corresponding to CORAL-type alignment. 4. If polynomial feature maps of order p are used, CPDA aligns moments up to order p, recovering the principle behind higher-order moment matching such as HoMM. 5. If CPDA is evaluated at several network layers, it recov-ers the multi-layer distribution-matching principle used by DAN-like methods, while retaining class conditioning and temporal structure. Proof. Each statement follows by restricting the feature map and conditioning structure of CPDA. For item 1, setting 
+
+αsig = αspec = αpath = 0 , αpool > 0, (44) and replacing class-conditional weights by uniform weights yields bμs − bμt
+
+> 2
+> H
+
+, which is the empirical MMD. For item 2, choosing a linear kernel 
+
+k(x, x ′) = ψpool (x)⊤ψpool (x′) (45) gives 
+
+MMD 2 = EPs ψpool (X) − EPt ψpool (X) 22, (46) which is first-order mean matching. For item 3, define the centered quadratic feature map 
+
+ψ2(x) = vec  (ψ(x) − μ)( ψ(x) − μ)⊤. (47) A linear MMD in this feature space is 
+
+EPs ψ2(X) − EPt ψ2(X) 22 = ∥Cs − Ct∥2 
+
+> F
+
+, (48) which is the core covariance discrepancy used by CORAL. For item 4, polynomial feature maps explicitly encode ten-sor products of features up to order p. Therefore, MMD in this feature space matches moments up to order p, which is precisely the principle underlying HoMM. For item 5, summing CPDA discrepancies over multiple layers gives a multi-layer discrepancy objective. This is structurally analo-gous to DAN-like multi-layer MMD, but CPDA additionally preserves class-conditional and temporal path information (refer to App. E, for more details.). 
+
+6 Experiments 
+
+Methods. We evaluate CPDA using the AdaTime (Ragab et al. 2023) benchmarking framework to ensure a re-producible comparison across DA methods. We bench-mark discrepancy-based baselines, including MSE align-ment, cross-correlation (CC) and Pearson-correlation (PC) alignment, Kullback-Leibler divergence (KL), linear and kernelized MMD (Borgwardt et al. 2006; Long et al. 2017), Jensen–Shannon divergence (JSD), linear and kernelized mean–covariance discrepancy variants (MMCD) (Zhang et al. 2020; Alipour and Tahmoresnezhad 2021), linear and squared DAN-style losses (Long et al. 2015), covariance-based objectives such as CORAL (Sun, Feng, and Saenko 2017), Jeffreys and Stein CORAL (Cherian et al. 2012; Sra 2012; Harandi, Salzmann, and Porikli 2014), HoMM (Chen et al. 2020), MMDA (Rahman et al. 2020), DDC (Tzeng et al. 2014), DANN (Ganin et al. 2016), CDAN (Long et al. 2018), DIRT-T (Shu et al. 2018), DSAN (Zhu et al. 2020), CoDATS (Wilson, Doppa, and Cook 2020), Ad-vSKM (Liu and Xue 2021), CoTMix (Eldele et al. 2023), MCD (Saito et al. 2018), AdaMatch (Berthelot et al. 2022), DANCE (Saito et al. 2020), OVANet (Saito and Saenko 2021), and RAINCOAT (He et al. 2023). We further eval-uate Sinkhorn-based optimal transport alignment (Ott et al. 2022a). Refer to App. I, for more details on methods. All methods are compared against CPDA under the same experi-mental protocol and are evaluated with three AdaTime back-bone architectures: CNN, ResNet18, and TCN (App. H). 
+
+Datasets. In total, we utilize 13 different time-series datasets for evaluation of unsupervised DA. Table 8 in App. J gives a detailed overview of different applica-tions and number of classes and samples. We utilize the EEG (Goldberger et al. 2000), HHAR SA (Stisen et al. 2015), UCI HAR (Anguita et al. 2013), WISDM (Kwapisz, Weiss, and Moore 2010), and uWave (Liu et al. 2009) datasets that are mainly used in DA benchmarks. Addition-ally, we evaluate datasets from the UCR/UEA (Blankertz, Curio, and M¨ uller 2001; Caputo et al. 2018; Villar et al. 2016; Olivetti, Kia, and Avesani 2014; Alimoglu and Al-paydin 1997) dataset suite. One prominent application is online handwriting (OnHW) recognition of symbols, equa-tions, and characters (Ott et al. 2022b, 2020). For ablation studies, we consider the transformation of sine-signals to cosine-signals as a DA problem (Ott et al. 2022a). 0 20 40        
+
+> Epoch
+> 0.2 0.4 0.6 0.8 1.0
+> Loss
+> Total Source CE CPDA 020 40
+> Epoch
+> −1.0 −0.5 0.0 0.5
+> Loss  IM loss VAT loss 020 40
+> Epoch
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Weight  Ramp-up α(t)
+> λCPDA
+> λIM
+> λVAT
+> 020 40
+> Epoch
+> 0.50 0.75 1.00 1.25 1.50 1.75
+> Entropy / diversity
+> Target entropy Target diversity Active classes 5.975 5.980 5.985 5.990 5.995 6.000
+> Active classes
+
+Figure 2: Training dynamics of CPDA: losses, target regu-larization, effective weights, and target prediction statistics. 
+
+7 Evaluation 
+
+We evaluate a large collection of source–target pairs (up to 
+
+435 pairs per dataset), repeat every transfer five times using different random seeds, and report the mean and standard deviation of accuracy and F1-score. Details on the hardware and training setup are provided in App. G, while additional experimental results are reported in App. K. The source– target domain discrepancies are analyzed in App. K.1. 
+
+Training Dynamics. Figure 2 shows stable CPDA op-timization: the total, source, and CPDA losses decrease steadily, while VAT remains active with fixed weight and only the IM weight is gradually increased by the ramp-up schedule. Target entropy decreases without a collapse in tar-get diversity or active classes, indicating more confident tar-get predictions while preserving class coverage. 
+
+Method Evaluation. Table 1 summarizes representative results for HHAR, EEG, and uWave, while App. K.2 confirms consistent trends across the remaining datasets. Across the nine representative dataset–backbone configu-rations, CPDA achieves the highest accuracy/F1-score in five settings, while being competitive with the best base-line in the remaining cases. Its strongest and most consis-tent gains occur with the CNN backbone and on HHAR and uWave, where class-dependent temporal structure is par-ticularly pronounced. On HHAR, CPDA reaches 81 .82% 
+
+accuracy and 80 .27% F1 with CNN and 77 .88% / 75 .84% 
+
+with TCN, while obtaining the strongest ResNet18 result. It likewise outperforms all baselines on EEG, despite the sub-stantially lower absolute performance and greater difficulty of this physiological-signal benchmark. The clearest gains are observed on uWave, where CPDA achieves 97 .30% ,
+
+61 .32% , and 92 .17% accuracy with CNN, ResNet18, and TCN, respectively, surpassing adversarial, discrepancy-based, optimal-transport, and time-series-specific competi-tors. These results support the central motivation of CPDA: aligning class-conditional latent paths is particularly effec-tive when discriminative information is encoded in tempo-ral evolution rather than only in marginal feature statistics. The closest competitors vary across settings, with DIRT-T and CDAN performing strongly on HHAR, AdaMatch and OVANet on EEG, and the recent time-series-specific RAINCOAT method on uWave with ResNet18 and under sinusoidal noise. The appendix further demonstrates strong performance on UCI HAR, WISDM, PenDigits, Epilepsy, and Face Detection, although the gains are more variable for small or highly heterogeneous datasets such as Finger Movements, Gestures Mid Air, and OnHW. On the sinu-soidal benchmark, CPDA is among the most robust methods Table 1: Results for all methods on the exemplary datasets HHAR, EEG, and uWave for CNN, ResNet18, and TCN backbones. Each entry reports accuracy in % and F1-score. Results for all datasets are given in App. K.2, including standard deviations. 
+
+Method HHAR CNN HHAR ResNet HHAR TCN EEG CNN EEG ResNet EEG TCN uWave CNN uWave ResNet uWave TCN 
+
+MSE 62.24, 57.79 48.40, 43.37 52.08, 46.31 69.12, 58.02 51.63, 38.55 45.87, 33.59 83.76, 82.43 45.88, 41.66 71.69, 68.82 CS 63.07, 59.09 53.68, 50.98 56.09, 51.36 71.51, 57.79 53.13, 36.18 46.00, 33.89 77.88, 76.09 48.51, 44.81 69.08, 66.29 PC 64.74, 60.68 54.97, 51.59 61.43, 57.20 69.80, 59.03 51.86, 38.80 45.89, 34.15 85.62, 84.62 49.99, 45.99 73.33, 70.22 KL 60.10, 54.76 50.83, 46.08 19.36, 8.39 69.20, 58.38 50.03, 37.36 26.56, 8.21 81.35, 79.89 46.41, 40.81 12.69, 2.81 JSD 64.75, 60.62 54.55, 50.74 17.79, 7.33 69.99, 59.30 48.80, 35.65 26.47, 8.21 84.10, 82.72 49.33, 43.11 12.10, 2.70 lMMD 66.83, 63.13 57.50, 54.95 68.33, 65.01 70.18, 59.39 51.74, 38.73 46.16, 33.78 86.53, 85.58 49.79, 45.79 83.40, 81.69 kMMD 63.86, 59.64 54.50, 51.25 61.48, 57.48 69.80, 59.11 51.91, 38.96 45.98, 34.00 86.57, 85.53 49.76, 45.78 79.22, 77.28 Deep CORAL 73.51, 71.57 61.20, 59.75 72.17, 70.23 72.44, 61.45 52.67, 39.21 46.79, 33.54 86.51, 85.44 50.11, 46.16 80.15, 78.30 Jeff CORAL 64.49, 60.18 54.55, 61.11 62.13, 58.15 69.69, 58.93 51.77, 38.81 45.93, 34.01 85.98, 84.88 49.75, 45.61 79.44, 77.50 Stein CORAL 64.10, 59.78 54.93, 51.57 62.11, 58.18 69.95, 59.24 51.87, 38.90 45.96, 34.08 86.41, 85.41 49.81, 45.71 79.11, 77.15 lMMCD 66.60, 63.03 57.32, 54.87 68.04, 64.78 70.19, 59.35 51.82, 38.77 45.85, 33.55 86.39, 85.26 49.75, 45.73 83.68, 81.84 kMMCD 64.37, 60.11 55.26, 52.06 62.03, 57.97 69.83, 59.04 51.74, 38.80 45.92, 33.88 86.51, 85.44 50.11, 46.16 80.15, 78.30 MMDA 70.34, 66.08 57.73, 55.05 67.26, 64.51 64.84, 47.83 52.15, 36.35 44.48, 28.31 92.26, 91.76 49.90, 46.24 84.64, 82.61 DDC 63.14, 59.32 53.74, 49.80 59.70, 55.69 72.44, 61.44 51.32, 37.98 46.77, 33.45 86.32, 85.28 49.96, 45.96 79.43, 77.42 Linear DAN 72.14, 69.81 59.19, 56.96 68.40, 65.86 70.25, 59.70 51.78, 38.82 45.98, 34.01 87.77, 87.03 50.58, 46.59 83.46, 82.02 Squared DAN 72.09, 69.84 59.29, 57.09 68.48, 66.12 70.50, 59.79 52.02, 39.02 45.96, 34.10 89.53, 88.83 51.03, 47.03 86.84, 85.98 HoMM p=3 72.64, 70.15 61.59, 59.70 70.84, 68.48 72.84, 61.74 51.16, 37.00 40.42, 19.14 92.00, 91.27 51.28, 47.62 90.36, 89.90 DANN 76.91, 75.86 63.21, 62.18 73.16, 71.86 73.09, 62.00 52.54, 38.54 46.30, 33.00 85.13, 84.13 52.01, 48.26 84.58, 83.37 CDAN 79.88, 79.44 66.49, 66.11 76.78, 75.10 71.70, 58.10 49.90, 32.28 47.88 , 33.47 96.43, 95.97 57.95, 53.18 81.85, 79.01 DIRT-T 80.11, 79.45 67.89, 65.92 76.78, 74.77 73.48, 61.23 52.37, 37.38 47.85, 33.30 96.43, 95.97 55.01, 49.97 80.15, 78.30 DSAN 77.96, 77.28 67.22, 66.60 74.64, 73.26 71.00, 58.15 51.53, 36.27 47.43, 34.71 13.11, 5.45 59.25, 56.85 91.92, 91.55 
+
+CoDATS 76.30, 75.62 63.79, 62.73 72.48, 71.10 70.03, 58.34 50.67, 35.63 42.39, 26.78 88.85, 88.32 55.48, 52.19 89.31, 88.46 AdvSKM 66.36, 62.23 53.61, 50.28 62.32, 58.07 72.56, 61.37 50.97, 35.32 46.62, 33.35 85.54, 84.61 50.07, 46.18 79.74, 77.68 Sinkhorn 75.15, 73.97 67.98 , 67.18 70.04, 68.11 71.37, 59.97 51.31, 37.15 44.87, 28.48 92.89, 91.41 58.01, 54.21 84.08, 83.01 CoTMix 76.61, 74.51 56.84, 54.60 67.32, 65.36 70.30, 58.55 49.25, 34.55 32.22, 22.37 91.88, 91.04 42.76, 41.62 36.46, 34.88 MCD 73.92, 71.13 61.14, 58.43 67.12, 63.71 72.47, 61.49 51.75, 37.41 42.98, 31.69 89.43, 88.60 53.10, 49.66 79.34, 77.13 AdaMatch 76.83, 75.40 64.07, 62.60 77.43, 75.83 72.79, 61.19 50.97, 37.28 51.01, 37.38 89.31, 88.81 53.74, 50.29 86.36, 85.52 DANCE 55.76, 51.05 59.18, 55.68 63.75, 61.30 53.27, 33.42 51.28, 31.98 41.62, 22.13 38.89, 33.90 46.47, 42.83 82.20, 79.64 OVANet 65.78, 61.72 56.76, 54.08 70.20, 66.82 65.86, 50.77 53.56 , 37.93 43.25, 25.12 60.21, 57.86 49.72, 46.29 83.12, 81.14 RAINCOAT 72.91, 70.65 61.94, 60.13 64.58, 61.30 63.51, 45.99 47.77, 24.73 45.82, 20.77 88.17, 87.39 63.30 , 59.71 82.39, 80.34 CPDA (ours) 81.82 , 80.27 67.79, 65.75 77.88 , 75.84 74.39 , 64.16 53.27, 40.46 46.76, 33.80 97.30 , 96.79 61.32, 57.53 92.17 , 91.24 learning_rate = 0.0005 0.001 0.005 domain_loss_wt = 0.1 0.5 1.0 2.0 cpda_im_wt = 0.0 0.01 0.025 0.05 0.1 cpda_vat_wt = 0.01 0.05 0.1 0.25 cpda_signature_wt = 0.0 0.25 0.5 1.0 cpda_spectral_wt = 0.25 0.5 1.0 cpda_pool_wt = 0.1 0.25 0.5 1.0 cpda_path_wt = 0.25 0.5 cpda_sig_proj_dim = 8 16 32 cpda_sig_level = 1 23cpda_max_seq_len = 32 64 128 10 
+
+> 0Accuracy Improv. [%p]  HHAR UCI HAR WISDM EEG uWave PenDigits Epilepsy Face Detection Finger Movements
+
+Figure 3: Accuracy improvements in percent points through hyperparameter searches against default parameters. under increasing noise, providing particularly strong perfor-mance in the moderate-noise regime (Figure 5, App. K.2). 
+
+Hyperparameter Searches. We perform parameter searches for all datasets using the CNN backbone (see Table 5 in App. G). Figure 3 reports the accuracy improve-ment over the default CPDA configuration of a post hoc sensitivity analysis. Overall, most hyperparameter changes lead only to small improvements, indicating that the default setting is already robust across datasets. The largest gains are dataset-specific: Finger Movements benefits strongly from selected loss weights, while Face Detection shows larger sensitivity to the pooled / path-related weights. In con-trast, HHAR, UCI HAR, WISDM, EEG, uWave, PenDigits, and Epilepsy remain comparatively stable. This suggests that CPDA is not overly sensitive to most hyperparameters, but that difficult or small datasets can benefit from targeted tuning of the loss weights and kernel-component weights. 
+
+8 Conclusion 
+
+We proposed CPDA, a non-adversarial method for unsuper-vised time-series DA that aligns class-conditional latent path distributions instead of only marginal feature distributions. CPDA combines source labels, target soft pseudo-labels, VAT regularization, and a composite signature–spectral ker-nel to capture pooled, temporal, spectral, and path-signature information. Experiments across multiple backbones show that CPDA achieves strong or best performance on several structured datasets. These results demonstrate that class-conditional path alignment is particularly effective when dis-criminative information is encoded in temporal trajectories. References 
+
+Alimoglu, F.; and Alpaydin, E. 1997. Combining Multiple Representations and Classifiers for Pen-based Handwritten Digit Recognition. In Proc. of the IAPR Intl. Conf. on Doc-ument Analysis and Recognition (ICDAR) , volume 2, 637– 640. Ulm, Germany. Alipour, N.; and Tahmoresnezhad, J. 2021. Heterogeneous Domain Adaptation with Statistical Distribution Alignment and Progressive Pseudo Label Selection. In Applied Intelli-gence , volume 52, 8038–8055. Anguita, D.; Ghio, A.; Oneto, L.; Parra, X.; and Reyes-Ortiz, J. L. 2013. A Public Domain Dataset for Human Activ-ity Recognition Using Smartphones. In Proc. of the Eu-rop. Symposium on Artificial Neural Networks, Computa-tional Intelligence and Machine Learning (ESANN) , 437– 442. Bruges, Belgium. Berthelot, D.; Roelofs, R.; Sohn, K.; Carlini, N.; and Ku-rakin, A. 2022. AdaMatch: A Unified Approach to Semi-Supervised Learning and Domain Adaptation. In Intl. Conf. on Learning Representations (ICLR) .Blankertz, B.; Curio, G.; and M¨ uller, K.-R. 2001. Classi-fying Single Trial EEG: Towards Brain Computer Interfac-ing. In Advances of Neural Information Processing Systems (NeurIPS) , volume 14, 157–164. Boedihardjo, H.; Geng, X.; Lyons, T.; and Yang, D. 2016. The Signature of a Rough Path: Uniqueness. In Advances in Mathematics , volume 293, 720–737. Borgwardt, K. M.; Gretton, A.; Rasch, M. J.; Kriegel, H.-P.; Sch¨ olkopf, B.; and Smola, A. J. 2006. Integrating Structured Biological Data by Kernel Maximum Mean Discrepancy. In 
+
+Bioinformatics , volume 22(14), e49–e57. Caputo, F. M.; Prebianca, P.; Carcangiu, A.; Spano, L. D.; and Giachetti, A. 2018. Comparing 3D Trajectories for Sim-ple Mid-Air Gesture Recognition. In Computers & Graph-ics , volume 73, 17–25. Chen, C.; Fu, Z.; Chen, Z.; Jin, S.; Cheng, Z.; Jin, X.; and sheng Hua, X. 2020. HoMM: Higher-Order Moment Match-ing for Unsupervised Domain Adaptation. In Proc. of the AAAI Conf. on Artificial Intelligence (AAAI) , volume 34(4), 3422–3429. Cherian, A.; Sra, S.; Banerjee, A.; and Papanikolopoulos, N. 2012. Jensen-Bregman LogDet Divergence with Appli-cation to Efficient Similarity Search for Covariance Matri-ces. In IEEE Trans. on Pattern Analysis and Machine Intel-ligence (TPAMI) , volume 35(9), 2161–2174. Dorent, R.; Golland, P.; and Wells, W. S. 2025. Connecting Jensen-Shannon and Kullback-Leibler Divergences: A New Bound for Representation Learning. In Advances of Neural Information Processing Systems (NeurIPS) .Eldele, E.; Ragab, M.; Chen, Z.; Wu, M.; Kwoh, C.-K.; and Li, X. 2023. Contrastive Domain Adaptation for Time-Series via Temporal Mixup. In IEEE Trans. on Artificial Intelligence (TAI) , volume 5(3), 1185–1194. Ganin, Y.; Ustinova, E.; Ajakan, H.; Germain, P.; Larochelle, H.; Laviolette, F.; March, M.; and Lempitsky, V. 2016. Domain-Adversarial Training of Neural Networks. In Jour-nal of Machine Learning Research (JMLR) , volume 17(59), 1–35. Goldberger, A. L.; Amaral, L. A. N.; Glass, L.; Hausdorff, J. M.; Ivanov, P. C.; Mark, R. G.; Mietus, J. E.; Moody, G. B.; Peng, C.-K.; and Stanley, H. E. 2000. PhysioBank, PhysioToolkit, and PhysioNet: Components of a New Re-search Resource for Complex Physiologic Signals. In Cir-culation , volume 101(23), e215–e220. Gretton, A.; Borgwardt, K. M.; Rasch, M. J.; Sch¨ olkopf, B.; and Smola, A. 2012. A Kernel Two-Sample Test. In Jour-nal of Machine Learning Research (JMLR) , volume 13(25), 723–773. Harandi, M.; Salzmann, M.; and Porikli, F. 2014. Bregman Divergences for Infinite Dimensional Covariance Matrices. In Proc. of the IEEE/CVF Intl. Conf. on Computer Vision and Pattern Recognition (CVPR) , 1003–1010. Columbus, OH. He, H.; Queen, O.; Koker, T.; Cuevas, C.; Tsiligkaridis, T.; and Zitnik, M. 2023. Domain Adaptation for Time Series Under Feature and Label Shifts. In Intl. Conf. on Machine Learning (ICML) , volume 202, 12746–12774. Kiraly, F. J.; and Oberhauser, H. 2019. Kernels for Sequen-tially Ordered Data. In Journal of Machine Learning Re-search (JMLR) , volume 20(31). Klaß, A.; Lorenz, S. M.; Lauer-Schmaltz, M. W.; R¨ ugamer, D.; Bischl, B.; Mutschler, C.; and Ott, F. 2022. Uncertainty-aware Evaluation of Time-Series Classification for Online Handwriting Recognition with Domain Shift. In IJCAI-ECAI Intl. Workshop on Spatio-Temporal Reasoning and Learning (STRL) , volume 3190. Vienna, Austria. Kullback, S.; and Leibler, R. A. 1951. On Information and Sufficiency. In Ann. Math. Statist. , volume 22(1), 79–86. Kwapisz, J. R.; Weiss, G. M.; and Moore, S. A. 2010. Activ-ity Recognition Using Cell Phone Accelerometers. In ACM SIGKDD Explorations Newsletter , volume 12(2), 74–82. Lee, D.-H. 2013. Pseudo-Label: The Simple and Efficient Semi-Supervised Learning Method for Deep Neural Net-works. In Intl. Conf. on Machine Learning (ICML) Work-shops: Challenges in Representation Learning (WREPL) .Atlanta, Georgia. Liu, J.; Wang, Z.; Zhong, L.; Wickramasuriya, J.; and Va-sudevan, V. 2009. uWave: Accelerometer-based Personal-ized Gesture Recognition and Its Applications. In IEEE Intl. Conf. on Pervasive Computing and Communications (Per-Com) , 1–9. Galveston, TX. Liu, Q.; and Xue, H. 2021. Adversarial Spectral Kernel Matching for Unsupervised Time Series Domain Adapta-tion. In Proc. of the Intl. Joint Conf. on Artificial Intelligence (IJCAI) , 2744–2750. Long, M.; Cao, Y.; Wang, J.; and Jordan, M. I. 2015. Learn-ing Transferable Features with Deep Adaptation Networks. In Intl. Conf. on Machine Learning (ICML) , volume 37, 97– 105. Long, M.; Cao, Z.; Wang, J.; and Jordan, M. I. 2018. Condi-tional Adversarial Domain Adaptation. In Advances of Neu-ral Information Processing Systems (NeurIPS) , volume 31, 1647–1657. Long, M.; Zhu, H.; Wang, J.; and Jordan, M. I. 2017. Deep Transfer Learning with Joint Adaptation Networks. In Intl. Conf. on Machine Learning (ICML) , volume 70, 2208– 2217. Men´ endez, M. L.; Pardo, J. A.; Pardo, L.; and Pardo, M. C. 1997. The Jensen-Shannon Divergence. In Journal of the Franklin Institute , volume 334(2), 307–318. Olivetti, E.; Kia, S. M.; and Avesani, P. 2014. MEG Decod-ing Across Subjects. In Intl. Workshop on Pattern Recogni-tion in Neuroimaging , 1–4. Tuebingen, Germany. Oppenheim, A. V.; and Schafer, R. W. 2014. Discrete-Time Signal Processing. In Pearson .Ott, F.; R¨ ugamer, D.; Heublein, L.; Bischl, B.; and Mutschler, C. 2022a. Domain Adaptation for Time-Series Classification to Mitigate Covariate Shift. In Proc. of the ACM Intl. Conf. on Multimedia (ACMMM) , 5934–5943. Lis-boa, Portugal. Ott, F.; R¨ ugamer, D.; Heublein, L.; Bischl, B.; and Mutschler, C. 2023. Auxiliary Cross-Modal Representation Learning with Triplet Loss Functions for Online Handwrit-ing Recognition. In IEEE Access , volume 11, 94148–94172. Ott, F.; R¨ ugamer, D.; Heublein, L.; Hamann, T.; Barth, J.; Bischl, B.; and Mutschler, C. 2022b. Benchmarking On-line Sequence-to-Sequence and Character-based Handwrit-ing Recognition from IMU-Enhanced Pens. In International Journal on Document Analysis and Recognition (IJDAR) ,volume 25, 385–414. Ott, F.; Wehbi, M.; Hamann, T.; Barth, J.; Eskofier, B.; and Mutschler, C. 2020. The OnHW Dataset: Online Handwrit-ing Recognition from IMU-Enhanced Ballpoint Pens with Machine Learning. In Proc. of the ACM on Interactive, Mo-bile, Wearable and Ubiquitous Technologies (IMWUT) , vol-ume 4(3), article 92, 1–20. Canc´ un, Mexico. Pearson, K. 1920. Notes on the History of Correlation. In 
+
+Biometrika , volume 13(1), 25–45. Ragab, M.; Eldele, E.; Tan, W. L.; Foo, C.-S.; Chen, Z.; Wu, M.; Kwoh, C.-K.; and Li, X. 2023. AdaTime: A Bench-marking Suite for Domain Adaptation on Time Series Data. In Proc. of the ACM Trans. on Knowledge Discovery from Data (TKDD) , volume 17(8), 1–18. Rahman, M. M.; Fookes, C.; Baktashmotlagh, M.; and Srid-haran, S. 2020. On Minimum Discrepancy Estimation for Deep Domain Adaptation. In Domain Adaptation for Visual Understanding, Springer, Cham. 
+
+Saito, K.; Kim, D.; Sclaroff, S.; and Saenko, K. 2020. Universal Domain Adaptation through Self Supervision. In Advances in Neural Information Processing Systems (NeurIPS) , volume 33, 16282–16292. Saito, K.; and Saenko, K. 2021. OVANet: One-vs-All Net-work for Universal Domain Adaptation. In IEEE/CVF Intl. Conf. on Computer Vision (ICCV) , 8980–8989. Saito, K.; Watanabe, K.; Ushiku, Y.; and Harada, T. 2018. Maximum Classifier Discrepancy for Unsupervised Domain Adaptation. In Proc. of the IEEE/CVF Intl. Conf. on Com-puter Vision and Pattern Recognition (CVPR) , 3723–3732. Salt Lake City, UT. Shu, R.; Bui, H. H.; Narui, H.; and Ermon, S. 2018. A DIRT-T Approach to Unsupervised Domain Adaptation. In Intl. Conf. on Learning Representations (ICLR) .Smola, A.; Gretton, A.; Song, L.; and Sch¨ olkopf, B. 2007. A Hilbert Space Embedding for Distributions. In Algorithmic Learning Theory , volume 4754, 13–31. Sra, S. 2012. A New Metric on the Manifold of Ker-nel Matrices with Application to Matrix Geometric Means. In Advances in Neural Information Processing Systems (NeurIPS) , volume 25. Stisen, A.; Blunck, H.; Bhattacharya, S.; Prentow, T. S.; Kjærgaard, M. B.; Dey, A.; Sonne, T.; and Jensen, M. M. 2015. Smart Devices are Different: Assessing and Mitigat-ing Mobile Sensing Heterogeneities for Activity Recogni-tion. In Proc. of the ACM Intl. Conf. on Embedded Net-worked Sensor Systems (SenSys) , 127–140. Sun, B.; Feng, J.; and Saenko, K. 2017. Correlation Align-ment for Unsupervised Domain Adaptation. In Domain Adaptation in Computer Vision Applications .Tzeng, E.; Hoffman, J.; Zhang, N.; Saenko, K.; and Darrell, T. 2014. Deep Domain Confusion: Maximizing for Domain Invariance. In arXiv preprint arXiv:1412.3474v1 [cs.CV] .Villar, J. R.; Vergara, P.; Men´ endez, M.; de la Cal, E.; Gonz´ alez, V. M.; and Sedano, J. 2016. Generalized Models for the Classification of Abnormal Movements in Daily Life and its Applicability to Epilepsy Convulsion Recognition. In 
+
+Intl. Journal of Neural Systems , volume 26(6), 1650037. Wang, Y.; Gong, P.; Wu, M.; Ott, F.; Li, X.; Xie, L.; and Chen, Z. 2026. Temporal Source Recovery for Time-Series Source-Free Unsupervised Domain Adaptation. In 
+
+IEEE Trans. on Pattern Analysis and Machine Intelligence (TPAMI) , volume 48(8), 9589–9605. Wilson, G.; Doppa, J. R.; and Cook, D. J. 2020. Multi-Source Deep Domain Adaptation with Weak Supervision for Time-Series Sensor Data. In Proc. of the ACM Intl. Conf. on Knowledge Discovery & Data Mining (SIGKDD) , 1768– 1778. Zhang, W.; Zhang, X.; Lan, L.; and Luo, Z. 2020. Maximum Mean and Covariance Discrepancy for Unsupervised Do-main Adaptation. In Neural Processing Letters , volume 51, 347–366. Zhu, Y.; Zhuang, F.; Wang, J.; Ke, G.; Chen, J.; Bian, J.; Xiong, H.; and He, Q. 2020. Deep Subdomain Adaptation Network for Image Classification. In IEEE Trans. on Neu-ral Networks and Learning Systems (TNNLS) , volume 32(4), 1713–1722. A Notations 
+
+We use uppercase letters to denote random variables, lower-case letters for their realizations, bold lowercase letters for vectors, and calligraphic letters for sets and function spaces. Source-domain quantities are marked by the superscript s,whereas target-domain quantities are marked by the super-script t. The source domain provides labeled samples, while the target domain provides only unlabeled samples. The learned model consists of a feature extractor fθ and a classi-fier gϕ. For time-series inputs, the feature extractor produces a latent temporal path Zθ (x) = ( z1, . . . , z T ), where each 
+
+zt is a latent feature vector at time index t. CPDA aligns source and target class-conditional latent path distributions using a composite signature–spectral kernel and soft target pseudo-labels. Table 2 and Table 3 gives an overview of all notations. Table 2: Summary of notations used throughout the paper. 
+
+Notation Description Domains and Data 
+
+X Input space of multivariate time-series 
+
+Y Label space, Y = {1, . . . , K }
+
+K Number of classes 
+
+Cin Number of input channels 
+
+L Length of the original input time-series 
+
+Ps(X, Y ) Joint source-domain distribution 
+
+Pt(X, Y ) Joint target-domain distribution 
+
+Ps(X),
+
+Pt(X)
+
+Source and target marginal input distributions 
+
+P cs Source class-conditional distr. Ps(X|Y = c)
+
+P ct Target class-conditional distr. Pt(X|Y = c)
+
+Ds Labeled source dataset {(xsi , y si )}ns
+
+> i=1
+
+Dt Unlabeled target dataset {xtj }nt
+
+> j=1
+
+ns, nt Number of source and target samples 
+
+Bs, Bt Source and target mini-batch sizes 
+
+xsi , xtj Source and target time-series samples 
+
+ysi Source label for sample xsi
+
+Model and Latent Representations 
+
+fθ Feature extractor with parameters θgϕ Classifier with parameters ϕhθ,ϕ Full prediction model hθ,ϕ = gϕ ◦ fθ
+
+Zθ (x) Latent temporal path extracted from input xZθ (x) =(z1, . . . , z T )
+
+Sequence of latent vectors 
+
+zt Latent feature vector at time index tT Latent temporal length after feature extraction 
+
+d Dimension of each latent vector zt
+
+∆zt Latent increment zt − zt−1
+
+Aθ (x)t Augmented latent path element [t/T, z t, ∆zt]
+
+qθ,ϕ (c | x) Softmax probability assigned to class c
+
+CPDA Features and Kernels 
+
+ψpool (x) Pooled latent feature representation 
+
+ψpath (x) Flattened augmented latent path representation 
+
+ψspec (x) Spectral representation of the latent path 
+
+ψsig (x) Low-rank truncated path-signature representation 
+
+Ft[·] Fourier transform along the temporal dimension 
+
+S1(x) First-order signature feature 
+
+Table 3: Table 2 continued. 
+
+Notation Description CPDA Features and Kernels 
+
+S2(x) Second-order signature feature 
+
+r Random projection dimension for signature fea-tures 
+
+kpool Kernel on pooled latent features 
+
+kpath Kernel on flattened temporal path features 
+
+kspec Kernel on spectral latent features 
+
+ksig Kernel on signature features 
+
+kCPDA Composite CPDA kernel 
+
+HCPDA RKHS induced by kCPDA 
+
+αpool Weight of the pooled kernel component 
+
+αpath Weight of the temporal-path kernel component 
+
+αspec Weight of the spectral kernel component 
+
+αsig Weight of the signature kernel component 
+
+Class-Conditional Alignment 
+
+wsi,c Source class weight 1[ysi = c]
+
+wtj,c Target soft class weight qθ,ϕ (c | xtj )¯wsi,c Normalized source class weight 
+
+¯wtj,c Normalized target class weight 
+
+πt(c) True target class prior Pt(Y = c)
+
+bπt(c) Estimated target class prior from soft pseudo-labels 
+
+μs,c Source class-conditional kernel mean embedding 
+
+μt,c Target class-conditional kernel mean embedding 
+
+bμs,c Empirical source class-conditional mean embed-ding 
+
+bμt,c Empirical target class-conditional mean embed-ding 
+
+\MMD 2 
+
+> c
+
+Empirical class-wise weighted MMD discrepancy 
+
+bD2CPDA Empirical CPDA discrepancy 
+
+Losses and Risks 
+
+ℓ(·, ·) Supervised classification loss 
+
+Lcls Source classification loss 
+
+LIM Target information maximization loss 
+
+LCPDA Total CPDA training objective 
+
+Rs(h) Source risk of classifier hRt(h) Target risk of classifier hRπt 
+
+> s
+
+(h) Source risk reweighted by target class priors 
+
+λ Weight of the CPDA discrepancy term 
+
+η Weight of the information maximization term 
+
+γ VAT weight, e.g., γ = 1 .0
+
+The source and target domains are described by distribu-tions Ps and Pt, respectively. The source dataset Ds con-tains labeled time-series, whereas the target dataset Dt con-tains unlabeled time-series. The model is decomposed into a feature extractor fθ and a classifier gϕ. The feature ex-tractor maps each input time-series to a latent temporal path 
+
+Zθ (x), which forms the object aligned by CPDA. Instead of matching only marginal feature distributions, CPDA con-structs class-conditional kernel mean embeddings μs,c and 
+
+μt,c for each class c and minimizes their discrepancy in the RKHS induced by the composite kernel kCPDA . Since tar-get labels are unavailable, target class weights are obtained from soft pseudo-labels qθ,ϕ (c | x).B Additional Theoretical Details 
+
+B.1 Assumptions 
+
+We state the assumptions used in the theoretical analysis. 
+
+Assumption 1 (Bounded loss) . The task loss satisfies 
+
+0 ≤ ℓ h(x), y  ≤ M (49) for all x ∈ X and y ∈ Y .
+
+Assumption 2 (RKHS regularity) . For every class c ∈{1, . . . , K }, the function 
+
+x 7 → ℓ h(x), c  (50) belongs to the RKHS HCPDA induced by the CPDA kernel and satisfies 
+
+∥ℓ(h(·), c )∥HCPDA ≤ B. (51) 
+
+Assumption 3 (Bounded kernel) . The CPDA kernel is bounded: 
+
+0 ≤ kCPDA (x, x ′) ≤ κ (52) for all x, x ′ ∈ X .
+
+Assumption 4 (Soft pseudo-label consistency) . The target pseudo-label distribution q(c|x) approximates the true tar-get posterior pt(c|x) with error 
+
+ηq = EX∼Pt
+
+∥q(·| X) − pt(·| X)∥1
+
+. (53) 
+
+B.2 Consistency of the Empirical CPDA Discrepancy 
+
+We first analyze the empirical class-conditional CPDA dis-crepancy under known target class labels. The pseudo-label case is discussed separately. For class c, define 
+
+P cs = Ps(X|Y = c), P ct = Pt(X|Y = c). (54) Let 
+
+μcs = EX∼P cs kCPDA (X, ·), μct = EX∼P ct kCPDA (X, ·).
+
+(55) The population class-wise discrepancy is 
+
+MMD 2CPDA (P cs , P ct ) = ∥μcs − μct ∥2 
+
+> HCPDA
+
+. (56) 
+
+Theorem 3 (Consistency of the empirical class-wise esti-mator) . Assume that kCPDA is bounded as in Assumption 3. Let 
+
+\MMD 2CPDA (P cs , P ct ) (57) 
+
+be the empirical biased MMD estimator computed from ncs
+
+source samples and nct target samples of class c. Then 
+
+\MMD 2CPDA (P cs , P ct ) p
+
+−→ MMD 2CPDA (P cs , P ct ) (58) 
+
+as ncs, n ct → ∞ .Proof. The empirical biased MMD estimator can be written as 
+
+\MMD 2
+
+= 1(ncs)2
+
+> ncs
+
+X
+
+> i,i ′=1
+
+kCPDA (xsi , x si′ )+ 1(nct )2
+
+> nct
+
+X
+
+> j,j ′=1
+
+kCPDA (xtj , x tj′ )
+
+− 2
+
+ncsnctncsX
+
+> i=1
+> nct
+
+X
+
+> j=1
+
+kCPDA (xsi , x tj ).
+
+(59) Since the kernel is bounded, all three terms are bounded 
+
+V -statistics. By the law of large numbers for bounded V -statistics, the three empirical terms converge in probability to their corresponding population expectations: 
+
+EX,X ′∼P cs kCPDA (X, X ′), (60) 
+
+EY,Y ′∼P ct kCPDA (Y, Y ′), (61) and 
+
+EX∼P cs ,Y ∼P ct kCPDA (X, Y ). (62) Therefore, 
+
+\MMD 2CPDA (P cs , P ct ) p
+
+−→ MMD 2CPDA (P cs , P ct ). (63) 
+
+B.3 Finite-Sample Concentration 
+
+Theorem 4 (Finite-sample deviation of empirical CPDA) .
+
+Assume that 
+
+0 ≤ kCPDA (x, x ′) ≤ κ (64) 
+
+for all x, x ′. For a fixed class c, with probability at least 1−δ,
+
+\MMD CPDA (P cs , P ct ) − MMD CPDA (P cs , P ct )
+
+≤ 2
+
+r κncs
+
++ 2 
+
+r κnct
+
++
+
+s
+
+2κ
+
+ 1
+
+ncs
+
++ 1
+
+nct
+
+
+
+log 1
+
+δ .
+
+(65) 
+
+Proof. The result follows from standard concentration argu-ments for empirical kernel mean embeddings. Since 
+
+MMD CPDA (P cs , P ct ) = ∥μcs − μct ∥HCPDA , (66) and 
+
+\MMD CPDA (P cs , P ct ) = ∥bμcs − bμct ∥HCPDA , (67) the reverse triangle inequality gives 
+
+\MMD CPDA (P cs , P ct ) − MMD CPDA (P cs , P ct )
+
+≤ ∥ bμcs − μcs∥HCPDA + ∥bμct − μct ∥HCPDA .
+
+(68) For bounded kernels, empirical kernel mean embeddings concentrate around their population means at rate O(1 /√n).Applying the concentration bound separately to the source and target empirical embeddings and combining the two de-viations yields the result. 
+
+B.4 Effect of Soft Pseudo-Label Error on CPDA 
+
+Theorem 5 (Stability of CPDA under pseudo-label pertur-bations) . Assume that 
+
+0 ≤ kCPDA (x, x ′) ≤ κ. (69) 
+
+Let pt(c|x) denote the true target posterior and q(c|x) the soft pseudo-label posterior used by CPDA. If 
+
+ηq = EX∼Pt ∥q(·| X) − pt(·| X)∥1, (70) 
+
+then the difference between the ideal class-conditional CPDA discrepancy and the pseudo-label-based discrepancy is bounded by 
+
+D2CPDA (pt) − D 2CPDA (q) = O(κη q ). (71) Proof. The pseudo-label distribution affects CPDA only through the target class weights and the estimated target class priors. For any class c, the difference between the true and pseudo-label-weighted target embeddings is 
+
+∥μpt,c − μqt,c ∥HCPDA 
+
+= EX∼Pt
+
+pt(c|X) − q(c|X)kCPDA (X, ·) HCPDA 
+
+≤ EX∼Pt
+
+|pt(c|X) − q(c|X)| ∥ kCPDA (X, ·)∥HCPDA 
+
+.
+
+(72) By the reproducing property, 
+
+∥kCPDA (X, ·)∥HCPDA = pkCPDA (X, X ) ≤ √κ. (73) Hence, 
+
+∥μpt,c −μqt,c ∥HCPDA ≤ √κEX∼Pt pt(c|X)−q(c|X) . (74) Summing over classes gives a total perturbation bounded by √κη q at the embedding level. Since the squared discrepancy is Lipschitz on bounded RKHS balls, the perturbation of the squared CPDA discrepancy is of order O(κη q ).
+
+C Computational Complexity 
+
+Let B be the mini-batch size, T the latent temporal length, 
+
+d the latent channel dimension, r the signature projection dimension, K the number of classes, and M the number of Gaussian bandwidths. The CPDA kernel is computed from four components: 1. Pooled component. The pooled feature has dimension d,and the pairwise kernel computation costs 
+
+O(M B 2d). (75) 2. Path component. The augmented flattened path has di-mension O(T d ). The pairwise kernel computation costs 
+
+O(M B 2T d ). (76) 3. Spectral component. The FFT computation costs 
+
+O(BdT log T ), (77) and the resulting pairwise kernel computation costs 
+
+O(M B 2T d ). (78) 4. Signature component. Using a random projection of di-mension r, the first-order signature costs 
+
+O(BT dr ), (79) and the second-order signature costs 
+
+O(BT r 2). (80) The pairwise kernel computation then costs 
+
+O(M B 2r2). (81) Therefore, the total mini-batch complexity is 
+
+O BdT log T +BT dr +BT r 2+M B 2(T d +r2+d). (82) In practice, T is the latent temporal length after pooling, and 
+
+r is chosen small, e.g., r = 16 , making CPDA comparable to standard mini-batch MMD while preserving temporal and spectral information. 
+
+D CPDA Algorithm 
+
+Algorithm 1 describes one training step of CPDA. Given a labeled source mini-batch and an unlabeled target mini-batch, the feature extractor first maps both domains into latent temporal paths, from which the classifier produces source and target logits. Since target labels are unavailable, CPDA uses the target softmax outputs as soft pseudo-labels to estimate class membership probabilities. The latent paths are then transformed into complementary pooled, temporal-path, spectral, and signature-based representations, which are used to construct the composite source–source, target– target, and source–target kernel matrices. For each class, CPDA forms source weights from the true labels and tar-get weights from the soft pseudo-labels, normalizes these weights, and computes a class-wise weighted MMD discrep-ancy. The final CPDA discrepancy is obtained by averaging the class-wise discrepancies according to the estimated tar-get class priors. The model parameters are updated by min-imizing the sum of the supervised source classification loss, the class-conditional CPDA discrepancy, and an optional tar-get information-maximization term that encourages confi-dent but non-collapsed target predictions. Algorithm 1: Class-Conditional Path Distribution Align-ment 
+
+Require: Source mini-batch {(xsi , y si )}Bs
+
+> i=1
+
+, target mini-batch {xtj }Bt
+
+> j=1
+
+Require: Feature extractor fθ , classifier gϕ, weights λ, η  
+
+> 1:
+
+Compute latent source paths Zsi = fθ (xsi ) 
+
+> 2:
+
+Compute latent target paths Ztj = fθ (xtj ) 
+
+> 3:
+
+Compute source logits and target logits  
+
+> 4:
+
+Compute target soft pseudo-labels qj (c) =softmax( gϕ(Ztj )) c 
+
+> 5:
+
+Construct pooled, path, spectral, and signature features  
+
+> 6:
+
+Compute composite kernel matrices Kss , Ktt , and Kst  
+
+> 7:
+
+for c = 1 , . . . , K do  
+
+> 8:
+
+Compute source class weights wsi,c = 1[ysi = c] 
+
+> 9:
+
+Compute target soft weights wtj,c = qj (c) 
+
+> 10:
+
+Normalize weights within class c 
+
+> 11:
+
+Compute class-wise weighted discrepancy \MMD 2 
+
+> c
+> 12:
+
+end for  
+
+> 13:
+
+Estimate target priors bπt(c) = B−1
+
+> t
+
+PBt 
+
+> j=1
+
+qj (c) 
+
+> 14:
+
+Compute CPDA discrepancy bD2CPDA =
+
+PKc=1 bπt(c) \MMD 2 
+
+> c
+> 15:
+
+Compute source classification loss Lcls  
+
+> 16:
+
+Compute optional target information maximization loss 
+
+LIM  
+
+> 17:
+
+Compute VAT loss LVAT on source and target samples  
+
+> 18:
+
+Update θ, ϕ by minimizing L = Lcls + λ bD2CPDA +
+
+ηLIM + γLVAT 
+
+E Special Cases of CPDA 
+
+Table 4 summarizes how CPDA generalizes several estab-lished discrepancy-based DA objectives. When class condi-tioning is removed and only a pooled RBF kernel is used, Table 4: Existing discrepancy losses as restricted cases of CPDA. 
+
+Restriction Resulting Objective Limitation Addressed by CPDA 
+
+No class conditioning, pooled RBF kernel only MMD Adds class-conditional alignment No class conditioning, linear pooled kernel Mean matching Adds nonlinear path alignment Centered quadratic feature map CORAL Adds higher-order & temporal structure Polynomial feature map of order p HoMM-like matching Adds explicit temporal order Multiple-layer pooled MMD DAN Adds class-conditional path kernels Class-conditional pooled MMD only LMMD/DSAN-like alignment Adds signature and spectral structure CPDA reduces to standard marginal MMD; with a lin-ear pooled kernel, it further simplifies to first-order mean matching. By choosing centered quadratic feature maps, the objective recovers the covariance-alignment principle of CORAL, while polynomial feature maps of order p yield a HoMM-like higher-order moment-matching objective. Sim-ilarly, applying pooled MMD across multiple layers recov-ers the principle underlying DAN, and using only class-conditional pooled MMD corresponds to lMMD / DSAN-like alignment. CPDA extends all of these special cases by jointly incorporating class-conditional alignment, non-linear kernel matching, temporal path structure, signature-based dynamics, and spectral information, thereby address-ing the main limitations of marginal, vector-level, or low-order moment-matching approaches. 
+
+Compared to MMD. Standard MMD aligns the marginal feature distributions Ps(Z) ≈ Pt(Z). This may incor-rectly align samples from different classes when the class-conditional distributions are multimodal or when source and target class priors differ. In contrast, CPDA aligns 
+
+Ps(Z1: T |Y = c) ≈ Pt(Z1: T |Y = c), (83) which directly targets class-preserving transfer. 
+
+Compared to CORAL. CORAL aligns only second-order covariance statistics: Cs ≈ Ct. Although this is stable and computationally efficient, it ignores higher-order, non-linear, spectral, and temporal-order information. CPDA gen-eralizes this idea by aligning distributions through an RKHS kernel over temporal, spectral, and signature-based path rep-resentations. 
+
+Compared to HoMM. HoMM matches higher-order mo-ments of feature vectors. However, standard HoMM still treats the representation as a vector and does not explicitly encode temporal ordering. CPDA uses path signatures and explicit time augmentation, thereby aligning higher-order temporal interactions rather than only higher-order feature moments. 
+
+Compared to DAN. DAN applies MMD to multiple task-specific layers but typically performs marginal alignment. CPDA can be viewed as a class-conditional and time-series-specific generalization: it aligns source and target distribu-tions at the level of latent paths and can be extended to mul-tiple layers if desired. 
+
+Compared to Adversarial Alignment. Adversarial DA learns domain-invariant representations by fooling a dis-criminator. Although powerful, adversarial alignment can be unstable and may still suffer from class-mismatch un-der marginal alignment. CPDA is a direct, non-adversarial discrepancy with an explicit class-conditional target-risk bound. 
+
+F Implementation Details of CPDA 
+
+In all experiments, CPDA is applied to the latent represen-tation produced by the final feature extractor layer. For con-volutional backbones, CPDA uses the pre-flattening feature map Z ∈ RT ×d, where the first dimension retains the tem-poral ordering produced by the encoder. For vector-output backbones, CPDA reduces to a one-step path and therefore remains well-defined. The CPDA kernel uses four compo-nents: pooled, flattened path, spectral, and low-rank signa-ture features. All components are ℓ2-normalized before the Gaussian kernels are evaluated. The Gaussian bandwidths are chosen using a median heuristic within each mini-batch and expanded into a multi-kernel set using a multiplicative factor. Unless otherwise stated, we use a second-order trun-cated signature with random projection dimension r = 16 .The random projection matrix is fixed during training and is not optimized. This keeps the signature representation computationally efficient while preserving path-dependent interactions. Target class weights are obtained from the soft-max output of the classifier. By default, gradients are not propagated through these target weights when computing the CPDA discrepancy. This stabilizes training by prevent-ing the model from reducing the discrepancy through degen-erate pseudo-label manipulation. The theoretical results ap-ply for a fixed feature extractor, projection, and set of kernel bandwidths. During optimization, these quantities are data-dependent; the analysis therefore characterizes each fixed training state rather than the complete non-stationary opti-mization process. 
+
+G Hardware & Training Setup 
+
+All experiments are conducted on compute nodes equipped with NVIDIA Tesla V100-SXM2 GPUs with 32 GB of VRAM. Each node is additionally equipped with Intel Xeon CPUs and 192 GB of system memory. This setup provides sufficient GPU memory for mini-batch training of all con-sidered time-series DA methods and enables a consistent comparison across backbones, datasets, and adaptation ob-jectives. Table 5: Main CPDA hyperparameters used in the experiments and their default value. 
+
+Hyperparameter Symbol / Key Default Value Search 
+
+Learning rate learning rate 0.005 [0 .0001 , 0.0005 , 0.001 ,
+
+0.003 , 0.005] 
+
+Weight decay weight decay 10 −4 –Number of epochs num epochs 40 –Batch size batch size 32 ; 128 for EEG –Source loss weight αcls / src cls loss wt 1.0 –CPDA discrepancy weight λ / domain loss wt 1.0 [0 .1, 0.25 , 0.5, 1.0, 2.0] 
+
+Information maximization weight η / cpda im wt 0.05 [0 .0, 0.01 , 0.025 ,
+
+0.05 , 0.1] 
+
+VAT weight γ / cpda vat wt 0.1 [0 .01 , 0.05 , 0.1, 0.25] 
+
+Signature kernel weight αsig / cpda signature wt 1.0 [0 .0, 0.25 , 0.5, 1.0] 
+
+Spectral kernel weight αspec / cpda spectral wt 0.5 [0 .25 , 0.5, 1.0] 
+
+Pooled kernel weight αpool / cpda pool wt 0.25 [0 .1, 0.25 , 0.5, 1.0] 
+
+Path kernel weight αpath / cpda path wt 0.25 [0 .25 , 0.5] 
+
+Signature projection dimension r / cpda sig proj dim 16 [8 , 16 , 32] 
+
+Signature order msig / cpda sig level 2 [1 , 2, 3] 
+
+Maximum latent sequence length Tmax / cpda max seq len 64 [32 , 64 , 128] 
+
+Number of Gaussian kernels M / cpda kernel num 5 –Kernel bandwidth multiplier ρ / cpda kernel mul 2.0 –Fixed kernel bandwidth σ2 / cpda fix sigma None –Target-prior weighting cpda use target prior Enabled –Active-class normalization cpda normalize by active Enabled –Detach target weights cpda detach target weights Enabled –Pseudo-label confidence threshold τ / cpda min target confidence 0.0 –Feature normalization cpda normalize features Enabled –Table 5 provides an overview of main CPDA hyperpa-rameters. The hyperparameters are specified at two lev-els: dataset-level training parameters and algorithm-specific optimization parameters. Unless otherwise stated, models are trained for 40 epochs using weight decay 10 −4. Most datasets use a mini-batch size of 32 , while the EEG dataset uses a mini-batch size of 128 . All non-adversarial methods are optimized using Adam, with the learning rate specified by the corresponding algorithm configuration. For CPDA, we use a learning rate of 5 × 10 −3 and optimize the objec-tive 
+
+L = Lcls + λ bD2CPDA + ηLIM , +γLVAT (84) with λ = 1 .0, η = 0 .05 , and γ = 0 .1. The source classifica-tion loss is weighted by 1.0. For the final CPDA variant, we additionally include a VAT regularizer, following its use in DIRT-T, to improve local prediction smoothness and stabi-lize target pseudo-label-based alignment. The corresponding weight is denoted by γ.The CPDA kernel combines four components: signature, spectral, pooled, and temporal-path kernels. Their respective weights are set to 
+
+αsig = 1 .0, αspec = 0 .5, αpool = 0 .25 , αpath = 0 .25 .
+
+The low-rank signature representation uses projection di-mension 16 and second-order signatures. The maximum la-tent sequence length is set to 64 . The multi-kernel Gaus-sian discrepancy uses 5 bandwidths with multiplicative fac-tor 2.0, and no fixed bandwidth is imposed. Target-prior weighting and feature normalization are enabled. Gradients are detached through the target pseudo-label weights when computing the CPDA discrepancy, which stabilizes train-ing by preventing degenerate pseudo-label manipulation. No target-confidence threshold is applied. 
+
+Ramp-up Schedule. For CPDA, we apply a ramp-up schedule only to the optional target information-maximization loss. The supervised source classification loss, the CPDA discrepancy, and the VAT regularization are used with their full weights from the beginning of training. In contrast, the information-maximization loss is multiplied by a time-dependent coefficient α(t) ∈ [0 , 1] , which is gradu-ally increased during the first training iterations. This avoids enforcing overly confident target predictions too early, when the target pseudo-labels may still be unreliable, while pre-serving the stabilizing effect of CPDA and VAT throughout training. Unless stated otherwise, we use a sigmoid ramp-up with 1,000 optimizer steps. For a training run with 40 
+
+epochs, this corresponds to 1,000 /N it epochs, where Nit de-notes the number of mini-batch updates per epoch. 
+
+H Backbone Architectures 
+
+To evaluate the proposed CPDA objective independently of a particular feature extractor, we use the backbone architec-Table 6: Summary of the backbone architectures used in the experiments. Architectural values are determined by the dataset-specific AdaTime (Ragab et al. 2023) configuration. 
+
+Backbone Main Components Output Representation 
+
+CNN Three Conv1D blocks with BatchNorm, ReLU, MaxPool; dropout in first block Flattened adaptive-pooled feature map of size 
+
+features len · final out channels 
+
+ResNet18-style Four residual stages with configuration [2 , 2, 2, 2] ;
+
+1 × 1 Conv1D residual blocks Flattened adaptive-pooled feature map of size 
+
+features len · final out channels 
+
+TCN Two causal dilated residual Conv1D blocks with dilations 1 and 2; chomp operations Final temporal state of the last residual feature map Table 7: Important configuration parameters used by the backbone implementations. 
+
+Parameter Description 
+
+input channels Number of input time-series channels Cin 
+
+mid channels Intermediate convolutional channel width 
+
+final out channels Final convolutional channel width used by CNN and ResNet18 
+
+kernel size Kernel size of the first CNN convolution 
+
+stride Stride used in the first CNN convolution and first ResNet stage 
+
+dropout Dropout probability in the first CNN block 
+
+features len Adaptive output temporal length for CNN and ResNet18 
+
+tcn layers Channel configuration of the TCN residual blocks 
+
+tcn kernel size Kernel size of the TCN convolutions 
+
+num classes Number of output classes K
+
+tures provided by the AdaTime (Ragab et al. 2023) frame-work. We consider three representative one-dimensional time-series encoders: (i) a convolutional neural network (CNN), (ii) a ResNet18-style architecture, and (iii) a tempo-ral convolutional network (TCN). Table 6 gives an overview of backbone architectures. All backbones operate on multi-variate time-series inputs of shape 
+
+x ∈ RCin ×L, (85) where Cin denotes the number of input channels and L the temporal input length. The relevant architectural hyperpa-rameters are specified through the dataset configuration, in-cluding the number of input channels input channels ,the intermediate channel width mid channels , the final channel width final out channels , the convolutional kernel size kernel size , the stride stride , the dropout probability dropout , and the output temporal feature length features len . For CNN and ResNet18, the final feature map is adaptively pooled to length features len 
+
+and flattened before classification. The resulting representa-tion has dimension 
+
+dfeat = features len · final out channels . (86) A linear classifier then maps this representation to the K
+
+output classes. For an overview, refer to Table 7. 
+
+CNN. The CNN backbone is a three-block one-dimensional convolutional encoder. The first block applies a temporal convolution with input channels input chan-nels and mid channels output channels. The convolution uses kernel size kernel size , stride stride , no bias term, and symmetric padding of size ⌊kernel size /2⌋.It is followed by batch normalization, a ReLU activation, max pooling with kernel size 2, stride 2, and padding 1,and dropout with probability dropout . The second block maps mid channels to 2 · mid channels using a one-dimensional convolution with kernel size 8, stride 
+
+1, padding 4, and no bias term, followed again by batch normalization, ReLU, and max pooling. The third block maps 2 · mid channels to final out channels with the same kernel size 8, stride 1, and padding 4, followed by batch normalization, ReLU, and max pooling. Finally, adaptive average pooling maps the temporal dimension to 
+
+features len , and the output tensor is flattened. This architecture provides a simple local-pattern extractor for time-series data and produces a latent temporal feature map suitable for CPDA path construction. 
+
+ResNet18-Style Backbone. The ResNet18-style back-bone follows a one-dimensional residual design with four residual stages and layer configuration 
+
+[2 , 2, 2, 2] . (87) The first stage maps the input from input channels to 
+
+mid channels using stride stride . The second stage maps to 2 · mid channels , while the third and fourth stages use final out channels . Each residual block consists of a one-dimensional 1 × 1 convolution, batch nor-malization, and ReLU activation, followed by an additive residual connection. If the number of channels or the stride differs between input and output, the residual branch is pro-jected using a 1 × 1 convolution followed by batch nor-malization. The block expansion factor is 1. After the four residual stages, adaptive average pooling maps the tempo-ral dimension to features len , and the resulting tensor is flattened into a vector of dimension features len ·
+
+final out channels . Compared to the plain CNN, the residual connections improve gradient propagation and al-low the encoder to learn deeper temporal representations. 
+
+TCN. The TCN backbone is designed to model temporal dependencies using dilated causal convolutions and residual connections. It contains two temporal convolutional residual blocks. The first block uses dilation factor 1, and the second block uses dilation factor 2. Both blocks use the kernel size 
+
+tcn kernel size and stride 1. To preserve causal struc-ture, the convolutional padding is set to 
+
+pℓ = ( tcn kernel size − 1) δℓ, (88) where δℓ denotes the dilation factor of block ℓ. After each convolution, a chomp operation removes the additional padded time steps, ensuring that the temporal dimension is consistent and that no future information is used. Each block contains two one-dimensional convolutions, chomp opera-tions, batch normalization, and ReLU activations. Residual connections are used in both blocks, with optional 1 × 1
+
+convolutional downsampling if the input and output channel dimensions differ. The TCN returns the final temporal state of the last residual feature map, 
+
+z = Z:,T , (89) as the sequence-level representation. This makes the TCN particularly suited to causal temporal modeling, where the final state summarizes the preceding sequence. 
+
+I Mathematical Foundations of Existing Methods 
+
+This appendix provides a unified mathematical analysis of the five DA methods evaluated in our benchmark: MMD, CORAL (Deep CORAL), MMDA, DAN, and HoMM. We derive each loss formally and identify the structural property that depends on whether the encoder representation retains temporal information. 
+
+I.1 Maximum Mean Discrepancy (MMD) 
+
+Let Hk be an RKHS with kernel k : F × F → R. The squared MMD between feature distributions is 
+
+MMD 2(PS , PT ) = || Ex∼PS [ϕ(x)] − Ex∼PT [ϕ(x)] || 2 
+
+> Hk
+
+,
+
+(90) where ϕ : F → H k is the canonical feature map. Expanding via the kernel trick k(x, x ′) = ⟨ϕ(x), ϕ (x′)⟩:
+
+MMD 2(PS , PT ) = E[k(xs, x ′
+
+> s
+
+)] − 2 E[k(xs, x t)] + E[k(xt, x ′
+
+> t
+
+)] . (91) If k is a characteristic kernel (e.g. Gaussian RBF), then 
+
+MMD( PS , PT ) = 0 ⇐⇒ PS = PT as marginal distri-butions (Gretton et al. 2012). 
+
+Time-series Limitation. The empirical embedding 
+
+> 1
+> T
+
+P 
+
+> t
+
+ϕ(Ft) is invariant to any permutation of the time axis. Consequently, MMD is insensitive to autocorrelation, oscillatory patterns, or any other temporal structure encoded in the joint distribution of the sequence. 
+
+I.2 Correlation Alignment (CORAL) 
+
+Deep CORAL (Sun, Feng, and Saenko 2017) aligns second-order statistics by minimizing the Frobenius norm between feature covariance matrices: 
+
+LCORAL = 14d2 || CS − CT || 2 
+
+> F
+
+, (92) where CS , CT ∈ Rd×d are the centered feature covariance matrices. This is equivalent to second-order HoMM (see App. I.5). 
+
+Time-series Limitation. CORAL operates on the 
+
+feature-level contemporaneous covariance C = E[FtF ⊤ 
+
+> t
+
+],which captures cross-feature correlations at a single time step. It does not capture the temporal autocovariance 
+
+R(τ ) = E[FtF ⊤ 
+
+> t+τ
+
+] for any lag τ > 0. Hence CORAL may fail to preserve detecting shifts in temporal dynamics, even those that are immediately visible to the human eye (e.g., a change from positive to negative autocorrelation). 
+
+I.3 Multiple-Moment Domain Adaptation (MMDA) 
+
+MMDA (Rahman et al. 2020) jointly minimizes several dis-tribution discrepancies: 
+
+LMMDA = λ1Lmean + λ2Lcov + λ3Lscatter , (93) where the scatter term uses a kernel-mean embedding at higher order. The theoretical basis rests on a truncated Wasserstein-type bound: if k finite moments of PS and PT
+
+are aligned, then 
+
+W2(PS , PT ) ≤ C ·
+
+> k
+
+X
+
+> p=1
+
+|| μ(p) 
+
+> S
+
+− μ(p) 
+
+> T
+
+|| F
+
+!1/k 
+
+, (94) where W2 is the 2-Wasserstein distance. However, this bound applies to the marginal Wasserstein distance only; the bound cannot close the gap arising from temporal structure differences. 
+
+I.4 Deep Adaptation Networks (DAN) 
+
+DAN (Long et al. 2015) extends MMD to multiple feature layers using multi-kernel MMD (MK-MMD): 
+
+LDAN =
+
+> ℓK
+
+X
+
+> ℓ=ℓ1
+
+MMD 2
+
+> K
+
+
+
+D(ℓ) 
+
+> S
+
+, D(ℓ)
+
+> T
+
+
+
+, (95) where the composite kernel K = {P 
+
+> u
+
+βuku : βu ≥
+
+0, P 
+
+> u
+
+βu = 1 } is optimized via the ratio of within-class to cross-class MMD. 
+
+Time-series Limitation. The multi-layer aggregation still operates on frame-level activations at each layer. For a TCN or transformer with receptive field ≤ T , the temporal con-text captured by deep layers has a bounded horizon, and the implicit i.i.d. assumption underlying Equation 95 is violated. More fundamentally, each layer’s activation is still summa-rized by its marginal distribution. I.5 Higher-Order Moment Matching (HoMM) 
+
+HoMM (Chen et al. 2020) performs order-p tensor moment matching: 
+
+L(p)HoMM = ES [F ⊗p] − ET [F ⊗p] 2 
+
+> F
+
+, (96) where F ⊗p denotes the p-fold tensor product. The first-order HoMM ( p = 1 ) is equivalent to MMD with a linear kernel, and the second-order ( p = 2 ) is equivalent to CORAL. For 
+
+p ≥ 3, HoMM targets fine-grained non-Gaussian structure. 
+
+Computational Cost. Storing E[F ⊗p] ∈ Rdp
+
+requires 
+
+O(dp) memory, which is exponential in p. For d = 512 ,
+
+p = 3 , this is approximately 1.3 × 10 8 floats. In practice, random tensor sketches reduce this to O(d) per projection, but at the cost of approximation bias. 
+
+Time-series Limitation. HoMM matches the marginal p-th moment tensor E[F ⊗p] but does not explicitly enforce 
+
+cross-time moments E[F ⊗p1 
+
+> t
+
+⊗ F ⊗p2 
+
+> t+τ
+
+]. These joint moments encode the dynamical structure (e.g. AR coefficients, oscil-lation periods) that defines the identity of a time-series. This failure persists at all orders p.
+
+I.6 Virtual Adversarial Training (VAT) 
+
+VAT, proposed by Shu et al. (2018), is added as a target-smoothness regularizer to stabilize the decision boundary in regions of high target density. For an input x, VAT penal-izes the change in the model prediction under the worst-case small perturbation, 
+
+LVAT = Ex∈D s∪D t
+
+KL  pθ,ϕ (· | x) ∥ pθ,ϕ (· | x + radv ) ,
+
+(97) where 
+
+radv = arg max  
+
+> ∥r∥≤ ϵ
+
+KL  pθ,ϕ (· | x) ∥ pθ,ϕ (· | x + r). (98) The parameter γ controls the contribution of the VAT regu-larizer. While CPDA aligns class-conditional latent path distribu-tions, VAT improves target-side robustness by encouraging local prediction smoothness around both source and target samples, thereby reducing the effect of noisy target pseudo-labels during class-conditional alignment. 
+
+J Dataset Details 
+
+We evaluate the proposed method on a diverse collection of time-series datasets covering human activity recogni-tion, sleep-stage classification, gesture recognition, biomed-ical signal analysis, handwriting recognition, and synthetic waveform classification. Table 8 summarizes the main dataset statistics, including the number of domains, chan-nels, classes, temporal length, and train/test sample sizes. In all DA experiments, domains correspond either to indi-vidual users, subjects, devices, or predefined source–target partitions, depending on the dataset. 
+
+HHAR. The Heterogeneity Human Activity Recognition (HHAR) dataset (Stisen et al. 2015) contains human activity recordings from nine users. The signals were collected us-ing three-axis accelerometers with sampling rates between 
+
+25 Hz and 200 Hz. In total, the dataset includes measure-ments from 36 smartphones, tablets, and smartwatches, en-abling the analysis of domain shifts induced by different sen-sors, devices, and workloads. We treat users as domains and evaluate DA over all 36 possible user-to-user transfer sce-narios. This provides a more comprehensive evaluation than prior studies, which commonly considered only a small sub-set of transfer pairs (Wilson, Doppa, and Cook 2020; Liu and Xue 2021; He et al. 2023; Ragab et al. 2023). 
+
+UCI HAR. The UCI Human Activity Recognition (HAR) dataset (Anguita et al. 2013) consists of inertial measure-ments from 30 users performing six activities of daily liv-ing: standing, sitting, lying down, walking, walking upstairs, and walking downstairs. The data were recorded with waist-mounted smartphones equipped with inertial sensors sam-pled at 50 Hz. Each sample contains nine channels, corre-sponding to three-axis accelerometer, gyroscope, and mag-netometer measurements. We treat each user as a separate domain and evaluate DA across all 435 possible source– target user combinations. 
+
+WISDM. The WISDM dataset (Kwapisz, Weiss, and Moore 2010) contains smartphone accelerometer recordings from 36 users performing six activities: walking, jogging, ascending stairs, descending stairs, sitting, and standing. Each recording consists of three-axis acceleration signals. We define each user as an individual domain and evaluate DA over 356 source–target user combinations. 
+
+EEG. The sleep-stage classification (SSC) dataset (Gold-berger et al. 2000) contains electroencephalography (EEG) recordings labeled according to five sleep stages: wakeful-ness, three non-rapid-eye-movement stages, and rapid-eye-movement sleep. The dataset includes univariate recordings from 20 users, with each time-series containing 3,000 time steps. Each user is treated as a distinct domain, resulting in 
+
+190 possible source–target transfer scenarios. 
+
+uWave. The uWave dataset (Liu et al. 2009) consists of gesture recordings obtained from a handheld device equipped with a three-axis accelerometer. The dataset con-tains 4,478 samples from eight users and comprises five ges-ture classes. Following our preprocessing, all time-series are interpolated to a fixed length of 150 time steps. We evalu-ate DA over all 28 possible source–target combinations be-tween the eight users. In contrast to some prior work (Wil-son, Doppa, and Cook 2020; Liu and Xue 2021), we use an 80% / 20% train/validation split. 
+
+PenDigits. The PenDigits dataset (Alimoglu and Alpaydin 1997) consists of handwritten digit trajectories recorded on a digital screen. Each sample is represented by two channels corresponding to the two-dimensional pen coordinates. The task is classification into 10 digit classes. The dataset con-tains 10 ,992 samples collected from 44 writers. As with the Epilepsy dataset, we construct source and target domains by randomly partitioning the available samples. 
+
+Epilepsy. The Epilepsy dataset (Villar et al. 2016) was recorded using a tri-axial accelerometer sampled at 16 Hz and worn on the dominant wrist. Six healthy participants Table 8: Overview of datasets used in the evaluation. Sample counts refer to the total number of samples used in the correspond-ing standard train / test split or benchmark preprocessing. Datasets are available at https://researchdata.ntu.edu.sg/dataverse/ adatime, https://www.timeseriesclassification.com/dataset.php, or https://www.iis.fraunhofer.de/de/ff/lv/dataanalytics/anwproj/ schreibtrainer/onhw-dataset.html.                                                                                      
+
+> Dataset Reference Description # Domains # Channels # Classes # Length # Samples
+> HHAR Stisen et al. (2015) Smartphone-based human activity recog-nition with subject/domain shift
+> 936128 17 ,934
+> UCI HAR Anguita et al. (2013) Inertial human activity recognition from accelerometer and gyroscope signals
+> 30 96128 3,290
+> WISDM Kwapisz, Weiss, and Moore (2010) Smartphone accelerometer-based human activity recognition
+> 36 36128 2,070
+> EEG (Sleep-EDF) Goldberger et al. (2000) Single-channel EEG sleep-stage classifi-cation dataset
+> 20 153,000 20 ,410
+> uWave UCR/UEA (Liu et al. 2009) Accelerometer-based gesture recognition from the UWave gesture library
+> 835150 4,478
+> PenDigits UCR/UEA (Alimoglu and Alpaydin 1997) Pen-trajectory recognition of handwritten digits
+> 2210 810 ,992
+> Epilepsy UCR/UEA (Villar et al. 2016) Multivariate accelerometer recordings for epilepsy-related movement classification
+> 234206 275
+> Face detection UCR/UEA (Olivetti, Kia, and Avesani 2014) MEG-based binary classification of face versus scrambled-image stimuli
+> 2144 262 9,414
+> Finger movements (univariate) UCR/UEA (Blankertz, Curio, and M¨ uller 2001) EEG-based binary finger-movement clas-sification, univariate variant
+> 28 1250 208
+> Finger movements (multi) UCR/UEA (Blankertz, Curio, and M¨ uller 2001) Multivariate EEG-based binary finger-movement classification
+> 28 1250 208
+> OnHW-symbols Ott et al. (2022b) Online handwriting recognition of mathe-matical symbols
+> 213 15 79 2,667
+> OnHW-equations Ott et al. (2022b) Online handwriting recognition from split equation symbols
+> 213 15 79 45 ,923
+> OnHW-chars (com-bined) Ott et al. (2020) Online handwriting recognition of upper-case and lowercase characters
+> 213 52 64 33 ,545
+> sin–cos (synthetic) Ott et al. (2022a) Controlled synthetic waveform dataset for ablation studies
+> 2110 1,000 12 ,000
+
+performed four activities: walking, running, sawing, and seizure mimicking, with each activity repeated at least ten times. Due to the limited dataset size, we randomly split the samples into source and target domains with a 50% / 50% ratio and further divide each domain into training and test-ing sets. Consequently, samples from all participants may appear in both domains, but with unequal proportions. 
+
+Face Detection. The Face Detection dataset (Olivetti, Kia, and Avesani 2014) addresses binary classification of magne-toencephalography (MEG) recordings. The task is to deter-mine whether a participant was presented with a face im-age or a scrambled image. The dataset contains 144 -channel MEG recordings from 16 participants and comprises 9,414 
+
+samples. 
+
+Finger Movements. The Finger Movements dataset (Blankertz, Curio, and M¨ uller 2001) consists of EEG recordings from a subject performing key-press movements with the index and little fingers while seated in a standard typing position. The task is binary classification, distinguishing left- and right-hand finger movements. The dataset is comparatively small, containing 104 training and testing samples. We evaluate DA over 378 possible source–target scenarios derived from the available domain partitions. 
+
+Online Handwriting. The Online Handwriting (OnHW) datasets contain handwriting samples captured with sensor-enhanced pens. The OnHW-chars dataset (Ott et al. 2020) addresses recognition of lowercase and uppercase charac-ters, resulting in 52 classes. It contains 31 ,275 samples from 119 right-handed writers and 2,270 samples from nine left-handed writers. The OnHW-symbols and split OnHW-equations datasets (Ott et al. 2022b) contain handwrit-ten numbers and mathematical symbols. In these datasets, writer handedness induces a natural domain shift: the right-handed domain consists of 27 and 55 writers, respectively, while the left-handed domain contains four writers in both cases. We evaluate adaptation in both transfer directions, from left-handed to right-handed writers (L →R) and from right-handed to left-handed writers (R →L). Although these Table 9: Results for the source and target test datasets, which are evaluated on the model trained solely on target samples to show the discrepancy between source and target domains. For all datasets, we report the accuracy and F1-score in % for the CNN, ResNet18, and TCN encoder networks. These metrics are averaged over all domain scenarios and five training runs. Bold 
+
+refers to the best-performing encoder network on target and source accuracy.                                                                                                                                                                                                                  
+
+> Dataset CNN Tar. Acc. CNN Tar. F1 CNN Sour. Acc. CNN Sour. F1 ResNet Tar. Acc. ResNet Tar. F1 ResNet Sour. Acc. ResNet Sour. F1 TCN Tar. Acc. TCN Tar. F1 TCN Sour. Acc. TCN Sour. F1
+> HHAR 98.70 98.70 63.88 58.87 98.01 98.05 47.42 42.54 98.02 98.06 60.77 55.83 UCI HAR 99.42 99.48 74.31 71.27 99.77 99.78 69.96 64.99 98.68 98.68 72.44 68.79 WISDM 99.28 98.21 55.23 38.44 99.22 98.09 55.60 32.84 93.83 88.46 56.36 37.25 EEG 79.62 70.18 66.69 54.84 62.13 48.34 49.71 36.43 52.45 39.90 45.11 33.52 uWave 99.82 99.83 83.54 82.05 96.43 96.15 43.38 38.12 99.43 99.41 79.65 77.70 PenDigits 99.69 99.68 96.07 95.99 84.41 84.28 78.92 78.78 99.54 99.53 96.03 96.01 Epilepsy 80.31 75.40 77.50 72.87 95.31 95.33 97.81 97.87 74.38 68.06 74.69 73.30 Face detection 52.59 40.59 56.46 48.86 53.52 50.94 51.75 45.88 69.92 69.92 64.10 64.09 Finger movements 55.91 51.08 51.23 42.55 50.66 45.47 50.51 46.00 57.00 55.16 51.48 46.43 OnHW-symbols 77.19 78.07 20.00 14.87 76.25 76.59 13.75 9.74 19.69 15.12 5.00 3.54 OnHW-equations 89.66 89.02 36.83 38.29 82.34 82.30 21.92 21.60 56.94 54.48 29.49 29.44 OnHW-chars 73.52 71.76 37.44 36.83 49.93 48.02 16.10 15.05 1.29 0.86 1.92 0.07 sin–cos ( b= 0 .0)23.99 15.24 40.12 29.18 58.69 50.45 10.18 3.45 100.0 100.0 0.00 0.00 sin–cos ( b= 0 .5)46.27 39.35 43.55 32.50 45.56 36.72 10.91 5.12 98.35 98.33 8.65 7.09 sin–cos ( b= 1 .0)34.74 26.95 37.28 29.55 21.01 9.65 8.67 2.33 84.92 84.24 0.87 1.12 sin–cos ( b= 1 .5)25.79 17.57 30.97 25.37 11.11 2.79 8.41 3.59 65.04 62.32 0.38 0.44 sin–cos ( b= 1 .9)28.75 28.95 22.69 24.17 10.30 2.30 8.87 3.69 59.05 57.58 0.50 0.59
+
+datasets contain fewer domains than the user-based sensor datasets, they are challenging due to their larger number of channels and classes. 
+
+Generated Sinusoidal Data. For controlled ablation stud-ies, we use the synthetic sinusoidal dataset introduced by Ott et al. (2022a). The dataset consists of univariate sinusoidal time-series with class-specific frequencies for 10 classes. Domain shift is introduced by adding noise sampled from a continuous uniform distribution U (a, b ) with a = 0 .0 and 
+
+b ∈ B = {0.0, 0.1, 0.2, . . . , 1.9}. (99) The noisy sinusoidal signals form the target domain. For the source domain, the sign of the time-series is flipped and noise sampled from U (a, b/ 2) is added. This controlled setup enables systematic evaluation of DA methods under gradually increasing noise levels and sign-induced distribu-tion shift. 
+
+K Experimental Results 
+
+K.1 Discrepancy Between Source and Target Domains 
+
+We first quantify the source-only transfer gap between source and target domains by comparing two settings: train-ing and evaluating a model on the target-domain data, and training on the source-domain data while evaluating on the target domain. The corresponding results are reported in Table 9. Across the considered datasets, the performance differences indicate a clear domain shift. The observed gaps amount to 34.82%p for HHAR, 25.11%p for UCI HAR, 37.47%p for WISDM, 12.93%p for SSC, 16.28%p for uWave, and 23.95%p for Gestures Mid Air. Thus, all datasets exhibit a measurable mismatch between source and target distributions. The domain shift is particularly pro-nounced for the OnHW datasets, where the gaps reach 57.19%p, 52.83%p, and 36.08%p. This is consistent with the substantial differences between sensor recordings from right-handed and left-handed writers reported in (Klaß et al. 2022). In contrast, the Finger Movements, Epilepsy, Face Detection, and PenDigits datasets show only small domain gaps, which is expected because their source and target par-titions are generated by random shuffling rather than by nat-urally distinct domains. For the synthetic sinusoidal dataset, the target-domain accuracy decreases substantially as the noise level increases, in line with previous observations (Ott et al. 2022a, 2023). Specifically, the accuracy drops from 100% at b = 0 .0 to 59.05% at b = 1 .9. This degradation indicates a strong source–target mismatch, since the model trained on the source domain fails to extract features that re-main reliably discriminative under the noisy target-domain conditions. The gap is smaller when using the CNN encoder, but this reduction comes at the cost of lower target-domain accuracy. 
+
+K.2 Evaluation Results for all DA Methods 
+
+Aggregation of Results. For a fixed dataset, backbone, and adaptation method, let ms,r denote the target accu-racy or macro-F1 score obtained for source–target scenario 
+
+s ∈ { 1, . . . , S } and random-seed run r ∈ { 1, . . . , R }, with 
+
+R = 5 . The values reported in the aggregate result tables are computed by pooling all SR scenario–run observations: 
+
+m = 1
+
+SR 
+
+> S
+
+X
+
+> s=1
+> R
+
+X
+
+> r=1
+
+ms,r , (100) Table 10: DA results in % (mean and standard deviation over all scenarios and five runs) for the HHAR (Stisen et al. 2015) dataset. Bold are best results. 
+
+Method CNN Accuracy CNN F1 ResNet18 Accuracy ResNet18 F1 TCN Accuracy TCN F1 
+
+MSE 62.24 ± 16.7 57.79 ± 18.0 48.40 ± 16.4 43.37 ± 18.1 52.08 ± 14.1 46.31 ± 16.2 CS 63.07 ± 18.7 59.09 ± 21.0 53.68 ± 19.6 50.98 ± 22.1 56.09 ± 17.8 51.36 ± 20.8 PC 64.74 ± 17.3 60.68 ± 19.1 54.97 ± 19.6 51.59 ± 22.1 61.43 ± 16.4 57.20 ± 19.1 KL 60.10 ± 16.9 54.76 ± 18.6 50.83 ± 18.7 46.08 ± 21.7 19.36 ± 6.0 8.39 ± 5.8 JSD 64.75 ± 17.4 60.62 ± 20.0 54.55 ± 20.4 50.74 ± 23.4 17.79 ± 3.6 7.33 ± 3.1 Linear MMD 66.83 ± 17.5 63.13 ± 19.7 57.50 ± 20.3 54.95 ± 22.8 68.33 ± 18.3 65.01 ± 21.3 Kernelized MMD 63.86 ± 17.1 59.64 ± 18.9 54.50 ± 19.8 51.25 ± 22.3 61.48 ± 17.4 57.48 ± 20.6 Deep CORAL 73.51 ± 17.2 71.57 ± 18.9 61.20 ± 19.2 59.75 ± 21.1 72.17 ± 16.8 70.23 ± 18.9 Jeffreys CORAL 64.49 ± 17.5 60.18 ± 19.4 54.55 ± 19.7 61.11 ± 22.3 62.13 ± 17.7 58.15 ± 21.0 Stein CORAL 64.10 ± 16.9 59.78 ± 18.9 54.93 ± 19.7 51.57 ± 22.2 62.11 ± 16.6 58.18 ± 19.4 Linear MMCD 66.60 ± 17.5 63.03 ± 19.7 57.32 ± 20.2 54.87 ± 22.7 68.04 ± 18.2 64.78 ± 21.1 Kernelized MMCD 64.37 ± 17.1 60.11 ± 19.0 55.26 ± 19.7 52.06 ± 22.3 62.03 ± 17.2 57.97 ± 20.4 MMDA 70.34 ± 14.0 66.08 ± 15.0 57.73 ± 20.8 55.05 ± 23.5 67.26 ± 17.6 64.51 ± 20.1 DDC 63.14 ± 16.6 59.32 ± 19.1 53.74 ± 17.7 49.80 ± 20.3 59.70 ± 16.0 55.69 ± 18.9 Linear DAN 72.14 ± 18.5 69.81 ± 20.6 59.19 ± 19.9 56.96 ± 22.3 68.40 ± 16.9 65.86 ± 19.5 Squared DAN 72.09 ± 18.4 69.84 ± 20.3 59.29 ± 20.2 57.09 ± 22.6 68.48 ± 17.7 66.12 ± 20.1 HoMM p=3 72.64 ± 17.3 70.15 ± 19.4 61.59 ± 19.8 59.70 ± 22.4 70.84 ± 16.8 68.48 ± 19.3 DANN 76.91 ± 18.9 75.86 ± 19.6 63.21 ± 20.3 62.18 ± 21.5 73.16 ± 18.3 71.86 ± 19.4 CDAN 79.88 ± 18.2 79.44 ± 18.5 66.49 ± 20.4 66.11 ± 20.9 76.78 ± 16.7 75.10 ± 18.2 DIRT-T 80.11 ± 18.3 79.45 ± 18.8 67.89 ± 22.0 65.92 ± 23.5 76.78 ± 17.5 74.77 ± 19.4 DSAN 77.96 ± 19.6 77.28 ± 20.4 67.22 ± 22.2 66.60 ± 23.1 74.64 ± 18.7 73.26 ± 20.3 CoDATS 76.30 ± 19.6 75.62 ± 20.4 63.79 ± 19.1 62.73 ± 20.0 72.48 ± 18.1 71.10 ± 19.5 AdvSKM 66.36 ± 15.3 62.23 ± 17.0 53.61 ± 18.6 50.28 ± 20.7 62.32 ± 15.8 58.07 ± 18.3 Sinkhorn 75.15 ± 19.5 73.97 ± 20.7 67.98 ± 20.9 67.18 ± 22.5 70.04 ± 19.1 68.11 ± 21.4 CPDA (ours) 81.82 ± 17.0 80.27 ± 18.2 67.79 ± 21.9 65.75 ± 23.9 77.88 ± 17.7 75.80 ± 19.8 
+
+Table 11: DA results in % (mean and standard deviation over all scenarios and five runs) for the UCI HAR (Anguita et al. 2013) dataset. Bold are best results. 
+
+Method CNN Accuracy CNN F1 ResNet18 Accuracy ResNet18 F1 TCN Accuracy TCN F1 
+
+MSE 72.41 ± 18.0 69.14 ± 19.9 68.04 ± 16.4 63.93 ± 17.7 69.73 ± 16.0 65.92 ± 17.3 CS 77.62 ± 18.0 75.43 ± 19.9 73.88 ± 16.3 70.49 ± 17.7 68.99 ± 16.5 65.34 ± 17.8 PC 80.52 ± 15.9 78.79 ± 17.1 77.51 ± 15.5 74.53 ± 16.8 78.26 ± 14.6 76.08 ± 15.6 KL 69.17 ± 18.9 65.30 ± 21.1 72.04 ± 16.4 67.42 ± 18.0 16.64 ± 4.8 5.36 ± 3.2 JSD 79.70 ± 16.3 77.95 ± 17.5 72.97 ± 14.7 67.67 ± 16.5 15.85 ± 3.8 4.74 ± 1.9 Linear MMD 82.48 ± 14.7 81.22 ± 15.7 80.97 ± 13.4 78.44 ± 14.6 84.62 ± 12.6 83.35 ± 13.6 Kernelized MMD 80.95 ± 15.7 79.26 ± 17.0 77.88 ± 15.2 74.94 ± 16.6 78.46 ± 14.8 76.28 ± 15.8 Deep CORAL 80.93 ± 14.5 79.20 ± 15.5 79.26 ± 13.2 76.60 ± 14.1 78.95 ± 12.7 76.77 ± 13.4 Jeffreys CORAL 80.99 ± 15.6 79.32 ± 16.9 77.90 ± 15.3 74.97 ± 16.6 78.33 ± 14.7 76.10 ± 15.9 Stein CORAL 80.99 ± 15.6 79.32 ± 16.8 77.92 ± 15.1 75.00 ± 16.5 78.52 ± 14.7 76.37 ± 15.7 Linear MMCD 82.45 ± 14.7 81.20 ± 15.6 81.11 ± 13.5 78.67 ± 14.7 84.62 ± 12.8 82.33 ± 13.9 Kernelized MMCD 80.93 ± 15.7 79.20 ± 16.9 79.26 ± 14.4 76.60 ± 15.6 78.95 ± 14.2 76.77 ± 15.3 MMDA 89.92 ± 11.4 89.86 ± 11.5 79.41 ± 13.7 77.04 ± 14.8 77.75 ± 12.9 75.35 ± 13.5 DDC 80.96 ± 14.5 79.29 ± 15.4 77.88 ± 14.0 74.96 ± 14.9 78.57 ± 13.2 76.40 ± 13.9 Linear DAN 86.17 ± 12.3 85.50 ± 12.9 81.91 ± 13.1 80.01 ± 14.1 81.73 ± 13.1 80.15 ± 14.0 Squared DAN 86.31 ± 12.5 85.69 ± 13.0 82.22 ± 13.2 80.41 ± 14.2 82.42 ± 13.0 81.03 ± 13.8 HoMM p=3 88.41 ± 11.9 88.39 ± 11.8 84.72 ± 12.0 83.43 ± 12.8 87.90 ± 10.7 87.64 ± 10.8 DANN 86.97 ± 10.4 86.33 ± 10.6 80.20 ± 12.6 78.03 ± 13.4 84.15 ± 10.8 83.03 ± 11.3 CDAN 89.15 ± 10.5 88.44 ± 11.0 85.16 ± 12.2 83.20 ± 13.2 83.36 ± 10.9 81.45 ± 11.5 DIRT-T 92.02 ± 9.6 91.97 ± 10.0 80.58 ± 14.5 76.04 ± 18.1 85.78 ± 13.1 83.69 ± 15.9 DSAN 89.25 ± 11.2 88.65 ± 11.7 88.17 ± 12.1 87.65 ± 12.5 87.35 ± 11.2 86.51 ± 11.6 CoDATS 87.38 ± 11.7 86.78 ± 12.0 83.11 ± 12.6 81.72 ± 13.3 85.56 ± 11.5 84.75 ± 11.9 AdvSKM 80.77 ± 14.5 78.95 ± 15.4 77.98 ± 14.6 75.23 ± 15.5 78.71 ± 12.9 76.55 ± 13.6 Sinkhorn 87.17 ± 12.4 86.55 ± 12.9 81.62 ± 12.7 78.96 ± 14.0 80.88 ± 12.9 79.05 ± 13.5 CPDA (ours) 91.88 ± 10.7 91.93 ± 10.9 89.53 ± 12.3 89.09 ± 13.0 90.31 ± 10.6 90.04 ± 11.1 Table 12: DA results in % (mean and standard deviation over all scenarios and five runs) for the WISDM (Kwapisz, Weiss, and Moore 2010) dataset. Bold are best results. 
+
+Method CNN Accuracy CNN F1 ResNet18 Accuracy ResNet18 F1 TCN Accuracy TCN F1 
+
+MSE 49.91 ± 19.8 33.28 ± 18.4 48.92 ± 16.8 27.87 ± 14.4 50.19 ± 15.1 27.08 ± 12.9 CS 50.69 ± 20.2 34.60 ± 18.2 50.84 ± 19.9 30.87 ± 16.5 39.26 ± 15.0 25.93 ± 13.6 PC 58.21 ± 21.2 40.51 ± 20.6 57.60 ± 18.8 35.47 ± 17.4 53.79 ± 20.3 37.50 ± 19.5 KL 45.27 ± 17.6 30.57 ± 17.2 54.72 ± 18.7 32.75 ± 17.1 29.34 ± 12.3 9.66 ± 4.8 JSD 58.46 ± 20.0 41.23 ± 20.6 54.71 ± 20.4 35.28 ± 19.2 29.03 ± 11.9 8.75 ± 4.2 Linear MMD 59.68 ± 19.9 41.04 ± 20.1 58.28 ± 18.7 36.27 ± 17.8 60.37 ± 19.7 38.93 ± 18.9 Kernelized MMD 59.15 ± 20.6 41.28 ± 20.6 57.70 ± 18.6 35.43 ± 17.2 57.40 ± 18.9 38.13 ± 18.7 Deep CORAL 60.21 ± 19.7 41.91 ± 20.1 58.84 ± 17.8 36.69 ± 16.9 59.15 ± 18.4 39.39 ± 18.4 Jeffreys CORAL 59.18 ± 20.6 41.30 ± 20.6 57.68 ± 18.6 35.43 ± 17.2 57.34 ± 18.9 38.09 ± 18.7 Stein CORAL 59.15 ± 20.6 41.29 ± 20.6 57.70 ± 18.7 35.44 ± 17.2 57.37 ± 18.9 38.08 ± 18.7 Linear MMCD 59.73 ± 19.9 41.10 ± 20.1 58.58 ± 18.8 36.53 ± 17.9 60.41 ± 19.7 38.95 ± 18.9 Kernelized MMCD 59.25 ± 20.6 41.34 ± 20.6 58.13 ± 18.6 35.85 ± 17.5 57.87 ± 18.8 38.40 ± 18.6 MMDA 62.46 ± 20.1 43.43 ± 20.1 55.27 ± 18.3 31.28 ± 14.8 51.95 ± 15.4 29.28 ± 14.4 DDC 59.68 ± 19.4 41.05 ± 19.8 57.77 ± 17.9 34.34 ± 15.9 59.08 ± 18.7 38.74 ± 18.3 Linear DAN 63.07 ± 20.8 43.62 ± 21.5 60.75 ± 18.9 38.22 ± 18.5 59.81 ± 18.9 39.65 ± 19.4 Squared DAN 63.15 ± 20.7 43.66 ± 21.5 61.01 ± 18.9 38.67 ± 18.8 60.58 ± 19.0 40.43 ± 19.7 HoMM p=3 42.41 ± 21.8 42.40 ± 21.8 59.32 ± 17.9 35.51 ± 17.3 59.89 ± 18.9 40.84 ± 19.6 DANN 63.37 ± 20.2 45.16 ± 21.5 58.26 ± 18.5 39.73 ± 19.1 58.15 ± 17.7 39.89 ± 18.5 CDAN 61.02 ± 19.7 40.95 ± 19.6 56.85 ± 17.7 34.31 ± 15.5 59.74 ± 18.5 39.10 ± 18.1 DIRT-T 61.32 ± 17.6 34.47 ± 14.1 55.76 ± 15.5 27.46 ± 10.8 58.18 ± 17.7 31.25 ± 13.9 DSAN 55.40 ± 18.8 30.80 ± 13.9 59.77 ± 17.9 34.62 ± 16.1 54.98 ± 18.8 34.77 ± 16.3 CoDATS 62.77 ± 19.8 43.74 ± 20.4 59.34 ± 18.8 39.16 ± 19.0 38.68 ± 18.6 36.68 ± 18.6 AdvSKM 59.36 ± 19.7 40.79 ± 20.0 57.26 ± 17.9 33.91 ± 15.6 58.11 ± 18.9 38.33 ± 18.3 Sinkhorn 59.40 ± 22.4 41.15 ± 22.4 59.18 ± 20.3 40.28 ± 20.8 55.66 ± 18.2 35.20 ± 17.4 CPDA (ours) 63.92 ± 20.7 44.46 ± 21.9 63.18 ± 20.4 41.58 ± 21.1 61.06 ± 20.2 40.19 ± 19.7 
+
+Table 13: DA results in % (mean and standard deviation over all scenarios and five runs) for the EEG (Goldberger et al. 2000) dataset. Bold are best results. 
+
+Method CNN Accuracy CNN F1 ResNet18 Accuracy ResNet18 F1 TCN Accuracy TCN F1 
+
+MSE 69.12 ± 11.1 58.02 ± 12.1 51.63 ± 9.1 38.55 ± 8.8 45.87 ± 4.8 33.59 ± 4.7 CS 71.51 ± 9.8 57.79 ± 11.3 53.13 ± 8.1 36.18 ± 9.2 46.00 ± 4.9 33.89 ± 4.8 PC 69.80 ± 11.1 59.03 ± 11.6 51.86 ± 9.1 38.80 ± 8.7 45.89 ± 5.0 34.15 ± 4.9 KL 69.20 ± 11.0 58.38 ± 11.7 50.03 ± 9.5 37.36 ± 8.7 26.56 ± 14.3 8.21 ± 3.7 JSD 69.99 ± 10.5 59.30 ± 11.0 48.80 ± 10.2 35.65 ± 9.2 26.47 ± 14.1 8.21 ± 3.7 Linear MMD 70.18 ± 10.4 59.39 ± 11.1 51.74 ± 9.2 38.73 ± 8.8 46.16 ± 5.2 33.78 ± 5.3 Kernelized MMD 69.80 ± 10.8 59.11 ± 11.4 51.91 ± 9.2 38.96 ± 8.8 45.98 ± 5.0 34.00 ± 4.9 Deep CORAL 72.44 ± 8.4 61.45 ± 8.6 52.67 ± 8.3 39.21 ± 8.1 46.79 ± 4.4 33.54 ± 4.6 Jeffreys CORAL 69.69 ± 10.8 58.93 ± 11.6 51.77 ± 9.3 38.81 ± 8.8 45.93 ± 4.9 34.01 ± 4.8 Stein CORAL 69.95 ± 11.0 59.24 ± 11.5 51.87 ± 9.0 38.90 ± 8.7 45.96 ± 4.9 34.08 ± 4.8 Linear MMCD 70.19 ± 10.3 59.35 ± 11.0 51.82 ± 9.4 38.77 ± 8.9 45.85 ± 5.3 33.55 ± 5.3 Kernelized MMCD 69.83 ± 11.3 59.04 ± 11.9 51,74 ± 9.4 38.80 ± 8.9 45.92 ± 5.0 33.88 ± 5.1 MMDA 64.84 ± 8.5 46.83 ± 8.5 52.15 ± 7.8 36.35 ± 8.4 44.48 ± 5.1 28.31 ± 5.2 DDC 72.44 ± 8.4 61.44 ± 8.6 51.32 ± 8.0 37.98 ± 8.5 46.77 ± 4.5 33.45 ± 4.6 Linear DAN 70.25 ± 10.7 59.70 ± 11.2 51.78 ± 9.3 38.82 ± 8.9 45.98 ± 4.9 34.01 ± 4.8 Squared DAN 70.50 ± 10.5 59.79 ± 11.0 52.02 ± 9.0 39.02 ± 8.7 45.96 ± 4.9 34.10 ± 4.8 HoMM p=3 72.84 ± 8.5 61.74 ± 8.7 51.16 ± 8.1 37.00 ± 8.2 40.42 ± 6.3 19.14 ± 4.7 DANN 73.09 ± 8.5 62.00 ± 8.5 52.54 ± 8.1 38.54 ± 7.8 46.30 ± 4.5 33.00 ± 4.6 CDAN 71.70 ± 10.5 58.10 ± 11.7 49.90 ± 8.2 32.28 ± 9.2 47.88 ± 5.0 33.47 ± 5.5 DIRT-T 73.48 ± 10.3 61.23 ± 11.1 52.37 ± 7.7 37.38 ± 8.0 47.85 ± 5.1 33.30 ± 6.1 DSAN 71.00 ± 10.4 58.15 ± 10.5 51.53 ± 8.3 36.27 ± 9.3 47.43 ± 4.7 34.71 ± 5.2 CoDATS 70.03 ± 8.5 58.34 ± 8.8 50.67 ± 7.4 35.63 ± 7.3 42.39 ± 5.7 26.78 ± 5.4 AdvSKM 72.56 ± 8.8 61.37 ± 9.1 50.97 ± 7.5 35.32 ± 7.8 46.62 ± 4.5 33.35 ± 4.7 Sinkhorn 71.37 ± 10.1 59.97 ± 10.8 51.31 ± 8.9 37.15 ± 8.7 44.87 ± 6.2 28.48 ± 6.3 CPDA (ours) 74.39 ± 9.8 64.16 ± 10.0 53.27 ± 8.4 40.46 ± 8.2 46.76 ± 4.7 33.80 ± 4.8 Table 14: DA results in % (mean and standard deviation over all scenarios and five runs) for the uWave (Liu et al. 2009) dataset. 
+
+Bold are best results. 
+
+Method CNN Accuracy CNN F1 ResNet18 Accuracy ResNet18 F1 TCN Accuracy TCN F1 
+
+MSE 83.76 ± 9.6 82.43 ± 10.3 45.88 ± 12.0 41.66 ± 12.3 71.69 ± 13.0 68.82 ± 14.3 CS 77.88 ± 12.6 76.09 ± 13.6 48.51 ± 11.5 44.81 ± 12.0 69.08 ± 14.9 66.29 ± 15.5 PC 85.62 ± 8.9 84.62 ± 9.6 49.99 ± 12.0 45.99 ± 12.9 73.33 ± 14.4 70.22 ± 15.4 KL 81.35 ± 11.5 79.89 ± 12.4 46.41 ± 11.4 40.81 ± 12.0 12.69 ± 2.6 2.81 ± 0.5 JSD 84.10 ± 11.2 82.72 ± 12.1 49.33 ± 10.6 43.11 ± 11.5 12.10 ± 3.0 2.70 ± 0.6 Linear MMD 86.53 ± 10.1 85.58 ± 10.7 49.79 ± 11.7 45.79 ± 12.4 83.40 ± 9.9 81.69 ± 10.9 Kernelized MMD 86.57 ± 9.3 85.53 ± 10.1 49.76 ± 12.0 45.78 ± 12.7 79.22 ± 13.2 77.28 ± 14.0 Deep CORAL 86.51 ± 8.1 85.44 ± 8.9 50.11 ± 10.8 46.16 ± 11.6 80.15 ± 12.5 78.30 ± 13.5 Jeffreys CORAL 85.98 ± 9.9 84.88 ± 10.7 49.75 ± 11.7 45.61 ± 12.4 79.44 ± 13.3 77.50 ± 14.2 Stein CORAL 86.41 ± 9.3 85.41 ± 9.9 49.81 ± 12.1 45.71 ± 12.8 79.11 ± 13.4 77.15 ± 14.2 Linear MMCD 86.39 ± 9.7 85.26 ± 10.6 49.75 ± 12.0 45.73 ± 12.6 83.68 ± 10.5 81.84 ± 11.8 Kernelized MMCD 86.51 ± 9.1 85.44 ± 10.1 50.11 ± 11.8 46.16 ± 12.5 80.15 ± 13.0 78.30 ± 14.0 MMDA 92.26 ± 6.2 91.76 ± 6.9 49.90 ± 10.6 46.24 ± 11.0 84.64 ± 11.3 82.61 ± 13.0 DDC 86.32 ± 8.1 85.28 ± 8.8 49.96 ± 10.4 45.96 ± 11.2 79.43 ± 12.4 77.42 ± 13.3 Linear DAN 87.77 ± 8.7 87.03 ± 9.4 50.58 ± 11.0 46.59 ± 11.7 83.46 ± 11.9 82.02 ± 12.7 Squared DAN 89.53 ± 8.0 88.83 ± 8.7 51.03 ± 11.1 47.03 ± 11.9 86.84 ± 11.3 85.98 ± 12.0 HoMM p=3 92.00 ± 6.1 91.27 ± 7.1 51.28 ± 10.2 47.62 ± 11.1 90.36 ± 9.8 89.90 ± 10.2 DANN 85.13 ± 8.2 84.13 ± 8.7 52.01 ± 10.2 48.26 ± 11.0 84.58 ± 11.0 83.37 ± 11.9 CDAN 96.43 ± 5.5 95.97 ± 6.9 57.95 ± 9.2 53.18 ± 10.7 81.85 ± 12.2 79.01 ± 13.7 DIRT-T 96.43 ± 5.5 95.97 ± 6.9 55.01 ± 12.9 49.97 ± 13.6 80.15 ± 12.5 78.30 ± 13.5 DSAN 13.11 ± 2.7 5.45 ± 1.6 59.25 ± 9.4 56.85 ± 10.4 91.92 ± 10.9 91.55 ± 11.6 CoDATS 88.85 ± 8.0 88.32 ± 8.8 55.48 ± 8.3 52.19 ± 9.6 89.31 ± 8.1 88.46 ± 8.9 AdvSKM 85.54 ± 9.1 84.61 ± 9.7 50.07 ± 11.6 46.18 ± 12.0 79.74 ± 12.5 77.68 ± 13.5 Sinkhorn 92.89 ± 7.3 91.41 ± 8.2 58.01 ± 10.0 54.21 ± 11.3 84.08 ± 13.2 83.01 ± 14.0 CPDA (ours) 97.30 ± 5.6 96.79 ± 7.2 61.32 ± 10.1 57.53 ± 11.7 92.17 ± 12.2 91.24 ± 12.9 
+
+Table 15: DA results in % (mean and standard deviation over all scenarios and five runs) for the PenDigits (Alimoglu and Alpaydin 1997) dataset. Bold are best results. 
+
+Method CNN Accuracy CNN F1 ResNet18 Accuracy ResNet18 F1 TCN Accuracy TCN F1 
+
+MSE 96.34 ± 0.2 96.30 ± 0.2 77.15 ± 0.8 77.01 ± 1.0 96.16 ± 0.6 96.10 ± 0.6 CS 96.05 ± 0.4 95.97 ± 0.4 75.83 ± 1.1 75.73 ± 1.1 95.67 ± 1.6 94.56 ± 0.6 PC 96.15 ± 0.5 96.10 ± 0.5 77.59 ± 0.8 77.49 ± 1.0 95.43 ± 2.0 95.36 ± 2.1 KL 95.81 ± 0.8 95.76 ± 0.9 63.97 ± 4.8 60.31 ± 6.4 10.42 ± 0.6 1.89 ± 0.1 JSD 95.82 ± 0.7 95.77 ± 0.7 56.37 ± 5.4 54.03 ± 5.1 10.01 ± 0.6 1.82 ± 0.1 Linear MMD 96.29 ± 0.4 96.23 ± 0.4 77.14 ± 0.7 76.94 ± 0.9 88.49 ± 13.1 87.31 ± 14.9 Kernelized MMD 95.91 ± 0.6 95.83 ± 0.6 77.54 ± 0.5 77.40 ± 0.9 95.46 ± 0.5 95.42 ± 0.5 Deep CORAL 96.04 ± 0.7 95.98 ± 0.7 77.49 ± 0.7 77.37 ± 0.9 96.16 ± 0.4 96.12 ± 0.5 Jeffreys CORAL 96.56 ± 0.3 96.52 ± 0.3 77.49 ± 0.9 77.38 ± 1.2 95.42 ± 1.1 95.35 ± 1.1 Stein CORAL 96.15 ± 0.6 96.10 ± 0.7 77.41 ± 0.7 77.23 ± 1.0 95.96 ± 0.8 95.92 ± 0.8 Linear MMCD 96.13 ± 0.4 96.08 ± 0.5 76.98 ± 0.8 76.87 ± 1.0 84.51 ± 6.3 81.55 ± 7.7 Kernelized MMCD 96.04 ± 0.7 95.98 ± 0.7 77.49 ± 0.7 77.37 ± 0.9 96.16 ± 0.4 96.12 ± 0.5 MMDA 95.72 ± 0.6 95.59 ± 0.7 78.53 ± 1.2 78.50 ± 1.3 96.26 ± 0.6 96.22 ± 0.7 DDC 95.83 ± 0.4 95.79 ± 0.4 77.32 ± 0.5 77.16 ± 0.8 95.64 ± 0.5 95.59 ± 0.6 Linear DAN 96.08 ± 0.5 96.01 ± 0.6 77.14 ± 0.5 77.01 ± 0.8 95.89 ± 0.6 95.84 ± 0.6 Squared DAN 96.20 ± 0.5 96.15 ± 0.5 77.37 ± 0.6 77.27 ± 0.8 95.83 ± 1.0 95.78 ± 1.0 HoMM p=3 96.29 ± 0.5 96.22 ± 0.6 78.46 ± 0.7 78.36 ± 0.8 95.52 ± 0.6 95.49 ± 0.6 DANN 96.65 ± 0.3 96.65 ± 0.3 76.48 ± 1.8 76.20 ± 1.6 94.54 ± 0.8 94.47 ± 0.8 CDAN 96.43 ± 0.4 96.41 ± 0.5 75.48 ± 1.9 75.25 ± 2.0 92.25 ± 5.7 91.36 ± 7.3 DIRT-T 96.67 ± 0.2 96.67 ± 0.2 79.21 ± 0.5 78.86 ± 0.7 96.99 ± 0.3 96.96 ± 0.3 DSAN 11.07 ± 0.0 1.99 ± 0.0 9.95 ± 0.8 1.87 ± 0.1 95.83 ± 2.3 95.62 ± 2.7 CoDATS 96.24 ± 0.4 96.20 ± 0.4 83.68 ± 1.3 83.37 ± 1.3 94.21 ± 2.0 93.96 ± 2.3 AdvSKM 96.46 ± 0.2 96.40 ± 0.2 77.43 ± 0.8 77.05 ± 1.0 95.85 ± 0.8 95.80 ± 0.9 Sinkhorn 96.46 ± 0.3 96.43 ± 0.3 76.29 ± 0.9 76.08 ± 1.1 72.07 ± 6.4 67.48 ± 8.1 CPDA (ours) 96.98 ± 0.4 96.98 ± 0.4 75.30 ± 1.6 74.78 ± 1.5 97.08 ± 0.6 97.07 ± 0.6 Table 16: DA results in % (mean and standard deviation over all scenarios and five runs) for the Epilepsy (Villar et al. 2016) dataset. Bold are best results. 
+
+Method CNN Accuracy CNN F1 ResNet18 Accuracy ResNet18 F1 TCN Accuracy TCN F1 
+
+MSE 98.12 ± 1.2 98.17 ± 1.1 97.19 ± 1.8 97.34 ± 1.7 68.75 ± 2.2 69.05 ± 2.4 CS 84.38 ± 6.3 83.81 ± 6.5 92.19 ± 1.0 91.89 ± 1.1 66.56 ± 3.5 65.33 ± 4.1 PC 99.06 ± 1.2 99.09 ± 1.2 99.38 ± 0.8 99.40 ± 0.7 77.81 ± 3.2 77.31 ± 3.1 KL 98.12 ± 1.2 98.17 ± 1.1 94.06 ± 2.7 93.72 ± 2.9 47.19 ± 3.9 39.09 ± 6.1 JSD 98.12 ± 1.2 98.17 ± 1.1 91.25 ± 3.6 91.06 ± 3.9 37.50 ± 4.0 21.89 ± 4.5 Linear MMD 98.12 ± 1.2 98.17 ± 1.1 98.75 ± 0.6 98.79 ± 0.6 75.00 ± 1.4 74.91 ± 1.6 Kernelized MMD 98.12 ± 1.2 98.17 ± 1.1 99.38 ± 0.8 99.40 ± 0.7 78.75 ± 1.9 78.97 ± 1.5 Deep CORAL 98.12 ± 1.2 98.17 ± 1.1 99.38 ± 0.8 99.40 ± 0.7 78.75 ± 1.9 78.97 ± 1.5 Jeffreys CORAL 98.12 ± 1.2 98.17 ± 1.1 99.38 ± 0.8 99.40 ± 0.7 78.44 ± 1.5 78.67 ± 1.2 Stein CORAL 98.12 ± 1.2 98.17 ± 1.1 99.38 ± 0.8 99.40 ± 0.7 78.44 ± 1.5 78.67 ± 1.2 Linear MMCD 98.12 ± 1.2 98.17 ± 1.1 98.75 ± 0.6 98.79 ± 0.6 75.00 ± 3.0 75.08 ± 2.9 Kernelized MMCD 98.12 ± 1.2 98.17 ± 1.1 99.38 ± 0.8 99.40 ± 0.7 78.75 ± 1.9 78.97 ± 1.5 MMDA 96.56 ± 0.6 96.60 ± 0.7 99.06 ± 1.2 99.09 ± 1.2 66.88 ± 3.2 66.40 ± 3.9 DDC 98.12 ± 1.2 98.17 ± 1.1 99.38 ± 0.8 99.40 ± 0.7 78.44 ± 1.5 78.66 ± 1.2 Linear DAN 98.75 ± 1.2 98.79 ± 1.1 98.75 ± 0.6 98.79 ± 0.6 74.38 ± 2.5 74.45 ± 13.0 Squared DAN 98.12 ± 1.2 98.17 ± 1.1 99.06 ± 0.8 99.10 ± 0.7 78.44 ± 2.1 78.53 ± 2.0 HoMM p=3 92.19 ± 2.6 91.57 ± 3.2 99.06 ± 0.8 99.10 ± 0.7 65.62 ± 2.6 63.81 ± 3.3 DANN 96.88 ± 2.0 96.77 ± 2.2 95.31 ± 2.6 95.27 ± 2.8 68.44 ± 4.8 67.28 ± 5.4 CDAN 95.94 ± 1.9 95.95 ± 2.0 92.50 ± 7.1 92.00 ± 7.8 70.62 ± 5.1 69.40 ± 5.5 DIRT-T 88.75 ± 2.5 87.94 ± 2.8 90.00 ± 1.2 89.52 ± 1.3 80.00 ± 2.7 75.47 ± 2.2 DSAN 69.06 ± 3.0 61.42 ± 5.5 97.19 ± 0.6 97.16 ± 0.7 66.56 ± 5.0 64.66 ± 4.6 CoDATS 96.56 ± 1.2 96.56 ± 1.3 96.25 ± 2.7 96.21 ± 2.8 63.44 ± 3.4 61.33 ± 4.1 AdvSKM 98.12 ± 1.2 98.10 ± 1.2 98.75 ± 0.6 98.79 ± 0.6 77.81 ± 3.2 77.68 ± 2.8 Sinkhorn 96.25 ± 0.8 96.28 ± 0.8 90.31 ± 4.6 89.72 ± 5.2 64.69 ± 4.4 63.84 ± 4.5 CPDA (ours) 97.81 ± 0.8 97.83 ± 0.7 98.12 ± 1.2 98.17 ± 1.1 85.62 ± 1.8 84.81 ± 2.3 
+
+Table 17: DA results in % (mean and standard deviation over all scenarios and five runs) for the Face detection (Olivetti, Kia, and Avesani 2014) dataset. Bold are best results. 
+
+Method CNN Accuracy CNN F1 ResNet18 Accuracy ResNet18 F1 TCN Accuracy TCN F1 
+
+MSE 60.12 ± 2.3 58.22 ± 4.2 51.63 ± 1.5 48.06 ± 5.7 64.86 ± 0.8 64.84 ± 0.8 CS 49.16 ± 0.0 32.96 ± 0.0 48.92 ± 0.4 38.28 ± 4.5 49.16 ± 0.0 32.96 ± 0.0 PC 59.59 ± 2.0 58.22 ± 3.2 52.62 ± 1.1 47.76 ± 3.7 65.43 ± 0.8 65.41 ± 0.8 KL 59.01 ± 1.8 56.36 ± 3.1 51.97 ± 0.4 46.44 ± 4.4 50.15 ± 0.8 33.40 ± 0.4 JSD 59.59 ± 2.1 57.96 ± 3.8 50.87 ± 1.4 41.62 ± 5.9 50.52 ± 0.6 33.59 ± 0.2 Linear MMD 63.20 ± 1.2 63.06 ± 1.3 53.31 ± 1.1 52.74 ± 1.5 64.66 ± 0.8 64.58 ± 0.8 Kernelized MMD 59.47 ± 0.6 58.17 ± 1.2 53.31 ± 0.5 51.94 ± 1.0 65.47 ± 0.8 65.46 ± 0.8 Deep CORAL 60.38 ± 2.2 59.04 ± 3.3 52.65 ± 1.3 50.96 ± 2.4 65.98 ± 0.9 65.97 ± 0.9 Jeffreys CORAL 60.46 ± 3.0 58.60 ± 5.5 52.21 ± 0.9 50.25 ± 2.2 64.53 ± 1.9 64.52 ± 1.8 Stein CORAL 59.42 ± 2.1 57.15 ± 4.0 52.71 ± 1.0 51.26 ± 2.4 65.85 ± 0.8 65.85 ± 0.8 Linear MMCD 62.29 ± 1.8 61.36 ± 3.1 52.76 ± 2.0 49.23 ± 7.7 65.50 ± 1.5 65.47 ± 1.5 Kernelized MMCD 60.38 ± 2.2 59.04 ± 3.3 52.65 ± 1.3 50.69 ± 2.4 65.98 ± 0.9 65.97 ± 0.9 MMDA 58.83 ± 1.1 57.88 ± 1.7 51.27 ± 1.3 48.36 ± 2.0 66.17 ± 0.6 66.15 ± 0.7 DDC 59.82 ± 2.8 58.24 ± 5.1 53.25 ± 1.5 50.19 ± 2.4 65.00 ± 0.9 64.97 ± 0.9 Linear DAN 61.10 ± 2.3 59.76 ± 3.7 53.32 ± 1.0 51.18 ± 3.9 64.95 ± 0.9 64.93 ± 0.9 Squared DAN 61.80 ± 1.3 60.69 ± 1.9 53.17 ± 2.0 51.71 ± 2.2 65.38 ± 1.3 65.25 ± 1.3 HoMM p=3 58.58 ± 2.9 54.55 ± 6.2 51.80 ± 1.4 47.17 ± 4.9 67.87 ± 0.7 67.85 ± 0.7 DANN 60.96 ± 1.0 60.31 ± 0.9 52.29 ± 1.3 50.81 ± 1.7 65.69 ± 1.2 65.67 ± 1.2 CDAN 60.95 ± 1.4 60.17 ± 1.6 52.13 ± 2.1 48.20 ± 6.3 65.09 ± 1.4 65.01 ± 1.4 DIRT-T 57.47 ± 2.8 50.90 ± 7.1 52.36 ± 2.7 44.34 ± 8.9 62.80 ± 2.3 62.57 ± 2.3 DSAN 49.48 ± 0.7 33.15 ± 0.3 52.44 ± 1.6 48.12 ± 5.1 49.21 ± 0.1 33.19 ± 0.2 CoDATS 60.52 ± 2.1 57.69 ± 3.9 52.70 ± 1.6 49.38 ± 7.1 68.29 ± 0.4 68.23 ± 0.4 AdvSKM 59.27 ± 1.6 58.18 ± 2.9 53.31 ± 0.8 50.70 ± 4.2 65.43 ± 1.8 65.31 ± 2.0 Sinkhorn 61.16 ± 1.9 59.61 ± 2.8 52.85 ± 1.3 50.27 ± 3.0 59.85 ± 7.2 53.13 ± 15.4 CPDA (ours) 63.70 ± 2.9 62.07 ± 4.3 54.05 ± 1.7 51.44 ± 4.0 66.42 ± 1.1 66.17 ± 1.5 Table 18: DA results in % (mean and standard deviation over all scenarios and five runs) for the Finger movements (Blankertz, Curio, and M¨ uller 2001) dataset. Bold are best results. 
+
+Method CNN Accuracy CNN F1 ResNet18 Accuracy ResNet18 F1 TCN Accuracy TCN F1 
+
+MSE 50.18 ± 4.5 45.62 ± 5.1 49.58 ± 4.3 43.72 ± 4.9 53.66 ± 4.0 46.03 ± 7.1 CS 53.27 ± 1.6 40.34 ± 3.5 53.47 ± 2.0 39.03 ± 4.5 53.26 ± 4.2 49.53 ± 5.6 PC 50.50 ± 4.4 45.71 ± 5.2 49.69 ± 4.4 43.14 ± 5.5 52.78 ± 4.6 48.21 ± 5.8 KL 50.18 ± 4.6 45.53 ± 5.2 51.26 ± 4.2 41.59 ± 5.4 50.90 ± 5.0 36.00 ± 6.8 JSD 50.18 ± 4.5 45.68 ± 5.2 51.23 ± 4.0 41.48 ± 5.9 50.80 ± 5.0 35.69 ± 6.4 Linear MMD 50.56 ± 4.3 45.96 ± 5.0 49.51 ± 4.3 43.56 ± 5.0 54.48 ± 2.7 39.47 ± 5.6 Kernelized MMD 50.36 ± 4.3 45.97 ± 5.1 49.67 ± 4.4 43.28 ± 5.5 52.63 ± 4.6 48.05 ± 5.8 Deep CORAL 50.35 ± 4.4 45.94 ± 5.2 49.68 ± 4.4 43.30 ± 5.5 52.77 ± 4.8 48.50 ± 5.9 Jeffreys CORAL 50.36 ± 4.4 45.95 ± 5.2 49.64 ± 4.4 43.33 ± 5.4 52.80 ± 4.5 48.11 ± 5.8 Stein CORAL 50.44 ± 4.4 46.01 ± 5.2 49.68 ± 4.3 43.43 ± 5.4 52.85 ± 4.6 48.31 ± 5.8 Linear MMCD 50.58 ± 4.4 45.94 ± 5.2 49.49 ± 4.3 43.53 ± 4.9 54.49 ± 2.7 39.33 ± 5.5 Kernelized MMCD 50.35 ± 4.4 45.94 ± 5.2 49.68 ± 4.4 43.30 ± 5.5 52.77 ± 4.8 48.50 ± 5.9 MMDA 50.69 ± 4.6 46.04 ± 5.2 51.36 ± 3.8 44.88 ± 5.0 51.60 ± 4.4 45.41 ± 6.2 DDC 50.29 ± 4.4 46.03 ± 5.1 49.58 ± 4.4 43.35 ± 5.3 52.89 ± 4.6 48.71 ± 5.9 Linear DAN 50.64 ± 4.4 45.81 ± 5.0 49.66 ± 4.4 43.05 ± 5.4 52.63 ± 4.6 48.24 ± 5.8 Squared DAN 50.54 ± 4.3 46.01 ± 5.0 49.54 ± 4.4 43.31 ± 5.4 52.52 ± 4.8 48.15 ± 5.8 HoMM p=3 49.82 ± 4.9 43.31 ± 6.4 49.99 ± 4.6 44.72 ± 4.9 53.16 ± 4.0 49.86 ± 4.8 DANN 48.74 ± 4.3 46.33 ± 5.1 48.17 ± 4.1 36.86 ± 5.5 52.75 ± 4.3 48.92 ± 6.0 CDAN 51.53 ± 4.4 46.18 ± 5.3 50.01 ± 4.1 42.56 ± 5.1 53.34 ± 3.5 50.31 ± 5.2 DIRT-T 51.02 ± 5.0 42.49 ± 6.1 49.34 ± 4.2 47.35 ± 4.1 51.45 ± 4.3 45.53 ± 6.2 DSAN 52.19 ± 3.3 39.81 ± 5.5 49.44 ± 4.4 45.53 ± 4.9 51.32 ± 4.9 49.80 ± 4.8 CoDATS 51.74 ± 4.1 44.71 ± 5.5 50.43 ± 4.1 43.84 ± 5.5 52.98 ± 4.3 49.00 ± 5.4 AdvSKM 50.47 ± 4.6 46.03 ± 5.7 47.92 ± 4.0 44.70 ± 4.6 52.22 ± 4.6 48.37 ± 5.7 Sinkhorn 50.35 ± 4.9 46.11 ± 4.9 48.33 ± 4.2 42.32 ± 6.1 55.07 ± 1.1 35.88 ± 2.2 CPDA (ours) 50.81 ± 4.4 46.24 ± 4.8 49.86 ± 4.2 43.19 ± 5.4 52.70 ± 4.6 48.20 ± 5.7 
+
+Table 19: DA results in % (mean and standard deviation over all scenarios and five runs) for the Gestures mid air (Caputo et al. 2018) dataset. Bold are best results. 
+
+Method CNN Accuracy CNN F1 ResNet18 Accuracy ResNet18 F1 TCN Accuracy TCN F1 
+
+MSE 42.56 ± 14.5 37.83 ± 14.9 37.32 ± 14.3 32.65 ± 14.7 43.04 ± 15.0 38.05 ± 15.8 CS 30.52 ± 12.4 23.83 ± 13.1 35.48 ± 14.5 30.39 ± 15.0 20.26 ± 13.1 13.08 ± 13.6 PC 41.96 ± 14.2 37.12 ± 14.8 37.21 ± 14.9 32.43 ± 15.2 43.49 ± 14.7 38.18 ± 15.6 KL 42.23 ± 14.3 37.40 ± 15.0 35.60 ± 14.2 30.46 ± 14.1 26.26 ± 19.5 20.44 ± 19.7 JSD 41.50 ± 14.8 36.56 ± 15.4 34.97 ± 13.0 29.57 ± 13.0 8.78 ± 8.3 2.58 ± 7.9 Linear MMD 42.43 ± 14.3 37.47 ± 14.7 37.03 ± 14.9 32.30 ± 15.1 40.42 ± 14.4 35.25 ± 14.8 Kernelized MMD 41.81 ± 14.7 37.10 ± 15.1 37.73 ± 14.3 32.72 ± 14.6 42.78 ± 15.0 37.80 ± 15.7 Deep CORAL 41.30 ± 14.5 36.36 ± 14.9 37.79 ± 15.2 32.86 ± 15.3 43.27 ± 15.3 38.17 ± 15.9 Jeffreys CORAL 41.68 ± 14.3 36.87 ± 14.9 37.56 ± 14.5 32.79 ± 14.8 43.63 ± 15.2 38.52 ± 16.0 Stein CORAL 42.09 ± 14.5 37.00 ± 14.9 37.25 ± 14.6 32.42 ± 14.8 43.50 ± 14.8 38.47 ± 15.6 Linear MMCD 41.89 ± 14.8 36.92 ± 15.3 37.39 ± 14.9 32.55 ± 15.1 39.88 ± 15.1 34.70 ± 15.6 Kernelized MMCD 41.30 ± 14.5 36.36 ± 14.9 37.79 ± 15.2 32.86 ± 15.3 43.27 ± 15.3 38.17 ± 15.9 MMDA 46.16 ± 15.3 41.27 ± 16.0 41.10 ± 16.0 36.93 ± 16.1 43.76 ± 15.1 38.77 ± 15.9 DDC 42.08 ± 14.5 37.21 ± 15.0 37.05 ± 14.6 32.45 ± 14.8 43.07 ± 15.3 37.86 ± 16.2 Linear DAN 42.00 ± 14.3 37.18 ± 14.6 37.53 ± 14.7 32.64 ± 15.2 44.20 ± 15.0 39.17 ± 15.7 Squared DAN 42.47 ± 15.0 37.65 ± 15.5 36.98 ± 14.1 32.10 ± 14.2 43.37 ± 14.8 38.16 ± 15.9 HoMM p=3 43.96 ± 14.8 39.36 ± 15.7 38.52 ± 14.6 34.33 ± 15.0 47.65 ± 15.7 43.30 ± 16.6 DANN 34.96 ± 13.5 29.52 ± 13.9 33.95 ± 13.6 28.62 ± 14.0 35.60 ± 15.3 30.20 ± 16.2 CDAN 40.83 ± 14.1 35.35 ± 14.8 37.90 ± 13.3 32.38 ± 14.1 19.86 ± 16.1 13.30 ± 16.5 DIRT-T 40.53 ± 14.7 34.62 ± 15.8 45.93 ± 14.8 40.88 ± 15.7 38.24 ± 14.3 32.63 ± 15.6 DSAN 7.24 ± 1.8 1.0 ± 0.3 6.91 ± 1.8 1.03 ± 0.4 7.36 ± 1.8 0.99 ± 0.3 CoDATS 33.79 ± 13.4 28.07 ± 14.2 37.79 ± 14.3 33.00 ± 14.8 35.17 ± 15.0 29.58 ± 15.7 AdvSKM 40.96 ± 14.6 36.23 ± 15.1 37.86 ± 14.0 33.27 ± 14.4 43.34 ± 15.4 38.20 ± 16.3 Sinkhorn 41.18 ± 14.3 35.22 ± 15.3 30.19 ± 11.8 23.25 ± 11.9 28.66 ± 12.1 22.44 ± 12.3 CPDA (ours) 38.20 ± 3.5 34.41 ± 3.8 31.00 ± 2.0 26.90 ± 2.0 21.00 ± 2.4 15.61 ± 1.9 Table 20: DA results in % (mean and standard deviation over all scenarios and five runs) for the OnHW-symbols, split OnHW-equations, and OnHW-chars (Ott et al. 2020, 2022b) datasets. CNN backbone as encoder network. Bold are best results. 
+
+Method Symbols L→R [Acc.] Symbols L→R [F1] Symbols R→L [Acc.] Symbols R→L [F1] Equations L→R [Acc.] Equations L→R [F1] 
+
+MSE 77.81 ± 4.3 78.56 ± 5.5 79.33 ± 3.0 78.96 ± 3.3 85.29 ± 1.7 84.39 ± 1.8 PC 77.19 ± 2.8 77.08 ± 5.7 80.13 ± 2.7 79.46 ± 3.4 78.96 ± 6.6 76.81 ± 7.3 KL 78.12 ± 3.7 79.16 ± 4.3 80.67 ± 4.1 80.55 ± 4.7 84.46 ± 3.5 83.07 ± 3.9 JSD 76.88 ± 4.0 77.18 ± 5.8 78.84 ± 3.1 78.56 ± 3.6 10.74 ± 6.2 6.34 ± 4.8 Linear MMD 76.56 ± 2.9 75.88 ± 3.2 81.79 ± 2.1 81.41 ± 2.7 88.33 ± 0.9 87.78 ± 1.3 Kernelized MMD 78.44 ± 2.0 79.75 ± 1.7 79.78 ± 3.2 79.39 ± 3.8 87.00 ± 0.6 86.25 ± 0.8 Deep CORAL 84.23 ± 1.0 83.94 ± 0.9 77.73 ± 5.9 77.72 ± 5.6 84.66 ± 1.7 83.61 ± 1.9 Jeffreys CORAL 77.81 ± 2.6 78.74 ± 2.6 79.64 ± 1.8 79.43 ± 2.1 86.84 ± 1.7 85.97 ± 1.9 Stein CORAL 76.25 ± 2.3 77.63 ± 2.3 80.18 ± 1.2 79.99 ± 1.7 85.99 ± 2.1 85.16 ± 2.5 Linear MMCD 76.25 ± 2.6 76.79 ± 3.6 81.29 ± 4.0 81.14 ± 4.3 88.37 ± 1.5 87.59 ± 1.9 Kernelized MMCD 76.25 ± 2.6 76.79 ± 3.6 80.45 ± 2.7 80.16 ± 3.0 87.48 ± 1.4 86.75 ± 1.6 MMDA 77.23 ± 2.5 77.14 ± 2.5 61.86 ± 5.8 61.82 ± 5.4 75.95 ± 4.4 74.95 ± 4.5 DDC 84.27 ± 2.3 83.85 ± 2.6 77.32 ± 5.9 77.24 ± 5.7 84.33 ± 1.9 83.14 ± 2.2 Linear DAN 76.56 ± 2.7 76.26 ± 2.5 81.83 ± 3.3 81.39 ± 4.2 88.37 ± 1.4 87.92 ± 1.5 Squared DAN 77.81 ± 10.4 78.15 ± 12.4 80.62 ± 2.6 80.20 ± 3.5 87.77 ± 2.7 86.91 ± 2.9 HoMM p=3 83.33 ± 2.9 83.99 ± 2.1 76.38 ± 3.6 76.51 ± 3.2 83.87 ± 3.7 83.23 ± 3.6 DANN 77.07 ± 6.2 76.90 ± 6.6 74.96 ± 6.2 73.69 ± 7.7 71.62 ± 6.8 71.49 ± 6.0 CDAN 65.22 ± 10.3 63.87 ± 12.0 72.37 ± 4.5 71.93 ± 5.1 52.90 ± 20.9 52.75 ± 22.0 DIRT-T 76.88 ± 3.7 77.23 ± 3.2 58.84 ± 5.3 59.40 ± 4.8 82.71 ± 1.9 81.17 ± 2.3 CoDATS 80.63 ± 3.1 80.71 ± 2.6 67.01 ± 6.5 66.75 ± 6.3 76.23 ± 4.5 75.73 ± 4.7 AdvSKM 84.08 ± 3.5 84.38 ± 3.4 81.03 ± 2.4 80.57 ± 3.0 83.99 ± 2.9 83.08 ± 3.4 Sinkhorn 81.56 ± 2.0 82.77 ± 1.8 78.93 ± 4.1 78.47 ± 4.2 85.67 ± 1.4 84.33 ± 2.1 CPDA (ours) 78.12 ± 6.3 78.52 ± 7.1 81.82 ± 3.3 80.62 ± 2.9 86.23 ± 3.0 81.12 ± 3.1 OT [Kernelized MMD] 85.09 ± 7.7 – – – 84.03 ± 9.4 –OT [HoMM p=3 ] 70.03 ± 7.4 – – – 62.37 ± 13.3 –OT [Jeffreys CORAL] 80.92 ± 8.0 – – – 82.24 ± 10.3 –OT [Stein CORAL] 82.31 ± 7.8 – – – 76.12 ± 13.0 –
+
+Method Equations R→L [Acc.] Equations R→L [F1] Chars L→R [Acc.] Chars L→R [F1] Chars R→L [Acc.] Chars R→L [F1] 
+
+MSE 92.76 ± 0.8 92.35 ± 0.8 75.51 ± 3.4 73.75 ± 4.6 64.02 ± 0.2 62.52 ± 0.3 PC 92.56 ± 1.2 92.07 ± 1.3 75.17 ± 2.0 73.48 ± 3.0 63.85 ± 0.2 62.40 ± 0.3 KL 92.44 ± 1.6 91.92 ± 1.9 74.01 ± 3.1 72.30 ± 3.9 63.72 ± 0.3 62.13 ± 0.3 JSD 92.42 ± 1.0 91.94 ± 1.1 74.22 ± 3.4 72.48 ± 4.2 63.45 ± 0.1 61.85 ± 0.1 Linear MMD 92.67 ± 0.4 92.14 ± 0.5 74.39 ± 3.3 73.60 ± 3.8 63.41 ± 0.1 61.82 ± 0.1 Kernelized MMD 92.62 ± 0.9 92.14 ± 1.0 74.92 ± 2.8 73.40 ± 3.5 64.05 ± 0.0 62.55 ± 0.0 Deep CORAL 92.27 ± 1.1 91.62 ± 1.1 75.39 ± 3.2 73.70 ± 3.7 64.98 ± 0.2 63.55 ± 0.3 Jeffreys CORAL 92.57 ± 0.6 92.08 ± 0.5 74.51 ± 2.9 72.54 ± 3.5 63.72 ± 0.3 62.22 ± 0.3 Stein CORAL 92.72 ± 0.7 92.28 ± 0.8 74.62 ± 2.9 73.08 ± 3.6 63.90 ± 0.2 62.37 ± 0.2 Linear MMCD 93.10 ± 0.6 92.59 ± 0.5 75.12 ± 2.8 73.61 ± 3.4 63.71 ± 0.1 62.22 ± 0.1 Kernelized MMCD 92.68 ± 1.2 92.24 ± 1.4 74.96 ± 2.7 73.61 ± 3.4 63.72 ± 0.3 62.26 ± 0.3 MMDA 92.08 ± 0.6 91.24 ± 0.7 62.98 ± 2.7 61.43 ± 3.3 57.64 ± 0.2 56.39 ± 0.2 DDC 92.60 ± 0.9 92.00 ± 0.9 71.30 ± 2.5 70.93 ± 2.3 65.17 ± 0.1 63.80 ± 0.1 Linear DAN 92.62 ± 0.9 92.23 ± 1.0 74.90 ± 3.0 72.93 ± 4.0 63.65 ± 0.2 62.16 ± 0.2 Squared DAN 92.75 ± 0.7 92.34 ± 0.7 75.14 ± 2.7 73.46 ± 3.4 63.96 ± 0.2 62.50 ± 0.1 HoMM p=3 93.08 ± 0.9 92.55 ± 0.8 78.14 ± 2.1 76.49 ± 2.8 63.39 ± 0.1 62.34 ± 0.1 DANN 91.52 ± 0.4 90.83 ± 0.6 71.70 ± 3.3 69.53 ± 4.4 62.60 ± 0.5 61.08 ± 0.4 CDAN 89.23 ± 1.9 88.42 ± 2.3 66.27 ± 4.2 66.40 ± 4.0 45.29 ± 8.5 46.39 ± 8.0 DIRT-T 91.53 ± 0.8 90.88 ± 0.9 74.88 ± 1.6 72.90 ± 2.7 57.78 ± 0.1 56.57 ± 0.1 CoDATS 91.85 ± 1.0 91.22 ± 1.0 71.07 ± 4.1 69.11 ± 4.6 57.34 ± 0.7 55.49 ± 0.7 AdvSKM 92.33 ± 0.5 91.83 ± 0.4 74.40 ± 3.4 72.59 ± 4.5 64.98 ± 0.0 63.51 ± 0.0 Sinkhorn 92.91 ± 1.3 92.34 ± 1.5 76.96 ± 2.5 75.27 ± 3.4 64.06 ± 0.1 62.79 ± 0.1 CPDA (ours) 92.97 ± 0.8 92.63 ± 0.4 65.52 ± 2.4 68.21 ± 2.6 65.31 ± 0.1 63.72 ± 0.2 OT [Kernelized MMD] – – 73.87 ± 11.1 – – –OT [HoMM p=3 ] – – 56.84 ± 9.6 – – –OT [Jeffreys CORAL] – – 72.30 ± 9.1 – – –OT [Stein CORAL] – – 66.50 ± 7.7 – – –and 
+
+σpool =
+
+vuut 1
+
+SR 
+
+> S
+
+X
+
+> s=1
+> R
+
+X
+
+> r=1
+
+(ms,r − m)2. (101) Thus, σpool is the descriptive population standard deviation over all evaluated scenario–seed combinations, consistent with the default normalization of numpy.std . Because ev-ery source–target scenario is evaluated with the same num-ber of runs, all scenarios receive equal weight. The reported deviation jointly reflects variation between source–target scenarios and stochastic variation between the five runs; it should therefore not be interpreted as the seed-induced stan-dard deviation for a single fixed transfer task or as a con-fidence interval. Equivalently, since each scenario has the same number of runs, 
+
+σ2pool = 1
+
+S
+
+> S
+
+X
+
+> s=1
+
+σ2 
+
+> s
+
++ 1
+
+S
+
+> S
+
+X
+
+> s=1
+
+(ms − m)2 , (102) where ms and σs are the mean and population standard de-viation across the five runs of scenario s. The first term cap-tures average within-scenario seed variability, whereas the second captures variability between source–target scenarios. 
+
+Evaluation of DA Methods on Standard Time-Series Datasets. Tables 10–20 show that CPDA is most effec-tive on datasets where the domain shift preserves a class-dependent temporal structure, such as human activity, ges-ture, and trajectory data. On HHAR, CPDA achieves the best CNN accuracy with 81 .82% , outperforming DIRT-T (80 .11% ) and CDAN ( 79 .88% ), and also obtains the best TCN accuracy with 77 .88% compared with 76 .78% for CDAN and DIRT-T. This indicates that class-conditional path alignment is beneficial when user- or sensor-dependent shifts affect the temporal dynamics but the class-wise move-ment patterns remain transferable. For ResNet18, however, Sinkhorn is marginally better ( 67 .98% vs. 67 .79% ), suggest-ing that direct transport-based matching can be competitive when the learned representation is less explicitly temporal. On UCI HAR and WISDM, CPDA also performs partic-ularly well. On UCI HAR, CPDA obtains the best ResNet18 and TCN accuracies with 89 .53% and 90 .31% , respectively, improving over DSAN ( 88 .17% with ResNet18) and HoMM (87 .90% with TCN). With CNN, DIRT-T remains slightly stronger ( 92 .02% vs. 91 .88% ), which suggests that adversar-ial entropy-regularized adaptation can still be highly effec-tive when the CNN representation is already well separated. On WISDM, CPDA achieves the best accuracy for all three backbones, with 63 .92% for CNN, 63 .18% for ResNet18, and 61 .06% for TCN. The improvement over the strongest alternatives is moderate but consistent, indicating that CPDA improves robustness across architectures by aligning class-conditional rather than purely marginal distributions. The strongest evidence for CPDA appears on uWave and PenDigits, both of which contain trajectory-like or gesture-like signals. On uWave, CPDA achieves the best accuracy for all backbones: 97 .30% with CNN, 61 .32% 
+
+with ResNet18, and 92 .17% with TCN. These results im-prove over strong baselines such as CDAN/DIRT-T on CNN (96 .43% ), DSAN on ResNet18 ( 59 .25% ), and DSAN on TCN ( 91 .92% ). Similarly, on PenDigits, CPDA obtains the best CNN and TCN accuracies with 96 .98% and 97 .08% ,respectively. Since both datasets are characterized by tempo-ral trajectories, these improvements support the motivation of CPDA: matching class-conditional latent paths can cap-ture discriminative temporal evolution better than marginal feature alignment alone. However, CoDATS remains clearly stronger for PenDigits with ResNet18 ( 83 .68% vs. 75 .30% ), suggesting that CPDA is sensitive to the interaction between the backbone representation and the path-alignment objec-tive. For EEG, Epilepsy, and Face Detection, the results are more mixed. On EEG, CPDA obtains the best CNN accu-racy ( 74 .39% ) and the best ResNet18 accuracy ( 53 .27% ), but it does not dominate the TCN setting, where CDAN obtains the highest accuracy ( 47 .88% ). This suggests that CPDA helps when the representation preserves stable class-conditioned structure, but EEG remains challenging because noisy or imbalanced target predictions can weaken pseudo-label-based alignment. On Epilepsy, CPDA is not best for CNN or ResNet18, where PC (Pearson 1920) and several kernel / covariance methods reach around 99% accuracy, but it strongly improves the TCN result, achieving 85 .62% accu-racy compared with 80 .00% for DIRT-T. On Face Detection, CPDA obtains the best CNN and ResNet18 accuracies with 
+
+63 .70% and 54 .05% , respectively, but TCN is better served by global or higher-order representation matching, with Co-DATS reaching 68 .29% and HoMM reaching 67 .87% .In contrast, CPDA is less effective on Finger Movements, Gestures Mid Air, and the OnHW handwriting tasks. On Finger Movements, CPDA reaches 50 .81% , 49 .86% , and 
+
+52 .70% accuracy for CNN, ResNet18, and TCN, whereas the best results are obtained by CS for CNN and ResNet18 (53 .27% and 53 .47% ) and by Sinkhorn for TCN ( 55 .07% ). This dataset is small and close to chance-level performance for many methods, so target pseudo-labels may be too un-reliable for class-conditional alignment. On Gestures Mid Air, CPDA performs substantially below the best methods, with 38 .20% , 31 .00% , and 21 .00% accuracy, while MMDA, DIRT-T, and HoMM reach 46 .16% , 45 .93% , and 47 .65% ,respectively. This suggests that the class-conditional CPDA objective can be harmed when target pseudo-labels are un-stable across many gesture classes or when inter-subject variability is high. For OnHW, CPDA does not consis-tently outperform the strongest baselines; for example, on OnHW-symbols L →R, CPDA obtains 78 .12% , while OT with kernelized MMD reaches 85 .09% , and on split OnHW-equations L →R, CPDA obtains 82 .23% , while linear DAN reaches 88 .37% . Overall, CPDA is strongest on structured temporal and trajectory-like shifts, whereas simpler mo-ment, transport, adversarial, or covariance-based methods can remain preferable when the domain shift is domi-nated by small-sample effects, highly variable target pseudo-labels, or non-temporal distributional changes. Figure 4 shows that most recent DA methods achieve sta-ble performance on the OnHW-symbols and split OnHW-equations tasks, whereas the OnHW-chars setting is more challenging. Across the symbol and equation transfers, MMDA DANN Deep CORAL DIRT-T CDAN HoMM CoDATS DSAN DDC AdvSKM 
+
+> Method 020 40 60 80 Accuracy/F1 [%]
+> 0.5 1.0 1.5 2.0 2.5
+> Risks [score]
+
+(a) OnHW-symbols (L → R). MMDA DANN Deep CORAL DIRT-T CDAN HoMM CoDATS DSAN DDC AdvSKM  
+
+> Method 020 40 60 80 Accuracy/F1 [%]
+> 0.5 1.0 1.5 2.0 2.5
+> Risks [score]
+
+(b) Split OnHW-equations (L → R). MMDA DANN Deep CORAL DIRT-T CDAN HoMM CoDATS DSAN DDC AdvSKM  
+
+> Method 020 40 60 80 Accuracy/F1 [%]
+> 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0
+> Risks [score]
+
+(c) OnHW-chars (L → R). MMDA DANN Deep CORAL DIRT-T CDAN HoMM CoDATS DSAN DDC AdvSKM 
+
+> Method 020 40 60 80 Accuracy/F1 [%] Accuracy F1
+> 0.5 1.0 1.5 2.0 2.5
+> Risks [score] Source risk Target risk Few-shot risk
+
+(d) OnHW-symbols (R → L). MMDA DANN Deep CORAL DIRT-T CDAN HoMM CoDATS DSAN DDC AdvSKM  
+
+> Method 020 40 60 80 Accuracy/F1 [%]
+> 0.5 1.0 1.5 2.0 2.5
+> Risks [score]
+
+(e) Split OnHW-equations (R → L). MMDA DANN Deep CORAL DIRT-T CDAN HoMM CoDATS DSAN DDC AdvSKM  
+
+> Method 010 20 30 40 50 60 Accuracy/F1 [%]
+> 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0
+> Risks [score]
+
+(f) OnHW-chars (R → L). 
+
+Figure 4: Comparison of the recent DA methods on the OnHW datasets for the adaptation from left- to right-handed writers (L 
+
+→ R) and the adaptation from right- to left-handed writers (R → L). MMDA, DANN, Deep CORAL, DIRT-T, HoMM, CoDATS, DDC, and AdvSKM generally obtain high accuracy and F1-scores, often in the range of approximately 75 –90% , indicat-ing that these methods can handle the handedness-induced domain shift when the number of classes is moderate. Deep CORAL, HoMM, DDC, and AdvSKM are particularly ro-bust, as they combine high target performance with rela-tively low source, target, and few-shot risks. In contrast, CDAN is less stable and shows clear performance drops in several settings, especially on the symbol and character tasks, suggesting that adversarial conditional alignment may be sensitive to the target-domain structure in this bench-mark. DSAN consistently fails; this indicates severe insta-bility or negative transfer under the OnHW domain shift. The OnHW-chars tasks are more challenging than the sym-bols and equations tasks, with lower overall accuracy and larger differences between methods, which is expected be-cause character recognition involves a much larger class space and more fine-grained writing variations. Overall, the figure suggests that covariance-, moment-, and higher-order alignment methods such as Deep CORAL, HoMM, DDC, and AdvSKM are the most reliable among the compared re-cent DA baselines on OnHW, while DSAN and, in some set-tings, CDAN are less suitable for this handwriting-based DA scenario. 
+
+Evaluation of DA Methods and Encoder Networks on the Sinusoidal Benchmark. Figure 5 compares the eval-uated DA methods under the controlled sinusoidal domain shift, for which the noise parameter b progressively in-creases the corruption of the target signals. The results re-veal a pronounced interaction between the adaptation objec-tive and the encoder architecture. ResNet18 performs close to the chance level of 10% for many methods and noise set-tings, indicating that its learned representation is not suf-ficiently discriminative for this benchmark. The CNN pro-duces higher accuracies, but its performance is strongly method-dependent and frequently exhibits non-monotonic behavior and large variations across runs. In contrast, the TCN provides the most robust representations: most estab-lished discrepancy-, covariance-, moment-, and transport-based methods achieve almost perfect classification under weak noise and degrade more gradually as b increases. KL (Kullback and Leibler 1951) and JSD (Men´ endez et al. 1997; Dorent, Golland, and Wells 2025) constitute clear ex-ceptions (Figure 5f), showing unstable behavior and sub-stantially lower classification performance, particularly with the TCN. The kernelized MMD and MMCD variants gener-ally provide small advantages over their linear counterparts (Figures 5k and 5l), whereas combining Sinkhorn transport with additional discrepancy objectives does not yield a con-sistent improvement over the respective individual methods (Figures 5m–5o). The strongest CPDA results are obtained with the TCN, as shown in Figure 5p. CPDA maintains an accuracy above approximately 85% throughout the range 
+
+b ≤ 1.0 and remains above 80% up to b = 1 .3, despite the progressively increasing target-domain corruption. Even at the maximum noise level b = 1 .9, CPDA retains an accu-racy of approximately 63% . Its F1-score closely follows its accuracy, demonstrating that the improvement is not caused by a bias toward individual classes but reflects balanced performance across the ten signal classes. Compared with DIRT-T, CPDA begins to show a clear advantage at approx-imately b = 0 .4 and achieves improvements of roughly 15 –0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+246810 
+
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 MMDA CDAN 
+
+23456789
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0.0 0.5 1.0 1.5 2.0 2.5 3.0 
+
+> Risks [score]
+
+(a) Methods MMDA and CDAN. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+246810 12 14 16 
+
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 CoDATS DSAN 
+
+23456
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5  
+
+> Risks [score]
+
+(b) Methods CoDATS and DSAN. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0246810 12 
+
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 DANN Deep CORAL 
+
+246810 12 14 16 
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+012345
+
+> Risks [score]
+
+(c) Methods DANN and Deep CORAL. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0.5 1.0 1.5 2.0 2.5 
+
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 DIRT-T HoMM 
+
+123456
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0.0 0.2 0.4 0.6 0.8 1.0 1.2  
+
+> Risks [score]
+
+(d) Methods DIRT-T and HoMM p=3 .0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+012345678
+
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 DDC AdvSKM 
+
+246810 12 
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0.0 0.5 1.0 1.5 2.0 
+
+> Risks [score]
+
+(e) Methods DDC and AdvSKM. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+012345678
+
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 KL JSD 
+
+5.0 7.5 10.0 12.5 15.0 17.5 20.0 22.5 
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+30000 40000 50000 60000 70000 80000  
+
+> Risks [score]
+
+(f) Methods KL and JSD. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+02468
+
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 Stein CORAL Jeffreys CORAL 
+
+246810 12 
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0.0 0.5 1.0 1.5 2.0 
+
+> Risks [score]
+
+(g) Methods Stein CORAL and Jeffreys CORAL. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0246810 12 
+
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 Linear DAN Squared DAN 
+
+246810 12 
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0.0 0.5 1.0 1.5 2.0 2.5 3.0  
+
+> Risks [score]
+
+(h) Methods linear DAN and squared DAN. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+02468
+
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 MSE Sinkhorn 
+
+246810 12 
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0.0 0.2 0.4 0.6 0.8 1.0 1.2 1.4 
+
+> Risks [score]
+
+(i) Methods MSE and Sinkhorn. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+02468
+
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 CC PC 
+
+246810 
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0.0 0.5 1.0 1.5 2.0 2.5 3.0  
+
+> Risks [score]
+
+(j) Methods CS and PC. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0246810 
+
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 Linear MMD kMMD 
+
+246810 12 
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0.0 0.5 1.0 1.5 2.0 
+
+> Risks [score]
+
+(k) Methods linear MMD and kMMD. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0246810 
+
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 kMMCD Linear MMCD 
+
+246810 12 
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0.0 0.5 1.0 1.5 2.0  
+
+> Risks [score]
+
+(l) Methods kMMCD and linear MMCD. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0123456
+
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 Sinkhorn+linear MMD Sinkhorn+kMMD 
+
+246810 
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0.0 0.2 0.4 0.6 0.8 1.0 1.2 1.4 
+
+> Risks [score]
+
+(m) Methods Sinkhorn+[linear MMD, kMMD]. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+123456
+
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 Sinkhorn+Deep CORAL Sinkhorn+Jeffreys CORAL Sinkhorn+Stein CORAL 
+
+246810 
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0.00 0.25 0.50 0.75 1.00 1.25 1.50 1.75  
+
+> Risks [score]
+
+(n) Methods Sinkhorn+[DeepCORAL, Jeffreys and Stein CORAL]. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0123456
+
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 Sinkhorn Sinkhorn+HoMM 
+
+246810 
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0.0 0.2 0.4 0.6 0.8 1.0 1.2 1.4 1.6 
+
+> Risks [score]
+
+(o) Methods Sinkhorn and Sinkhorn+HoMM. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+246810 
+
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 DIRT-T CPDA 
+
+2.0 2.1 2.2 2.3 2.4 2.5 2.6 
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 
+
+Noise b
+
+020 40 60 80 100 Accuracy/F1 [%] 
+
+0.0 0.5 1.0 1.5 2.0 2.5 3.0  
+
+> Risks [score]
+
+(p) Methods DIRT-T and CPDA (ours). 
+
+Figure 5: Performance of the evaluated domain-adaptation methods on the controlled sinusoidal benchmark as a function of the noise parameter b ∈ { 0.0, 0.1, . . . , 1.9}. The target domain contains class-specific sinusoidal signals corrupted by noise sampled from U(0 , b ), whereas the source signals are sign-inverted and corrupted by noise sampled from U(0 , b/ 2) . Each subfigure compares the methods indicated in its subcaption using a CNN (left), ResNet18 (center), and TCN (right) backbone. Solid and dashed curves report target-domain accuracy and F1-score, respectively, on the left vertical axis. The curves associated with the secondary vertical axis show the source, target, and few-shot risks. Lines represent the mean over five independent runs, while the shaded regions indicate the corresponding standard deviations. Increasing b produces a progressively stronger stochastic domain shift and therefore reveals the robustness of the different adaptation objectives under increasing noise. 
+
+30 percentage points over much of the moderate- and high-noise range. While the performance of DIRT-T decreases rapidly to approximately 50 –60% , CPDA exhibits a substan-tially smoother degradation and remains within the group 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9    
+
+> Noise b
+> 020 40 60 80 100 Accuracy/F1 [%]
+> 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+> Noise b
+> 020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 CoTMix MCD
+> 246810 12
+> Risks [score]
+> Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+> Noise b
+> 020 40 60 80 100 Accuracy/F1 [%]
+> 0.0 0.5 1.0 1.5 2.0 2.5
+> Risks [score]
+
+(a) Methods CoTMix and MCD. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9     
+
+> Noise b
+> 020 40 60 80 100 Accuracy/F1 [%]
+> 012345
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+> Noise b
+> 020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 AdaMatch DANCE
+> 12345678
+> Risks [score]
+> Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+> Noise b
+> 020 40 60 80 100 Accuracy/F1 [%]
+> 0.00 0.25 0.50 0.75 1.00 1.25 1.50 1.75 2.00
+> Risks [score]
+
+(b) Methods AdaMatch and DANCE. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9    
+
+> Noise b
+> 020 40 60 80 100 Accuracy/F1 [%]
+> 0.6 0.8 1.0 1.2 1.4 1.6 1.8 2.0
+> Risks [score] 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+> Noise b
+> 020 40 60 80 100 Accuracy/F1 [%] Accuracy F1 OVANet RAINCOAT
+> 0.8 1.0 1.2 1.4 1.6 1.8 2.0
+> Risks [score]
+> Source risk Target risk Few-shot risk 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9
+> Noise b
+> 020 40 60 80 100 Accuracy/F1 [%]
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Risks [score]
+
+(c) Methods OVANet and RAINCOAT. 
+
+Figure 6: Continuation of Figure 5, comparing CoTMix, MCD, AdaMatch, DANCE, OVANet, and RAINCOAT on the con-trolled sinusoidal benchmark for increasing noise levels b. The columns show results for CNN, ResNet18, and TCN, respec-tively. Solid and dashed lines denote target-domain accuracy and F1-score, while the marker-based curves show the source, target, and few-shot risks. Results are averaged over five runs, with shaded regions indicating the standard deviations. of the most robust methods. The corresponding target- and few-shot-risk 1 estimates are also generally lower for CPDA throughout the moderate-noise regime, supporting the ob-served accuracy improvements. Moreover, except for an iso-lated fluctuation at very low noise, the comparatively narrow uncertainty intervals indicate that the CPDA results are con-sistent across the five independent runs. The same advan-tage is not observed with the CNN and ResNet18, show-ing that CPDA cannot fully compensate for a weak encoder representation and that its effectiveness depends on a back-bone capable of extracting discriminative temporal features. Overall, the results demonstrate that the combination of CPDA and TCN is particularly robust against the simultane-ous sign-induced and noise-induced distribution shifts con-sidered in this controlled experiment. The additional com-parisons in Figure 6 confirm that the encoder architecture re-mains a decisive factor for adaptation performance. CoTMix and MCD achieve high and gradually decreasing accuracies with the TCN, retaining approximately 65% performance at the highest noise level, whereas both methods perform sub-stantially worse with the CNN and ResNet18 (Figure 6a). AdaMatch exhibits a pronounced performance degradation as the noise intensity increases, while DANCE is consider-ably more robust with the TCN and maintains an accuracy of approximately 65% at b = 1 .9 (Figure 6b). The strongest additional competitor is RAINCOAT, which benefits from explicitly combining temporal- and frequency-domain infor-
+
+1Source, Target, and Few-Shot Risks. Following Ada-Time (Ragab et al. 2023), the source and target risks are the mean cross-entropy losses evaluated on the complete labeled source and target test sets, respectively. The few-shot target risk is computed on a class-balanced subset of the target test set containing up to five randomly selected labeled samples per class, i.e., at most 5K
+
+target samples for a K-class problem. These labeled target samples are used only to calculate the diagnostic risk after training and do not influence domain adaptation, parameter updates, or the reported target accuracy and macro-F1 score. The few-shot risk therefore represents the limited-label model-selection setting considered by AdaTime: it approximates target-domain performance when only a small number of labeled target samples are available, whereas the full target risk is an oracle diagnostic requiring all target labels. 
+
+mation. With the TCN, RAINCOAT retains an accuracy of approximately 75% under the strongest noise corruption and generally outperforms OVANet. RAINCOAT also achieves high mean accuracy with ResNet18, although its wide confi-dence intervals indicate considerable variability across runs (Figure 6c). Overall, these results place CPDA among the most robust methods on the sinusoidal benchmark rather than establishing uniform dominance over every baseline. In particular, CPDA provides consistently strong and balanced accuracy and F1-score across increasing noise levels, while RAINCOAT and DANCE constitute its closest competitors in the high-noise regime. For more information on source-free unsupervised DA, refer to Wang et al. (2026). 
+
+K.3 Evaluation Results for Source / Target Domains 
+
+Figure 7 shows that the DA performance strongly depends on the selected source–target pair. For HHAR (Figure 7a) and uWave (Figure 7e), most combinations yield high and stable accuracy/F1, indicating that the learned representa-tion transfers well for many user pairs; however, individual transfer directions still show pronounced drops, reflecting asymmetric domain shifts between specific subjects. HAR (Figure 7b) also achieves high average performance, but the dense set of source–target combinations reveals many local fluctuations, suggesting that some subjects are sub-stantially easier transfer sources than others. In contrast, WISDM (Figure 7c) and Finger movements (Figure 7f) ex-hibit considerably higher variability: WISDM shows large oscillations in accuracy and F1 across pairs, while Finger movements remains close to chance level for many transfers, indicating weak transferability and unreliable target adap-tation. EEG (Figure 7d) lies between these extremes, with moderate average performance and several difficult source– target pairs. The risk curves further confirm this behavior: low source risk does not always imply low target or few-shot risk, showing that good source-domain fitting alone is insufficient for robust DA. Overall, the figure highlights that averaged benchmark results can hide substantial pairwise variability, and that DA methods should be evaluated across all source–target combinations rather than only on selected 0 1
+
+> 0 2
+> 0 3
+> 0 4
+> 0 5
+> 0 6
+> 0 7
+> 0 8
+> 1 8
+> 1 7
+> 1 6
+> 1 2
+> 1 4
+> 1 3
+> 1 5
+> 2 7
+> 2 8
+> 2 6
+> 2 5
+> 2 4
+> 2 3
+> 3 4
+> 3 5
+> 3 6
+> 3 7
+> 3 8
+> 4 8
+> 4 7
+> 4 6
+> 4 5
+> 5 6
+> 5 7
+> 5 8
+> 6 7
+> 6 8
+> 7 8
+
+ID [source to target] 20 30 40 50 60 70 80 90 100 Accuracy/F1 [%] Accuracy F1 
+
+012345
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk (a) HHAR. 1 21 
+
+> 1 26
+> 1 16
+> 2 11
+> 2 17
+> 2 4
+> 3 7
+> 3 13
+> 3 21
+> 4 6
+> 4 18
+> 5 10
+> 5 27
+> 5 17
+> 6 30
+> 6 18
+> 7 24
+> 7 20
+> 7 10
+> 8 27
+> 8 16
+> 9 29
+> 9 12
+> 10  27
+> 10  15
+> 11  20
+> 11  15
+> 12  23
+> 12  20
+> 13  21
+> 14  30
+> 14  19
+> 15  23
+> 16  18
+> 16  20
+> 17  24
+> 18  28
+> 19  27
+> 20  21
+> 21  30
+> 22  24
+> 23  26
+> 25  29
+> 27  29
+
+ID [source to target] 40 50 60 70 80 90 100 Accuracy/F1 [%] Accuracy F1 
+
+0.00 0.25 0.50 0.75 1.00 1.25 1.50 1.75 2.00 
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk (b) HAR. 0 11 
+
+> 0 26
+> 1 31
+> 1 19
+> 2 32
+> 2 20
+> 3 32
+> 3 23
+> 4 6
+> 5 30
+> 5 23
+> 6 31
+> 6 18
+> 7 18
+> 8 26
+> 9 31
+> 9 23
+> 10  23
+> 11  35
+> 12  33
+> 12  17
+> 13  19
+> 14  19
+> 15  26
+> 16  18
+> 17  30
+> 17  33
+> 18  35
+> 20  23
+> 21  28
+> 22  28
+> 23  31
+> 25  28
+> 26  35
+> 28  30
+> 30  33
+
+ID [source to target] 020 40 60 80 Accuracy/F1 [%] Accuracy F1 
+
+0123456
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 
+
+(c) WISDM. 0 1
+
+> 0 2
+> 0 13
+> 1 5
+> 1 16
+> 1 10
+> 2 4
+> 2 13
+> 3 8
+> 3 16
+> 4 14
+> 4 17
+> 4 9
+> 5 14
+> 5 8
+> 6 10
+> 7 9
+> 7 13
+> 8 18
+> 8 15
+> 9 15
+> 10  13
+> 11  19
+> 11  15
+> 12  15
+> 14  19
+> 15  17
+> 18  19
+
+ID [source to target] 20 30 40 50 60 70 80 90 Accuracy/F1 [%] Accuracy F1 
+
+123456
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk (d) EEG. 1 2
+
+> 1 3
+> 1 4
+> 1 5
+> 1 6
+> 1 7
+> 1 8
+> 2 3
+> 2 4
+> 2 5
+> 2 6
+> 2 7
+> 2 8
+> 3 8
+> 3 7
+> 3 4
+> 3 5
+> 3 6
+> 4 5
+> 4 6
+> 4 7
+> 4 8
+> 5 6
+> 5 7
+> 5 8
+> 6 8
+> 6 7
+> 7 8
+
+ID [source to target] 75 80 85 90 95 100 Accuracy/F1 [%] Accuracy F1 
+
+0.0 0.2 0.4 0.6 0.8 1.0 1.2 1.4 
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk 
+
+(e) uWave. 0 10 80 70 60 50 40 30 27 0 26 0 25 0 24 0 23 0 22 0 90 20 0 10 0 11 0 12 0 21 0 14 0 13 0 16 0 17 0 18 0 19 0 20 15 1 23 1 24 1 25 1 26 1 91 31 41 51 61 22 1 27 1 21 1 17 1 20 1 21 19 1 18 1 16 1 15 1 14 1 13 1 12 1 11 1 81 10 1 72 13 2 82 24 2 23 2 22 2 21 2 20 2 19 2 18 2 17 2 16 2 92 15 2 12 2 11 2 10 2 27 2 32 42 52 62 72 14 2 25 2 26 3 73 83 63 53 43 27 3 26 3 25 3 24 3 23 3 22 3 21 3 93 19 3 18 3 17 3 16 3 15 3 14 3 13 3 12 3 11 3 10 3 20 4 23 4 24 4 25 4 74 27 4 54 64 22 4 26 4 21 4 15 4 19 4 18 4 17 4 16 4 14 4 13 4 12 4 11 4 10 4 84 20 4 95 23 5 11 5 95 85 75 65 27 5 26 5 25 5 24 5 22 5 10 5 20 5 19 5 18 5 17 5 16 5 15 5 14 5 13 5 12 5 21 6 23 6 22 6 21 6 20 6 16 6 18 6 17 6 24 6 15 6 19 6 25 6 96 27 6 76 86 13 6 12 6 14 6 10 6 26 6 11 7 10 7 11 7 12 7 13 7 15 7 18 7 19 7 20 7 21 7 22 7 23 7 24 7 25 7 26 7 27 7 87 97 14 7 17 7 16 8 15 8 22 8 23 8 24 8 25 8 26 8 27 8 98 16 8 11 8 10 8 17 8 14 8 19 8 18 8 21 8 13 8 12 8 20 9 25 9 24 9 23 9 22 9 21 9 20 9 19 9 17 9 16 9 15 9 13 9 12 9 11 9 10 9 18 9 14 9 27 9 26 10  22 10  27 10  26 10  25 10  24 10  23 10  21 10  19 10  20 10  17 10  16 10  15 10  14 10  13 10  12 10  11 10  18 11  25 11  24 11  26 11  14 11  15 11  23 11  27 11  22 11  13 11  20 11  19 11  18 11  17 11  16 11  12 11  21 12  27 12  26 12  25 12  24 12  23 12  22 12  18 12  20 12  19 12  13 12  17 12  16 12  15 12  21 12  14 13  27 13  26 13  24 13  23 13  22 13  25 13  20 13  21 13  14 13  15 13  18 13  17 13  19 13  16 14  15 14  16 14  17 14  18 14  27 14  20 14  21 14  22 14  23 14  24 14  25 14  26 14  19 15  16 15  18 15  17 15  27 15  25 15  24 15  26 15  22 15  21 15  20 15  23 15  19 16  27 16  26 16  25 16  24 16  23 16  21 16  20 16  19 16  18 16  17 16  22 17  27 17  26 17  24 17  25 17  22 17  21 17  20 17  19 17  18 17  23 18  27 18  26 18  25 18  19 18  23 18  22 18  21 18  20 18  24 19  27 19  25 19  26 19  23 19  22 19  20 19  24 19  21 20  21 20  22 20  23 20  24 20  25 20  26 20  27 21  25 21  22 21  23 21  24 21  26 21  27 22  26 22  25 22  27 22  23 22  24 23  24 23  25 23  26 23  27 24  25 24  26 24  27 25  26 25  27 26  27 
+
+ID [source to target] 30 35 40 45 50 55 60 65 Accuracy/F1 [%] Accuracy F1 
+
+0.675 0.700 0.725 0.750 0.775 0.800 0.825 0.850 
+
+> Risks [score]
+
+Source risk Target risk Few-shot risk (f) Finger movements (univariate). 
+
+Figure 7: Evaluation results of a large collection of source–target DA pairs for each dataset. The dashed lines show average results over all source–target combinations. transfer scenarios (as done in previous DA studies). 
+
+L Source-Code Structure 
+
+The supplementary archive contains the complete imple-mentation of CPDA together with the training and evalu-ation pipeline, the evaluated DA baselines, encoder back-bones, dataset and hyperparameter configurations, runtime measurements, and result-aggregation utilities. The imple-mentation follows the experimental workflow described in the main paper and supports cross-domain experiments, source-only and target-supervised reference models, con-trolled sinusoidal experiments, hyperparameter studies, and repeated evaluations with different random seeds. The pro-cessed datasets are not included because of their size and separate licensing conditions; the expected data format and directory organization are documented in the accompanying 
+
+README.md . The archive is organized as follows: 
+
+AAAI_CPDA_2027_supplementary_material/ |-- README.md |-- requirements.txt ‘-- source_code/ |-- main.py |-- main_time.py |-- main_hyper.py |-- trainer.py |-- trainer_hyper.py |-- same_domain_trainer.py |-- utils.py ||-- algorithms/ | ‘-- algorithms.py ||-- configs/ | |-- data_model_configs.py | |-- hparams.py | ‘-- sweep_params.py ||-- dataloader/ | ‘-- dataloader.py ||-- models/ | |-- models.py | |-- loss.py | ‘-- augmentations.py ||-- experiments_logs/ | |-- count.sh | |-- coun_onhw.sh | |-- plot_logs.py | ‘-- plot_results.py ||-- src_only_saved_models/ | |-- plot_backbones_all_models.png | |-- plot_backbones_sin_cos.png | |-- plot_results_all_models.py | ‘-- plot_results_sin_cos.py ||-- run_backbone.sh |-- run_cpda.sh |-- run_cpda_onhw.sh ‘-- run_cpda_sincos.sh 
+
+Implementation and Reproducibility. The experimental pipeline is controlled by main.py , with training, eval-uation, runtime measurement, hyperparameter studies, and source-only or target-supervised reference experi-ments implemented in trainer.py , main time.py ,
+
+main hyper.py , trainer hyper.py ,and same domain trainer.py . The file 
+
+algorithms/algorithms.py contains CPDA and all evaluated baselines, including the class-conditional path discrepancy, information-maximization and VAT regularization, target-prior weighting, and active-class normalization. Encoder architectures, losses, and augmen-tations are defined in models/ , while dataset properties, source–target scenarios, optimization parameters, and search spaces are specified in configs/ ; processed data are loaded by dataloader/dataloader.py .The provided shell scripts launch the benchmark, OnHW, sinusoidal, and backbone experiments, and the utilities in utils.py , experiments logs/ , and 
+
+src only saved models/ handle deterministic initial-ization, logging, checkpointing, metric aggregation, and figure generation. Installation instructions, data formatting, execution commands, supported methods and backbones, output conventions, and reproduction details are docu-mented in README.md , while requirements.txt 
+
+records the software environment. Reproducibility Checklist 
+
+1. General Paper Structure 
+
+1.1. Includes a conceptual outline and/or pseudocode de-scription of AI methods introduced (yes/partial/no/NA) Yes. We include both a conceptual description and pseu-docode for the proposed method. Specifically, App. D provides a step-by-step description of one CPDA train-ing iteration, including latent path extraction, target soft pseudo-label estimation, construction of pooled, path, spectral, and signature-based features, computation of the composite kernel matrices, class-wise weighted MMD estimation, and optimization of the final training objective. The corresponding pseudocode is given in Al-gorithm 1. It explicitly states the required source and tar-get mini-batches, the feature extractor and classifier, the construction of class-conditional weights, the computa-tion of the CPDA discrepancy, and the final update ob-jective. 1.2. Clearly delineates statements that are opinions, hy-pothesis, and speculation from objective facts and re-sults (yes/no) Yes. Formal methodological and theoret-ical claims are stated through definitions, propositions, theorems, and proofs in Sections 4 and 5 and App. B. Measured experimental findings are reported separately in Section 7 and App. K, while explanatory interpreta-tions and limitations are presented as discussion rather than as established facts. 1.3. Provides well-marked pedagogical references for less-familiar readers to gain background necessary to repli-cate the paper (yes/no) Yes. App. A summarizes the notation used throughout the paper. We provide peda-gogical background material in the appendices to sup-port reproducibility. App. I gives a unified mathemati-cal overview of the main discrepancy-based baselines, including MMD, CORAL, MMDA, DAN, HoMM, and VAT, together with their objectives and limitations for time-series data. App. B states the assumptions used in the CPDA analysis and provides additional theoretical details, including consistency, finite-sample concentra-tion, and pseudo-label stability results. These sections are intended to help less-familiar readers understand both the proposed method and the comparison methods needed to replicate the study. Section 2 introduces the main classes of DA methods and their relationships to CPDA. App. E explains how established discrepancy objectives arise as restricted cases of the proposed framework. 
+
+2. Theoretical Contributions 
+
+2.1. Does this paper make theoretical contributions? (yes/no) Yes. Section 5 establishes kernel validity, the integral-probability-metric interpretation, a class-conditional target-risk bound, the effect of pseudo-label error, and connections to existing discrepancy objectives. App. B provides additional consistency, finite-sample concentration, and pseudo-label stability results. If yes, please address the following points: 2.2. All assumptions and restrictions are stated clearly and formally (yes/partial/no) Yes. The assumptions re-quired by the main target-risk and pseudo-label results are stated in Section 5. App. B.1 additionally states the bounded-loss, RKHS-regularity, bounded-kernel, and pseudo-label assumptions used by the supplemen-tary theoretical results. Implementation restrictions, including one-step paths for vector-output backbones, detached target weights, feature normalization, and fixed random projections, are documented in App. F. 2.3. All novel claims are stated formally (e.g., in theo-rem statements) (yes/partial/no) Yes. The CPDA dis-crepancy and training objective are formally defined in Section 4. The principal theoretical claims are stated as propositions, theorems, and a corollary in Section 5 and App. B. The relationship to existing discrepancy methods is formalized in Proposition 3 and Table 4. 2.4. Proofs of all novel claims are included (yes/par-tial/no) Yes. Proofs for kernel validity, the IM inter-pretation, the class-conditional target-risk bound, the equal-prior corollary, the pseudo-label risk result, and the restricted-case relationships are included in Sec-tion 5. Proofs for empirical consistency, finite-sample concentration, and stability under pseudo-label pertur-bations are included in App. B. 2.5. Proof sketches or intuitions are given for complex and/or novel results (yes/partial/no) Yes. We provide intuition and a conceptual explanation for the pro-posed method in addition to the formal derivations. In particular, Fig. 1 gives a visual overview of CPDA by illustrating how source and target time-series are mapped to latent temporal paths, transformed into pooled, temporal-path, spectral, and signature-based representations, and aligned using class-conditional weights from source labels and target soft pseudo-labels. Sections 3 and 4 explain why marginal vector-level alignment may be insufficient for time-series. Al-gorithm 1 and App. E provide operational intuition for the training procedure and its relationship to es-tablished discrepancy losses. 2.6. Appropriate citations to theoretical tools used are given (yes/partial/no) Yes. The paper cites the relevant work on RKHS mean embeddings and MMD, sequen-tial kernels, path signatures, Fourier representations, covariance and moment matching, pseudo-labeling, and VAT. These references appear in Sections 2–5 and are summarized mathematically in App. I. 2.7. All theoretical claims are demonstrated empirically to hold (yes/partial/no/NA) Partially. The practical ef-fectiveness and stability of CPDA are evaluated in Ta-ble 1, Figures 2 and 3, and App. K. The controlled si-nusoidal study in Figures 5 and 6 further evaluates ro-bustness under increasing domain shift. Mathematical properties such as positive semidefiniteness, consis-tency, and finite-sample concentration are established analytically and are not separately tested as empirical hypotheses. 2.8. All experimental code used to eliminate or dis-prove claims is included (yes/no/NA) Yes. The sup-plementary archive includes the implementations, ex-periment launchers, hyperparameter configurations, runtime evaluation, metric aggregation, and plotting utilities used for the benchmark, sensitivity anal-ysis, controlled sinusoidal study, and source- and target-only reference experiments. The archive struc-ture is documented in App. L and the accompanying 
+
+README.md .
+
+3. Dataset Usage 
+
+3.1. Does this paper rely on one or more datasets? (yes/no) Yes. The experiments use the time-series datasets sum-marized in Table 8 and described in App. J. They cover human activity recognition, sleep-stage classifica-tion, gesture recognition, biomedical signals, handwrit-ing recognition, and controlled synthetic waveforms. If yes, please address the following points: 3.2. A motivation is given for why the experiments are conducted on the selected datasets (yes/partial/no/NA) Yes. Section 6 and App. J explain that the collection covers different sensors, modalities, temporal lengths, numbers of classes, domain definitions, dataset sizes, and source–target shifts. This diversity is used to eval-uate whether CPDA generalizes beyond one applica-tion or encoder configuration. 3.3. All novel datasets introduced in this paper are in-cluded in a data appendix (yes/partial/no/NA) NA. We do not introduce a new real-world dataset in this pa-per. All evaluation datasets are existing public bench-mark datasets, used for controlled ablations, which is fully described in the dataset section App. J and can be regenerated from the specified data-generation proce-dure. 3.4. All novel datasets introduced in this paper will be made publicly available upon publication of the pa-per with a license that allows free usage for research purposes (yes/partial/no/NA) NA. No novel dataset is introduced in this paper. 3.5. All datasets drawn from the existing literature (potentially including authors’ own previously pub-lished work) are accompanied by appropriate cita-tions (yes/no/NA) Yes. All datasets drawn from the existing literature are accompanied by appropriate ci-tations in Table 8. The table lists the dataset name, reference, description, number of classes, and sample count, and also provides the public sources from which the datasets can be obtained. 3.6. All datasets drawn from the existing literature (po-tentially including authors’ own previously published work) are publicly available (yes/partial/no/NA) Yes. Table 8 provides the public benchmark sources, in-cluding the AdaTime data repository, the UCR/UEA archive, and the OnHW dataset website. The con-trolled synthetic benchmark is cited to its original pub-lication. 3.7. All datasets that are not publicly available are described in detail, with explanation why publicly available alternatives are not scientifically satisfic-ing (yes/partial/no/NA) NA. No private or access-restricted dataset is used. The supplementary archive does not duplicate the processed datasets because of their size and separate distribution conditions; their public sources, expected tensor format, and directory structure are documented in Table 8, App. J, and the supplementary README.md .
+
+4. Computational Experiments 
+
+4.1. Does this paper include computational experiments? (yes/no) Yes. The experimental design is described in Section 6, the principal results are reported in Section 7, and the complete results are provided in App. K. If yes, please address the following points: 4.2. This paper states the number and range of val-ues tried per (hyper-) parameter during development of the paper, along with the criterion used for se-lecting the final parameter setting (yes/partial/no/NA) Yes. Table 5 lists the default CPDA configuration and the explored ranges for the learning rate, ob-jective weights, kernel-component weights, signature dimension and order, and maximum latent sequence length. Figure 3 reports the resulting sensitivity across datasets, and the full sweep spaces are included in 
+
+configs/sweep params.py .4.3. Any code required for pre-processing data is in-cluded in the appendix (yes/partial/no) Yes. The sup-plementary material includes the dataset configura-tions, source–target scenarios, expected tensor dimen-sions, and the loader for the processed domain-specific files. App. J documents the benchmark preprocess-ing and splits, and the README.md specifies the re-quired file format and directory structure. The archive does not include complete raw-data download, but does contain the conversion scripts for every external dataset. 4.4. All source code required for conducting and ana-lyzing the experiments is included in a code appendix (yes/partial/no) Yes. The supplementary archive con-tains CPDA and baseline implementations, encoder architectures, losses, augmentations, data loading, dataset and hyperparameter configurations, cross-domain training, source- and target-only reference training, runtime measurement, metric calculation, re-sult aggregation, and plotting utilities. The complete structure and the correspondence between files and ex-perimental stages are documented in App. L. 4.5. All source code required for conducting and ana-lyzing the experiments will be made publicly available upon publication of the paper with a license that allows free usage for research purposes (yes/partial/no) Yes. The source code included in the supplementary archive will be made publicly available upon publication under a license permitting free research use. This includes the proposed method, evaluated baselines, training and evaluation pipeline, configurations, and result-analysis utilities described in App. L. 4.6. All source code implementing new methods have comments detailing the implementation, with refer-ences to the paper where each step comes from (yes/-partial/no) Partial. The released source code includes comments for the implementation of the proposed CPDA components and identifies the main steps cor-responding to the method described in the paper, in-cluding latent path construction, signature–spectral feature extraction, class-conditional weighting, CPDA discrepancy computation, and VAT regularization. We will ensure that the final public release contains suf-ficient inline comments and references to the relevant equations, algorithm, and appendix sections. 4.7. If an algorithm depends on randomness, then the method used for setting seeds is described in a way sufficient to allow replication of results (yes/par-tial/no/NA) Yes. Section 7 states that each source– target configuration is repeated five times with differ-ent random seeds. The supplementary implementation sets the Python, NumPy, PyTorch, and CUDA seeds and configures deterministic cuDNN execution before every run. The per-run seed is determined by the run identifier. 4.8. This paper specifies the computing infrastructure used for running experiments (hardware and software), including GPU/CPU models; amount of memory; op-erating system; names and versions of relevant soft-ware libraries and frameworks (yes/partial/no) Yes. We specify the hardware infrastructure used for the experiments, including NVIDIA Tesla V100-SXM2 GPUs with 32 GB VRAM, Intel Xeon CPUs, and 192 GB RAM. The final version and released code will additionally document the relevant software environ-ment, including the operating system, Python version, PyTorch version, CUDA version, and main library de-pendencies required to reproduce the experiments. 4.9. This paper formally describes evaluation metrics used and explains the motivation for choosing these metrics (yes/partial/no) Yes. Section 7, Table 1, and the tables in App. K.2 consistently report classifica-tion accuracy and F1-score. The supplied evaluation code computes macro-averaged F1, which is suitable for datasets with unequal class frequencies. The cur-rent manuscript does not provide explicit mathemati-cal definitions of accuracy and macro-F1 or explicitly identify the reported F1 variant in the main text. 4.10. This paper states the number of algorithm runs used to compute each reported result (yes/no) Yes. Section 7 states that every source–target configuration is trained five times with different random seeds. Ta-ble 1, the tables in App. K.2, and Figures 5 and 6 report results aggregated over these five runs. 4.11. Analysis of experiments goes beyond single-dimensional summaries of performance (e.g., aver-age; median) to include measures of variation, con-fidence, or other distributional information (yes/no) Yes. The tables in App. K.2 report means and standard deviations over source–target scenarios and repeated runs. The sinusoidal results in Figures 5 and 6 include shaded standard-deviation regions, while Figure 7 ex-poses performance and risk variation across individual source–target pairs. Figure 2 additionally reports opti-mization and target-prediction dynamics. 4.12. The significance of any improvement or decrease in performance is judged using appropriate statisti-cal tests (e.g., Wilcoxon signed-rank) (yes/partial/no) No. We do not currently use formal statistical signifi-cance tests such as the Wilcoxon signed-rank test. In-stead, we report mean and standard deviation over five random seeds for each source–target configuration. We therefore interpret improvements based on aver-age performance and variability, and we avoid making claims of statistical significance unless supported by an explicit test. 4.13. This paper lists all final (hyper-)parameters used for each model/algorithm in the paper’s experiments (yes/partial/no/NA) Partial. Table 5 lists the final CPDA optimizer, loss, kernel, signature, pseudo-label, normalization, and ramp-up parameters. Back-bone configurations are summarized in Tables 6and 7. The complete dataset- and method-specific settings for CPDA and the evaluated baselines are included in configs/data model configs.py 
+
+and configs/hparams.py , but the complete per-baseline configurations are not reproduced as tables in the paper.

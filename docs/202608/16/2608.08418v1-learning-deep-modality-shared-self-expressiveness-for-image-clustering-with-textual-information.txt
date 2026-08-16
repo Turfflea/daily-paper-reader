@@ -1,0 +1,2491 @@
+Title: Learning Deep Modality-Shared Self-Expressiveness for Image Clustering with Textual Information
+
+URL Source: https://arxiv.org/pdf/2608.08418v1
+
+Published Time: Tue, 11 Aug 2026 01:16:38 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+> JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 1
+
+# Learning Deep Modality-Shared Self-Expressiveness for Image Clustering with Textual Information 
+
+Xianghan Meng, Wei He, Zhiyuan Huang, and Chun-Guang Li ∗
+
+Abstract —Leveraging textual information for image clustering has emerged as a promising direction, largely owing to the powerful representations learned by Vision-Language Models (VLMs). Existing approaches typically retrieve a textual counter-part for each image and then refine multimodal representations by directly enforcing cross-modal agreement, e.g., maximizing image-text similarity inherited from pretrained VLMs. However, such a strategy aligns heterogeneous representations across modalities without explicitly modeling the intrinsic structure within each modality and thus might yield unreliable align-ment or distort modality-specific structures that are crucial for clustering. In this paper, we propose a simple but prin-cipled approach, termed deep modality-shared self-expressive model (DeepMORSE), which discovers cross-modal structures via a modality-shared self-expressive model and simultaneously learns structured representations that conform to a union of modality-specific subspaces. Moreover, we theoretically justify that the modality-shared self-expressive coefficients suppress inter-class noise towards a subspace-preserving solution, and show that mini-batch optimization procedure introduces an implicit regularization onto the self-expressive model. We eval-uate our DeepMORSE on six widely used image clustering benchmarks and observe performance improvements exceeding 3% on the UCF-101, DTD-47, and ImageNet-Dogs datasets. In addition, we demonstrate the strong transferability of the learned representations by achieving state-of-the-art perfor-mance on downstream tasks such as image retrieval and zero-shot classification–—without requiring any task-specific losses or post-processing. The code is available at: https: //github.com/mengxianghan123/DeepMORSE. 
+
+Index Terms —Image clustering, multimodal representation learning, subspace clustering 
+
+I. I NTRODUCTION 
+
+# NOWADAYS vast quantities of unlabeled data are gener-ated at an unprecedented scale. The ability to discover meaningful latent structures from massive high-dimensional data without human annotation has become a central challenge in various fields of data science. A fundamental approach to tackling this challenge is clustering, which aims to partition data according to their latent patterns or geometric structures without relying on ground-truth labels [1], [2]. The geometric structures, referring to the topology, distribution, and relative positional relationships of data in the ambient space, are often modeled as, e.g., centroids [1]–[3], linear (or affine) subspaces [4]–[6], or manifolds [7]–[10]. Although these ap-proaches perform well on simple datasets (e.g., MNIST [11]), they often struggle with high-dimensional real-world images that exhibit complex structures [12], [13]. 
+
+Xianghan Meng, Wei He, Zhiyuan Huang, and Chun-Guang Li are with the School of Artificial Intelligence, Beijing University of Posts and Telecom-munications, Beijing 100876, P.R. China. (e-mail: {mengxianghan; wei.he; huangzhiyuan; lichunguang }@bupt.edu.cn). 
+
+> ∗
+
+Corresponding author. Finetune 
+
+Share d
+
+Subspace 
+
+UoS 
+
+Structure 
+
+Images 
+
+Texts 
+
+Subspace 
+
+Fig. 1. Illustration of the basic idea of the paper. We explicitly learn structured representations that conform to a Union of Subspaces (UoS) and capture modality-shared structure for clustering. 
+
+Over the past decade, deep clustering has emerged as a promising line of research which leverages the representation learning ability of deep neural networks [14], [15] and has quickly progressed following the rapid advances in representa-tion learning—from early autoencoder-based approaches [16]– [19] to contrastive learning-based approaches [20]–[24], and more recently, to pretrained Vision-Language Models (VLMs)-based multimodal approaches [25]–[28]. Despite the rapid advances in clustering performance, fundamental questions naturally arise in the multimodal approaches: a) what latent patterns in data representation would be shared across differ-ent modalities? b) how to properly learn the latent patterns across multimodal representations? 
+
+Existing multimodal clustering approaches typically address these questions by directly enforcing cross-modal alignment, e.g., by maximizing the similarity of pseudo-labels across modalities [26], [28]. However, without explicitly modeling the intrinsic structure of each modality, the alignment of heterogeneous distributions between different modalities may distort modality-specific structures, yielding representations with unclear structure. This issue is particularly demonstrated by [29], [30], which show that the off-the-shelf VLMs provide unreliable intra-modal geometry, leading to suboptimal perfor-mance for intra-modal tasks (e.g., clustering and retrieval). Motivated by the intrinsic heterogeneity [31], [32] and the modality gap [33], [34] between multimodal representations, it is natural to permit each modality to have its own modality-specific structure. On the other hand, recent empirical evi-dence suggests that the representations of different modalities arXiv:2608.08418v1 [cs.CV] 9 Aug 2026 JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 2
+
+often exhibit a shared geometric structure as model scale in-creases [35]–[37]. Putting two aspects together, it is appealing to build a learning model that enables: a) modality-specific structure flexible to account for the heterogeneity and b) consistent partition patterns shared across different modalities. In this paper, we introduce a union of modality-specific low-dimensional subspaces to accommodate the heterogeneity across different modalities 1, while assuming that consistent partition patterns are shared among them, as illustrated in Figure 1. Specifically, we propose a simple but principled approach, termed deep mo dality-sha red self-expressive model (DeepMORSE) to learn structured multimodal representations that align with a union of modality-specific subspaces and simultaneously capture the partition patterns shared across different modalities for clustering. More specifically, our DeepMORSE integrates a shared deep self-expressive model to discover modality-invariant self-expressive coefficients and learn modality-specific structured representations that tend to form the union of modality-specific subspaces. Moreover, we provide theoretical results to justify the merit of learning self-expressive coefficients across different modalities, the guar-antee to yield non-collapsed modality-specific representations, and the induced implicit regularization in implementation. To evaluate the performance of our DeepMORSE, we conduct extensive experiments on six widely used image clustering benchmarks to demonstrate significant performance improve-ments, validate the theoretical results, and provide insightful and comprehensive evaluations. In addition, we also show the strong transferability of the learned representations on downstream tasks such as image retrieval and zero-shot clas-sification without requiring any task-specific losses or post-processing. The main contributions of the paper are highlighted below. 1) We propose DeepMORSE, which jointly learns structured representations and discovers partition patterns that are shared across different modalities for clustering. 2) We provide theoretical analysis to justify the underlying mechanism of our DeepMORSE—suppressing inter-class noise and exhibiting an implicit regularization. 3) We demonstrate the effectiveness of our DeepMORSE with extensive experiments on six image clustering benchmarks. 4) We validate the generalization ability of the learned struc-tured representations on downstream tasks including image retrieval and zero-shot classification. 
+
+Paper Outline. The remainder of this paper is organized as follows. We review related works in Section II, present the formulation and theoretical justifications in Section III, describe the experimental setups and results in Section IV, and make concluding remarks in Section V. II. R ELATED WORK 
+
+This section reviews relevant work on deep clustering, self-expressive models and structured representations learning. 
+
+Deep Clustering. The progress of deep clustering closely follows the rapid advances in unsupervised representation        
+
+> 1The union-of-subspaces assumption of deep representations is well-grounded in recent findings [38]–[42].
+
+learning. The deep clustering approaches in the early stage are mainly based on autoencoders [18], [19]. Then, with the flourishing success of contrastive learning [43], [44], a number of deep clustering approaches have been proposed, which are designed by integrating diverse self-supervision signals, e.g., pseudo-labeling [20], cluster and graph-level contrastive learning [21], [22], [45], [46], neighbor matching [23], proto-type scattering [47], and contextually affinitive neighborhood mining [48]. Among these approaches, clusters are merely modeled as a set of centroids [45], [46]—which can be viewed as a zero-dimensional subspace. Recently, driven by contrastive learning, miscellaneous deep multi-view clustering approaches [49]–[52] have been pre-sented, which emphasize on maximizing the alignment be-tween different views. More recently, there are also some works to address the noisy correspondence issue in con-trastive multi-view clustering, by e.g., a noise-robust con-trastive loss [53], cross-sample and cross-view feature aggre-gation [54], high-order random walks for global data pair identification [55], and a spectral correspondence refinery framework [56]. Despite these advances, existing deep multi-view clustering approaches primarily lack explicit modeling of the underlying geometric structure of data within each view. Since that multimodal foundation models are used to pro-vide powerful representations for various downstream tasks, multimodal clustering methods have received increasing at-tention [26], [28]. These methods typically train a multimodal classifier and align the pseudo-labels of each sample—as well as its neighbors—across different modalities. To mitigate the mismatch between different modalities, multi-level cross-modal alignments are introduced with theoretical guarantees on clustering risk [57]. Meanwhile, an orthogonal line of work explores training-free language-assisted image clustering by introducing hierarchical caption-noun semantic alignment via optimal transport [58] and gradient-guided positive noun filtering with provable error bounds [59]. Nevertheless, without explicitly modeling the intrinsic structure of each modality, it is unclear whether the cross-modal alignment would distort the intra-modal structure. 
+
+Self-Expressive Models. The self-expressive models [60] are designed to recover the underlying subspace structure by expressing each data point as a linear combination of others. Under certain regularizations, e.g., sparsity [60], low-rankness [61], the non-zero expressive coefficients are guar-anteed to indicate which data points belong to the same sub-space [62]–[64]. After solving the self-expressive coefficients for the given data, spectral clustering [65] is applied to obtain the subspace clustering result. Recent progress in the self-expressive model focuses on improving the scalability [66]– [68], incorporating powerful representation learning [69]–[72], and designing white-box deep architectures [73]. It is notewor-thy that the connection between self-expressive models and the self-attention mechanism has been discussed in [68], [74]. Nevertheless, these works mentioned above still focus on data with a single modality. 
+
+Learning Structured Representations. In supervised learn-ing, structured representations that conform to a union of orthogonal subspaces are pioneered in Orthogonal Low-rank JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 3ViT  Transformer   
+
+> Modality-Shared
+> Self-Expression
+> Modality-Mixed
+> Embeddings
+> Representations to be expressed
+> Other representations
+> Different classes
+> Shared expressive relationship
+> a photo of
+> a cat
+> Modality-specific structure
+> Fig. 2. The overview of DeepMORSE. DeepMORSE learns modality-invariant structure through modality-shared self-expression, and jointly fine-tunes the representations to conform to the union of modality-specific subspace structures.
+
+Embedding (OL ´ E) [75] and Maximal Coding Rate Reduction (MCR 2) [76]. For both approaches, the learned representa-tions in each class are guaranteed to reside in class-specific subspaces and these class-specific subspaces are arranged to be mutually orthogonal [77]. In unsupervised learning, an approach called Manifold Linearization and Clustering (MLC) attempts to learn structured representations with a modified MCR 2 principle, where the membership informa-tion is replaced by the learned affinity [10]. More recently, a principled approach for deep subspace clustering (PRO-DSC) [72] is proposed, which learns structured representations by the self-expressive model with a maximal total coding rate regularization and provides theoretical justifications showing that the learned representations are guaranteed to avoid the catastrophic feature collapse [78] and tend to form desired structure of a union of subspaces. Unfortunately, these works are not designed for dealing with multimodal data. Our Deep-MORSE can be viewed as a multimodal extension of [72]. III. O UR PROPOSED APPROACH : D EEP MORSE This section presents a deep modality-shared self-expressive model for learning modality-invariant structure and structured representations, then provides theoretical justifications, and describes the textual counterpart generation strategy, scalable implementation with reparameterization. 
+
+A. Modality-Shared Deep Self-Expressive Model 
+
+Existing approaches to model data relations for clustering often rely on neighborhood information, either in a single-modality setting [20], [23], [24], [47] or in a multimodal setting [26], [28]. Although neighborhoods can reflect the local distribution of data, they suffer from two fundamental limitations: a) the distance metric—on which neighborhood is based—becomes less reliable in high-dimensional spaces [79], [80]; and b) it is insufficient to capture the global structure unless the data are densely sampled [81]. As an alterna-tive, self-expressive model [60] uncovers the global Union-of-Subspaces (UoS) structure of the data by seeking linear combination relationships among data, which is suitable for high-dimensional and sparsely sampled data [5], [82]. 
+
+Learning UoS Structures by Self-Expressive Model. Under the assumption that data points lie on (or nearby) a union of low-dimensional subspaces, self-expressive model [60] discov-ers the UoS structure of the data by solving the problem: 
+
+min 
+
+> cj
+
+∥xj − X
+
+> i̸=j
+
+cij xi∥22 + r(cj ), (1) for all j ∈ { 1, · · · , N }, where r(·) : RN 7 → R+ is a regular-ization on the expressive coefficient cj = [ c1j , · · · , c N j ]⊤.The widely used regularizer, e.g., ℓ1-norm, can guarantee the optimal solution of (1) under mild condition to enjoy a so-called subspace-preserving property , i.e., the non-zero coefficients indicate the data points that belong to the same subspace under certain conditions [62]–[64]. 
+
+Discovering Shared UoS Structures across Modalities. 
+
+Recent empirical evidence suggests that the learned repre-sentations from different modalities tend to exhibit a shared geometric structure [35]–[37]. This motivates us to leverage the information from multiple modalities to jointly discover the shared UoS structures. To this end, it is natural to introduce a self-expressive model with modality-invariant coefficients , i.e., 
+
+min 
+
+> cj
+
+∥xj − X
+
+> i̸=j
+
+cij xi∥22 + ∥tj − X
+
+> i̸=j
+
+cij ti∥22 + r(cj ), (2) for all j ∈ {1, · · · , N }, where {ti}Ni=1 denote the asso-ciated textual data. The benefit of this modality-invariant design can be understood through the example illustrated in Figure 2. For the j-th data point, the self-expressive coefficients {c1j , c 2j , c 3j , c 4j } capture its relations with other images, while {c2j , c 3j , c 4j , c 5j } capture its relations among JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 4
+
+textual counterparts, in which only {c2j , c 3j , c 4j } reflect cor-rect subspace structure that is shared across two modalities, whereas c1j and c5j arise from modality-specific noise. By enforcing self-expressive coefficients shared across modalities, the formulation (2) promotes the coefficients that are consis-tently subspace-preserving across modalities while suppress-ing modality-specific perturbations. 
+
+Learning Modality-Specific Structured Representations. 
+
+For the real-world data, however, the distribution of the raw data in each modality might not conform well to a UoS structure. To handle more complex data and more complicated distribution structures, we employ a set of transformations 
+
+f , g : RD 7 → Rd to obtain modality-specific representations 
+
+zimg and ztext which are expected to conform to UoS structures, where zimg = f (x) and ztext = g(t).For clarity and compactness in notation, we denote Zimg := [zimg ,1, · · · , zimg ,N ] and Ztext := [ ztext ,1, · · · , ztext ,N ] as the learned representations of all images and all associated texts, respectively, and denote C := [ c1, · · · , cN ] as the modality-shared self-expressive coefficient matrix. Then, for fixed Zimg 
+
+and Ztext , problem (2) is equivalently reformulated as follows: 
+
+min  
+
+> C
+
+∥Zimg − Zimg C∥2 
+
+> F
+
++ ∥Ztext − Ztext C∥2 
+
+> F
+
++ r(C),
+
+s.t. Diag( C) = 0. (3) To handle the raw data from real-world, we thus learn simul-taneously the embeddings Zimg and Ztext and the coefficient matrix C by solving the following problem: 
+
+min  
+
+> Zimg ,Ztext ,C
+
+∥Zimg − Zimg C∥2 
+
+> F
+
++ ∥Ztext − Ztext C∥2 
+
+> F
+
++ r(C),
+
+s.t. Diag( C) = 0, ∥Zimg ∥2 
+
+> F
+
+= N, ∥Ztext ∥2 
+
+> F
+
+= N, (4) where the constraints are used to avoid the trivial solution. 2
+
+Unfortunately, such a joint optimization problem in (4) suffers from a catastrophic representation collapse issue, anal-ogous to the phenomenon observed in the deep self-expressive model [78]. In this paper, inspired by [72], we impose a maximal total coding rate regularization on each modality of the learned representations which are defined as follows: 
+
+ρ(Zimg ) := log det( I + dN ϵ 2 Zimg Z⊤
+
+> img
+
+),ρ(Ztext ) := log det( I + dN ϵ 2 Ztext Z⊤
+
+> text
+
+),
+
+(5) where ϵ > 0 is a hyperparameter and ρ(·) measures the volume of the subspace spanned by the learned representations. 3
+
+Putting these together, we propose a simple but principled approach for deep multi-modal subspace clustering, called 
+
+deep mo dality-sha red self-expressive model (DeepMORSE): 
+
+min  
+
+> Zimg ,Ztext ,C
+
+γ  ∥Zimg − Zimg C∥2 
+
+> F
+
++ ∥Ztext − Ztext C∥2
+
+> F
+
+
+
+− ρ(Zimg ) − ρ(Ztext ) + r(C),
+
+s.t. Diag( C) = 0, ∥Zimg ∥2 
+
+> F
+
+= N, ∥Ztext ∥2 
+
+> F
+
+= N, 
+
+(6) where γ ∈ R+ is a balancing hyperparameter.              
+
+> 2In our implementation, we normalize {zimg ,i ,ztext ,i }Ni=1 to have unit ℓ2
+> norm to avoid the trivial solution Zimg =Ztext =0,C=0.
+> 3The volume of space is estimated by counting the number of ϵ-balls that can be packed [82].
+
+Remark 1. The incorporated regularization terms −ρ(Zimg )
+
+and −ρ(Ztext ) are to maximize the volume of the spanned subspace of the learned representations. As analyzed in [72], the total coding rate regularization can not only prevent the catastrophic representation collapse but also promote the learned representations conforming to a union of the modality-specific subspaces. From an alternating optimization perspec-tive, when {Zimg , Ztext } are fixed, optimizing the shared coefficient matrix C in DeepMORSE encourages modality-shared subspace-preserving structures; whereas when C is fixed, optimizing {Zimg , Ztext } in DeepMORSE refines the multimodal representations to better conform to a union of modality-specific subspace structures. 
+
+B. Theoretical Justification 
+
+Proposition 1. Consider the sub-problem of DeepMORSE with fixed representations Zimg and Ztext , i.e., 
+
+cj 
+
+> share
+
+:= arg min 
+
+> cj
+
+∥zj 
+
+> img
+
+− Z−j
+
+> img
+
+cj ∥22 + ∥zj 
+
+> text
+
+− Z−j 
+
+> text
+
+cj ∥22, (7) 
+
+where Z−j 
+
+> img
+
+and Z−j 
+
+> text
+
+denote the representation matrices excluding the j-th column. Let cj⋆ be the modality-invariant self-expressive coefficients, i.e., 
+
+zj 
+
+> img
+
+= Z−j
+
+> img
+
+cj⋆ + δj
+
+> img
+
+, zj 
+
+> text
+
+= Z−j 
+
+> text
+
+cj⋆ + δj
+
+> text
+
+, (8) 
+
+where δj
+
+> img
+
+, δj 
+
+> text
+
+denote the modality-specific deviation terms. Assume that E[δj
+
+> img
+
+] = E[δj
+
+> text
+
+] = 0, Cov[ δj
+
+> img
+
+] = Cov[ δj
+
+> text
+
+] = 
+
+σ2Id, then we have: a) cj 
+
+> share
+
+is closer to cj⋆ than both the modality-specific optimal solutions cj 
+
+> img
+
+and cj
+
+> text
+
+, i.e., 
+
+E
+
+h
+
+∥cj 
+
+> share
+
+−cj⋆∥22
+
+i
+
+≤ min 
+
+
+
+E
+
+h
+
+∥cj 
+
+> img
+
+−cj⋆∥22
+
+i
+
+, E
+
+h
+
+∥cj 
+
+> text
+
+−cj⋆∥22
+
+i 
+
+.
+
+(9) 
+
+b) If cj⋆ is subspace-preserving, then the self-expressive coefficients corresponding to mismatched subspaces (which are indicated by Ij
+
+> −
+
+) satisfy that: 
+
+E
+
+h
+
+∥cj
+
+> share ,Ij
+> −
+
+∥22
+
+i
+
+≤ min 
+
+
+
+E
+
+h
+
+∥cj
+
+> img ,Ij
+> −
+
+∥22
+
+i
+
+, E
+
+h
+
+∥cj
+
+> text ,Ij
+> −
+
+∥22
+
+i 
+
+. (10) We now turn to the other side of the alternating optimiza-tion, where we optimize the modality-specific representations 
+
+{Zimg , Ztext } when C is fixed. We consider the following problem: 
+
+arg min 
+
+> Z
+
+− log det( I + αZZ ⊤) + γ∥Z − ZC ∥2 
+
+> F
+
+,
+
+s.t. ∥Z∥2 
+
+> F
+
+= N, 
+
+(11) where α = d/ (N ϵ 2). This formulation is exactly the regular-ized deep self-expressive model analyzed in [72]. It is easy to see that the two modality-specific representations {Zimg , Ztext }
+
+are non-collapsed under mild conditions as follows. 
+
+Proposition 2 ( [72]) . Let M := ( I −Cshare )( I −Cshare )⊤, the optimal multimodal representations {Zimg ,⋆ , Ztext ,⋆ } learned by solving problem (6) are non-collapsed, i.e., satisfying 
+
+rank( Zimg ,⋆ ) = rank( Ztext ,⋆ ) = min {d, N },JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 5
+
+with the singular values given by 
+
+σ(i) 
+
+> Zimg ,⋆
+
+= σ(i) 
+
+> Ztext ,⋆
+
+=
+
+s 1
+
+γσ (i) 
+
+> M
+
++ ν⋆
+
+− 1
+
+α , (12) 
+
+for i = 1, · · · , min {d, N }, provided that γ < (α −
+
+ν⋆)/λ max (M ), where ν⋆ is the optimal dual variable. 
+
+Remark 2. The two propositions characterize a mutually rein-forcing mechanism: the shared self-expressive coefficients sup-press modality-specific noise towards being modality-specific subspace-preserving, which in turn guides the modality-specific representations toward a structured UoS distribution. Then, the refined structured representations help learn shared self-expressive coefficients in subsequent iterations. Finally, from an implementation perspective, if a random mini-batch scheme is used to solve C, then there is an implicit regularization ∥C∥2 
+
+> F
+
+in the self-expressive model. Precisely, we have the following result. 
+
+Proposition 3. Let ξ = ( ξ1, . . . , ξ N )⊤ be a random vector consisting of N i.i.d. Bernoulli random variables with 
+
+ξi =
+
+ 1, with probability nb/N, 
+
+0, with probability 1 − nb/N, (13) 
+
+where nb is the batch size. Then, using a stochastic mini-batch scheme to solve C in the sub-problem of DeepMORSE essentially addresses the following problem 4
+
+min  
+
+> C
+
+∥Zimg Diag( ξ) − Zimg Diag( ξ)C Diag( ξ)∥2
+
+> F
+
++ ∥Ztext Diag( ξ) − Ztext Diag( ξ)C Diag( ξ)∥2 
+
+> F
+
+,
+
+s.t. Diag( C) = 0, (14) 
+
+which induces an implicit regularization 2( N −nb) 
+
+> nb
+
+∥C∥2 
+
+> F
+
+.
+
+This result reveals that the mini-batch training procedure of the self-expressive coefficients introduces an implicit ∥C∥2
+
+> F
+
+regularization. This also explains the empirical observation in [72] that explicit regularization on the self-expressive co-efficients has merely marginal effect—because the mini-batch optimization itself already induces an implicit regularizer. 
+
+C. Implementations 
+
+Textual Counterpart Generation. In practical image clus-tering scenarios, off-the-shelf image-text pairs are seldom available. Therefore, we leverage pretrained vision-language models (e.g., CLIP [83]) to generate a textual counterpart for each image. Formally, we denote x ∈ RD as an image embed-ding and D = {d1, · · · , dM } as a concept dictionary of text embeddings. Following prior work [28], we build the concept dictionary D by first applying k-means algorithm to the image embeddings and then, for each cluster center, selecting the top-ranked WordNet text embeddings based on the similarity between image embeddings and text embeddings. Given the concept dictionary D, we then generate the textual counterparts for each image that accurately capture the semantic content of the image while maintaining the clear geometric structure. To be specific, for each image embedding   
+
+> 4The regularization terms not involving cjare ignored.
+
+x ∈ RD , we seek its textual counterpart t := PMi=1 θidi by solving the following cross-modal sparse coding problem: 
+
+min  
+
+> θ
+
+∥x −
+
+> M
+
+X
+
+> i=1
+
+θidi∥22, s.t. ∥θ∥0 ≤ s, (15) where ∥θ∥0 denotes the number of non-zero coefficients and 
+
+s is a positive integer to specify the sparsity. Note that the query comes from the image modality while the dictio-nary is constructed from the text modality. The describable correspondence of the textual counterpart t is guaranteed by minimizing the Euclidean distance between x and t, in which the sparsity constraint enforces that only the top-s most semantically relevant atomic concepts are picked, so that the generated textual counterpart {ti}Ni=1 approximately reside on the subspace spanned by a small set of atomic concepts in D.By solving problem (15) for all images X := {x1, · · · , xN },we obtain the textual counterparts T := {t1, · · · , tN }, which accurately reflect the content of each image while approxi-mately conforming to a UoS structure. In experiments, we adopt matching pursuit algorithm [84] to solve problem (15). 
+
+Reparameterization and Training Procedure. To solve prob-lem (6) efficiently, we use MLPs to reparameterize f and g
+
+as f ( · ; ϕI ) and g( · ; ϕT ), where ϕI and ϕT denote the learnable parameters. Accordingly, the modality-specific (i.e., image and text) representations are obtained by: 
+
+zimg =f (x; ϕI )/∥f (x; ϕI )∥2,
+
+ztext =g(t; ϕT )/∥g(t; ϕT )∥2, (16) where the unit ℓ2-norm is to satisfy the normalization con-straint in problem (4). Since the number of expressive coeffi-cients {cij }Ni,j =1 grows quadratically with N , we follow [10], [68], [72] to reparameterize the coefficients with a properly designed two-branch network. Specifically, we first compute a modality-mixed representation zmix := 12 (zimg + ztext ) and then define the expressive coefficients as follows: 5
+
+C = P(Z⊤
+
+> mix
+
+Zmix ), (17) where P(·) is a signed Sinkhorn-Knopp projection [87]. 
+
+Remark 3. We clarify the key differences between our repa-rameterization of C and that of SENet [68]. First, although SENet is also trained with SGD, its self-expressive coefficients are computed with respect to the dictionary which consists of the full training data. As a result, there is no implicit regu-larization induced by its training procedure and the computa-tional cost scales with N . In our DeepMORSE, the training procedure via SGD in mini-batch mode effectively induces an implicit regularization ℓ22, similar to the implicit regulariza-tion analyzed in [67]. Second, SENet introduces a learnable soft-thresholding operation to obtain a sparse self-expressive matrix, while DeepMORSE adopts “signed” Sinkhorn-Knopp projection to obtain the self-expressive matrix. Empirically, we observe that the “signed” Sinkhorn-Knopp projection      
+
+> 5After the Sinkhorn-Knopp projection [10], [85], [86], we eliminate the diagonal elements of Cto satisfy the constraint, and multiply the projected coefficients element-wise by sign( Z⊤
+> mix Zmix )to restore the sign, as the self-expressive coefficients are not required to be non-negative. Thus, we refer to it as a “signed” Sinkhorn-Knopp projection. JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 6
+
+yields better clustering performance compared to the soft-thresholding operator. Third, while the forward computation 
+
+C = P(Z⊤Z) is similar to [10], the interpretation is fundamentally different: the output of Sinkhorn-Knopp pro-jection in [10] is doubly stochastic and used as the affinity matrix; whereas the output of the “signed” Sinkhorn-Knopp projection 6 in DeepMORSE is no longer doubly stochastic and serves as self-expressive coefficients to capture the underlying subspace structure. Equipped with the reparameterization for Zimg , Ztext and C,rather than directly solving Zimg , Ztext and C from problem (6), we instead train the networks by jointly updating the parameters {ϕI , ϕT } via Stochastic Gradient Descent (SGD) in mini-batch mode. Specifically, for each iteration, we pick a mini-batch of nb image representations at random from X
+
+(denoted as ZB 
+
+> img
+
+∈ Rd×nb ), and accordingly pick nb counter-part text representations from T (denoted as ZB 
+
+> text
+
+∈ Rd×nb ). Then, for each mini-batch, the loss function is computed by: 
+
+L := γ  ∥ZB 
+
+> img
+
+− ZB
+
+> img
+
+CB∥2 
+
+> F
+
++ ∥ZB 
+
+> text
+
+− ZB
+
+> text
+
+CB∥2
+
+> F
+
+
+
+− ρ(ZB
+
+> img
+
+) − ρ(ZB
+
+> text
+
+), (18) where the term r(·) is ignored due to the implicit regularization induced by SGD in a mini-batch mode (Proposition 3). 
+
+Evaluation on Test Data. After training, the clustering results are obtained via spectral clustering [65] on the affinity matrix directly induced by |Z⊤
+
+> img
+
+Zimg |. Here, we use only the image modality to find the clustering of the test data, without fur-ther textual counterpart generation. This makes the inductive clustering process simpler and straightforward. 7 Moreover, the structured multimodal representations Zimg and Ztext learned by DeepMORSE can be directly applied to downstream tasks such as zero-shot classification and image retrieval. For clarity, we illustrate our DeepMORSE in Figure 2 and summarize the training procedure in Algorithm 1. IV. E XPERIMENTS 
+
+We first describe the experimental setup in Section IV-A, then report the clustering performance comparison in Sec-tion IV-B and show extensive evaluations in Section IV-C. 
+
+A. Experimental Setup 
+
+The reparameterized transformations f ( · ; ϕI ) and 
+
+g( · ; ϕT ) are implemented as two-layer MLPs, each consisting of two fully-connected layers interleaved with batch normal-ization and a ReLU activation, with hidden dimension 512 and output dimension 128 by default. Nevertheless, for the datasets that include more than 128 categories, we increase the hidden dimensions and output dimensions of the model and adjust 
+
+γ proportionally according to the output dimension, which is based on the sufficient condition to avoid representation collapse [72]. We fix the hyperparameters s and ϵ to s = 5 
+
+> 6The Sinkhorn-Knopp projection has also been employed in manifold-constrained hyper-connections (mHC) [88], where it projects residual con-nection matrices onto the Birkhoff polytope for stable signal propagation. While the context differs, we conjecture that the Sinkhorn-Knopp projection serves to numerically stabilizing the optimization.
+> 7This strategy also follows [26], [28], ensuring a fair comparison.
+
+Algorithm 1 Deep Modality-Shared Self-Expressive Model (DeepMORSE) 
+
+Input: Image embeddings X , dictionary of text embeddings 
+
+D, hyperparameters s, γ, ϵ, n b, number of iterations T ,learning rate η
+
+Textual counterpart generation: Generate textual counter-parts T = {ti}Ni=1 by solving problem (15) 
+
+Initialization: Initialize network parameters ϕI , ϕT 
+
+> 1:
+
+for t = 1 , . . . , T do  
+
+> 2:
+
+# Forward propagation  
+
+> 3:
+
+Randomly select a mini-batch of data {xi, ti}i∈B  
+
+> 4:
+
+Compute representations ZB
+
+> img
+
+, ZB 
+
+> text
+
+by (16)  
+
+> 5:
+
+Compute self-expressive matrix CB by (17)  
+
+> 6:
+
+Compute loss L by (18)  
+
+> 7:
+
+# Backward propagation  
+
+> 8:
+
+Compute gradient ∇ϕI := ∂L 
+
+> ∂ϕI
+
+, ∇ϕT := ∂L 
+
+> ∂ϕT
+> 9:
+
+Update ϕI , ϕT by SGD with learning rate η 
+
+> 10:
+
+end for Test:  
+
+> 11:
+
+Compute representations of test data Zimg by (16)  
+
+> 12:
+
+Apply spectral clustering on |Z⊤
+
+> img
+
+Zimg |.and ϵ2 = 0 .1 on all datasets. DeepMORSE is trained with a learning rate of η = 10 −4 and a batch size of nb = 1024 .We evaluate clustering performance using accuracy (ACC) and normalized mutual information (NMI), and report the average results over five random seeds. Please refer to Appendix B for more experimental details and our principled approach for hyper-parameters configuration. 
+
+B. Main Results 
+
+Clustering Performance. We conduct experiments on six im-age clustering benchmarks, including CIFAR-10 [12], CIFAR-20 [12], ImageNet-Dogs [89], DTD-47 [90], UCF-101 [91], and ImageNet-1k [13]. We compare DeepMORSE with uni-modal deep clustering baselines (e.g., GCC [22], NNM [23], SCAN [20], CoKe [45], SeCu [46], PRO-DSC [72]) as well as multimodal methods (e.g., SIC [26], TAC [28], MCA [57], GradNorm [59], CAE [58]). 8 For CLIP +k-means and CLIP +Spectral Clustering (SC), we compute the image embeddings with pretrained CLIP image encoder and then directly run k-means or spectral clustering algorithm on the obtained embeddings, respectively. As shown in Table I, DeepMORSE achieves state-of-the-art clustering performance except for CIFAR-10. Specifically, it improves clustering accuracy by 3.8% , 3.2% , and 4.9% 
+
+on DTD-47, UCF-101, and ImageNet-Dogs, respectively. In addition, since PRO-DSC is a deep self-expressive model for unimodal image clustering, the improvements of DeepMORSE over PRO-DSC provide clear evidence that leveraging textual information can effectively enhance image clustering. 
+
+Visualization via PCA. To visualize the structure of rep-resentations learned by TAC [28] and our DeepMORSE, 
+
+> 8Since that GradNorm and CAE are training-free methods, we compare DeepMORSE to TAC for most cases.
+
+JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 7
+
+TABLE I 
+
+IMAGE CLUSTERING PERFORMANCE COMPARISON . THE BEST RESULTS ARE IN BOLD AND THE SECOND BEST RESULTS ARE UNDERLINED . T HE METHOD MARKED WITH † IS BASED ON OUR REPRODUCTION , DUE TO THE DISTINCTION OF ARCHITECTURES . T HE METHODS MARKED WITH ∗ ARE TRAINING -FREE APPROACHES .CIFAR-10 CIFAR-20 Dogs-15 DTD-47 UCF-101 ImgNet-1k Backbone Venue ACC NMI ACC NMI ACC NMI ACC NMI ACC NMI ACC NMI 
+
+Without Textual Information 
+
+SCAN [20] ResNet-18 ECCV’20 88.3 79.7 50.7 48.6 59.3 61.2 46.4 59.4 61.1 79.7 39.9 -GCC [22] ResNet-18 ICCV’21 85.6 76.4 47.2 47.2 52.6 49.0 - - - - - -NNM [23] ResNet-18 CVPR’21 83.7 73.7 45.9 48.0 58.6 60.4 - - - - - -CoKe [45] ResNet-18 CVPR’22 85.7 76.6 49.7 49.1 - - - - - - - -SeCu [46] ResNet-18 ICCV’23 93.0 86.1 55.2 55.1 - - - - - - - -CLIP+ k-means [83] ViT-B/32 ICML’21 74.2 70.3 45.5 49.9 38.1 39.8 42.6 57.3 58.2 79.5 38.9 72.3 CLIP+SC [83] ViT-B/32 ICML’21 69.0 65.6 45.1 47.7 41.9 42.5 49.8 61.4 64.2 82.2 41.3 72.5 PRO-DSC † [72] ViT-B/32 ICLR’25 86.7 79.1 58.8 62.1 32.3 25.8 48.1 57.0 68.0 83.6 - -
+
+With Textual Information 
+
+SIC [26] ViT-B/32 AAAI’23 92.6 84.7 58.3 59.3 69.7 69.0 45.9 59.6 61.9 81.0 47.0 77.2 MCA [57] ViT-B/32 AAAI’24 92.7 84.9 59.7 59.8 74.9 73.3 - - - - - -TAC [28] ViT-B/32 ICML’24 91.9 83.3 60.7 61.1 83.0 80.6 50.1 62.1 68.7 82.3 58.2 79.9 GradNorm ∗ [59] ViT-B/32 ICCV’25 91.1 82.6 60.6 61.3 81.2 81.0 50.9 61.3 62.7 82.9 52.6 79.2 CAE ∗ [58] ViT-B/32 AAAI’26 90.9 81.7 60.9 62.8 77.5 77.9 46.7 62.1 63.5 82.8 53.1 79.3 DeepMORSE ViT-B/32 Ours 92 .3±0.1 84 .1±0.2 63.3 ±0.6 63.1 ±0.5 87.9 ±1.1 83.8 ±1.4 54.7 ±1.0 64.2 ±0.3 71.9 ±0.8 85.6 ±0.4 60.8 ±0.2 80.9 ±0.2
+
+(a) TAC image (top) and text (bottom) representations 
+
+(b) DeepMORSE image (top) and text (bottom) representations Fig. 3. Visualization of image and text representations via PCA. 
+
+we display the dimension reduction results via PCA of the learned representations for each modality on five benchmark datasets. Note that PCA preserves the global structure of the representations as it performs the dimension reduction by a 
+
+linear projection. As shown in Figure 3, the representations learned by our DeepMORSE (in rows 3 and 4) approximately JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 8Image Text Min Max Avg Ours                        
+
+> 0.00 0.05 0.10 0.15 0.20
+> Value CIFAR-20
+> 1
+> N
+> ∑Nj=1 ‖cj
+> Ij
+> +
+> ‖221
+> N
+> ∑Nj=1 ‖cj
+> Ij
+> −
+> ‖22
+> ACC
+> 020 40 60 80 100
+> ACC (%) Image Text Min Max Avg Ours
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30
+> Value ImageNet-Dogs
+> 1
+> N
+> ∑Nj=1 ‖cj
+> Ij
+> +
+> ‖221
+> N
+> ∑Nj=1 ‖cj
+> Ij
+> −
+> ‖22
+> ACC
+> 020 40 60 80 100
+> ACC (%) Image Text Min Max Avg Ours
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30
+> Value DTD-47
+> 1
+> N
+> ∑Nj=1 ‖cj
+> Ij
+> +
+> ‖221
+> N
+> ∑Nj=1 ‖cj
+> Ij
+> −
+> ‖22
+> ACC
+> 30 40 50 60 70
+> ACC (%) Image Text Min Max Avg Ours
+> 0.00 0.10 0.20 0.30 0.40 0.50
+> Value UCF-101
+> 1
+> N
+> ∑Nj=1 ‖cj
+> Ij
+> +
+> ‖221
+> N
+> ∑Nj=1 ‖cj
+> Ij
+> −
+> ‖22
+> ACC
+> 60 70 80 90
+> ACC (%)
+
+Fig. 4. Illustration of the average intra/inter-class self-expressive coeffi-cients along with clustering accuracy. 
+
+form a union of orthogonal low-dimensional subspaces, where the representations from each class are concentrated within a distinct subspace. For TAC (in rows 1 and 2), the projected embeddings exhibit a variety of structures that cannot be easily approximated by a union of centroids, subspaces, or manifolds. 
+
+DeepMORSE Suppresses Inter-Class Coefficients. Proposi-tion 1 demonstrates that the modality-shared self-expressive coefficients provably suppress inter-class self-expressive co-efficients compared to modality-specific solutions. We now empirically verify this statement. Specifically, we compare the shared self-expressive matrix learned by our DeepMORSE against those learned separately on each modality, in terms of the per-sample intra-class coefficients 1
+
+N
+
+PNj=1 ∥cj
+
+Ij
+
+> +
+
+∥22, the per-sample inter-class coefficients 1
+
+N
+
+PNj=1 ∥cj
+
+Ij
+
+> −
+
+∥22, and the resulting clustering accuracy. We also include “post-fusion” baselines obtained by integrating the modality-specific coef-ficients via element-wise minimum, maximum, and average operations, respectively. As shown in Figure 4, the inter-class coefficients produced by our DeepMORSE are the smallest among all methods. This validates the theoretical finding that modality-shared self-expression suppresses inter-class noise. At the same time, its intra-class coefficients remain com-parably strong, which account for the satisfactory clustering accuracy achieved by our DeepMORSE. 
+
+Implicit Regularization in Mini-batch Training. To em-pirically verify the implicit Frobenius-norm regularization induced by the mini-batch training scheme as pointed out in Proposition 3, we compare the self-expression loss computed during mini-batch training against that computed using the full training data. During standard training with batch size 
+
+nb, the per-sample self-expressive loss for each batch is computed as 1
+
+nb ∥ZB − ZBCB∥2
+
+F for whichever the image or text modality. If we take an average over all mini-batches within each epoch, we have the per-sample mini-batch loss 
+
+1
+
+N
+
+PNj=1 ∥zimg ,j −ZB
+
+img cB
+
+j ∥22 and 1
+
+N
+
+PNj=1 ∥ztext ,j −ZB
+
+text cB
+
+j ∥22.To obtain the self-expressive loss without using mini-batch 20 40 60 80 100                                                         
+
+> Epoch
+> 0.10 0.15 0.20 0.25 0.30 0.35
+> Value
+> Regularization
+> N−nb
+> N n b‖C‖2
+> F: 0.014 DTD (Image)
+> 1
+> N
+> ∑Nj=1 ‖zimg ,j −ZBimg cB
+> j‖221
+> N
+> ∑Nj=1 ‖zimg ,j −Zimg cj‖22
+> Regularization 20 40 60 80 100
+> Epoch
+> 0.10 0.15 0.20 0.25 0.30 0.35
+> Value
+> Regularization
+> N−nb
+> N n b‖C‖2
+> F: 0.014 DTD (Text)
+> 1
+> N
+> ∑Nj=1 ‖ztext ,j −ZBtext cB
+> j‖221
+> N
+> ∑Nj=1 ‖ztext ,j −Ztext cj‖22
+> Regularization 20 40 60 80 100
+> Epoch
+> 0.20 0.22 0.24 0.26 0.28 0.30 0.32
+> Value
+> Regularization
+> N−nb
+> N n b‖C‖2
+> F: 0.045 UCF101 (Image)
+> 1
+> N
+> ∑Nj=1 ‖zimg ,j −ZBimg cB
+> j‖221
+> N
+> ∑Nj=1 ‖zimg ,j −Zimg cj‖22
+> Regularization 20 40 60 80 100
+> Epoch
+> 0.150 0.175 0.200 0.225 0.250 0.275 0.300
+> Value
+> Regularization
+> N−nb
+> N n b‖C‖2
+> F: 0.045 UCF101 (Text)
+> 1
+> N
+> ∑Nj=1 ‖ztext ,j −ZBtext cB
+> j‖221
+> N
+> ∑Nj=1 ‖ztext ,j −Ztext cj‖22
+> Regularization
+
+Fig. 5. Validating Implicit regularization induced by SGD in mini-batch. 
+
+subsampling scheme, for each iteration, we forward the entire training set through the network to obtain the full representations Zimg , Ztext ∈ Rd×N , and then compute the complete self-expressive matrix C via (16) and (17). The corresponding full-data loss 1
+
+N
+
+PNj=1 ∥zimg ,j − Zimg cj ∥22 and 
+
+1
+
+N
+
+PNj=1 ∥ztext ,j − Ztext cj ∥22 are then obtained. According to Proposition 3, the per-sample loss gap between the mini-batch scheme and the full-data scheme is expected to be 
+
+N −nb
+
+N n b ∥C∥2
+
+F for each modality—which is due to the implicit regularization. We conduct training experiments on datasets DTD-47 and UCF-101 with batch size nb = 1024 and display the loss curves during training period in Figure 5. As can be observed, the quantitatively measured gap between the loss functions tends to closely match the theoretical prediction in Proposition 3 on both datasets when the training is terminated. This confirms the implicit regularization due to the mini-batch training in our DeepMORSE. 
+
+Ablation Studies. To evaluate the contribution of each com-ponent in our DeepMORSE, we conduct a set of ablation studies and report the results in Table II. First, we evaluate unimodal variants by removing the loss from the other modal-ity. 9 As shown in first, second and fifth rows, the cluster-ing performance degrades sharply when only using a single modality. Removing the representation regularization terms further causes severe degeneration (see third row and sixth row), which is consistent with the collapse problem reported in [72], [78]. Finally, when replacing our textual counterpart generation method with neighborhood-based retrieval [28] (fourth row), the results still surpass those of [28], highlighting the robustness of our modality-shared self-expression. 
+
+Complexity Analysis. Note that by the commutative property 
+
+log det( I + ZZ ⊤) = log det( I + Z⊤Z) (see [92]), we can reduce the computation of log det( ·) from an N × N
+
+> 9
+
+Unimodal self-expressive matrices are defined as Cimg := 
+
+P(Z⊤
+
+> img
+
+Zimg ) and Ctext := P(Z⊤
+
+> text
+
+Ztext ), with γ selected from 
+
+{0.5, 1, 5, 10 , 50 , 100 , 150 , 300 , 500 }.JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 9
+
+TABLE II 
+
+ABLATION STUDIES .
+
+Text Loss function Clustering performance (ACC: %) generation Lexpr img Lexpr text ρ(Zimg ) ρ(Ztext ) CIFAR-10 CIFAR-20 Dogs-15 DTD-47 UCF-101 - ✓ ✓ 86.7 58.8 32.3 48.1 68.0 Neighbor 
+
+✓ ✓ 69.8 34.0 72.2 40.0 60.1 
+
+✓ ✓ 32.8 9.6 36.3 28.2 44.0 
+
+✓ ✓ ✓ ✓ 92.0 62.4 88.5 54.3 72.2 
+
+✓ ✓ 71.2 34.5 72.9 40.2 60.7 
+
+✓ ✓ 33.0 9.4 17.2 27.0 47.8 Sparse ✓ ✓ ✓ ✓ 92.3 63.3 87.9 54.7 71.9 0 14 29 43 58             
+
+> Training Time (s)
+> 0.45 0.49 0.53 0.57 0.61 0.65
+> Accuracy (%)
+> CIFAR-20 DeepMORSE TAC 0510 15 20
+> Training Time (s)
+> 0.50 0.58 0.66 0.75 0.83 0.91
+> Accuracy (%)
+> ImageNet-Dogs DeepMORSE TAC 02468
+> Training Time (s)
+> 0.00 0.11 0.23 0.34 0.45 0.57
+> Accuracy (%)
+> DTD DeepMORSE TAC 0917 26 35
+> Training Time (s)
+> 0.00 0.15 0.31 0.46 0.61 0.76
+> Accuracy (%)
+> UCF101 DeepMORSE TAC
+
+Fig. 6. Clustering accuracy of DeepMORSE and TAC at different training time. Red: DeepMORSE; blue: TAC. 
+
+matrix to a d × d matrix. This decouples the complexity from the number of samples N and yields a time and space complexity of O(d3), where typically d ≪ N . Since that the computation of log det( ·) is the bottleneck in optimizing our DeepMORSE, this property makes the loss evaluation substantially more efficient. To evaluate the computational efficiency of DeepMORSE, we measure the time cost on a single NVIDIA RTX 5090 GPU and Intel(R) Xeon(R) Platinum 8470Q CPU. Specifically, we plot the clustering accuracy as a function of training time for both TAC and DeepMORSE in Figure 6. We also mark the time at which DeepMORSE reaches TAC’s best performance. As shown, to reach the best clustering accuracy of TAC, DeepMORSE requires only about half of TAC’s training time (and less than 20 seconds for each dataset). 
+
+Sensitivity of Hyperparameters. To discover the influence of hyperparameters on clustering performance, we conduct a set of experiments with varying s and γ and illustrate the results in Figure 7. For each hyperparameter setting, the experiments are repeated for five trials and report the average clustering accuracy. As can be observed, the clustering performance of 75 125 175 225 275             
+
+> γ
+> 525 45 65 85
+> s
+> CIFAR-20
+> 56% 60% 60%
+> 40 45 50 55 60 65 70 75 125 175 225 275
+> γ
+> 525 45 65 85
+> s
+> ImageNet-Dogs
+> 60% 60% 70% 80%
+> 30 40 50 60 70 80 90 75 125 175 225 275
+> γ
+> 525 45 65 85
+> s
+> DTD
+> 40% 50% 52% 52%
+> 30 35 40 45 50 55 60 75 125 175 225 275
+> γ
+> 525 45 65 85
+> s
+> UCF101
+> 68% 70% 70%
+> 50 55 60 65 70 75
+
+Fig. 7. Clustering accuracy of DeepMORSE with respect to γ and s.
+
+TABLE III 
+
+LEARNING EXPRESSIVE MATRIX C VIA SEN ET .
+
+Clustering result (ACC: %) 
+
+C CIFAR-10 CIFAR-20 Dogs-15 DTD-47 UCF-101 
+
+Tb(Q⊤
+
+> mix
+
+Kmix ) 91.7 53.9 76.9 51.8 71.9 
+
+P(Z⊤
+
+> mix
+
+Zmix ) 92.3 63.3 87.9 54.7 71.9 
+
+DeepMORSE remains stable across different settings of s and 
+
+γ, showing its robustness to hyperparameter choices. 
+
+Learning C via SENet. To further investigate the effect of the “signed” Sinkhorn-Knopp projection in obtaining the modality-shared self-expressive matrix, we design a variant that replaces the Sinkhorn-based coefficients of DeepMORSE with the strategy of SENet [68]. Specifically, we retain the learnable transformations f and g to produce modality-specific representations zimg and ztext , and introduce two separate MLPs—a query net and a key net—following SENet’s archi-tecture. For each mini-batch, we first compute the modality-specific query embeddings of the batch samples and the key embeddings of all training data via these networks, and then average the embeddings of the two modalities to obtain modality-shared representations Qmix and Kmix . The modality-JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 10                                                    
+
+> TABLE IV
+> VARIANTS OF LEARNABLE TRANSFORMATIONS .
+> Clustering result (ACC: %)
+> f,gCIFAR-10 CIFAR-20 Dogs-15 DTD-47 UCF-101 N/A 78.2 53.0 61.7 45.8 60.3 Linear 92.1 59.2 82.3 54.4 70.8 MLP (2 layers) 92.3 63.3 87.9 54.7 71.9 MLP (3 layers) 92.3 63.5 88.4 53.5 73.5
+> TABLE V
+> MLLM FOR TEXTUAL COUNTERPART GENERATION .
+> Text Clustering result (ACC: %) generation CIFAR-10 CIFAR-20 Dogs-15 DTD-47 UCF-101 MLLM as T77.5 50.3 82.3 56.6 74.0
+> MLLM as D92.0 61.0 83.6 55.5 73.9 WordNet 92.3 63.3 87.9 54.7 71.9
+
+shared self-expressive matrix is then obtained by applying the adaptive soft-thresholding operation on the inner product of the modality-shared representations, i.e., Tb(Q⊤
+
+> mix
+
+Kmix ). Ex-perimental results are reported in Table III. As can be read that, the self-expressive matrix obtained via the “signed” Sinkhorn-Knopp projection consistently outperforms the SENet based variant method on all datasets except UCF-101. 
+
+C. Other Evaluations 
+
+Evaluation on Using other Learnable Transformations. 
+
+To validate the necessity of involving a set of learnable nonlinear transformations f , g, we conducted an ablation study with different transformation variants: a) without using 
+
+f , g, i.e., the self-expressive model is learned directly on the frozen CLIP features; b) using linear f , g, i.e., f , g
+
+are replaced by learnable linear projections; and c) using nonlinear f , g, i.e., using nonlinear transformations with different layers. For each variant, we tune the parameter 
+
+γ ∈ { 0.5, 1, 5, 10 , 50 , 100 , 150 , 300 , 500 } and report the best average clustering accuracy after repeating experiments with 5 random seeds. Experimental results are reported in Table IV. As can be read, the performance without using f , g degen-erates significantly compared to DeepMORSE. This confirms that the learned transformations are indeed necessary. Inter-estingly, the performance without using f , g still outperforms the result of CLIP+ k-means in Table I, indicating that the raw features are better approximated by a union of subspaces rather than by centroids. When linear transformations are used, the clustering performance improves substantially over the result of “without f , g”, indicating that even a linear projection can approximately transform data onto a union of subspaces, thereby enhancing the clustering performance. When nonlinear transformations are adopted, we obtain the best performance across all datasets. If we further increase the number of layers, marginal performance improvements can be observed. This suggests that using deep nonlinear transformations is able to effectively linearize and separate the subspaces in our DeepMORSE framework. 
+
+Generating Textual Counterparts Using MLLM. Note that directly leveraging Multimodal Large Language Models (MLLMs) is an appealing way to enrich textual counterparts for image clustering. Here we take Qwen-VL-Plus as a rep-resentative of MLLMs and conduct following two sets of experiments: a) using MLLM as T , and b) using MLLM as D.In the experiments of using MLLM as T , for each image, we prompt Qwen-VL-Plus to generate a descriptive caption, then wrap this caption into a CLIP-style prompt (e.g., “a photo of [caption]”) and encode it with the pretrained CLIP text encoder to obtain textual counterparts. In the experiments of using MLLM as D, we collect the captions for all images in a dataset as a dataset-specific, semantically compact dictionary, and then generate the textual counterparts from this dictionary and train DeepMORSE exactly as in the original WordNet-based setting of our DeepMORSE. We report the average clustering accuracy over 5 random trials in Table V. As can be read, using MLLM-generated captions yields performance comparable to or even better than the original WordNet-based setup, especially on the DTD-47 dataset, which contain texture images that are beyond the description of WordNet. However, for CIFAR-10 and CIFAR-20, the method based on MLLM-generated captions frequently misclassifies images because their resolution is very low ( 32 × 32 ), making reliable caption generation difficult. 
+
+Compared to Multi-view Clustering. To thoroughly evalu-ate the performance of our DeepMORSE in the context of multi-view clustering, we conduct the following two sets of experiments. First, we treat the CLIP image and text em-beddings as two views, then apply state-of-the-art multi-view clustering methods, SURE [53], GCFAgg [54], DIVIDE [55], CANDY [56], and COPER [93], to our multimodal data. For a fair comparison, we keep network architectures the same and repeat all experiments with 5 random seeds, reporting the average performance in Table VI. Second, we evaluate our DeepMORSE directly on several multi-view clustering datasets, including Scene15 [101], LandUse21 [102], NUS-WIDE [103], where we treat the multiple views as separate modalities within our framework. The experimental results are reported in Table VI. Across all datasets, we observe that our DeepMORSE is highly competitive with the multi-view baselines, implying that modeling modality-specific UoS structures with modality-shared relationship, as done in our DeepMORSE, provides a more effective way to leverage both multimodal and multi-view information. 
+
+Extending Beyond Vision-Language Data. While our current experiments focus on vision-language data, the DeepMORSE framework itself is modality-agnostic. Specifically, our Deep-MORSE only requires that each modality be mapped into a shared semantic feature space (as in CLIP). Given multi-modal input features, we can learn a transformation for each modality (e.g., image, text, acoustics, hyperspectral) via sepa-rate encoders, and construct a modality-shared self-expressive matrix without any architectural changes. In this sense, our DeepMORSE can be straightforwardly extended to additional modalities once suitable multimodal features are available. To demonstrate this, we additionally conduct experiments with Wav2CLIP [104], which provides a joint image-text-audio embedding space. Concretely, we first generate audio counter-JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 11 
+
+TABLE VI 
+
+COMPARING DEEP MORSE TO MULTI -VIEW CLUSTERING BASELINES ON MULTIMODAL AND MULTI -VIEW DATASETS .Multimodal clustering datasets Multi-view clustering datasets 
+
+ImageNet-Dogs DTD-47 UCF101 Scene15 LandUse21 NUS-WIDE Method ACC NMI ARI ACC NMI ARI ACC NMI ARI ACC NMI ARI ACC NMI ARI ACC NMI ARI SURE [53] 77.9 77.0 66.0 49.6 60.7 32.8 65.9 82.0 57.8 41.0 43.2 25.0 25.1 28.3 10.9 57.4 44.8 38.3 GCFAgg [54] 76.9 78.5 62.5 52.4 63.9 35.7 68.9 80.4 61.2 42.2 42.5 24.4 27.5 31.3 14.0 41.1 32.1 18.6 DIVIDE [55] 74.4 74.4 60.0 48.7 59.9 31.2 68.1 81.5 58.3 49.1 48.7 31.6 32.3 39.7 18.1 45.1 30.9 19.4 CANDY [56] 81.6 80.4 71.1 51.5 62.5 35.5 56.2 77.0 47.4 42.0 41.6 24.7 30.6 36.5 16.2 62.1 49.0 37.0 COPER [93] 82.0 80.8 72.2 50.1 61.3 33.8 56.5 77.8 47.6 40.7 42.0 25.0 31.0 35.9 16.1 62.1 49.3 37.7 Ours 87.9 83.8 78.3 54.7 64.2 39.3 71.9 85.6 66.7 43.2 46.2 28.0 31.4 37.9 17.4 63.4 50.6 43.2 
+
+TABLE VII 
+
+EXTENDING DEEP MORSE BEYOND VISION -LANGUAGE DATA . WE CONDUCT EXPERIMENTS WITH WAV 2CLIP AS THE PRETRAINED TRI -MODAL ARCHITECTURE .CIFAR-10 CIFAR-20 ImageNet-Dogs DTD-47 UCF-101 Image Text Audio ACC NMI ACC NMI ACC NMI ACC NMI ACC NMI 
+
+✓ 87.3 79.6 53.1 60.9 29.3 23.9 49.0 57.0 67.9 83.1 
+
+✓ 77.6 60.9 34.8 34.5 69.2 69.9 39.6 51.9 60.3 76.0 
+
+✓ 77.4 62.5 32.0 30.6 19.9 15.5 24.1 34.6 42.1 63.3 
+
+✓ ✓ 92.3 84.1 63.3 63.1 87.9 83.8 54.7 64.2 71.9 85.6 
+
+✓ ✓ 89.0 80.5 57.1 60.6 30.6 27.0 44.6 54.1 67.4 83.3 
+
+✓ ✓ ✓ 92.6 84.4 63.7 63.1 88.7 84.5 54.9 64.7 72.6 85.9 
+
+TABLE VIII 
+
+IMAGE RETRIEVAL PERFORMANCE (MAP: %) COMPARING TO THE STATE -OF -THE -ART . THE COMPARATIVE RESULTS ARE DIRECTLY CITED . T HE IMAGE ENCODER OF ALL METHODS ARE BASED ON VIT-B/32. Method Flower DTD Pets Cars UCF Caltech Food SUN Aircraft EuroSAT ImageNet-1k CLIP ViT-B/32 [83] 62.0 28.1 30.5 24.6 47.1 77.1 32.3 34.3 14.5 47.9 21.4 OTI [30] 62.6 31.9 37.5 28.0 48.6 79.9 34.7 36.3 14.4 47.2 23.8 Our DeepMORSE 65.2 32.0 57.7 28.9 53.3 81.1 57.1 42.6 15.6 53.4 30.2 
+
+TABLE IX 
+
+ZERO -SHOT CLASSIFICATION PERFORMANCE (ACC: %) COMPARING TO THE STATE -OF -THE -ART . THE COMPARATIVE RESULTS ARE DIRECTLY CITED . T HE IMAGE ENCODER OF ALL METHODS ARE BASED ON VIT-B/16. Method Flower DTD Pets Cars UCF Caltech Food SUN Aircraft EuroSAT ImageNet-1k CLIP ViT-B/16 [83] 64.4 44.3 88.3 65.5 65.1 93.4 83.7 62.6 23.7 42.0 66.7 Ensemble [94] 67.0 45.0 86.9 66.1 65.2 93.6 82.9 65.6 23.2 50.4 68.3 TPT [95] 69.0 47.8 87.8 66.9 68.0 94.2 84.7 65.5 24.8 42.4 69.0 DiffTPT [96] 70.1 47.0 88.2 67.0 68.2 92.5 87.2 65.7 25.6 43.1 70.3 DMN [97] 75.3 54.9 91.2 67.0 72.0 93.6 84.1 69.1 28.3 56.2 70.5 TDA [98] 71.4 47.4 88.6 67.3 70.7 94.2 86.1 67.6 23.9 58.0 69.5 ZLaP [99] 73.5 48.6 87.1 65.6 71.5 93.1 86.9 67.4 25.4 55.6 70.2 ECALP [100] 76.0 56.3 92.3 68.2 75.4 94.4 85.7 70.5 29.5 56.5 71.3 Our DeepMORSE 76.9 54.8 93.0 68.7 74.1 91.9 86.2 70.2 27.1 44.4 71.4 
+
+parts for each image via multimodal sparse coding (as in Sec. III-C) from the audio features of the FSD50K dataset [105], which contains 51,197 Freesound clips across 200 classes. For training our DeepMORSE, we transform the audio data u
+
+into representations with another learnable mapping zaudio =
+
+h(u; ϕu) followed by normalization. We then construct a modality-mixed representation: zmix = 0 .5( zimg + zaudio ) for image-audio; and zmix = 0 .45 ×zimg +0 .45 ×ztext +0 .1×zaudio 
+
+for image-text-audio. The modality-shared self-expressive ma-trix is still computed by Eq. (17), and we add the audio loss term γ∥Zaudio − Zaudio C∥2 
+
+> F
+
+− ρ(Zaudio ) into the overall objective. The results are shown in Table VII. We observe a notable performance drop for the Image +audio combination, which is consistent with the findings in AudioCLIP [106], where ImageNet top-1 accuracy drops from 40.5% to 21.8%. This degradation is largely due to the fact that existing tri-modal encoders are trained on much smaller audio corpora (e.g., AudioSet with 2M clips) compared to the large-scale image-text data used for CLIP (400M pairs), resulting in weaker image representations. For the Image+text+audio combination, the performance on CIFAR-10, CIFAR-20, and ImageNet-Dogs slightly improves or remains on par with the Image +text setting, demonstrating that DeepMORSE can incorporate an additional audio modal-ity without harming performance and sometimes with small gains. For DTD-47 and UCF-101, audio is unsurprisingly less JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 12 
+
+helpful: textures (e.g., striped, grid) and many actions (e.g., applying eye makeup, playing yo-yo) are essentially silent. 
+
+DeepMORSE for Image Retrieval. Image retrieval is a uni-modal downstream task that aims to retrieve images belonging to the same category. Here, we directly perform the retrieval based on the cosine similarity of the image representations learned by our DeepMORSE. As shown in Table VIII, our DeepMORSE achieves state-of-the-art performance on image retrieval without any task-specific design. Prior work [30] has shown that intra-modal similarity scores from CLIP models do not always correspond faithfully to semantic similarities among images. In contrast, the representations learned by our DeepMORSE mitigate this issue by aligning with structures shared across modalities. 
+
+DeepMORSE for Zero-Shot Classification. Zero-shot clas-sification is a multimodal downstream task that assigns each image to a class based on the similarity between its represen-tation and the text representations of the given labels. Since that the categories of the datasets are known, we construct the dictionary D = {d1, · · · , dC } for cross-modal sparse coding using embeddings of the prompts “A photo of [class name]” extracted by a pretrained CLIP text encoder, where C
+
+is the number of classes. After training DeepMORSE, each image x is classified according to the similarity between its learned representation and the class representations, i.e., 
+
+arg max j∈{ 1,··· ,C }     
+
+> f(x)⊤g(πj)
+> ∥f(x)∥2∥g(πj)∥2
+
+. The results are reported in Table IX, where the baseline results are directly cited from [100]. As can be read, our DeepMORSE achieves competitive performance and surpasses existing methods on datasets Flowers102, OxfordPets, and StanfordCars—without any task-specific design for zero-shot classification. V. C ONCLUSION 
+
+We have presented a simple but principled approach for deep image clustering assisted with textual information, called DeepMORSE, which jointly learns representations that con-form to a union of modality-specific subspaces and dis-covers shared self-expressive coefficients across modalities. Moreover, we have theoretically justified that the modality-shared self-expressive coefficients under certain conditions suppress the inter-class noise compared to modality-specific solutions, leading to a provably cleaner affinity for clustering. In addition, we have demonstrated that the SGD training in mini-batch mode intrinsically introduces an implicit regular-ization on the coefficient matrix, with no need to incorporate an explicit regularization term. Empirically, we have shown that DeepMORSE achieves state-of-the-art clustering perfor-mance on six widely used benchmarks, and the structured representations learned by DeepMORSE transfer effectively to downstream tasks including image retrieval and zero-shot classification, achieving competitive results without any task-specific losses or post-processing. In future work, it would be interesting to extend DeepMORSE to scenarios with naturally available text, to larger-scale problems, and to downstream tasks such as few-shot learning and open-world recognition. ACKNOWLEDGMENTS 
+
+This work is supported by the National Natural Science Foundation of China under Grant 62576048. REFERENCES [1] E. Forgy, “Cluster analysis of multivariate data: Efficiency versus interpretability of classifications,” Biometrics , pp. 768–780, 1965. [2] J. MacQueen, “Some methods for classification and analysis of multi-variate observations,” in Proceedings of the Fifth Berkeley Symposium on Mathematical Statistics and Probability , 1967, pp. 281–297. [3] D. Arthur and S. Vassilvitskii, “k-means++: the advantages of careful seeding,” Symposium on Discrete Algorithms , 2007. [4] R. Vidal, “Subspace clustering,” IEEE Signal Processing Magazine ,vol. 28, no. 3, pp. 52–68, 2011. [5] R. Vidal, Y. Ma, and S. Sastry, Generalized Principal Component Analysis . Springer Verlag, 2016. [6] C.-G. Li, C. You, and R. Vidal, “Structured sparse subspace clustering: A joint affinity learning and subspace clustering framework,” IEEE Transactions on Image Processing , vol. 26, no. 6, pp. 2988–3001, 2017. [7] V. M. Patel and R. Vidal, “Kernel sparse subspace clustering,” in Pro-ceedings of the IEEE International Conference on Image Processing ,2014, pp. 2849–2853. [8] E. Elhamifar and R. Vidal, “Sparse manifold clustering and embed-ding,” in Neural Information Processing and Systems , 2011. [9] Z. Li, Y. Chen, Y. LeCun, and F. T. Sommer, “Neural manifold clustering and embedding,” arXiv preprint arXiv:2201.10000 , 2022. [10] T. Ding, S. Tong, K. H. R. Chan, X. Dai, Y. Ma, and B. D. Haeffele, “Unsupervised manifold linearizing and clustering,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , 2023, pp. 5450–5461. [11] Y. LeCun, L. Bottou, Y. Bengio, and P. Haffner, “Gradient-based learning applied to document recognition,” Proceedings of the IEEE ,vol. 86, no. 11, pp. 2278–2324, 1998. [12] A. Krizhevsky, G. Hinton et al. , “Learning multiple layers of features from tiny images,” 2009. [13] J. Deng, W. Dong, R. Socher, L.-J. Li, K. Li, and L. Fei-Fei, “Imagenet: A large-scale hierarchical image database,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,2009, pp. 248–255. [14] Y. Lu, H. Li, Y. Li, Y. Lin, and X. Peng, “A survey on deep clustering: from the prior perspective,” Vicinagearth , vol. 1, no. 1, pp. 4–17, 2024. [15] Y. Ren, J. Pu, Z. Yang, J. Xu, G. Li, X. Pu, P. S. Yu, and L. He, “Deep clustering: A comprehensive survey,” IEEE Transactions on Neural Networks and Learning Systems , vol. 36, no. 4, pp. 5858–5878, 2025. [16] X. Peng, S. Xiao, J. Feng, W. Y. Yau, and Z. Yi, “Deep subspace clustering with sparsity prior,” in International Joint Conference on Artificial Intelligence , 2016, pp. 1925–1931. [17] J. Xie, R. Girshick, and A. Farhadi, “Unsupervised deep embedding for clustering analysis,” in International Conference on Machine Learning ,2016, pp. 478–487. [18] X. Guo, L. Gao, X. Liu, and J. Yin, “Improved deep embedded clustering with local structure preservation,” in Proceedings of the International Joint Conference on Artificial Intelligence , 2017, pp. 1753–1759. [19] B. Yang, X. Fu, N. D. Sidiropoulos, and M. Hong, “Towards k-means-friendly spaces: Simultaneous deep learning and clustering,” in 
+
+International Conference on Machine Learning , 2017, pp. 3861–3870. [20] W. Van Gansbeke, S. Vandenhende, S. Georgoulis, M. Proesmans, and L. Van Gool, “SCAN: Learning to classify images without labels,” in 
+
+European Conference on Computer Vision , 2020, pp. 268–285. [21] Y. Li, P. Hu, Z. Liu, D. Peng, J. T. Zhou, and X. Peng, “Contrastive clustering,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 35, no. 10, 2021, pp. 8547–8555. [22] H. Zhong, J. Wu, C. Chen, J. Huang, M. Deng, L. Nie, Z. Lin, and X.-S. Hua, “Graph contrastive clustering,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , 2021, pp. 9224–9233. [23] Z. Dang, C. Deng, X. Yang, K. Wei, and H. Huang, “Nearest neigh-bor matching for deep clustering,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2021, pp. 13 693–13 702. [24] C. Niu, H. Shan, and G. Wang, “SPICE: Semantic pseudo-labeling for image clustering,” IEEE Transactions on Image Processing , vol. 31, pp. 7264–7278, 2022. JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 13 
+
+[25] N. Adaloglou, F. Michels, H. Kalisch, and M. Kollmann, “Exploring the limits of deep image clustering using pretrained models,” in British Machine Vision Conference , 2023, pp. 297–299. [26] S. Cai, L. Qiu, X. Chen, Q. Zhang, and L. Chen, “Semantic-enhanced image clustering,” in Proceedings of the AAAI conference on artificial intelligence , vol. 37, no. 6, 2023, pp. 6869–6878. [27] T. Chu, S. Tong, T. Ding, X. Dai, B. D. Haeffele, R. Vidal, and Y. Ma, “Image clustering via the principle of rate reduction in the age of pretrained models,” in International Conference on Learning Representations , 2024. [28] Y. Li, P. Hu, D. Peng, J. Lv, J. Fan, and X. Peng, “Image clustering with external guidance,” in International Conference on Machine Learning ,2024. [29] C. Yi, L. Ren, D.-C. Zhan, and H.-J. Ye, “Leveraging cross-modal neighbor representation for improved clip classification,” in Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024, pp. 27 402–27 411. [30] M. Mistretta, A. Baldrati, L. Agnolucci, M. Bertini, and A. D. Bagdanov, “Cross the gap: Exposing the intra-modal misalignment in clip via modality inversion,” in International Conference on Learning Representations , 2025. [31] P. P. Liang, Y. Cheng, X. Fan, C. K. Ling, S. Nie, R. Chen, Z. Deng, N. Allen, R. Auerbach, F. Mahmood et al. , “Quantifying & modeling multimodal interactions: An information decomposition framework,” 
+
+Advances in Neural Information Processing Systems , vol. 36, pp. 27 351–27 393, 2023. [32] P. P. Liang, A. Zadeh, and L.-P. Morency, “Foundations & trends in multimodal machine learning: Principles, challenges, and open questions,” ACM computing surveys , vol. 56, no. 10, pp. 1–42, 2024. [33] V. W. Liang, Y. Zhang, Y. Kwon, S. Yeung, and J. Y. Zou, “Mind the gap: Understanding the modality gap in multi-modal contrastive representation learning,” Advances in Neural Information Processing Systems , vol. 35, pp. 17 612–17 625, 2022. [34] S. Schrodi, D. T. Hoffmann, M. Argus, V. Fischer, and T. Brox, “Two effects, one trigger: On the modality gap, object bias, and information imbalance in contrastive vision-language models,” in The International Conference on Learning Representations , 2025. [35] M. Huh, B. Cheung, T. Wang, and P. Isola, “Position: the platonic rep-resentation hypothesis,” in Proceedings of the International Conference on Machine Learning , 2024. [36] M. Tjandrasuwita, C. Ekbote, L. Ziyin, and P. P. Liang, “Understanding the emergence of multimodal representation alignment,” in Proceedings of the International Conference on Machine Learning , 2025. [37] F. Gr¨ oger, S. Wen, and M. Brbi´ c, “Revisiting the platonic representation hypothesis: An aristotelian view,” arXiv preprint arXiv:2602.14486 ,2026. [38] J. Mamou, H. Le, M. D. Rio, C. Stephenson, H. Tang, Y. Kim, and S. Chung, “Emergence of separable manifolds in deep language representations,” in Proceedings of the International Conference on Machine Learning , vol. 119, 2020, pp. 6713–6723. [39] H. Liu, H. Xiong, Y. Wang, H. An, D. Dou, and D. Wu, “Exploring the common principal subspace of deep features in neural networks,” 
+
+Machine Learning , vol. 111, no. 3, pp. 1125–1157, 2022. [40] B. C. A. Brown, A. L. Caterini, B. L. Ross, J. C. Cresswell, and G. Loaiza-Ganem, “Verifying the union of manifolds hypothesis for image data,” in International Conference on Learning Representations ,2023. [41] M. Trager, P. Perera, L. Zancato, A. Achille, P. Bhatia, and S. Soatto, “Linear spaces of meanings: compositional structures in vision-language models,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , 2023, pp. 15 395–15 404. [42] N. Pelleriti, M. Zimmer, E. S. Wirth, and S. Pokutta, “Approximating latent manifolds in neural networks via vanishing ideals,” in Interna-tional Conference on Machine Learning , 2025. [43] T. Chen, S. Kornblith, M. Norouzi, and G. Hinton, “A simple frame-work for contrastive learning of visual representations,” in International Conference on Machine Learning , 2020, pp. 1597–1607. [44] K. He, H. Fan, Y. Wu, S. Xie, and R. Girshick, “Momentum contrast for unsupervised visual representation learning,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,2020, pp. 9729–9738. [45] Q. Qian, Y. Xu, J. Hu, H. Li, and R. Jin, “Unsupervised visual represen-tation learning by online constrained k-means,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,2022, pp. 16 640–16 649. [46] Q. Qian, “Stable cluster discrimination for deep clustering,” in Pro-ceedings of the IEEE/CVF international conference on computer vision ,2023, pp. 16 645–16 654. [47] Z. Huang, J. Chen, J. Zhang, and H. Shan, “Learning representation for clustering via prototype scattering and positive sampling,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 45, no. 6, pp. 7509–7524, 2023. [48] C. Yu, Y. Shi, and J. Wang, “Contextually affinitive neighborhood re-finery for deep clustering,” Advances in Neural Information Processing Systems , vol. 36, pp. 5778–5790, 2023. [49] Y. Tian, D. Krishnan, and P. Isola, “Contrastive multiview coding,” in 
+
+European Conference on Computer Vision , 2020, pp. 776–794. [50] Y. Lin, Y. Gou, Z. Liu, B. Li, J. Lv, and X. Peng, “Completer: Incomplete multi-view clustering via contrastive prediction,” in Pro-ceedings of the IEEE/CVF conference on Computer Vision and Pattern Recognition , 2021, pp. 11 174–11 183. [51] E. Pan and Z. Kang, “Multi-view contrastive graph clustering,” Ad-vances in Neural Information Processing Systems , vol. 34, pp. 2148– 2159, 2021. [52] D. J. Trosten, S. Lokse, R. Jenssen, and M. Kampffmeyer, “Re-considering representation alignment for multi-view clustering,” in 
+
+Proceedings of the IEEE/CVF conference on Computer Vision and Pattern Recognition , 2021, pp. 1255–1265. [53] M. Yang, Y. Li, P. Hu, J. Bai, J. Lv, and X. Peng, “Robust multi-view clustering with incomplete information,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 45, no. 1, pp. 1055–1069, 2022. [54] W. Yan, Y. Zhang, C. Lv, C. Tang, G. Yue, L. Liao, and W. Lin, “Gcfagg: Global and cross-view feature aggregation for multi-view clustering,” in Proceedings of the IEEE/CVF conference on Computer Vision and Pattern Recognition , 2023, pp. 19 863–19 872. [55] Y. Lu, Y. Lin, M. Yang, D. Peng, P. Hu, and X. Peng, “Decoupled contrastive multi-view clustering with high-order random walks,” in 
+
+Proceedings of the AAAI conference on artificial intelligence , vol. 38, no. 13, 2024, pp. 14 193–14 201. [56] R. Guo, M. Yang, Y. Lin, X. Peng, and P. Hu, “Robust contrastive multi-view clustering against dual noisy correspondence,” Advances in Neural Information Processing Systems , vol. 37, 2024. [57] L. Qiu, Q. Zhang, X. Chen, and S. Cai, “Multi-level cross-modal align-ment for image clustering,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 38, no. 13, 2024, pp. 14 695–14 703. [58] X. Zhu, B. Zhu, Y. Li, J. Fang, S. Wang, K. Zhao, and H. Zhang, “Hierarchical semantic alignment for image clustering,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 40, no. 34, 2026, pp. 29 177–29 185. [59] B. Peng, J. Lu, G. Zhang, and Z. Fang, “On the provable importance of gradients for autonomous language-assisted image clustering,” in 
+
+Proceedings of the IEEE/CVF International Conference on Computer Vision , 2025, pp. 19 805–19 815. [60] E. Elhamifar and R. Vidal, “Sparse subspace clustering,” in IEEE Conference on Computer Vision and Pattern Recognition , 2009, pp. 2790–2797. [61] G. Liu, Z. Lin, and Y. Yu, “Robust subspace segmentation by low-rank representation,” in Proceedings of the International Conference on Machine Learning , 2010, pp. 663–670. [62] E. Elhamifar and R. Vidal, “Sparse subspace clustering: Algorithm, theory, and applications,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 35, no. 11, pp. 2765–2781, 2013. [63] M. Soltanolkotabi and E. J. Cand` es, “A geometric analysis of subspace clustering with outliers,” Annals of Statistics , vol. 40, no. 4, pp. 2195– 2238, 2012. [64] C.-G. Li, C. You, and R. Vidal, “On geometric analysis of affine sparse subspace clustering,” IEEE Journal on Selected Topics in Signal Processing , vol. 12, no. 6, pp. 1520–1533, 2018. [65] J. Shi and J. Malik, “Normalized cuts and image segmentation,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 22, no. 8, pp. 888–905, 2000. [66] C. You, C.-G. Li, D. Robinson, and R. Vidal, “Oracle based active set algorithm for scalable elastic net subspace clustering,” in IEEE Conference on Computer Vision and Pattern Recognition , 2016, pp. 3928–3937. [67] Y. Chen, C.-G. Li, and C. You, “Stochastic sparse subspace clustering,” in Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , 2020, pp. 4155–4164. [68] S. Zhang, C. You, R. Vidal, and C.-G. Li, “Learning a self-expressive network for subspace clustering,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2021, pp. 12 393–12 403. JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 14 
+
+[69] Y. Cai, Z. Zhang, Z. Cai, X. Liu, X. Jiang, and Q. Yan, “Graph convolu-tional subspace clustering: A robust subspace clustering framework for hyperspectral image,” IEEE Transactions on Geoscience and Remote Sensing , vol. 59, no. 5, pp. 4191–4202, 2020. [70] Z. Ma, Z. Kang, G. Luo, L. Tian, and W. Chen, “Towards clustering-friendly representations: Subspace clustering via graph filtering,” in 
+
+Proceedings of the 28th ACM international conference on multimedia ,2020, pp. 3081–3089. [71] L. Wei, Z. Chen, J. Yin, C. Zhu, R. Zhou, and J. Liu, “Adaptive graph convolutional subspace clustering,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2023, pp. 6262–6271. [72] X. Meng, Z. Huang, W. He, X. Qi, R. Xiao, and C.-G. Li, “Exploring a principled framework for deep subspace clustering,” in International Conference on Learning Representations , 2025. [73] C. Zhao, C.-G. Li, W. He, and C. You, “Deep self-expressive learning,” in The First Conference on Parsimony and Learning , vol. 234, 2024, pp. 228–247. [74] R. Vidal, “Attention: Self-expression is all you need,” in IEEE 10th International Workshop on Computational Advances in Multi-Sensor Adaptive Processing (CAMSAP) , 2025, pp. 352–356. [75] J. Lezama, Q. Qiu, P. Mus´ e, and G. Sapiro, “OLE: Orthogonal low-rank embedding - a plug and play geometric loss for deep learning,” in Proceedings of IEEE/CVF International Conference on Computer Vision and Pattern Recognition , 2018, pp. 8109–8118. [76] Y. Yu, K. H. R. Chan, C. You, C. Song, and Y. Ma, “Learning diverse and discriminative representations via the principle of maximal coding rate reduction,” in Advances in Neural Information Processing Systems ,2020. [77] P. Wang, H. Liu, D. Pai, Y. Yu, Z. Zhu, Q. Qu, and Y. Ma, “A global geometric analysis of maximal coding rate reduction,” in International Conference on Machine Learning , 2024. [78] B. D. Haeffele, C. You, and R. Vidal, “A critique of self-expressive deep subspace clustering,” in International Conference on Learning Representations , 2021. [79] K. Beyer, J. Goldstein, R. Ramakrishnan, and U. Shaft, “When is “near-est neighbor” meaningful?” in International Conference on Database Theory . Springer, 1999, pp. 217–235. [80] C. C. Aggarwal, A. Hinneburg, and D. A. Keim, “On the surprising be-havior of distance metrics in high dimensional space,” in International Conference on Database Theory . Springer, 2001, pp. 420–434. [81] S. Roweis and L. Saul, “Think globally, fit locally: Unsupervised learning of low dimensional manifolds,” Journal of Machine Learning Research , vol. 4, pp. 119–155, 2003. [82] J. Wright and Y. Ma, High-dimensional data analysis with low-dimensional models: Principles, computation, and applications . Cam-bridge University Press, 2022. [83] A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh, S. Agarwal, G. Sastry, A. Askell, P. Mishkin, J. Clark et al. , “Learning transferable visual models from natural language supervision,” in International Conference on Machine Learning , 2021, pp. 8748–8763. [84] S. Mallat and Z. Zhang, “Matching pursuits with time-frequency dictionaries,” IEEE Trans. Signal Process. , vol. 41, no. 12, pp. 3397– 3415, 1993. [85] M. Caron, I. Misra, J. Mairal, P. Goyal, P. Bojanowski, and A. Joulin, “Unsupervised learning of visual features by contrasting cluster assign-ments,” Advances in Neural Information Processing Systems , vol. 33, pp. 9912–9924, 2020. [86] T. Ding, D. Lim, R. Vidal, and B. D. Haeffele, “Understanding doubly stochastic clustering,” in International Conference on Machine Learning , 2022, pp. 5153–5165. [87] M. Cuturi, “Sinkhorn distances: Lightspeed computation of opti-mal transport,” Advances in Neural Information Processing Systems ,vol. 26, pp. 2292–2300, 2013. [88] Z. Xie, Y. Wei, H. Cao, C. Zhao, C. Deng, J. Li, D. Dai, H. Gao, J. Chang, K. Yu et al. , “mHC: Manifold-constrained hyper-connections,” arXiv preprint arXiv:2512.24880 , 2025. [89] J. Chang, L. Wang, G. Meng, S. Xiang, and C. Pan, “Deep adaptive image clustering,” in Proceedings of the IEEE International Conference on Computer Vision , 2017, pp. 5879–5887. [90] M. Cimpoi, S. Maji, I. Kokkinos, S. Mohamed, and A. Vedaldi, “Describing textures in the wild,” in Proceedings of the IEEE/CVF conference on Computer Vision and Pattern Recognition , 2014, pp. 3606–3613. [91] K. Soomro, A. R. Zamir, and M. Shah, “Ucf101: A dataset of 101 human actions classes from videos in the wild,” arXiv preprint arXiv:1212.0402 , 2012. [92] Y. Ma, H. Derksen, W. Hong, and J. Wright, “Segmentation of multivariate mixed data via lossy data coding and compression,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 29, no. 9, pp. 1546–1562, 2007. [93] R. Eisenberg, J. Svirsky, and O. Lindenbaum, “COPER: Correlation-based permutations for multi-view clustering,” in International Confer-ence on Learning Representations , 2025. [94] R. Zhang, W. Zhang, R. Fang, P. Gao, K. Li, J. Dai, Y. Qiao, and H. Li, “Tip-adapter: Training-free adaption of clip for few-shot classification,” in European Conference on Computer Vision , 2022, pp. 493–510. [95] M. Shu, W. Nie, D.-A. Huang, Z. Yu, T. Goldstein, A. Anandkumar, and C. Xiao, “Test-time prompt tuning for zero-shot generalization in vision-language models,” Advances in Neural Information Processing Systems , vol. 35, pp. 14 274–14 289, 2022. [96] C.-M. Feng, K. Yu, Y. Liu, S. Khan, and W. Zuo, “Diverse data augmentation with diffusions for effective test-time prompt tuning,” in 
+
+Proceedings of the IEEE/CVF International Conference on Computer Vision , 2023, pp. 2704–2714. [97] Y. Zhang, W. Zhu, H. Tang, Z. Ma, K. Zhou, and L. Zhang, “Dual memory networks: A versatile adaptation approach for vision-language models,” in Proceedings of the IEEE/CVF conference on Computer Vision and Pattern Recognition , 2024, pp. 28 718–28 728. [98] A. Karmanov, D. Guan, S. Lu, A. El Saddik, and E. Xing, “Efficient test-time adaptation of vision-language models,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,2024, pp. 14 162–14 171. [99] Y. Kalantidis, G. Tolias et al. , “Label propagation for zero-shot classifi-cation with vision-language models,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024, pp. 23 209–23 218. [100] Y. Li, Y. Su, A. Goodge, K. Jia, and X. Xu, “Efficient and context-aware label propagation for zero-/few-shot training-free adaptation of vision-language model,” in International Conference on Learning Representations , 2025. [101] L. Fei-Fei and P. Perona, “A bayesian hierarchical model for learning natural scene categories,” in Proceedings of the IEEE/CVF computer society conference on Computer Vision and Pattern Recognition , vol. 2. IEEE, 2005, pp. 524–531. [102] Y. Yang and S. Newsam, “Bag-of-visual-words and spatial extensions for land-use classification,” in Proceedings of the 18th SIGSPATIAL International Conference on Advances in Geographic Information Systems , 2010, pp. 270–279. [103] P. Hu, L. Zhen, D. Peng, and P. Liu, “Scalable deep multimodal learning for cross-modal retrieval,” in Proceedings of the 42nd International ACM SIGIR Conference on Research and Development in Information Retrieval , 2019, pp. 635–644. [104] H.-H. Wu, P. Seetharaman, K. Kumar, and J. P. Bello, “Wav2clip: Learning robust audio representations from clip,” in IEEE International Conference on Acoustics, Speech and Signal Processing , 2022, pp. 4563–4567. [105] E. Fonseca, X. Favory, J. Pons, F. Font, and X. Serra, “FSD50K: an open dataset of human-labeled sound events,” IEEE/ACM Transactions on Audio, Speech, and Language Processing , vol. 30, pp. 829–852, 2022. [106] A. Guzhov, F. Raue, J. Hees, and A. Dengel, “Audioclip: Extending clip to image, text and audio,” in IEEE International Conference on Acoustics, Speech and Signal Processing , 2022, pp. 976–980. JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 1
+
+# SUPPLEMENTARY MATERIAL FOR “L EARNING DEEP MODALITY -S HARED 
+
+# SELF -E XPRESSIVENESS FOR IMAGE CLUSTERING WITH TEXTUAL INFORMATION ”
+
+A. P ROOFS OF THEORETICAL FINDINGS 
+
+A. Proof for Proportion 1 Proof. Since that problem (14) is convex with respect to cj , we get its closed-form solution by the first-order condition: 
+
+∇cj L =
+
+
+
+(Z−j
+
+> img
+
+)⊤Z−j 
+
+> img
+
++ ( Z−j 
+
+> text
+
+)⊤Z−j
+
+> text
+
+
+
+cj − (Z−j
+
+> img
+
+)⊤zj 
+
+> img
+
+− (Z−j 
+
+> text
+
+)⊤zj 
+
+> text
+
+= 0, (19) 
+
+⇒ cj 
+
+> share
+
+= ( Gimg + Gtext )−1 h
+
+(Z−j
+
+> img
+
+)⊤zj 
+
+> img
+
++ ( Z−j 
+
+> text
+
+)⊤zj
+
+> text
+
+i
+
+, (20) where Gimg := ( Z−j
+
+> img
+
+)⊤Z−j 
+
+> img
+
+and Gtext := ( Z−j 
+
+> text
+
+)⊤Z−j 
+
+> text
+
+are Gram matrices. Similarly, the modality-specific optimal solutions of problem (14) are: 
+
+cj 
+
+> img
+
+:= G−1
+
+> img
+
+(Z−j
+
+> img
+
+)⊤zj 
+
+> img
+
+and cj 
+
+> text
+
+:= G−1
+
+> text
+
+(Z−j 
+
+> text
+
+)⊤zj
+
+> text
+
+, (21) respectively. 
+
+Proof of Statement 1. Leveraging eq. (8), the estimation errors are 
+
+cj 
+
+> img
+
+− cj⋆ = G−1
+
+> img
+
+(Z−j
+
+> img
+
+)⊤(Z−j
+
+> img
+
+cj⋆ + δj
+
+> img
+
+) − cj⋆ = G−1
+
+> img
+
+(Z−j
+
+> img
+
+)⊤δj
+
+> img
+
+, (22) 
+
+cj 
+
+> text
+
+− cj⋆ = G−1
+
+> text
+
+(Z−j 
+
+> text
+
+)⊤(Z−j 
+
+> text
+
+cj⋆ + δj
+
+> text
+
+) − cj⋆ = G−1
+
+> text
+
+(Z−j 
+
+> text
+
+)⊤δj
+
+> text
+
+, (23) 
+
+cj 
+
+> share
+
+− cj⋆ = ( Gimg + Gtext )−1h
+
+(Z−j
+
+> img
+
+)⊤δj 
+
+> img
+
++ ( Z−j 
+
+> text
+
+)⊤δj
+
+> text
+
+i
+
+. (24) Then, we have: 
+
+E
+
+h
+
+∥cj 
+
+> share
+
+− cj⋆∥22
+
+i
+
+(25) 
+
+= E
+
+
+
+Tr 
+
+
+
+cj 
+
+> share
+
+− cj⋆
+
+  
+
+cj 
+
+> share
+
+− cj⋆
+
+⊤ 
+
+(26) 
+
+= Tr 
+
+
+
+(Gimg + Gtext )−1
+
+
+
+Z−j
+
+> img
+
+⊤
+
+E
+
+h
+
+δj
+
+> img
+
+δj⊤
+
+> img
+
+i
+
+Z−j 
+
+> img
+
++
+
+
+
+Z−j
+
+> text
+
+⊤
+
+E
+
+h
+
+δj
+
+> text
+
+δj⊤
+
+> text
+
+i
+
+Z−j
+
+> text
+
+
+
+(Gimg + Gtext )−1
+
+
+
+(27) 
+
+= Tr 
+
+
+
+(Gimg + Gtext )−1  σ2Gimg + σ2Gtext 
+
+ (Gimg + Gtext )−1
+
+(28) 
+
+= σ2 Tr  (Gimg + Gtext )−1 . (29) Similarly, we have 
+
+E
+
+h
+
+∥cj 
+
+> img
+
+− cj⋆∥22
+
+i
+
+= σ2 Tr( G−1
+
+> img
+
+), and E
+
+h
+
+∥cj 
+
+> text
+
+− cj⋆∥22
+
+i
+
+= σ2 Tr( G−1
+
+> text
+
+). (30) Since Gtext ⪰ 0, we have Gimg ⪯ Gimg + Gtext , therefore, 
+
+(Gimg + Gtext )−1 ⪯ G−1
+
+> img
+
+. (31) Taking the trace of both sides and multiplying by σ2 yields 
+
+E
+
+
+
+cj 
+
+> share
+
+− cj⋆
+
+> 22
+
+
+
+≤ E
+
+
+
+cj 
+
+> img
+
+− cj⋆
+
+> 22
+
+
+
+. (32) Similarly, we have that E
+
+
+
+cj 
+
+> share
+
+− cj⋆
+
+> 22
+
+
+
+≤ E
+
+
+
+cj 
+
+> img
+
+− cj⋆
+
+> 22
+
+
+
+. Thus we conclude the proof 
+
+E
+
+h
+
+∥cj 
+
+> share
+
+− cj⋆∥22
+
+i
+
+≤ min 
+
+
+
+E
+
+h
+
+∥cj 
+
+> img
+
+− cj⋆∥22
+
+i
+
+, E
+
+h
+
+∥cj 
+
+> text
+
+− cj⋆∥22
+
+i 
+
+. (33) 
+
+Proof of Statement 2. Let Ij
+
+> +
+
+, Ij 
+
+> −
+
+⊂ N≥0 be the index sets of samples belonging to the same class as the j-th data point and belonging to a different class from the j-th data point, respectively. Denote Diag( 1Ij
+
+> +
+
+) as the diagonal matrix whose i-th diagonal entry is 1 if i ∈ I j 
+
+> +
+
+and 0 otherwise. JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 2
+
+Since cj⋆ is subspace-preserving, we have that cj⋆, Ij
+
+> −
+
+:= ( IN − Diag( 1Ij
+
+> +
+
+)) cj⋆ = Diag( 1Ij
+
+> −
+
+)cj⋆ = 0. Thus, 
+
+E
+
+"
+
+cj
+
+> share ,Ij
+> −
+> 22
+
+#
+
+= E
+
+
+
+Diag( 1Ij
+
+> −
+
+)cj
+
+> share
+> 22
+
+
+
+= E
+
+
+
+Diag( 1Ij
+
+> −
+
+)cj 
+
+> share
+
+− Diag( 1Ij
+
+> −
+
+)cj⋆
+
+> 22
+
+
+
+= E
+
+
+
+Diag( 1Ij
+
+> −
+
+)( cj 
+
+> share
+
+− cj⋆) 22
+
+
+
+= Tr 
+
+
+
+Diag 
+
+
+
+1Ij
+
+> −
+
+
+
+E
+
+
+
+cj 
+
+> share
+
+− cj⋆
+
+  
+
+cj 
+
+> share
+
+− cj⋆
+
+⊤
+
+Diag 
+
+
+
+1Ij
+
+> −
+
+
+
+= σ2 Tr 
+
+
+
+Diag 
+
+
+
+1Ij
+
+> −
+
+
+
+(Gimg + Gtext )−1 Diag 
+
+
+
+1Ij
+
+> −
+
+ 
+
+= σ2 Tr 
+
+
+
+(Gimg + Gtext )−1
+
+> Ij
+> −,Ij
+> −
+
+
+
+,
+
+(34) and similarly we have: 
+
+E
+
+"
+
+cj
+
+> img ,Ij
+> −
+> 22
+
+#
+
+= σ2 Tr 
+
+
+
+(G−1
+
+> img
+
+)Ij
+
+> −,Ij
+> −
+
+
+
+, E
+
+"
+
+cj
+
+> text ,Ij
+> −
+> 22
+
+#
+
+= σ2 Tr 
+
+
+
+(G−1
+
+> text
+
+)Ij
+
+> −,Ij
+> −
+
+
+
+, (35) where [·]−1
+
+> Ij
+> −,Ij
+> −
+
+denotes the submatrix of [·]−1 where rows and columns are indexed by Ij
+
+> −
+
+.Note that if A ⪯ B, we have AS,S ⪯ BS,S , since that for ∀v ∈ R|S| , we have 
+
+v⊤AS,S v = ˜ v⊤A˜v ≤ ˜v⊤B ˜v = v⊤BS,S v, (36) where ˜v ∈ RN is constructed by zero-padding: ˜vi = vi if i ∈ S and ˜vi = 0 otherwise. Therefore, we conclude that 
+
+E
+
+h
+
+∥cj
+
+> share ,Ij
+> −
+
+∥22
+
+i
+
+≤ min 
+
+
+
+E
+
+h
+
+∥cj
+
+> img ,Ij
+> −
+
+∥22
+
+i
+
+, E
+
+h
+
+∥cj
+
+> text ,Ij
+> −
+
+∥22
+
+i 
+
+, (37) which completes the proof. 
+
+B. Proof for Proportion 3 Proof. We have: 
+
+˜L := ∥Zimg Diag( ξ) − Zimg Diag( ξ)C Diag( ξ)∥2 
+
+> F
+
++ ∥Ztext Diag( ξ) − Ztext Diag( ξ)C Diag( ξ)∥2
+
+> F
+
+=
+
+> N
+
+X
+
+> j=1
+
+∥ξj zj 
+
+> img
+
+− ξj [Zimg Diag( ξ)C]j ∥22 + ∥ξj zj 
+
+> text
+
+− ξj [Ztext Diag( ξ)C]j ∥22
+
+=
+
+> N
+
+X
+
+> j=1
+
+ξj
+
+
+
+∥zj 
+
+> img
+
+−
+
+> N
+
+X
+
+> i=1
+
+ξicij zi
+
+> img
+
+∥22 + ∥zj 
+
+> text
+
+−
+
+> N
+
+X
+
+> i=1
+
+ξicij zi
+
+> text
+
+∥22
+
+
+
+.
+
+(38) By taking an expectation to the objective function, we have: 
+
+E[ ˜L] = 
+
+> N
+
+X
+
+> j=1
+
+E[ξj ]
+
+
+
+E
+
+h
+
+∥zj 
+
+> img
+
+−
+
+> N
+
+X
+
+> i=1
+
+ξicij zi
+
+> img
+
+∥22
+
+i
+
++ E
+
+h
+
+∥zj 
+
+> text
+
+−
+
+> N
+
+X
+
+> i=1
+
+ξicij zi
+
+> text
+
+∥22
+
+i 
+
+. (39) JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 3
+
+The first and second moments of the random variable ξ are given by E[ξi] = nb 
+
+> N
+
+, E[ξiξj ] = E[ξi]E[ξj ] = n2  
+
+> b
+> N2
+
+, E[ξ2 
+
+> i
+
+] = nb 
+
+> N
+
+.Then, we have: 
+
+E
+
+ zj 
+
+> img
+
+− X
+
+> i
+
+ξicij zi
+
+> img
+> 22
+
+ = ∥zj
+
+> img
+
+∥22 − 2E X
+
+> i
+
+ξicij zj⊤
+
+> img
+
+zi 
+
+> img
+
++ E
+
+ X
+
+> i
+
+ξicij zi
+
+> img
+> 22
+
+
+
+= ∥zj
+
+> img
+
+∥22 − 2 X
+
+> i
+
+E [ξi] cij zj⊤
+
+> img
+
+zi 
+
+> img
+
++ X
+
+> i
+
+E∥ξicij zi
+
+> img
+
+∥22 + 2 E X
+
+> i,k :i̸=k
+
+ξiξkcij ckj zi⊤
+
+> img
+
+zk
+
+> img
+
+= ∥zj
+
+> img
+
+∥22 − 2 X
+
+> i
+
+nb
+
+N cij zj⊤
+
+> img
+
+zi 
+
+> img
+
++ X
+
+> i
+
+E[ξ2 
+
+> i
+
+]∥cij zi
+
+> img
+
+∥22 + 2 X
+
+> i,k :i̸=k
+
+E[ξiξk]cij ckj zi⊤
+
+> img
+
+zk
+
+> img
+
+= ∥zj
+
+> img
+
+∥22 − 2 X
+
+> i
+
+nb
+
+N cij zj⊤
+
+> img
+
+zi 
+
+> img
+
++ X
+
+> i
+
+nb
+
+N ∥cij zi
+
+> img
+
+∥22 + 2 X
+
+> i,k :i̸=k
+
+n2
+
+> b
+
+N 2 cij ckj zi⊤
+
+> img
+
+zk
+
+> img
+
+= ∥zj
+
+> img
+
+∥22 − 2 X
+
+> i
+
+nb
+
+N cij zj⊤
+
+> img
+
+zi 
+
+> img
+
++ X
+
+> i
+
+nb
+
+N cij zi
+
+> img
+> 22
+
++ ( nb
+
+N − n2
+
+> b
+
+N 2 ) X
+
+> i
+
+∥cij zi
+
+> img
+
+∥22
+
+= zj 
+
+> img
+
+− X
+
+> i
+
+nb
+
+N cij zi
+
+> img
+> 22
+
++ ( nb
+
+N − n2
+
+> b
+
+N 2 )∥cj ∥22.
+
+(40) Let ˜cj = nb 
+
+> N
+
+cj , we have: 
+
+E
+
+ zj 
+
+> img
+
+− X
+
+> i
+
+ξicij zi
+
+> img
+> 22
+
+ = zj 
+
+> img
+
+− Zimg ˜cj
+
+> 22
+
++ N − nb
+
+nb
+
+∥˜cj ∥22. (41) Thus, the expectation of the objective function is equal to: 
+
+E[ ˜L] = nb
+
+N
+
+> N
+
+X
+
+> j=1
+
+
+
+zj 
+
+> img
+
+− Zimg ˜cj
+
+> 22
+
++ zj 
+
+> text
+
+− Ztext ˜cj
+
+> 22
+
++ 2( N − nb)
+
+nb
+
+∥˜cj ∥22
+
+
+
+= nb
+
+N
+
+
+
+Zimg − Zimg ˜C 2
+
+> F
+
++ Ztext − Ztext ˜C 2
+
+> F
+
++ 2( N − nb)
+
+nb
+
+∥ ˜C∥2
+
+> F
+
+
+
+.
+
+(42) Therefore, we conclude that optimizing the loss function (18) with mini-batch training asymptotically introduces an implicit regularization r(C) = 2( N −nb) 
+
+> nb
+
+∥C∥2 
+
+> F
+
+.B. E XPERIMENTAL DETAILS 
+
+Construction of Dictionary D. Since WordNet contains 146,347 words with heterogeneous semantic meanings, we follow TAC [28] to filter the vocabulary before textual counterpart generation. Specifically, after extracting image and text embeddings using a pretrained vision-language model, we apply k-means clustering to the image embeddings to obtain k cluster centers. For each cluster center, the top-ω most similar word embeddings are then selected to construct the dictionary for cross-modal sparse coding. Following TAC [28], we fix k = N/ 300 and ω = 5 for all datasets. 
+
+Image Clustering. For a fair comparison, we follow the preprocessing steps of TAC [28]. Specifically, images are first resized to 224 pixels on the shorter side (256 for ImageNet-10 and ImageNet-Dogs), then center-cropped to 224 × 224 , and finally fed into the CLIP ViT-B/32 pretrained image encoder to obtain image embeddings. The construction of text embedding dictionary 
+
+D also follows TAC [28]. With the query image embeddings and the text embedding dictionary D, textual counterparts are generated via cross-modal sparse coding. We summarize the hyperparameters used to train DeepMORSE in Table B.1. The model is trained with stochastic gradient descent (SGD) using a learning rate of η = 1 × 10 −4, weight decay wd = 1 × 10 −4, and batch size nb = 1024 . The hidden dimension dhidden = 512 and output dimension d = 128 of f ( · ; ϕI ) and g( · ; ϕT ) are fixed across all datasets. Similarly, the sparsity level of sparse coding is set to s = 5 , and the loss hyperparameters are fixed to γ = 150 and ϵ2 = 0 .1 for all datasets. 
+
+Image Retrieval. For a fair comparison, we directly use the image embeddings provided by OTI [30], which were extracted using the pretrained CLIP ViT-B/32 model. To generate the textual counterpart of each image embedding, we first construct the text embedding dictionary as described in Section IV, and then solve the cross-modal sparse coding problem with MP. After training DeepMORSE, image retrieval is performed based on the cosine similarity among the learned image representations. We summarize the hyperparameters for training DeepMORSE on the image retrieval task in Table B.2, where most hyperparameters remain unchanged, except for extended epochs and larger d, γ for datasets with greater than 128 classes. Specifically, since the benchmark datasets are relatively small in size (for example, OxfordPets, Flowers102, FGVCAircraft, DTD, and Caltech101 each contain fewer than 5,000 training samples), we extend the training epochs to ensure sufficient JOURNAL OF L ATEX CLASS FILES, VOL. 18, NO. 9, SEPTEMBER 2026 4  
+
+> TABLE B.1
+> HYPERPARAMETERS CONFIGURATION FOR TRAINING DEEP MORSE FOR IMAGE CLUSTERING .
+
+η wd dhidden d T nb γ ϵ2 s
+
+CIFAR-10 1 × 10 −4 1 × 10 −4 512 128 50 1024 150 0.1 5CIFAR-20 1 × 10 −4 1 × 10 −4 512 128 50 1024 150 0.1 5STL-10 1 × 10 −4 1 × 10 −4 512 128 50 1024 150 0.1 5ImageNet-10 1 × 10 −4 1 × 10 −4 512 128 50 1024 150 0.1 5ImageNet-Dogs 1 × 10 −4 1 × 10 −4 512 128 50 1024 150 0.1 5DTD-47 1 × 10 −4 1 × 10 −4 512 128 100 1024 150 0.1 5UCF-101 1 × 10 −4 1 × 10 −4 512 128 100 1024 150 0.1 5ImageNet-1k 1 × 10 −4 1 × 10 −4 8192 1024 500 8192 600 0.1 5
+
+iterations. For StanfordCars and SUN397, which include more than 128 categories, we increase the hidden and output dimensions of the model and adjust γ accordingly to balance the different loss terms.   
+
+> TABLE B.2
+> HYPERPARAMETERS CONFIGURATION FOR TRAINING DEEP MORSE FOR IMAGE RETRIEVAL AND ZERO -SHOT CLASSIFICATION .
+
+η wd dhidden d T nb γ ϵ2 s
+
+Flower 1 × 10 −4 1 × 10 −4 512 128 200 1024 150 0.1 5DTD 1 × 10 −4 1 × 10 −4 512 128 200 1024 150 0.1 5Pets 1 × 10 −4 1 × 10 −4 512 128 200 1024 150 0.1 5UCF 1 × 10 −4 1 × 10 −4 512 128 200 1024 150 0.1 5Caltech 1 × 10 −4 1 × 10 −4 512 128 200 1024 150 0.1 5Food 1 × 10 −4 1 × 10 −4 512 128 200 1024 150 0.1 5Aircraft 1 × 10 −4 1 × 10 −4 512 128 200 1024 150 0.1 5EuroSAT 1 × 10 −4 1 × 10 −4 512 128 200 1024 150 0.1 5Cars 1 × 10 −4 1 × 10 −4 512 256 1000 1024 200 0.1 5SUN 1 × 10 −4 1 × 10 −4 2048 512 2000 1024 350 0.1 5ImageNet-1k 1 × 10 −4 1 × 10 −4 8192 1024 4000 8192 600 0.1 5
+
+Here, we present a simple and principled rule for tuning hyperparameters: 1) Adjusting the output dimension d. DeepMORSE encourages representations from different classes to occupy orthogonal subspaces. Thus, the output dimension must be greater than the number of classes to accommodate these subspaces. 2) Adjusting the balancing hyperparameter γ. As justified in [72], the upper bound of γ scales linearly with α = d/ (nbϵ2),where d is the output dimension, nb is the batch-size, and ϵ is the coding precision. Since that DeepMORSE uses the same nb and ϵ for all experiments, γ scales linearly with the output dimension d. Empirically, our settings for γ and d
+
+approximately follow γ ≈ 0.5 × d + 80 , which provides a simple rule for other datasets without manual search. 
+
+Zero-Shot Classification. For a fair comparison with existing approaches, we directly use the image embeddings provided by ECALP [100], which are extracted using the pretrained CLIP ViT-B/16 model. Since the dataset categories are known in zero-shot classification, we construct the text embedding dictionary D = {π1, · · · , πC } by extracting text embeddings of the prompts “A photo of class” with a pretrained CLIP text encoder, where C denotes the number of classes. The textual counterpart of each image embedding is then generated using MP. For training DeepMORSE, the hyperparameter configuration is kept exactly the same as in the image retrieval task. 
+
+Reproducing PRO-DSC. The original PRO-DSC [72] uses ViT-L/14 as the image encoder, while all our CLIP-based baselines in Table I use ViT-B/32. To ensure a fair comparison, we reproduce its performance with ViT-B/32 using the code provided by the author and report the best clustering results after tuning hyperparameters over γ ∈ { 0.5, 1, 5, 10 , 50 , 100 , 150 , 300 , 500 }
+
+and β ∈ { 0, 100 , 200 , 300 , 400 }.
+
+Ablation Study. The intention of the first two rows of Table II is to analyze uni-modal counterparts of DeepMORSE. The first row is the image-only counterpart of DeepMORSE: we keep only the loss terms for the image modality, compute 
+
+C as P(Z⊤
+
+> img
+
+Zimg ) with the learned image representations, and perform spectral clustering on the affinity matrix induced by A = |C| + |C⊤|. The second row is the text-only counterpart of DeepMORSE: we keep only the loss terms for the text modality, compute C as P(Z⊤
+
+> text
+
+Ztext ) with the learned text representations, and perform spectral clustering on the affinity matrix induced by A = |C| + |C⊤|. We report the best clustering results after tuning hyperparameters over 
+
+γ ∈ { 0.5, 1, 5, 10 , 50 , 100 , 150 , 300 , 500 }.

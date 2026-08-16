@@ -1,0 +1,789 @@
+Title: Catastrophic Forgetting in Continual Reinforcement Learning
+
+URL Source: https://arxiv.org/pdf/2608.08673v1
+
+Published Time: Tue, 11 Aug 2026 01:38:50 GMT
+
+Number of Pages: 51
+
+Markdown Content:
+# Catastrophic Forgetting in Continual Reinforcement Learning 
+
+## Graphical Structures and the Effects of Task Similarity on Forgetting Emma Graham 1
+
+## MSc Machine Learning Andrew Saxe Submission date: 11 September 2023 
+
+> 1
+
+Disclaimer: This report is submitted as part requirement for the Machine Learning MSc at UCL. It is substantially the result of my own work except where explicitly indicated in the text. The report will be distributed to the internal and external examiners, but thereafter may not be copied or distributed except with permission from the author. arXiv:2608.08673v1 [cs.LG] 9 Aug 2026 RL 
+
+# Acknowledgements 
+
+Many thanks go to Sebastian Lee, Lee Gunderson, and Grecia Bravo-Hermsdorff for their invaluable expertise, collaboration, and inspiration. I am grateful to Andrew Saxe for the opportunity to work with the Saxe Lab and for introducing me to Sebastian and his project proposal. My appreciation extends to the entire Gatsby Computational Neuroscience Unit for its inclusive support and fostering an environment of collaboration. 1Abstract 
+
+This paper explores the relationship between task similarity and catastrophic forgetting in reinforcement learning. Catastrophic forgetting, the phenomenon in machine learning of losing the ability to effectively perform on previous tasks, is a significant impediment to continual learning. This study aims to understand the extent to which the similarity of a new task influences the performance on the previous task. Interpretable reinforcement learning, specifically Q-learning, is employed on graph-based tasks with the objective of minimising the number of steps to reach a goal. The study investigates the performance on a previously learned task after training on a new task, for tasks of varying relative levels of complexity. The experimental results reveal a complex dynamic between task similarity and forgetting, with significant fluctuations in forgetting severity observed across degrees of task similarities and task complexities, and are suggestive of an interdependence of forgetting on the similarity and complexity of tasks. The observations were accompanied by observations of high degrees of variability in forgetting and an uneven distribution of task similarity measures. The relationship between these variables remains unclear and no evidence of statistical significance that task similarity has an effect, independently, on forgetting is found in continual reinforcement learning. Further research is warranted to gain a comprehensive understanding of the potential interplay between task similarity and catastrophic forgetting. Contents 
+
+1 Introduction 2
+
+1.1 Background Topics . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21.2 Research Problem . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 31.3 Research Objectives . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 41.4 Scope . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 41.5 Structural Outline . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 4
+
+2 Background 5
+
+2.1 Reinforcement Learning . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 52.1.1 Reinforcement Learning Formalism . . . . . . . . . . . . . . . . . . . . . . . 52.1.2 Approaches to Learning the Optimal Policy . . . . . . . . . . . . . . . . . . 62.1.3 Tabular Reinforcement Learning . . . . . . . . . . . . . . . . . . . . . . . . 72.1.4 Action Selection Policies . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 82.2 Continual Learning . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 92.2.1 Forgetting and Transfer Learning . . . . . . . . . . . . . . . . . . . . . . . . 92.2.2 Catastrophic Forgetting . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 10 2.3 Task Similarity . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 10 2.4 Graph Theory . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 11 2.4.1 Graph Formalism . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 12 2.4.2 Graph Similarity Metrics . . . . . . . . . . . . . . . . . . . . . . . . . . . . 12 2.4.3 Rotation Systems . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14 2.5 Computational Geometry . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15 2.5.1 Voronoi Diagram . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15 2.5.2 Stability and Quantifying Change . . . . . . . . . . . . . . . . . . . . . . . 17 
+
+3 Related Work 19 
+
+3.1 Catastrophic Forgetting . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 19 3.2 Effect of Task Similarity on Catastrophic Forgetting . . . . . . . . . . . . . . . . . 19 3.3 Task Similarity Metrics in Reinforcement Learning . . . . . . . . . . . . . . . . . . 20 
+
+4 Methodology 21 
+
+4.1 Tasks . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21 4.1.1 Generating Tasks . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 22 4.1.2 Measuring Similarity . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 24 14.2 Agent . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 25 4.2.1 Initialisation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 25 4.2.2 Training . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 28 4.3 Evaluation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 28 4.3.1 Performance . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 28 4.3.2 Forgetting . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 29 4.3.3 Experiments . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 29 
+
+5 Results 31 
+
+5.1 Experimental Results . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 31 5.1.1 Tasks . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 31 5.1.2 Performance . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 33 5.1.3 Relationship between Task Similarity and Forgetting . . . . . . . . . . . . . 35 5.2 Limitations . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 38 
+
+6 Conclusions and Future Directions 39 Appendices 40 A Modelling Parameter 41 B State Actions for Unusual Size Action Sets 42 
+
+1Chapter 1 
+
+# Introduction 
+
+Continual learning, or the ability to sequentially learn tasks, is one of the major unresolved prob-lems in the field of machine learning. A significant barrier to continual learning is the phenomenon known as catastrophic interference or catastrophic forgetting [45, 26]. Catastrophic forgetting occurs when machine learning models lose previously acquired knowledge after learning new infor-mation [45, 22]. In reinforcement learning, catastrophic forgetting can substantially degrade the performance on previously learned tasks. Mitigating catastrophic forgetting is needed for efficient learning in complex, real-world environments. Severe forgetting can degrade the performance on previously learned tasks, rendering a reinforcement learning agent ineffective when performing more than one task or adapting between tasks [45, 22, 66]. The relationship between forgetting and task similarity remains an open research problem that has not yet been quantified in the reinforcement learning setting. The aim of this research is to quantify the effects of the new task difference, on the performance of the initial task in continual reinforcement learning. This chapter will overview background topics, define the research problem and objectives, and layout the scope and structure of this study. 
+
+# 1.1 Background Topics 
+
+Intelligence will be defined as the ability to learn to make decisions to achieve goals. While biological intelligence is the intellect of living systems, artificial intelligence is the intellectual ability imbued in non-living systems. Machine learning is the term for computer systems that are able to learn and adapt without following explicit instructions, essentially able to teach themselves. This is a subset of artificial intelligence and is segmented into three general categories: supervised learning, unsupervised learning, and reinforcement learning. Broadly speaking, reinforcement learning is a sequential decision problem comprising goal-directed learning from interaction [61, 33]. In reinforcement learning, the inherent interaction with the environment, as depicted in the Figure 1.1, is a powerful representation of the dynamic, continuous feedback loop that characterises our own learning paradigm. Notably, the reinforcement learning process has been shown to mirror the neuromodulatory influences that drive attention and decision-making in biological systems [75]. This positions reinforcement learning not merely as a methodology within machine learning, 2Figure 1.1: Supporting graphic depicting reinforcement learning from the Reinforcement Learning taught class (COMP0089) by DeepMind at UCL [29]. but as a paradigm that bridges artificial and biological learning processes [47, 59]. The act of reaching the goal(s) of a reinforcement learning agent is frequently called the task. The concept of a task is fundamental to machine learning because it helps define the problem that the machine learning system is trying to solve. A classical definition of a task in machine learning is: ”A task T is a measure of performance that the machine learning system should improve with experience E on some class of tasks T, given some performance measure P” [46]. Task similarity in machine learning refers to the degree to which two tasks share underlying patterns, structures, or concepts, indicating the potential for shared or overlapping learning between these tasks [77]. A graph is a concept from mathematics that aids in the understanding and visualisation of the relationships among different objects. Graph theory is a prominent field within discrete mathe-matics, which studies the properties of graph structures and will be overviewed and formalised in the Graph Theory section of Chapter 2 [71]. Computational Geometry is a branch of computer science that deals with the mathematical techniques necessary for the manipulation and analysis of geometric structures and shapes. This field is especially important in areas where solving problems involving the spatial and structural relationships between different objects is needed. The Computational Geometry section of Chapter 2 will outline some relevant fundamental concepts of this discipline. 
+
+# 1.2 Research Problem 
+
+Catastrophic forgetting poses a significant hurdle in machine learning, causing detrimental effects on the performance of learning models. Understanding its impact and the factors that influence it, such as task similarity, will help enable the development of robust and efficient learning algorithms. Understanding the relationship between task differences and memory retention is a key component for the development of effective continual learning models in reinforcement learning. However, this relationship has been studied less than the amount of knowledge transferred to new tasks. These insights will aid in mitigating the effects of catastrophic forgetting and enhance our understanding of continual learning. The ability of an artificially intelligent system to learn new tasks without forgetting previous ones would be a remarkable capability. This skill is a powerful aspect of intelligence, both natural and artificial, and forms the basis for adaptability, versatility, and efficiency. 31.3 Research Objectives 
+
+The objective of this study is to understand the relationship between catastrophic forgetting and task similarity in continual reinforcement learning. The research seeks to offer a new under-standing of how the similarity of a new task impacts the performance on the previous task in an interpretable reinforcement learning setting. To elucidate this relationship, the study aims to produce a graph depicting the interplay between forgetting and task similarity. Consequentially, methods to quantify both measures, that of the amount forgotten and the similarity of the task, are essential. 
+
+# 1.4 Scope 
+
+This study uses tabular reinforcement learning, specifically utilising Q-learning. Also, the research is restricted to graph-based reinforcement learning with the objective of minimising the quantity of steps to reach a goal. The study delves into the effects on the performance of a previously learned task after a single training session on a new task. The relationship between forgetting and task similarity is examined in tasks of varying relative levels of complexity, of which a modern laptop has the capacity to capture. 
+
+# 1.5 Structural Outline 
+
+This report details background knowledge of the concepts used in this study in Chapter 2. Start-ing with an overview of reinforcement learning, this section lays out fundamentals of continual learning and catastrophic forgetting. Task similarity and pertinent principles of graph theory and computational geometry follow in detail. The next chapter, Chapter 3, gives a literature review of current research on catastrophic forgetting, task similarity, and their relationship. The methodol-ogy of the study is expressed in Chapter 4. In this chapter the reinforcement learning models and the methods for creating similar tasks, measuring the difference between tasks, and quantifying the amount of forgetting are outlined and detailed. The rationale behind the modelling choices and quantification metrics are discussed throughout this section. Chapter 5 is the results section which presents the findings from a hundred trials. The tasks generated, the similarity measures of the tasks, and the difference in performance quantities are analysed. Then, the relationship between the task similarity and the amount forgotten is discussed and limitations to the study identified. In Chapter 6, the paper finishes with the conclusions, their implications in reinforcement learning and continual learning, and directions for future work. 4Chapter 2 
+
+# Background 
+
+# 2.1 Reinforcement Learning 
+
+Reinforcement Learning (RL) is a type of machine learning where an agent learns to make decisions by interacting with an environment [61]. RL is goal-directed and makes decisions as to obtain its objectives. Reinforcement learning is based on the reward hypothesis, the hypothesis being that any goal can be formalised as the outcome of maximising a cumulative reward. The agent tries to maximise a cumulative reward by learning a policy for choosing actions based on the environmental states. 
+
+## 2.1.1 Reinforcement Learning Formalism 
+
+The RL learning formalism includes the environment represents the learning dynamics of the problem, the reward signal which specifies the goal, and the agent containing the agent state, the policy, the value function, and a model. In RL, an agent’s environment and reward signal are typically modelled using a Markov Decision Process (MDP). 
+
+DEFINITION 1 A Markov Decision Process is a tuple ⟨S , A, P, R, γ ⟩, where: 
+
+• S is a finite set of states. 
+
+• A is a finite set of actions. 
+
+• P : S × A × S → [0 , 1] are the state transition probability functions, where P (s, a, s ′) is the probability of reaching state s′ when taking action a in state s.
+
+• R : S × A → R are the reward functions, where R(s, a ) is the expected immediate reward for taking action a in state s.
+
+• γ ∈ [0 , 1] is the discount factor, which determines the importance of future rewards. 
+
+The agent state is the internal state of the agent as opposed to the state of the environment the agent is in. The policy is the map from agent state to action, which defines the agent’s behaviour. The goal of the agent in a reinforcement learning problem is to learn a policy π : S → A , a mapping from states to actions, to maximise the expected sum of discounted rewards called the return, denoted by Gt in equation (2.1). 5Gt = E
+
+" ∞X
+
+> k=0
+
+γkRst,a t
+
+#
+
+(2.1) 
+
+## 2.1.2 Approaches to Learning the Optimal Policy 
+
+To learn the optimal policy, the agent often represents the value of a state or a state-action pair through value functions. The value function estimate is the expected return. The state-value function V π (s) is the expected return when starting from state s and following policy π, while the action-value function Qπ (s, a ) is the expected return when starting from state s, taking action a,and then following policy π [61]: 
+
+V π (s) = Eπ [Gt|St = s], (2.2) 
+
+Qπ (s, a ) = Eπ [Gt|St = s, A t = a]. (2.3) A model predicts what the environment will do next, for instance the expected next state or reward if a certain action is taken in the current state. In reinforcement learning, there are two fundamental approaches to learning the optimal policy 
+
+π∗: value-based methods and policy-gradient methods. Both of these methods can be applied in a variety of settings, including both tabular and function approximation scenarios. 
+
+Value-Based Methods 
+
+Value-based methods aim to learn the value function and indirectly derive the policy from this value function. A core concept in these methods is Temporal-Difference learning. Temporal-Difference learning (TD) learns a state-value function V (s) which takes in a state and outputs the expected cumulative reward following a certain policy. So, TD learning methods learn directly from raw experience without requiring a model of the environment’s dynamics. This is accomplished through a process called bootstrapping, where estimates are updated based on other estimates. The simplest form of TD learning is TD(0), or one-step TD, which estimates the value function V (s) of a policy. The update rule for TD(0) is: 
+
+V (st) ← V (st) + α[Rt+1 + γV (st+1 ) − V (st)] (2.4) where st is the current state, Rt+1 is the reward received after transitioning from state st to state st+1 , V (st+1 ) is the estimate of the value of state st+1 , α is the learning rate, and γ is the discount factor [61]. A common value-based method is Q-learning, which is a type of TD learning that learns the action-value function, or Q-function. Q-Learning updates an action-value function, called the Q-function, which takes a state-action pair as input and outputs the expected cumulative reward for taking that action in that state, following a certain policy [70]. The update rule for Q-learning is: 
+
+Q(st, a t) ← Q(st, a t) + α[Rt+1 + γ max  
+
+> a′
+
+Q(st+1 , a ′) − Q(st, a t)] (2.5) 6where st is the current state, at is the current action, Rt+1 is the reward received after taking action at in state st, st+1 is the new state, a′ refers to any possible action in state st+1 , α is the learning rate, and γ is the discount factor. 
+
+Policy-Gradient Methods 
+
+Policy-gradient methods learn a policy that maximises the expected return by directly optimising the policy parameters. These methods are based on the idea of using gradient ascent to find the optimal parameters that maximise the expected return. One common policy gradient method is the REINFORCE algorithm. The REINFORCE algo-rithm works by adjusting the policy parameters using the following update rule: 
+
+θ ← θ + α∇θ log π θ (at|st)Gt (2.6) where θ are the policy parameters, α is the learning rate, πθ (at|st) is the probability of taking action at in state st under policy π, and Gt is the return from time step t [73]. Another policy-gradient approach is the Actor-Critic method, which combines the benefits of policy-gradient methods and value-based methods. In Actor-Critic methods, two separate neural networks are employed: the Actor, which updates the policy, and the Critic, which evaluates the policy by computing the value function. This allows the algorithm to leverage the strengths of both types of methods. The Critic reduces the variance of the gradient estimation, which can help improve the stability and speed of learning. The update rule for the Actor-Critic method is: 
+
+θ ← θ + α∇θ log π θ (at|st)Vϕ(st) (2.7) where θ and ϕ are the policy parameters and value function parameters, respectively, α is the learning rate, πθ (at|st) is the probability of taking action at in state st under policy π, and Vϕ(st)is the value function estimated by the Critic at state st [36]. 
+
+## 2.1.3 Tabular Reinforcement Learning 
+
+Tabular Reinforcement Learning is a class of reinforcement learning algorithms that operate in discrete and finite state-action spaces [61]. In these settings, the agent learns the optimal policy by interacting with the environment using a table containing values or policies for each state-action pair. The agent maintains and updates a table for V π (s) or Qπ (s, a ) as it interacts with the environment. Tabular reinforcement learning has the advantage of being understandable and offering strong theoretical guarantees. These methods are limited to problems with small state and action spaces due to the need to maintain and update a table of values for each state-action pair. For problems where the state and action spaces are too large to feasibly create such a table, function approxima-tion methods, including both value-based and policy-gradient methods, are used to approximate the value function or policy function with a parameterised function, such as a neural network. 72.1.4 Action Selection Policies 
+
+In RL, exploration policies are used to balance the trade-off between exploration (discovering new information about the environment) and exploitation (using the current knowledge to maximise rewards). Several popular exploration policies are the ϵ-greedy policy, the Boltzmann exploration, and the Upper Confidence Bound method. I. ϵ-greedy policy: This is one of the simplest and most widely used exploration policies in RL [61]. In the ϵ-greedy policy, the agent selects a random action with probability ϵ and chooses the action that currently has the highest estimated value with probability 1 − ϵ. This policy is defined in Definition 2. 
+
+DEFINITION 2 The ϵ-greedy policy , π(a|s) selects an action a given the state s s.t. 
+
+π(a|s) = 
+
+( 1 − ϵ + ϵ 
+
+> |A|
+
+if a = arg max a′ Q(s, a ′) 
+
+> ϵ
+> |A|
+
+otherwise 
+
+)
+
+where Q(s, a ) is the action-value function, and |A| is the size of the action space. 
+
+II. Boltzmann exploration or Softmax policy: This policy selects actions based on their relative action-value estimates rather than selecting the action with the highest value deterministically [61]. The function works, essentially, as a smoothing function that transforms a vector of real numbers into a probability distribution, with each probability representing the relative preference of the agent for each action. The mathematical representation of the softmax action selection is given in Definition 3. 
+
+DEFINITION 3 The softmax policy π computes the probability of selecting an action a given a state s by 
+
+π(a|s) = exp( Q(s, a )/τ )
+
+P 
+
+> a′
+
+exp( Q(s, a ′)/τ )
+
+with a temperature parameter τ > 0.
+
+The temperature parameter τ controls the exploration-exploitation trade-off. Higher values of 
+
+τ result in more exploration, while lower values make the policy more deterministic and focused on exploitation. III. Upper Confidence Bound (UCB) action selection: UCB is an exploration policy that balances exploration and exploitation by considering the uncertainty in the action-value estimates [6]. The UCB action selection rule is defined in Definition 4. 
+
+DEFINITION 4 The Upper Confidence Bound action selection policy is the selection of the action at given state s by 
+
+at = arg max 
+
+> a
+
+"
+
+Q(s, a ) + c
+
+s
+
+log tNt(a)
+
+#
+
+8where t is the current time step, Nt(a) is the number of times action a has been selected up to time t, and c > 0 is a parameter that controls the exploration-exploitation trade-off. The second term in the square brackets represents the uncertainty in the action-value estimates and encourages exploration of actions that have been tried less frequently. 
+
+# 2.2 Continual Learning 
+
+Continual learning is a concept that refers to the ability of a model to learn tasks sequentially. This ability to keep learning, without forgetting previously learned information, is one of the major unresolved challenges in the field. In a continual learning framework, a model is presented with a series of tasks T1, T 2, . . . , T n. The model learns task Ti at time i, while retaining knowledge from tasks T1, . . . , T i−1, and without access to data from future tasks Ti+1 , . . . , T n [43]. 
+
+## 2.2.1 Forgetting and Transfer Learning 
+
+The ability of a model to apply its knowledge to new tasks, a process known as transfer learning, is a key aspect of continual learning. Similarly, the ability to maintain performance on original tasks, or the lack of forgetting , is another crucial component. Together, transfer learning and forgetting represent the central challenge in continual learning: how to effectively transfer knowledge to new tasks without forgetting important information from previous ones. This balance is often referred to as the stability-plasticity dilemma in continual learning. 
+
+Continual Supervised Learning 
+
+In the realm of continual supervised learning, each task Ti typically involves a classification or regression challenge with its own training dataset Di = ( xi,j , y i,j )j = 1 Ni , where xi, j is the j-th input example, yi,j is the corresponding label, and Ni is the number of examples for task Ti [54]. 
+
+Continual Unsupervised Learning 
+
+Continual unsupervised learning involves tasks Ti that require understanding the underlying data distribution or identifying other properties of the data, without the use of explicit labels. A task could involve clustering a different dataset or conducting a dimensionality reduction task with varying objectives [3]. 
+
+Continual Reinforcement Learning 
+
+The framework of reinforcement learning can simply be defined for each task when in the continual learning context. 9DEFINITION 5 Continual reinforcement learning tasks Ti are defined as a Markov decision process (MDP) in a tuple represented by a tuple ⟨S i, Ai, Pi, Ri, γ i⟩ :
+
+• Si is a finite set of states for task Ti.
+
+• Ai is a finite set of actions for task Ti.
+
+• Pi : Si × A i × S i → [0 , 1] represents the state transition probability functions for task Ti,where Pi(s, a, s ′) is the probability of reaching state s′ when taking action a in state s.
+
+• Ri : Si × A i → R represents the reward functions for task Ti, where Ri(s, a ) is the expected immediate reward for taking action a in state s.
+
+• γi ∈ [0 , 1] is the discount factor for task Ti, which determines the importance of future rewards. 
+
+This definition aligns with the general Markov decision process, but in the context of continual learning, each task has its own MDP [56]. 
+
+## 2.2.2 Catastrophic Forgetting 
+
+A significant barrier to continual learning is the phenomenon known as catastrophic interference or catastrophic forgetting [45, 26]. Catastrophic forgetting refers to the loss of previously acquired knowledge by ML models when learning new information [45, 22]. This issue can arise when weights, essential for the initial task, are overwritten by information pertinent to the new task, causing the model to struggle to perform on the initial task after learning another. 
+
+# 2.3 Task Similarity 
+
+Task similarity, the quantification of difference between two tasks, can be quite challenging in the domain of RL. Within the conventional Markov Decision Process (MDP) framework, various met-rics are proposed to assess task similarity [23]. These metrics broadly classify into two categories: model-based metrics and performance-based metrics. Model-based metrics provide an estimation of the similarity between an original and a new task by using the respective MDP model parameters of each. On the contrary, performance-based metrics are dependent on the performance of the agents in the base and new tasks. Types of model-based metrics are dependent on which elements of the MDPs are considered and can be categorised into the following: 
+
+• Transition and reward dynamics: Metrics in this category necessitate comprehensive knowl-edge of the MDP models for both the original and new tasks. Three main approaches are identified: state abstraction techniques [41, 20, 21, 11], compliance metrics [38, 17, 5], and metrics that construct MDP graphs [37, 69]. 
+
+• Transitions: Metrics in this category use tuples in the form ⟨s, a, s ′⟩ to measure the similarity between MDPs [65, 4]. 
+
+• Rewards: Metrics in this category use tuples in the form ⟨s, a, r ⟩ to measure the similarity between MDPs [10, 63, 25]. 10 • State and actions: Metrics in this category use pairs in the form ⟨s, a ⟩ in both the source task and the target task to compute the similarity between MDPs [10, 64, 49]. 
+
+• States: Metrics in this category use the state space in both the original and new tasks to compute their similarity [62]. Another relevant area of research in this category is case-based reasoning, where RL approaches use a similarity function between the states in the new task and the states in a case base from a previous source task [1, 12]. For performance-based metrics, two distinct approaches are identified: policy similarity and transfer gain. 1. Policy similarity: Metrics in this category are based on the learned value function V π or the action-value function Qπ , or the behavioural policies π obtained in the base task and the new task. 2. Transfer gain: Approaches in this category approximate the level of similarity to the ad-vantage gained by using the knowledge in one original task to speed the learning of another task [10, 66]. Each of these metrics measure a different component in the RL framework. Assigning a com-prehensive metric to similarity can be quite difficult. Additionally, the concept of similarity can be subjective, depending on the specific problem domain and the goals of the learning process [66]. 
+
+Simple Example of the Subjectivity of Similarity Quantification 
+
+Consider evaluating the ’similarity’ of three types of vehicles: sports cars, sedans, and pickup trucks. Both considered passenger cars, perhaps sports cars have more in common with sedans. To quantify this relationship, the ’similarity score’ of sedans from sports cars could be 10. Con-sidered a utility vehicle and not a passenger car, a pickup truck could receive a lower ’similarity score’, but how much lower? How different does the categorisation make pickup truck’s ’similarity score’ and how different relative to the ’similarity score’ of the sedan? However, when the ’sim-ilarity’ evaluation shifts to vehicle performance capabilities, a contrasting scenario can emerge. It could be seen that sports cars and pickup trucks, both exhibiting high speed and power, are less different than sports cars and sedans, contradicting the previous numerical measure. This example demonstrates how the quantification of ’similarity’ can be significantly influenced by the particular characteristics or metrics selected for the comparison process. 
+
+# 2.4 Graph Theory 
+
+Graphs are combinatorial structures of configurations of nodes and connections [27]. Graph theory is a prominent field within discrete mathematics, studying the properties of graph structures. The two following definitions are a predominant graph theory textbook, updated in 2019, by Gross, Yellen, and Anderson titled Graph Theory and Its Applications .11 2.4.1 Graph Formalism 
+
+DEFINITION 6 A graph G = ( V, E ) is a mathematical structure consisting of two finite sets 
+
+V and E. The elements of V are called vertices (or nodes), and the elements of E are called edges. Each edge has a set of one or two vertices associated to it, which are called its endpoints. 
+
+An edge is said to join its endpoints. A vertex joined by an edge to a vertex v is said to be a neighbour of v.
+
+DEFINITION 7 The (open) neighbourhood of a vertex v in a graph G, denoted N (v), is the set of all the neighbours of v. The closed neighbourhood of v is given by N [v] = N (v) ∪ { v}.
+
+When G is not the only graph under consideration, the notations VG and EG (or V (G) and 
+
+E(G)) are used for the vertex- and edge-sets of G, and the notations NG(v) and NG[v] are used for the neighbourhoods of v.
+
+## 2.4.2 Graph Similarity Metrics 
+
+Quantifying the similarity between two graphs is a complex problem. This Graph Similarity Metrics section discusses a common metric for comparing graphical structure followed by two metrics well-established means of comparing sets of points in a metric space which can be applied to graphs. 
+
+Graph Edit Distance 
+
+The Graph Edit Distance between two graphs G1 and G2 is defined as the minimum cost sequence of edit operations required to transform G1 into G2 [55]. The edit operations can involve insertion, deletion, or substitution of vertices or edges, each with an associated cost. The goal is to find the sequence of operations with the minimum total cost [55]. 
+
+DEFINITION 8 The Graph Edit Distance is given by 
+
+GED (G1, G 2) = min 
+
+> ϕ:V1∪E1→V2∪E2
+
+X
+
+> x∈V1∪E1
+
+c(x, ϕ (x)) 
+
+where ϕ : V1 ∪ E1 → V2 ∪ E2 is a partial function that maps vertices and edges of G1 to vertices and edges of G2, and c(x, ϕ (x)) is the cost of substituting, deleting, or inserting x depending on 
+
+ϕ(x).
+
+The GED problem is NP-hard and correspondingly computationally difficult to solve exactly [32]. 
+
+Wasserstein Distance 
+
+The Wasserstein distance between two probability measures on a metric space, also known as the Earth Mover’s distance, is a measure of the optimal cost of transporting mass to transform one measure into the other [68]. In the context of graph theory, this can be extended to the space of graph structures by considering the graphs as distributions of features [51]. 12 DEFINITION 9 The p-th order Wasserstein distance between two probability measures μ
+
+and ν on a metric space (M, d ) is defined as: 
+
+Wp(μ, ν ) = 
+
+
+
+inf 
+
+> γ∈Γ( μ,ν )
+
+Z 
+
+> M×M
+
+d(x, y )p dγ (x, y )
+
+1/p 
+
+where 
+
+• Wp(μ, ν ) is the p-th order Wasserstein distance. 
+
+• d(x, y ) is the given metric on the space M .
+
+• Γ( μ, ν ) is the set of all joint distributions γ(x, y ) whose marginals are μ and ν respectively. 
+
+• The inf is the infimum over all possible such γ.
+
+Calculating the Wasserstein distance can be computationally expensive, especially for high-dimensional data [51]. 
+
+Hausdorff and Relative Hausdorff Distances 
+
+The Hausdorff distance is a measure commonly used in the field of computer vision and pattern recognition. It allows for a many-to-many correspondence between two sets, often making it more flexible for comparison tasks than measures requiring a one-to-one mapping [31]. 
+
+DEFINITION 10 Given two point sets A = a1, a 2, ..., a n and B = b1, b 2, ..., b m, the one-sided 
+
+Hausdorff distance from A to B is given by 
+
+˜δH (A, B ) = max  
+
+> a∈A
+
+min  
+
+> b∈B
+
+|a − b|
+
+This measure can be computed on Voronoi diagrams in O(( n + m) log( n + m)) time [16]. The Relative Hausdorff distance is a variant of the Hausdorff distance that is especially suit-able for comparing graphs. It was developed to measure the closeness of degree distributions at all scales, which makes it an effective tool for comparing the heavy-tailed degree distributions frequently observed in real-world graphs [2]. 
+
+DEFINITION 11 The Relative Hausdorff distance between two graphs, Υ and Λ, is a mea-sure of closeness between their complementary cumulative degree histograms. The metric is given by 
+
+˜δRH (Υ , Λ) = max {˜δRH → (Υ , Λ) , ˜δRH → (Λ , Υ) }
+
+where ˜δRH → (Υ , Λ) is the minimum ϵ such that ∀ d ∈ { 1, . . . , ∆(Υ) }, ∃ d′ ∈ { 1, . . . , ∆(Λ) + 1 }
+
+such that |d − d′| ≤ ϵd and |Υ( d) − Λ( d′)| ≤ ϵΥ( d).
+
+The Relative Hausdorff distance is less computationally intensive than the Hausdorff distance, especially for large graphs or graphs embedded in high-dimensional spaces, and can capture the degree distribution closeness at all scales [2]. 13 Dual Graph Formalism 
+
+A dual object in mathematics is a transformation that turns one kind of mathematical object into another kind, preserving the relationships and characteristics of the original. 
+
+DEFINITION 12 The dual graph G∗ of the planar graph G is defined as the union of a vertex set, denoted as V (G∗), and an edge set, denoted as E(G∗), where: 
+
+• The vertex set of G∗ is in one-to-one correspondence with the face set of G, F (G).
+
+• The edge set of G∗ is in one-to-one correspondence with the edge set of G, E(G). An edge in G∗ connects two vertices (corresponding to faces in G) if and only if the corresponding faces share a common edge in G.
+
+This translation expresses the essence of the original in a different form. In graph theory, the concept of a dual graph is applied to planar graphs, graphs that can be embedded in the plane without edge crossings [34]. 
+
+## 2.4.3 Rotation Systems 
+
+In combinatorial mathematics, rotation systems, also called combinatorial embeddings or combi-natorial maps, encode embeddings of graphs onto orientable surfaces by describing the circular ordering of a graph’s edges around each vertex [72]. Rotations systems are also known as combi-natorial embeddings or combinatorial maps and their formal definition is given by Definition 12 [72] followed by a visualisation in Figure 2.1 [52]. 
+
+DEFINITION 13 A rotation system is defined as a pair (σ, θ ) where σ and θ are permutations acting on the same ground set β, θ is a fixed-point-free involution, and the group < σ, θ > generated by σ and θ acts transitively on β.
+
+Figure 2.1: (a) the drawing of a graph G with edge crossings. (b) representation of the graph G
+
+embedded in the sphere is shown in. The graph embedded U (G) serves as the symmetrisation of the graph G where an edge e in G from x to y induces an edge in U (G) from x to y and an edge from y to x. The corresponding faces of the graph embedding shaded are named Fi for i from 1 to 6. (c) the incident edges at the node a in U (G) in purple, the rotation system at a in green. Combinatorial maps are dimension-independent and rely on a single element along with a simple set of relations. All the information about the cells and their incidence and adjacency 14 relations is contained within this simple model. All neighbourhood queries are resolved in optimal time, linear in the number of traversed cells, without having to maintain any additional information [13]. 
+
+# 2.5 Computational Geometry 
+
+Computational Geometry is a field of study dedicated to the resolution of geometric problems. 
+
+## 2.5.1 Voronoi Diagram 
+
+A foundational structure of interest in computational geometry are Voronoi diagrams. A Voronoi diagram is a geometric partitioning of a space into regions, where each region is associated with a unique generating point, commonly called a ”site”, such that every location within a region is closer to its corresponding generating point than to any other generating point [7]. In essence, it is a tessellation that optimally assigns each point in the space to its nearest site, providing a natural representation of spatial proximity and neighbour relationships. 
+
+DEFINITION 14 Let S = {s1, s 2, . . . , s m} is a set of s points in our n-dimensional space. 
+
+Voronoi cells Vi is a cell that contains all the points closer to si ∈ S than to any other point. The Voronoi cell of a site si ∈ S, denoted as V (si), given by 
+
+V (s)i = {x : ∀j̸ = i, d (x, s i) ≤ d(x, s j )}, with i, j ∈ { 1, 2, . . . , c }
+
+using the concept of distance function d(x, y ), which gives the distance between points x and y in the plane. The Voronoi Diagram is the union of all Voronoi cells for points in S:
+
+V(S) = [
+
+> s∈S
+
+{V (s)} (2.8) The distance function d(x, y ) is used to calculate the distance between points. Predominately, the Euclidean distance (l 2 distance) is used: 
+
+d(x, y ) = ∥x − y∥2 =
+
+vuut nX
+
+> k=1
+
+(xk − yk)2 (2.9) However, other distance metrics, such as Manhattan distance (l 1 distance), are used as well, and others required for higher dimensions. 
+
+Geometric Explanation 
+
+Consider a set of sites in the plane. For each seed, the Voronoi cell is the region of all points that are closer to that seed than any other sites [7]. The boundaries of Voronoi cells are equidistant from neighbouring sites, neighbours as given by Definition 7, and the vertices of the diagram are equidistant from three or more seeds which is visualised in Figure 2.2 below [74]. 15 Figure 2.2: Two-dimensional (a) and three-dimensional (b) images of Voronoi diagrams from a 2015 article by Ying, Xu, Li, and Mao titled Point Cluster Analysis Using a 3D Voronoi Diagram with Applications in Point Cloud Segmentation .
+
+Properties of Voronoi Diagrams 
+
+The Voronoi diagram has several notable properties: 1. Coverage: The union of all Voronoi cells covers the entire metric space, S 
+
+> si∈S
+
+V (si) = M .2. Partition: The Voronoi cells are disjoint, V (si) ∩ V (sj ) = ∅ for any si, s j ∈ S with i̸ = j.3. Adjacency: Two sites si, s j ∈ S are said to be adjacent if their corresponding Voronoi sites 
+
+V (si) and V (sj ) share a non-empty common border. The adjacency relationship between seeds induces a graph structure on the set of sites, known as the Voronoi graph of S.4. Convexity: If the metric space is the Euclidean space and the distance function is the Euclidean distance, then each Voronoi cell is a convex set [7] [15]. 
+
+Delaunay Triangulation 
+
+Delaunay triangulation gives the dual graph to its associated Voronoi diagram. Delaunay triangu-lation is a technique used in computational geometry to create a triangulation of a set of points in the plane such that each edge connects two points with adjacent Voronoi cells (URL) [15]). This can be seen in 2.3 below [57]. Notice that given a set of points P = {p1, p 2, . . . , p n} in the plane, a triangulation is a division of the convex hull of the points into non-overlapping triangles, such that each point in P is a vertex of one or more triangles [14]. This triangulation has the property that the circumcircle of any triangle formed by an edge in the graph contains no other seeds in its interior [8]. This triangulation maximises the minimum angle of all the triangles in the triangulation, avoiding triangles with very sharp angles [39]. This property can be seen in 2.3 and makes Delaunay triangulation useful in many applications such as mesh generation and spatial interpolation. Several algorithms exist for their construction, including the incremental algorithm, divide-and-conquer algorithm, and the sweep-line algorithm [14]. 16 Figure 2.3: Visual of Delaunay Triangulation and Voronoi Diagram created from a set of points from a 2016 article by Rokicki and Gawell titled Voronoi diagrams – rod structure research models in architectural and structural optimisation .
+
+## 2.5.2 Stability and Quantifying Change 
+
+The concept of stability or sensitivity in computational geometry involves measuring how small perturbations to the input (the set of points) affect the output (the Voronoi diagram, Delaunay triangulation, or their dual graph). Small perturbations to the set of points can lead to changes in the structure of the Delaunay triangulation or Voronoi diagram, with the nature and extent of these changes being dependent on the specific configuration of the points and the nature of the perturbation [16]. 
+
+Relationship between Changes in the Generating Sites and Changes in the Resulting Diagrams 
+
+The relationship between the changes in sites that generate diagrams and the resulting Voronoi diagrams, is strictly monotonic. Dependent on the location of the sites, small perturbations in the sites positions can lead to significant changes in the Delaunay triangulation, such as edge flips, and consequently, in the Voronoi diagram [28]. Perturbations may also warp the corresponding Voronoi diagram while not effecting the graphical structure of the diagram at all if there remains any site with the relative position of the previous nearest neighbours as before. This relationship is depicted in Figure 2.4 As the impact of a perturbation depends on the specific configuration of the points and the 17 (a) (b) (c) 
+
+Figure 2.4: Figure (a) is of the base Voronoi diagram in black resulting from the sites shown in red. Figure (b) shows red sites, the five central most have been perturbed, using Voronoi site generation procedure outlined in the beginning of this section, by α = 0 .05, and showing the resulting Voronoi diagram that is differing in structure to that of (a). Figure (c) is figure (b) with an additional 0 .05 perturbation making α = 0 .1 yet only resulting in warping of the resulting diagram but no connection-changing structural change to that of (b). nature of the perturbation, quantifying this effect in a general and measurable way still presents some challenges. 18 Chapter 3 
+
+# Related Work 
+
+# 3.1 Catastrophic Forgetting 
+
+Most work in understanding catastrophic forgetting has been in the domains of supervised learning and neural networks. Of the research on catastrophic forgetting, studies have concentrated on developing methods for mitigating forgetting with techniques to regulate the change of weights in the network [35, 76], the experience replay [18, 19, 30, 47, 48, 50, 58, 67], and the local optimisation of neural networks [19, 24, 42] as well as meta learning [9, 60]. However, there has been limited work on how forgetting is influenced by the similarity, or dissimilarity, of the new task from the initial, which is the focus of this paper. 
+
+# 3.2 Effect of Task Similarity on Catastrophic Forgetting 
+
+The 2013 paper ”An Empirical Investigation of Catastrophic Forgetting in Gradient-Based Neu-ral Networks” analysed the impact of similar and dissimilar tasks on catastrophic forgetting in gradient-based neural networks. This investigation was carried out across various gradient-based training algorithms and using different activation functions. Although a difference in forgetting was identified based on the difference of the new task, this effect was inconsistent across the different activation functions [26]. A notable study in 2020, ”Anatomy of Catastrophic Forgetting: Hidden Representations and Task Semantics”, observed maximal forgetting in neural network models occurs for task sequences with intermediate similarity [53]. The 2021 paper, ”Continual Learning in the Teacher-Student Setup: Impact of Task Similarity” primarily aimed to investigate the effect of task similarity on forgetting, providing the most recent and direct work on this relationship. This research examined the problem of catastrophic forgetting in the context of deep learning networks and found that the greatest forgetting occurs at an intermediate task similarity, when tasks depend on similar features [40]. 19 3.3 Task Similarity Metrics in Reinforcement Learning 
+
+In the pursuit of a more comprehensive and accurate metric for task similarity in RL, a recent advance in the performance-based metrics category learns an embedding for sequential tasks as a similarity measure. Proposed this year in ”Learning Embeddings for Sequential Tasks Using Population of Agents”, the embeddings are based on an information-theoretic framework. The information-theoretic criterion is directed by the concept that two tasks can be considered similar if observing an agent’s performance on one task can reduce our uncertainty about its performance on the other [44]. 20 Chapter 4 
+
+# Methodology 
+
+To explicate the relationship between task similarity and forgetting, a way to generate related tasks, a metric for measuring the difference between tasks, and a method for quantifying the degree of forgetting after sequential training are needed. A tabular, Q-learning method with the objective of minimising the steps taken to reach a goal is used; details of which follow in the 4.3 Agent section. To enable a clear quantification of task similarity, the tasks are based on graphs. The use of graphs avoids some of the subjectivity, discussed in Section 2.3, in similarity metrics. Voronoi diagrams, defined in Section 2.5.1, offer a means for generating similar graphs by manipulating the original sites locations. By optimising for the number of steps taken, the agent interprets a difference in tasks by only the graph’s topological structure, irrespective of edge length or spatial distortion. To measure task similarity, a metric for structural difference between graphs, which is computationally feasible, is established. Details of the generation and measurement of similar tasks are in the 4.2 Task section. The extent of forgetting is quantified by the difference in the performance from training on an initial task, and the performance after training on a new task. Each RL agent is trained on a base graph with the step-minimising objective and a specified goal state. The performance is measured by the number of steps taken, given a specified starting state. Next, the agent is trained on a new graph with the same specified goal state (details of enabling consistent goal state are in the 4.2 Task section). Then, the performance on the base graph, with the same starting state, is measured. The difference between the two performances is the measure forgotten . The details of capturing these measures follow in the 4.4 Evaluation section. The experimental trials, the parameters tested, and the measurements tracked are expressed in the 4.4.3 Experiment section. 
+
+# 4.1 Tasks 
+
+This section presents the systematic approach employed for the creation of tasks, with a focus on ensuring the tasks remain related. This is followed by the means used to evaluate and quantify the degree of task similarity. 21 4.1.1 Generating Tasks 
+
+The procedure for creating similar tasks is accomplished by generating graphs from Voronoi dia-grams with sites manipulated by a controlled perturbation of base sites. 
+
+Voronoi Diagram Site Generation 
+
+Voronoi diagrams serve as a geometric tool to divide a given space into several regions based on a specific set of sites, as defined in Section 2.5.1. The set of sites S is comprised of two disjoint subsets: external points denoted as N ∈ R2, and internal points denoted as M ∈ R2.To provide a consistent outer perimeter for the graphs of the resulting Voronoi diagrams, the set of external sites will remain the same. These external points are evenly distributed along the circumferences of two concentric circles centered on the origin. On the larger of the two circles, given by radius R, the outer external sites are allocated. On the smaller of the two circles, with radius r, the inner external sites are allocated. Enabling the generation of many base diagrams, the internal sites are sampled from a normal distribution that centers at the center of the external sites. The multivariate Gaussian distribution of the internal sites is given in equation 4.1. 
+
+M ∼ N (0 , 0) ,
+
+ R
+
+4
+
+2
+
+I
+
+!
+
+(4.1) To ensure the resulting Voronoi diagrams from different internal sites change while remaining related, two random sets of inner sites are sampled, x0 ∈ M and x1 ∈ M , and interpolating between the sets using equation 4.2: 
+
+xα = cos 
+
+ π
+
+2 α
+
+
+
+x0 + sin 
+
+ π
+
+2 α
+
+
+
+x1 (4.2) where α ∈ [0 , 1]. Notably, because the interpolation is a linear combination of Gaussian-distributed points in such a way that preserves the variance, it is ensured that the the interpolated tasks retain the same distributional properties of the original distributions. The parameter α can be interpreted as the fraction of the variance, providing a mechanism to control the difference between sites. When α is 0, the task is entirely defined by x0; as α increases to 1, the influence of 
+
+x1 grows while the influence of x0 diminishes correspondingly. Together, the outer external, inner external, and internal points serve as the sites for the Voronoi diagram. 
+
+Voronoi Diagrams Generation 
+
+To create these diagrams, the scipy.spatial.Voronoi functions from the SciPy library in Python was used. This function relies on the Qhull library, a robust computational framework for tackling spatial problems such as Voronoi diagrams, Delaunay triangulations, and convex hulls. 22 (a) External and Internal Sites S (b) Delaunay Triangulation D(S) (c) Resulting Voronoi Diagram V(S)
+
+Figure 4.1: (a) shows 7 outer external sites, 6 inner external sites, and 3 internal sites. The external sites, N and the corresponding circles they are evenly placed upon are shown in blue. The internal points M and a circle marking one standard deviation from the center of the Gaussian from which the points are generated are shown in green. (b) adds to (a) the Delaunay triangulation of the sites S = N ∪ M . (c) adds to (b) the boundaries and intersections of the Voronoi polygons, giving the resulting Voronoi diagram for the sites S.The specific process Qhull employed to generate a Voronoi diagrams, using Delaunay triangu-lation, proceeds through these steps: 1. Delaunay Triangulation: The Delaunay triangulation D(S) of the input sites S is computed. This is visualised in Figure 4.1b, with a red Delaunay triangulation of the blue and green sites. 2. Circumcenter Calculation: The circumcenter cijk for each triangle △ijk ∈ D(S) is calculated. These circumcenters serve as the vertices V = vijk of the Voronoi diagram. 3. Boundaries: The boundaries B = bij of the Voronoi regions are formed by the set of points equidistant from two sites si, s j ∈ S. The process employs Euclidean distance to create a patchwork of polygons that blanket the entire space. Each intersection of two Voronoi cell boundaries bij , b jk ∈ B creates an edge eijk ∈ E which become the edges of the Voronoi diagram. 4. Resulting Diagram: This process results in the Voronoi diagram V(S) = Ri, E, V , where 
+
+Ri are the regions, E are the edges, and V are the vertices. Figure 4.1c shows the resulting Voronoi diagram in black, from the red Delaunay triangulation of the blue and green sites. 
+
+Consistent Vertex Label Assignment across Corresponding Voronoi Diagrams 
+
+Building upon the duality of Voronoi diagrams and Delaunay triangulations, a strategy is cre-ated that assigns labels to the vertices consistently across different Voronoi diagrams and their corresponding Delaunay triangulations. Each vertex is one-hot encoded, signifying the binary rep-resentation of the Delaunay triangle associated with the vertex. To maintain a consistent mapping between sites, Voronoi vertices, and Delaunay triangles across varying diagrams, a method rooted in computational geometry and graph theory was employed. To efficiently organise points in the 23 multi-dimensional space, a k-d tree data structure is constructed from the original set of sites. This structure partitions the space into various regions, enabling rapid nearest neighbour queries. For each subsequent Voronoi diagram with site points Sα = sα, 1, sα, 2, ..., sα, |N |+|M |, where 
+
+α = 0 gives the initial Voronoi diagram, a k-d tree is utilised to find the closest original site s0,j 
+
+for each site sα,i . This step creates a mapping from the perturbed sites back to the original. For every vertex vα,i in the set of vertices V = vα, 1, vα, 2, ..., vα,η , the Euclidean distances to all sites in S are computed and the three nearest sites identified. Formed from these three nearest sites is the Delaunay triangle △ijk corresponding to the Voronoi vertex vα,i .This association between Voronoi vertices, Delaunay triangles, and original sites is represented by a binary-encoded matrix B ∈ 0, 1m×p. Each entry bij in the matrix is assigned a value as given in Equation 4.3. 
+
+bij =
+
+
+
+1, if △ijk corresponds to vα,i and ∃ k s.t. Ik = j
+
+0, otherwise (4.3) 
+
+Extracting a Network Graph from the Voronoi Diagram 
+
+A graph, denoted as G = ( N , E), where N is the set of nodes and E is the set of edges, is formed based on the Voronoi diagrams. The Voronoi vertices V in the Voronoi diagram V(S) corresponds to a nodes N in N of the graph G. The node n ∈ N is assigned the vector of coordinates ( x, y )n of the corresponding Voronoi vertex v ∈ V . The labelling of the node n is determined by the one-hot encoding labelling method given previously in Section 4.2.3. For every finite Voronoi edge ef inite 
+
+in E(S), there is a corresponding edge ε ∈ E of the graph G. The infinite edges of the Voronoi diagram are excluded from the graph. The resulting graph G has a structure that resembles the connected portion of the Voronoi diagram and incorporates the consistent labelling between similar graph (i.e. the graphs resulting from perturbation). 
+
+## 4.1.2 Measuring Similarity 
+
+The procedure for measuring the similarity between tasks is accomplished by a (feasible) metric that indirectly captures the structural differences between two graphs. The difference measure of interest is that of the topological structure of two graphs. To reiter-ate, purely the connections of the graph is of interest due to the agent’s step-based optimisation. A change in the length of the edges traversed or a change to the angles at which the agent is moving is of no consequence in the interpretation of the task by this agent if the change does not alter the connections of the graph. Recall from 2.5.2, the extent of structural changes does not necessarily correlate with the magnitude perturbing the sites because the topological structure depends not solely on each site’s positions but also their relative position to each other. It is for this reason the similarity between two tasks is computed using a metric focused on the topological structures between graphs. Although calculating the Graph Edit Distance, defined in Section 2.4.2, provides a direct measure of the structural difference between two graphs, it is computationally expensive and impractical for larger graphs due to its NP-hard nature. This makes it, unfortunately, beyond 24 the capability of computation in this study. The Wasserstein distance and the Hausdorff distance offer more computationally feasible alternatives. The Wasserstein metric, defined in Definition 9, captures the overall difference in the spatial distribution of the cells. Let the Voronoi diagram associated with the graph G be VG, and the area of the Voronoi cell corresponding to a vertex v ∈ V be a(v). Let Γ( G1, G 2) denotes the set of all joint distributions over vertex pairs ( v1, v 2) for v1 ∈ V G, whose marginals correspond to the distributions of areas in VG. The second order Wasserstein distance between the Voronoi diagrams that gave the two graphs G1 and G2, calculated over the areas of Voronoi cells is given in Equation 4.4. 
+
+W2(G1, G 2) = 
+
+
+
+inf 
+
+> γ∈Γ( G1,G 2)
+
+Z
+
+> N1×N 2
+
+d(a(v1), a (v2)) 2 dγ (v1, v 2)
+
+1/2
+
+(4.4) The computation of the Hausdorff distance defined in Definition 10, between the graphs 
+
+G1(N1, E1) and G2(N2, E2), is given in Equation 4.5. 
+
+δH (G1, G 2) = max 
+
+
+
+max 
+
+> n1∈N 1
+
+min 
+
+> n2∈N 2
+
+|| n1 − n2|| , max 
+
+> n2∈N 2
+
+min 
+
+> n1∈N 1
+
+|| n2 − n1|| 
+
+
+
+(4.5) These metrics are used in combination to provide a relatively comprehensive measure of the differences between the topological graph structures. To combine these metrics, the aver-age of the normalised Wasserstein and Hausdorff distances is computed. The combined metric, 
+
+∆(G1, G 2) = (W2(G1, G 2) + δH (G1, G 2)) /2 , provides a measure that indirectly captures the structural differences between two graphs. This metric is used for measuring task similarity. 
+
+# 4.2 Agent 
+
+The agent operates on a closed, undirected graph derived from a Voronoi diagram. Each node of the graph represents a discrete state, and the edges signify actions that the agent can execute. The objective of the agent is to traverse the graph in such a way as to reach the goal state in the fewest possible steps. For interpretability, the agent uses tabular Q-learning, interacting with its environment to incrementally learn the values of actions for each state. The Q-learning algorithm operates in an iterative manner, balancing exploration of new actions and exploitation of known information. This balance is achieved using an ϵ-greedy strategy with a decaying ϵ-value. The agent updates a Q-table, from which it derives a policy that is used to make decisions to maximise the cumulative reward. Note that the action-selection process is based on the graph, not on the Q-table which is not graph-specific. This flexibility allows the agent to handle training on new task (i.e. graphs) to which the Q-table may not have been initialised. 
+
+## 4.2.1 Initialisation 
+
+States S ∈ S are identified according to the labels of the nodes of the Voronoi graphs. Each state has a set of available actions, A ∈ A , which correspond to transitions to neighbouring states along an edge. The state transitions, P ∈ P , are deterministic. To allow the agent consistency in its interact with difference graphs, the actions are constructed with a rotation system. The rotation system provides a means of abstracting the graph’s geometry 25 to shift reliance on the specific structure to the combinatorial properties of the graph. To create this system, a sorted list of states and its neighbours is assembled into a state-neighbour dictionary. This state-neighbour dictionary is arranged such that the neighbouring states associated with each state are sorted in clockwise order relative to due north of the state. This results in a consistent and ordered labelling of neighbouring states for each state in the dictionary that preserves a notation of relative position of its neighbouring states. Index 0 of the ordered neighbouring states corresponds to the upper-right most neighbouring state, the neighbour at index 1 to the neighbour in the clockwise direction, and the neighbour at index 2 to a third neighbouring state at a greater ’time’ on the theoretical clock face. 
+
+Figure 4.2: Each graph shows a central node, S, connected by a black edge to each of the nodes: A, B, C. The top-left graph shows the edge connecting node S and node A in blue. The top-right graph shows the edge connecting node S and node B in blue. The lower graph shows the edge connecting node S and node C in blue. 26 The ordering of the state-neighbour dictionary created from the graphs shown in Figure 4.2 would be: D = {{ C : [ S]}, {S : [ A], [B], [C]}, {A : [ S]}, {B : [ S]}} . The state-neighbour dictionary forms the basis of the rotation system. The ordered dictionary entries provides a combinatorial embedding for the graph on the plane, by description of the spatial orientation of the states and their corresponding actions via the index of the ordered neighbours of each state. This embedding allows the agent to make decisions based on relative positions rather than absolute coordinates. The relative positions provided by the indexing of the state-neighbour dictionary is shown in the Figure 4.2. This example state-neighbour dictionary, state S has three actions [ A], [B], [C] which are sorted in a clockwise order. The neighbour ordering translates to a rotation system around the vertex S, with edges S − A, S − B, and S − C, ordered clockwise. The number of available actions for a state depends on the number of neighbours. Most nodes, located in the interior of the graph, have three edge connections and thus three available actions for interior states. For states that have three available actions, the available actions are either 
+
+back , left , or right . Notice that the action will depend on the relative direction of the previous state. The index of the state-neighbour dictionary then needs to correspond to the action which takes the agent to the neighbour state with the specified relative position to the current state. For a visual example of this this mapping-to-ordered-mapping, let us look at Figure 4.2. The graph G({A, B, C, S }, {[A, S ], [B, S ], [S, C ]}) in Figure 4.2, has the corresponding state-neighbour dictionary D = {{ C : {S}} , {S : {A, B, C }} , {A : {S}} , {B : {S}}} . This is the result of the order of the states A, B, and C about state S being alphabetical in a clockwise direction, relative to due north of state S. If the agent has just traversed the blue edge in the top-left graph, bringing the agent from state A to state S, then the action of left should map to the S − B edge that leads to state B, whereas right would take the S − C edge to neighbouring state C and finally 
+
+back would take blue edge back to previous state A. In the top-right graph, traversing the blue edge to state S makes the left action the S − C edge to state C, the right action to state A, and the back action bringing the agent to previous state B. For the lower graph, going left leads to state A, right to state B, and back to state C. Corresponding to the blue edge for the top-left, top-right, and lower graphs in Figure 4.2, the state-neighbour dictionary map of state S with the previous state coloured blue is {S : {A, B, C }, {A, B, C }, {A, B, C }} , respectively. Notice how when current index i refers to a blue coloured state, taking the edge to this neighbour corresponds to the back action because the blue state is the other state on the blue edge connection to S.Then, with the clockwise ordering, the state next index, i ≡ 1 mod 3, always corresponds to the 
+
+left action and the state back an index, i ≡ − 1 mod 3 to the right , where mod denotes the modulo operation. For a state s with 3 neighbouring states, the actions associated with this state are A(s) = 
+
+{back, lef t, right }. Let previous state, ς, be located at the i-th index in the state-neighbour dictionary for state s. The action a ∈ A (s) that corresponds to the ι-th index of the state-neighbour dictionary of state s given previous state ς designated by equation 4.6. 
+
+a =
+
+
+
+back if ι = ( i)
+
+lef t if ι ≡ (i + 1) mod 3 
+
+right if ι ≡ (i − 1) mod 3 (4.6) 27 Note that the nodes on the perimeter of the graph have only two connected edges. Refer to Appendix B for a discussion on the actions associated with states with less than and greater than 3 neighbours. The Q-table, denoted as Q(s, a ), is initialised with a value of 1 .0 for each of the state-neighbour pairs obtained from the base graph (i.e. the graph from α = 0 perturbation). The base graph is chosen for initialisation because it is on this graph the the agent is first trained. 
+
+## 4.2.2 Training 
+
+During the training process, the Q-table is updated iteratively using the Q-learning update rule described in Section 2.1.2. The goal state is the eastern-most (right-most) node on the graph, which sits at the same coordinate location for each graph due to the consistency of the external site placements. In each episode of training, the agent starts from a random state and selects actions following the ϵ-greedy strategy. Taking the selected action leads to a new state and yields a classic reward value of either 1 when the goal state is reached or 0 otherwise. The discount factor γ is set less than 1 to give an incentive to minimise the steps taken to reach the goal state. The modelling choice of the ϵ-greedy strategy was chosen for its simplicity, computational efficiency, and flexible tuning of the exploration-exploitation trade-off. This was chosen instead of the common alternatives defined in the Section 2.1.4, because the ϵ-greedy approach does not require maintaining additional counts of actions or calculating probability distributions over actions, aiding its computationally efficiency. To shift from exploration to exploitation as the agent learns more about the task, the value of ϵt starts with ϵo = 0 .1 and decays over time by 
+
+ϵt = p ϵo 
+
+> t
+
+for each step t of the episode. The action selection process is based on the current graph, which may differ from the graph used to previously construct the Q-table. So, the agent selects the valid actions for the current graph, and due to the consistent action labelling enabled by the rotation system, the state-neighbour pair is typically present in the Q-table. If a state-neighbour pair is not present (e.g. when a node with more than three edges appears in a perturbed graph), the state-neighbour pair is added to the Q-table with a designed initial value of 1 .0 to incentives its exploration. This adaptability is vital for the agent to adjust to new tasks which manifests in a changes in the number of connections of a node in the graphs. 
+
+# 4.3 Evaluation 
+
+All agents are first trained on an initial task, given by a base graph of α = 0 perturbation. The trained Q-table is then updated by further training trained on a similar task which is given by a graph of α-perturbation. The agent’s performance on the initial task is used to assess the degree of forgetting, using the process outlined in this section. 
+
+## 4.3.1 Performance 
+
+To evaluate the learned policy on the initial task, all agents began from the starting state, in this case, the western-most (i.e. left-most) node of the graph. Guided by the trained Q-table, the agents takes actions until it reaches the goal state. 28 The task (i.e. structure of the graph on which the agent is operating) determines the valid actions an agent can execute. The agent’s movements, from the actions taken, utilise the rotation system employed during training. To select an action, each agent calculates the softmax probabil-ities (as per Definition 3) of the corresponding Q-values for the valid actions of the current state. The Boltzmann exploration was selected for its distributional approach to maintain a balance between exploration and exploitation during the testing phase. This balance was regulated by varying the temperature parameter, τ . Lower values rendered the action selection more determin-istic, while higher values promoted a smoother, more exploration-inclined selection distribution. In the experiments, τ = 0 .1 was chosen to draw primarily from the learned knowledge, while allowing sufficient exploration to avoid cyclical paths that could prevent reaching the goal state. 
+
+## 4.3.2 Forgetting 
+
+The degree of forgetting was measured by the absolute value of the difference in performance after training on a new task. Let the path length to reach the goal state for task t be denoted as Pt,and | · | as the absolute value function. Then, Ft can be calculated using Equation 4.7. 
+
+Ft = |P original  
+
+> t
+
+− P original  
+
+> o
+
+| (4.7) 
+
+## 4.3.3 Experiments 
+
+Each trial involved training an agent on a set of graphs derived from Voronoi diagrams, created from sites with incrementally increasing perturbations. One hundred trials were executed on three levels of task complexity, which corresponded to the sizes of the Voronoi diagram graphs generated from different quantities of internal sites. The sizes tested were derived from three, five, and fifteen internal sites, each combined with twelve outer external sites and one hundred inner external sites, arranged as detailed in Section 4.2.1. Figure 4.3 shows Voronoi diagrams generated from the three quantities of internal sites, and depicts the shape of the resulting diagram from the arrangement of the external sites (as per Section 4.1.1). The site configuration both encourages the agent to pass through the center of the graph, where the controlled internal site manipulation occurs, and to provide a clock-like structure for an interesting start state (western-most node) and goal state selection (eastern-most node) on the graphs from these diagrams. Each trial employed a set of graphs derived from Voronoi diagrams with sites perturbed by ten incremental α-values from 0 to 0 .25. Following the initial round of training for 2500 episodes on the graph from α = 0, each agent receives training for another 2500 episodes on a, respective, perturbed graph. Each agent was evaluated on its performance on the initial task, which involves reaching the eastern-most node from the western-most node on the unperturbed graph. The number of steps taken, the performance, of each agent was recorded for each level of task complexity. To reiterate, the number of steps taken on the original graph (the initial task) serves as the performance metric. The difference between the agent’s performance after training on the initial task and the performance after additional training on a different task provides the measure of forgetting .29 (a) (b) (c) 
+
+Figure 4.3: The Voronoi diagram, in black, generated from both the external sites, in blue, and 3 internal sites, in green, is shown in (a). Figure (b) delivers the same visual but with a resulting Voronoi diagram from 5 green, internal sites, and figure (c) displays the diagram with 15 green, internal sites. 30 Chapter 5 
+
+# Results 
+
+This chapter provides results derived from a hundred experimental trials. Limitations of the study are expressed after presenting and discussing the results. 
+
+# 5.1 Experimental Results 
+
+## 5.1.1 Tasks 
+
+Generated Similar Tasks 
+
+Voronoi diagrams were generated for three different sample sizes of internal sites. The pertur-bations of these sites are displayed in Figures 5.1, 5.2, and 5.3. To avoid an excess of diagrams, every-other α-value, from ten increments in the range [0 , 0.25], that control the perturbation are displayed in the figures. 
+
+First Task Complexity: 3 Internal Sites 
+
+A set of the Voronoi diagrams generated by 3 internal sites and perturbed by α-values are depicted in Figure 5.1. It can be seen that as α increases, the edges that form the connections between states can lead to different states, directions, or relative areas. It can also be seen that this perturbation range enables the successful creation of Voronoi diagrams that differ in degrees that maintain relation to the base structure. 
+
+(a) (b) (c) (d) (e) 
+
+Figure 5.1: Voronoi diagrams from three internal sites with (a) no site perturbation, (b) sites perturbation of α = 0 .05, (c) sites perturbation of α = 0 .10, (d) sites perturbation of α = 0 .15, (e) sites perturbation of α = 0 .20. 
+
+The perturbations of just three internal sites offer a difference in tasks that most closely corre-31 sponds to the difference in the α perturbations. From the agent’s perspective, the perturbations change the states that provide access to the shortcut through the center of the graph. The change in shortcut-access states corresponds to a connection distance generally proportional to the α-value of the perturbation. Key for the agent will be remembering how to get to the shortcut-access states of the first graph. 
+
+Second Task Complexity: 5 Internal Sites 
+
+Voronoi diagrams generated with 5 internal sites, perturbed by specified values of α, are shown in Figure 5.2. From the perspective of the agent, the perturbation of the sites results in a change in the states that provide access to the central shortcut and the states within the shortcut. The changes to these connections predominantly occur in the shortcut-access states. A change in the connections within the shortcut is only seen in Figures 5.6d and 5.6e. It is also observed that the 
+
+α-range employed for the graph changes creates Voronoi diagrams that do not differ to the point of becoming unrelated.     
+
+> (a) (b) (c) (d) (e)
+
+Figure 5.2: Voronoi diagrams from five internal sites with (a) no site perturbation, (b) sites perturbation of α = 0 .05, (c) sites perturbation of α = 0 .10, (d) sites perturbation of α = 0 .15, (e) sites perturbation of α = 0 .20. For agents operating on tasks with the size from five internal sites, the connections between the shortcut-access states remain of high importance. However, performing well on the initial task requires remembering the correct connections between a few states within the shortcut, as well as the locations of the states that enable entry to the shortcut through the center. 
+
+Third Task Complexity: 15 Internal Sites 
+
+The most complex tasks were generated using 15 internal sites and the associated Voronoi diagrams, perturbed by α, are exhibited in Figure 5.3. The increased number of internal sites leads to a corresponding increase in the complexity of the central shortcut. As α increases, the perturbations of site locations lead to significant changes in the connections between the states and the shortcut-access states. Compared to the previous two complexity levels, changes are more profound due to the increased number of connections. Tasks corresponding to the 15 internal sites involve remembering the larger number of connec-tions to the central shortcut. In addition to the larger number of shortcut-access states, there is an increase in the number of connections within the shortcut itself. The task requires the agent to not only remember how to reach the shortcut but also to navigate through the shortcut to reach the exit. As α increases, the agent needs to learn a new set of connections within the central shortcut that is different from the initial task. 32 (a) (b) (c) (d) (e) 
+
+Figure 5.3: Voronoi diagrams from fifteen internal sites with (a) no site perturbation, (b) sites perturbation of α = 0 .05, (c) sites perturbation of α = 0 .10, (d) sites perturbation of α = 0 .15, (e) sites perturbation of α = 0 .20. 
+
+Difference Measure of Generated Tasks 
+
+The distribution of difference measures between graphs generated from the α-perturbations is shown in Figure 5.4. As the x-values progresses to the right on the x-axis, the difference measure between the tasks increases. The bars in the graph represent the average number of occurrences of each similarity measure, plotted over their respective ranges. The results of 3, 5, and 15 internal sites are represented in Figure 5.4a, 5.4b, and 5.4c respectively.   
+
+> (a) (b) (c)
+
+Figure 5.4: The histograms depict the number of occurrences of the graph distance measure, giving the task similarity, for all graphs generated in all trials of (a) M = 3, (b) M = 5, (c) M = 15. A bar height of 100 represents the occurrence of a specific measure at a rate of once per trial. The histograms indicate that for all three sets of internal sites, the intermediate similarity measures occur about once every trial. This observation simply parallels the central limit theorem, however such a severe lack of certain measures is an unexpected observation and limitation. The paucity of graphs with the highest difference measure is significant and is factored into the interpretations throughout this chapter. The disproportionate representation of intermediate similarity measures and the relative scarcity of most-similar graph measures in Figure 5.4c are also noteworthy. 
+
+## 5.1.2 Performance 
+
+Agent performances on the initial task, given by the unperturbed graph, are plotted in Figures 5.5, 5.6, and 5.7. The figures are presented in increasing order of task complexity. Each graph 33 within the figures is a base graph ( α = 0) generated during a trial. The agent’s starting state is denoted by a blue circle, while the goal state is signified by a gold star. The path traversed by the agent is marked in red, with the hue lightening as the agent’s steps progress, providing insight into the sequence in which the graph was explored. Figures 5.5 - 5.7 illustrate a comparison of agent performances: a satisfactory instance in (a) versus a severely suboptimal instance in (b).  
+
+> (a) (b)
+
+Figure 5.5: The graphs are shown in grey. A blue circle marks the start state and a gold star marks the goal state. The path is shown in red with a hue that lightens as the path progresses. Figures (a) and (b) illustrate two performances, respectively, after additional training on different tasks. Effective navigation of the smallest task size requires learning to reach the nearest state that allows access to the shortcut through the center of the graph. This behaviour appears to have been learned by the agents, as evident in both Figure 5.5a and 5.5b, where the states around each shortcut-access state are evident. On the intermediate task size, the performance of the agent in Figure 5.6a shows a better memory of the location of the shortcut-access states but operates in the same sub-optimal manner on the navigation of the shortcut states themselves as the agent in Figure 5.6b. The remembered location, or learning of the location, of these shortcut-access states by the agents remains a key distinguishing factor between good and poor performance. However, the difference between good and optimal performance also hinges on the knowledge of the best path in the shortcut itself. The high complexity of the shortcut provided by the graphs of Figure 5.7 underscores the importance of knowledge about the shortcut itself when it comes to the largest task size. Figure 5.7a illustrates a case where an agent circulates around the shortcut-access state several times before effectively, albeit imperfectly, traversing the cut-through. Conversely, the performance showcased in Figure 5.7b demonstrates how poor execution in the shortcut can result in additional steps from disorientation, as well as increased potential to exit the central shortcut area. The need to locate the shortcut-access states and navigate the states in the shortcut becomes most evenly divided for agents operating on the largest task size. 34 (a) (b) 
+
+Figure 5.6: The graphs are shown in grey. A blue circle marks the start state and a gold start marks the goal state. The path is shown in red with a hue that lightens as the path progresses. Figures (a) and (b) illustrate two performances, respectively, after additional training on different tasks.  
+
+> (a) (b)
+
+Figure 5.7: The graphs are shown in grey. A blue circle marks the start state and a gold start marks the goal state. The path is shown in red with a hue that lightens as the path progresses. Figures (a) and (b) illustrate two performances, respectively, after additional training on different tasks. 
+
+## 5.1.3 Relationship between Task Similarity and Forgetting 
+
+Figures 5.8, 5.9, and 5.10 depict forgetting in terms of task similarity. In Figure 5.8, each plot shows the amount forgotten versus the similarity of the new task of a hundred trial for each of the 35 task complexity levels.   
+
+> (a) (b) (c)
+
+Figure 5.8: The blue markers represent the difference in performance on the y-axis given the measure of difference between graphs on the x-axis. Graphs (a), (b), and (c) correspond with the trials of the first, second, and third graph sizes, respectively. The Figure 5.8 displays a high variability in the differences in performance post-training on the new task. Across the task sizes, the forgetting measures appear to be concentrated in the lower amounts and then sees increases into performance differences of 7000. Quantities of forgetting in the thousands indicates a considerable policy difference after training on the new task. Each task size appears to present a spectrum of forgetting severity, accompanied by instances of catastrophic forgetting. Figure 5.8a shows that the smallest task size has a considerably greater forgetting variance than the larger task sizes depicted in Figure 5.8b and 5.8c. This could be contributed to the importance of locating the shortcut-accessing states for agents operating on graphs of this size, as discussed in Section 5.1.2. If the agent struggles to reach the shortcut through the graph, it results in bounces around the outer states, considerably lengthening the steps of the path. The impact of task similarity on the amount forgotten is not explicit from Figure 5.8. Figure 5.9 helps to see past some of the noise by illustrating the average forgetting measures over small task difference intervals. The histograms have two hundred bins covering the range of task differences. For tasks of the first complexity, as shown in Figure 5.9a, significant forgetting fluctuations span the range of task similarities. Notice that the range of performance differences on the y-axis is double that for this task size than for the two larger ones. The fluctuations into catastrophic forgetting are much more frequent than the other two complexities and the overall measure much higher. Tasks of the second complexity, depicted in Figure 5.9b, appear to have a more uniform distribution of forgetting with higher fluctuations at both ends of the similarity scale. Figure 5.9c shows high fluctuations in forgetting at the extremes of the task similarity scale. It is important to note, however, that the ranges with increased fluctuations directly correspond to severely underrepresented task similarity measures, as depicted in Figure 5.4c. The histograms in Figure 5.10 further generalise by averaging forgetting over just 20 similarity intervals. Figure 5.10a, 5.10b, and 5.10c displays the relationship over the full range of graph dis-tance measures for each size task. The differences in the distribution of graph difference generated for the separate task sizes is starkly evident. Figure 5.10c does not contain the most-similar tasks or tasks of a difference as high as those in 5.10a and 5.10b, as observed in Figure 2.4 in the 5.1.1 36 (a) (b) (c) 
+
+Figure 5.9: The bar heights represent the average difference in steps and the bar widths represent the graph difference ranges. The span of the graph differences is partitioned into 500 ranges. Graphs (a), (b), and (c) correspond with the trials of the first, second, and third graph sizes, respectively. Task section.   
+
+> (a) (b) (c)
+
+Figure 5.10: The bar heights represent the average difference in steps and the bar widths represent the graph difference ranges. The span of the graph differences is partitioned into 20 ranges. The bars are grey when less than ten samples are present. Graphs (a), (b), and (c) correspond with the trials of the first, second, and third graph sizes, respectively. In the figures that contain highly similar tasks, 5.10a and 5.10b, the rate of forgetting for the most-similar tasks is noticeably high for both participating task sizes. As tasks increase in difference from the highest similarity, a drop in the average rate of forgetting is seen in Figures 5.10a and 5.10b. Forgetting decreases significantly, to about half of the most-similar tasks, past those least-different tasks. Tasks that exhibit intermediate levels of similarity also seem to present fewer spikes in catastrophic forgetting, as shown in Figure 5.9b and 5.9c. The patterns observed in the plots of Figure 5.8 suggest that this trend may be the result of variability and instances of catastrophic forgetting, rather than a threshold beyond which the phenomenon occurs. As the tasks increase in difference from mid-similarity, the average forgetting in Figures 5.10a and 5.10b see another increase. Across task complexities, however, the increases come at different rates and at inconsistent dissimilarity measures. Despite the limited task difference range present, the even distribution of forgetting in Figure 5.10c shows no effect of task similarity on forgetting. 37 The high inconsistency between all three task complexities indicates that task similarity and task complexity are not mutually independent in their impact on forgetting. This study does not find evidence of statistical significance that task similarity independently has a discernible effect on forgetting in continual RL. The study suggests that task similarity and task complexity are not independently affecting forgetting, but rather, are interdependent in their impact. Given the high degree of variability of forgetting measures and the uneven distribution of graph differences, the relationship between these variables remains unclear. Further research is warranted to gain a comprehensive understanding of the potential interplay between task similarity on catastrophic forgetting. 
+
+# 5.2 Limitations 
+
+A more comprehensive and direct measure for the difference between graph structures would correspond more highly to the amount of difference the agent is believed to interpret between tasks. The inability to utilise the graph edit distance, which directly quantifies the structural transformation cost between two graphs, posed a notable constraint. This metric offers a more direct and capable measure for the similarity between the structural-graph-based tasks than the indirect metric employed. Additionally, more robust results could be achieved if there were a more even distribution of graph differences were present. Another constraint relates to the precision of computation during the formation of the Voronoi diagrams from the sites. The limited precision of the software was observed through the instances of nodes with five edges during the trials. This phenomenon occurred in the largest graphs, despite its high statistical improbability. Such an anomaly can be attributed to precision limitations on the intersection of the Voronoi polygon edges, where closely placed vertices could be considered identical. While the research is able to provide insight into this previously unquantified relationship, the results may only be indicative of trends for tabular RL in deterministic graphical settings. 38 Chapter 6 
+
+# Conclusions and Future Directions 
+
+This research explored the relationship between task similarity and forgetting in a continual re-inforcement learning. The experimental findings uncovered a complex interaction between these variables, with substantial variability in forgetting measures across task complexities and similar-ities. A spectrum of forgetting severity was observed, showing significant fluctuations across different degrees of task similarity and complexity. These fluctuations, sometimes reaching catastrophic measures, appeared to be uninfluenced by task similarity in isolation. On average, high degrees of forgetting were observed for tasks that were either highly similar or highly dissimilar. These observations were accompanied with the observations of an uneven distribution of graph similarities from the related graphs that were generated. Across the levels of task complexity, the absence of a clear relationship could be attributed to the high variability and uneven distribution of graph differences. Interestingly, the results are suggestive that the impact of forgetting may be contingent upon a combined influence of task similarity and task complexity. However, the study did not uncover statistically significant evidence to affirm that task similarity has a measurable effect on forgetting in a continual reinforcement learning setting. To begin investigating approaches that improve generalisation, it may prove useful to evaluating the ramifications of different modelling hyperparameters, examining a wider spectrum of task complexity, and modifying the objective of the reinforcement learning agent. If the objective were to minimise the total distance of the path, as opposed to the number of steps taken, the perturbation value that generates the related tasks could also serve as a measure of task similarity. Diving deeper into diverse sequential training scenarios offers a promising trajectory for future studies. Consider the scenario of training an agent back on the initial task post-training on the new task, or having an agent sequentially tackle tasks with increasing differences. Such approaches could shed new light on how different tasks influence forgetting. Additionally, performance eval-uations during intermediate stages of training on the subsequent task could provide insights into the evolving performance on the original task. Employing deep reinforcement learning methods, starting with deep Q-learning, provides op-portunities to explore more complex, high-dimensional tasks. Such exploration could offer deeper insights into the effects of task similarity on forgetting, although these might not be as easily 39 interpretable. The recent findings of the effect of task similarity on forgetting in deep learning networks observed that the greatest forgetting occurs with intermediate task similarity [40, 53]. Whether this observation holds true in the reinforcement learning setting may contribute to an understanding of this relationship across fields. Ultimately, while this research casts light on a previously unquantified relationship in rein-forcement learning, the effect of task similarity on forgetting remains largely undefined, warrant-ing further exploration. Intriguing directions for future inquiry and a growing academic interest underscore the significance and potential of this topic in shaping future research. 40 Appendix A 
+
+# Modelling Parameter 
+
+Parameter Value Definition 
+
+R 100 Radius of outer concentric circle upon which the outer external sites are dispersed 
+
+r 75 Radius of inner concentric circle upon which the inner external sites are dispersed 
+
+|Nouter | 12 Number of outer external sites 
+
+|Ninner | 100 Number of inner external sites 
+
+|M | 3, 5, 15 Number of internal sites 
+
+α {0.025 , 0.05 , . . . , 0.25 } Perturbation values for Voronoi diagrams episodes 2500 Number of training episodes for each training 
+
+Q(s, a ) 1.0 Initial Q-value for each state-action pair learning rate 0.1 Q-learning learning rate for Q-table updates 
+
+γ 0.9 Discount factor 
+
+ϵo 0.1 Initial epsilon for ϵ-greedy strategy 
+
+ϵ2500 0.006 Final epsilon for ϵ-greedy strategy Table A.1: A summary of model parameters and hyperparameters. 41 Appendix B 
+
+# State Actions for Unusual Size Action Sets 
+
+The action-edge mappings correspond to the number of connections to neighbouring states, of which there are not always three. When states have more than three neighbours, a relatively common occurrence with the slow shifting of the sites and the limited precision of the calculation software, additional action options need to be available. Constant for all graphs due to the identical outer cicular site placements, the outer-most states from the center of the graph have only two neighbours. A modification of Equation 4.6, is used for and state s the number of neighbouring state, |E (s)|, different for the encountered amounts of 2, 4, and 5 during training. The actions given are: 
+
+• A2(s) = {back, f orward } for |E (s)| = 2; 
+
+• A4(s) = {back, lef t, f orward, right } for |E (s)| = 4; 
+
+• A5(s) = {back, lef t, f orward − lef t, f orward − right, right } for |E (s)| = 5 To preserve the order, let A2 = [ back, f orward ], A4 = [ back, lef t, f orward, right ], and 
+
+A5 = [ back, lef t, f orward − lef t, f orward − right, right ]. Let previous state, ς, be located at the i-th index in the state-neighbour dictionary of state s. The action a ∈ A (s) that corresponds to the ι-th index of the state-neighbour dictionary of state s given previous state ς designated by equation 4.6. 
+
+a = A|E (s)|(ι) for ι ≡ (i + η) mod |E (s)|, ∀ η = 0 , 1, . . . , (|E (s)| − 1) (B.1) 42 Bibliography 
+
+[1] Aamodt Agnar and Enric Plaza. “Case-Based reasoning: Foundational issues, methodological variations, and system approaches”. In: AI Communications 7.1 (1994). issn : 09217126. doi :
+
+10.3233/AIC-1994-7104 .[2] Sinan G. Aksoy et al. “Relative Hausdorff distance for network analysis”. In: Applied Network Science 4.1 (2019). issn : 23648228. doi : 10.1007/s41109-019-0198-0 .[3] Rahaf Aljundi et al. “Online Continual Learning with Maximally Interfered Retrieval”. In: (Aug. 2019). [4] Haitham Bou Ammar et al. “An automated measure of MDP similarity for transfer in reinforcement learning”. In: AAAI Workshop - Technical Report . Vol. WS-14-07. 2014. [5] Anestis Fachantidis. “Knowledge transfer in reinforcement learning. ” PhD thesis. 2016. [6] Peter Auer, Nicol` o Cesa-Bianchi, and Paul Fischer. “Finite-time analysis of the multiarmed bandit problem”. In: Machine Learning 47.2-3 (2002). issn : 08856125. doi : 10.1023/A: 1013689704352 .[7] F Aurenhammer. “Voronoi Diagrams - A Survey of a Fundamental Data Structure”. In: 
+
+ACM Computing Surveys (CSUR) 23.3 (1991). [8] Franz Aurenhammer and Rolf Klein. “Voronoi Diagrams**Partially supported by the Deutsche Forschungsgemeinschaft, grant K1 655 2-2.” In: Handbook of Computational Geometry . El-sevier, 2000, pp. 201–290. doi : 10.1016/B978-044482537-7/50006-1 .[9] Sungyong Baik, Seokil Hong, and Kyoung Mu Lee. “Learning to Forget for Meta-Learning”. In: (June 2019). [10] James L. Carroll and Kevin Seppi. “Task similarity measures for transfer in reinforcement learning task libraries”. In: Proceedings of the International Joint Conference on Neural Networks . Vol. 2. 2005. doi : 10.1109/IJCNN.2005.1555955 .[11] Pablo Samuel Castro. “Scalable methods for computing state similarity in deterministic markov decision processes”. In: AAAI 2020 - 34th AAAI Conference on Artificial Intelli-gence . 2020. doi : 10.1609/aaai.v34i06.6564 .[12] Luiz A. Celiberto et al. “Using cases as heuristics in reinforcement learning: A transfer learning application”. In: IJCAI International Joint Conference on Artificial Intelligence .2011. doi : 10.5591/978-1-57735-516-8/IJCAI11-206 .[13] CGoGN. Combinatorial maps . 2023. 43 [14] Mark De Berg et al. Computational geometry: Algorithms and applications . 2008. doi : 10. 1007/978-3-540-77974-2 .[15] Adam Dobrin. “A Review of Properties and Variations of Voronoi Diagrams”. In: Whit-man.Edu (2005). [16] Edelsbrunner, Letscher, and Zomorodian. “Topological Persistence and Simplification”. In: 
+
+Discrete & Computational Geometry 28.4 (Nov. 2002), pp. 511–533. issn : 0179-5376. doi :
+
+10.1007/s00454-002-2885-2 .[17] Anestis Fachantidis et al. “Transfer learning with probabilistic mapping selection”. In: Adap-tive Behavior 23.1 (2015). issn : 17412633. doi : 10.1177/1059712314559525 .[18] Forough Fazeli-Asl and Michael Minyi Zhang. “A Bayesian Non-parametric Approach to Generative Models: Integrating Variational Autoencoder and Generative Adversarial Net-works using Wasserstein and Maximum Mean Discrepancy”. In: (Aug. 2023). [19] William Fedus et al. “On Catastrophic Interference in Atari 2600 Games”. In: (Feb. 2020). [20] Norm Ferns, Prakash Panangaden, and Doina Precup. “Metrics for finite markov decision processes”. In: Proceedings of the National Conference on Artificial Intelligence . 2004. [21] Norman Ferns, Prakash Panangaden, and Doina Precup. “Metrics for Markov Decision Pro-cesses with Infinite State Spaces”. In: (July 2012). [22] Robert M. French. Catastrophic forgetting in connectionist networks . 1999. doi : 10.1016/ S1364-6613(99)01294-2 .[23] Javier Garc´ ıa, ´Alvaro Vis´ us, and Fernando Fern´ andez. “A taxonomy for similarity metrics between Markov decision processes”. In: Machine Learning 111.11 (2022). issn : 15730565. 
+
+doi : 10.1007/s10994-022-06242-4 .[24] Sina Ghiassian et al. “Improving Performance in Reinforcement Learning by Breaking Gen-eralization in Neural Networks”. In: (Mar. 2020). [25] Adam Gleave et al. “QUANTIFYING DIFFERENCES IN REWARD FUNCTIONS”. In: 
+
+ICLR 2021 - 9th International Conference on Learning Representations . 2021. [26] Ian J. Goodfellow et al. “Maxout Networks”. In: (Feb. 2013). [27] Jonathan L. Gross, Jay Yellen, and Mark Anderson. Graph Theory and Its Applications .2018. doi : 10.1201/9780429425134 .[28] Leo J. Guibas and Jorge Stolfi. “PRIMITIVES FOR THE MANIPULATION OF GENERAL SUBDIVISIONS AND THE COMPUTATION OF VORONOI DIAGRAMS.” In: Conference Proceedings of the Annual ACM Symposium on Theory of Computing . 1983. doi : 10.1145/ 800061.808751 .[29] Hado van Hasselt, Diana Borsa, and Matteo Hessel. Reinforcement Learning . 2023. [30] Muhammad Burhan Hafez et al. “Map-based experience replay: a memory-efficient solution to catastrophic forgetting in reinforcement learning”. In: Frontiers in Neurorobotics 17 (June 2023). issn : 1662-5218. doi : 10.3389/fnbot.2023.1127642 .[31] Daniel P. Huttenlocher, Gregory A. Klanderman, and William J. Rucklidge. “Comparing Images Using the Hausdorff Distance”. In: IEEE Transactions on Pattern Analysis and Machine Intelligence 15.9 (1993). issn : 01628828. doi : 10.1109/34.232073 .44 [32] Massimiliano Incudini et al. “Computing graph edit distance on quantum devices”. In: Quan-tum Machine Intelligence 4.2 (2022). issn : 25244914. doi : 10.1007/s42484-022-00077-x .[33] Sebastian Jaimungal. “Reinforcement learning and stochastic optimisation”. In: Finance and Stochastics 26.1 (2022). issn : 14321122. doi : 10.1007/s00780-021-00467-2 .[34] E. Kay, J. A. Bondy, and U. S. R. Murty. “Graph Theory with Applications”. In: Operational Research Quarterly (1970-1977) 28.1 (1977). issn : 00303623. doi : 10.2307/3008805 .[35] James Kirkpatrick et al. “Overcoming catastrophic forgetting in neural networks”. In: Pro-ceedings of the National Academy of Sciences of the United States of America 114.13 (2017). 
+
+issn : 10916490. doi : 10.1073/pnas.1611835114 .[36] Vijay R. Konda and John N. Tsitsiklis. “On actor-critic algorithms”. In: SIAM Journal on Control and Optimization 42.4 (2003). issn : 03630129. doi : 10.1137/S0363012901385691 .[37] Gregory Kuhlmann and Peter Stone. “Graph-based domain mapping for transfer learning in general games”. In: Lecture Notes in Computer Science (including subseries Lecture Notes in Artificial Intelligence and Lecture Notes in Bioinformatics) . Vol. 4701 LNAI. 2007. doi :
+
+10.1007/978-3-540-74958-5{\_}20 .[38] Alessandro Lazaric, Marcello Restelli, and Andrea Bonarini. “Transfer of samples in batch reinforcement learning”. In: Proceedings of the 25th International Conference on Machine Learning . 2008. doi : 10.1145/1390156.1390225 .[39] D. T. Lee and B. J. Schachter. “Two algorithms for constructing a Delaunay triangulation”. In: International Journal of Computer & Information Sciences 9.3 (1980). issn : 00917036. 
+
+doi : 10.1007/BF00977785 .[40] Sebastian Lee, Sebastian Goldt, and Andrew Saxe. “Continual Learning in the Teacher-Student Setup: Impact of Task Similarity”. In: (July 2021). [41] Lihong Li, Thomas J. Walsh, and Michael L. Littman. “Towards a unified theory of state abstraction for MDPs”. In: 9th International Symposium on Artificial Intelligence and Math-ematics, ISAIM 2006 . 2006. [42] Vincent Liu et al. “The Utility of Sparse Representations for Control in Reinforcement Learning”. In: (Nov. 2018). [43] David Lopez-Paz and Marc’Aurelio Ranzato. “Gradient episodic memory for continual learn-ing”. In: Advances in Neural Information Processing Systems . Vol. 2017-December. 2017. [44] Mridul Mahajan et al. “Learning Embeddings for Sequential Tasks Using Population of Agents”. In: (June 2023). [45] Michael McCloskey and Neal J. Cohen. “Catastrophic Interference in Connectionist Net-works: The Sequential Learning Problem”. In: Psychology of Learning and Motivation -Advances in Research and Theory 24.C (1989). issn : 00797421. doi : 10 . 1016 / S0079 -7421(08)60536-8 .[46] Tom M Mitchell. “Machine learning. 1997”. In: Burr Ridge, IL: McGraw Hill 45 (1997). [47] Volodymyr Mnih et al. “Human-level control through deep reinforcement learning”. In: Na-ture 518.7540 (2015). issn : 14764687. doi : 10.1038/nature14236 .45 [48] Volodymyr Mnih et al. “Playing Atari with Deep Reinforcement Learning”. In: (Dec. 2013). [49] Akshay Narayan and Tze Yun Leong. “Effects of task similarity on policy transfer with selective exploration in reinforcement learning”. In: Proceedings of the International Joint Conference on Autonomous Agents and Multiagent Systems, AAMAS . Vol. 4. 2019. [50] German I. Parisi et al. “Continual Lifelong Learning with Neural Networks: A Review”. In: (Feb. 2018). doi : 10.1016/j.neunet.2019.01.012. .[51] Gabriel Peyr´ e and Marco Cuturi. “Computational optimal transport”. In: Foundations and Trends in Machine Learning 11.5-6 (2019). issn : 19358245. doi : 10.1561/2200000073 .[52] Jonathan Prieto-Cubides and H˚ akon Robbestad Gylterud. “On Planarity of Graphs in Ho-motopy Type Theory”. In: (Dec. 2021). [53] Vinay V. Ramasesh, Ethan Dyer, and Maithra Raghu. “Anatomy of Catastrophic Forgetting: Hidden Representations and Task Semantics”. In: (July 2020). [54] Sylvestre-Alvise Rebuffi et al. “iCaRL: Incremental Classifier and Representation Learning”. In: (Nov. 2016). [55] Kaspar Riesen and Horst Bunke. “Approximate graph edit distance computation by means of bipartite graph matching”. In: Image and Vision Computing 27.7 (2009). issn : 02628856. 
+
+doi : 10.1016/j.imavis.2008.04.004 .[56] M B Ring. “Continual learning in reinforcement environments”. In: Psychology 1 (1994). [57] Wieslaw Rokicki and Ewelina Gawell. “Voronoi diagrams – rod structure research models in architectural and structural optimization”. In: Mazowsze Studia Regionalne 2016.19 (2016). 
+
+issn : 16894774. doi : 10.21858/msr.19.10 .[58] Tom Schaul et al. “Prioritized Experience Replay”. In: (Nov. 2015). [59] Wolfram Schultz, Peter Dayan, and P. Read Montague. “A Neural Substrate of Prediction and Reward”. In: Science 275.5306 (Mar. 1997), pp. 1593–1599. issn : 0036-8075. doi : 10. 1126/science.275.5306.1593 .[60] Giacomo Spigler. “Meta-learnt priors slow down catastrophic forgetting in neural networks”. In: (Sept. 2019). [61] Richard S Sutton and Andrew G Barto. Reinforcement learning: An Introduction (2nd edi-tion 2018) . Vol. 3. 9. 2018. [62] Maxwell Svetlik et al. “Automatic curriculum graph generation for reinforcement learning agents”. In: 31st AAAI Conference on Artificial Intelligence, AAAI 2017 . 2017. doi : 10. 1609/aaai.v31i1.10933 .[63] Yunzhe Tao et al. “REPAINT: Knowledge Transfer in Deep Reinforcement Learning”. In: 
+
+Proceedings of Machine Learning Research . Vol. 139. 2021. [64] Jonathan J. Taylor, Doina Precup, and Prakash Panangaden. “Bounding performance loss in approximate MDP homomorphisms”. In: Advances in Neural Information Processing Sys-tems 21 - Proceedings of the 2008 Conference . 2009. [65] Matthew E. Taylor, Gregory Kuhlmann, and Peter Stone. “Autonomous transfer for rein-forcement learning”. In: Proceedings of the International Joint Conference on Autonomous Agents and Multiagent Systems, AAMAS . Vol. 1. 2008. 46 [66] Matthew E. Taylor and Peter Stone. “Transfer learning for reinforcement learning domains: A survey”. In: Journal of Machine Learning Research 10 (2009). issn : 15324435. [67] Gido M. van de Ven and Andreas S. Tolias. “Generative replay with feedback connections as a general strategy for continual learning”. In: (Sept. 2018). [68] C´ edric Villani. “Optimal Transport Old and New”. In: Media 338 (2007). issn : 0072-7830. [69] Hao Wang, Shaokang Dong, and Ling Shao. “Measuring structural similarities in finite MDPs”. In: IJCAI International Joint Conference on Artificial Intelligence . Vol. 2019-August. 2019. doi : 10.24963/ijcai.2019/511 .[70] Christopher J. C. H. Watkins and Peter Dayan. “Q-learning”. In: Machine Learning 8.3-4 (1992). issn : 0885-6125. doi : 10.1007/bf00992698 .[71] Douglas Brent. West. Introduction to Graph Theory (2nd Edition) . 2012. [72] Wikipedia. Rotation System . Aug. 2023. [73] Ronald J. Willia. “Simple Statistical Gradient-Following Algorithms for Connectionist Re-inforcement Learning”. In: Machine Learning 8.3 (1992). issn : 15730565. doi : 10.1023/A: 1022672621406 .[74] Shen Ying et al. “Point cluster analysis using a 3D voronoi diagram with applications in point cloud segmentation”. In: ISPRS International Journal of Geo-Information 4.3 (2015). 
+
+issn : 22209964. doi : 10.3390/ijgi4031480 .[75] Angela J. Yu and Peter Dayan. “Uncertainty, Neuromodulation, and Attention”. In: Neuron 
+
+46.4 (May 2005), pp. 681–692. issn : 08966273. doi : 10.1016/j.neuron.2005.04.026 .[76] Friedemann Zenke, Ben Poole, and Surya Ganguli. “Continual Learning Through Synaptic Intelligence”. In: (Mar. 2017). [77] Yu Zhang, Jian Wei Liu, and Xin Zuo. “Survey of Multi-Task Learning”. In: Jisuanji Xue-bao/Chinese Journal of Computers 43.7 (2020). issn : 02544164. doi : 10.11897/SP.J.1016. 2020.01340 .47

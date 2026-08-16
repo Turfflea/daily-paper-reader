@@ -1,0 +1,573 @@
+Title: Multi-Granular Rationale-Guided Molecular LLM for Property Prediction
+
+URL Source: https://arxiv.org/pdf/2608.10480v1
+
+Published Time: Wed, 12 Aug 2026 00:35:38 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+# Multi-Granular Rationale-Guided Molecular LLM for Property Prediction 
+
+# Junwoo Park 1, Minyoung Shin 1, Cheol Soon Lee 2, Sujee Lee 1∗
+
+> 1
+
+Sungkyunkwan University, 2Korea University jw0528@g.skku.edu, ericashin1@g.skku.edu, xtal21@korea.ac.kr, sujeelee@skku.edu 
+
+Abstract 
+
+Large language models (LLMs) are widely applied across chemical tasks, such as molecular property prediction, which underpins drug discovery. Molecular LLMs represent amolecule through several modalities, notably a 1D SMILES sequence or a 2D molecular graph. Both encode molecular information implicitly, so the contribution of individual sub-structures remains opaque. Retrieval and augmentation meth-ods add context, but from external sources. However, the cues chemists reason over are the internal substructures that drive a property up or down. We propose MR-MoL, a multi-granular rationale-guided molecular LLM that supplies this evidence directly. A fine-tuned GNN scores each substructure through masking, and the most influential ones are serialized as a ranked, direction-tagged rationale that the LLM reads along-side the SMILES sequence and molecular graph. The rationale spans three levels of granularity: Murcko scaffolds with their side chains, BRICS fragments, and functional groups. This is, to our knowledge, the first method to expose GNN-derived attributions to an LLM as evidence for property prediction. On eight MoleculeNet tasks, MR-MoL achieves the best over-all results among generalist models and narrows the gap to specialist models tuned for each task. Five diagnostics further confirm that the model reads the rationale rather than merely benefiting from its presence. Its direction, rank, and substruc-ture each shape the prediction, and its attributions reproduce known structure-property relationships. 
+
+Code — https://github.com/skku-aihclab/MR-MoL 
+
+# Introduction 
+
+Molecular property prediction underpins drug discovery, tox-icity screening, and solubility design. Deep learning mod-els for this task have traditionally operated directly on di-verse molecular representations: 2D molecular graphs (Xia et al. 2023; Wang et al. 2022; Liu et al. 2022), 1D Sim-plified Molecular-Input Line-Entry System (SMILES) se-quences (Ross et al. 2022; Chithrananda, Grand, and Ram-sundar 2020), and 3D conformers (Zhou et al. 2023; Schütt et al. 2018). Such models remain among the strongest predic-tors on standardized benchmarks such as MoleculeNet (Wu et al. 2018), but are typically trained or fine-tuned per task. More recently, large language models (LLMs) have been adapted to molecular property prediction. Applying an LLM 
+
+> ∗
+
+Corresponding author. 
+
+to a molecule first requires casting its representation into a form the model can consume, and two routes have emerged. The first route keeps everything textual. The molecule is se-rialized as a string and fed to the LLM as text tokens (Yu et al. 2024; Fang et al. 2024). The second route attaches a graph encoder and aligns it to the LLM through a projector, so that the molecule enters the prompt as continuous em-beddings. Some of these models are fine-tuned per task (Liu et al. 2023; Chen et al. 2024), while others share a single model over many chemical tasks (Park et al. 2024; Kim, Lee, and Hwang 2026). Yet these molecular LLMs leave a common gap. Since modalities such as 2D graph and 1D SMILES representations encode molecular information implicitly, the contribution of the molecule’s substructures remains opaque (Wellawatte et al. 2023; Jiménez-Luna, Grisoni, and Schneider 2020; Wu et al. 2023). Adding retrieval or knowledge graphs to the prompt can supply extra context at the molecule level (Xian et al. 2025; Lee et al. 2026), but none of these channels ex-poses the importance of the current molecule’s substructures in a form the model can read. In practice, this is the evidence chemists rely on, namely a functional group or fragment that elevates or suppresses a property. Motivated by this gap, we equip the LLM with explicit, per-substructure evidence specific to the input molecule. We propose MR-MoL, a Multi-granular Rationale-Guided 
+
+Mo lecular LLM. The idea is simple. We let a fine-tuned graph neural network (GNN) score each substructure’s con-tribution to its prediction (Wu et al. 2023), and give this to the LLM as a rationale, a ranked and direction-tagged list indicating whether each substructure pushes the GNN’s pre-diction higher or lower. We serialize it as text, so the LLM reads it directly alongside SMILES sequences and molecu-lar graph representations. Specifically, we draw the rationale from three views at different structural granularities: Murcko scaffolds together with their side chains (Bemis and Murcko 1996), retrosynthetically motivated BRICS fragments (De-gen et al. 2008), and chemically named functional groups. This design supports two claims. First, the rationale should improve predictive performance, since structural cues are known to matter in molecular property prediction (Fang et al. 2023; Zhang et al. 2021; Wu et al. 2023). Second, the LLM should use rationales as directional and ranked evidence, not as inert filler. We evaluate the first claim against seven spe-arXiv:2608.10480v1 [cs.AI] 11 Aug 2026 cialist models, comprising five GNN-based models and two molecular LLMs that are fine-tuned per task, and five gener-alist molecular LLMs that share a single model across tasks. We test the second claim with five diagnostics, four behav-ioral interventions that edit the rationale and one chemical check on whether its attributions reproduce known structure-property relationships. Our contributions are as follows. 
+
+• We introduce MR-MoL, a multi-task molecular LLM for property prediction. To our knowledge, it is the first to feed GNN-derived attributions into the prompt as evidence. 
+
+• Building on substructure masking, we formulate a ra-tionale that decomposes per-substructure attribution into three complementary views and exposes it as direction-tagged, ranked textual evidence. 
+
+• We benchmark MR-MoL on eight MoleculeNet tasks with ablations, and design diagnostics that show the rationale acts as effective evidence. 
+
+# Related Work 
+
+Instruction-Tuned Molecular Language Models. Agrowing body of molecular LLMs is instruction-tuned on molecule-text pairs to follow natural-language task descrip-tions (Wei et al. 2022; Ouyang et al. 2022). LlaSMol (Yu et al. 2024) and nach0 (Livne et al. 2024) tune LLMs on large chemistry instruction corpora, representing molecules as SMILES sequences. The molecule reaches the LLM through this textual prompt alone. The other group attaches a modality-specific encoder and aligns it to the LLM through a projector. MolCA (Liu et al. 2023), LLaMo (Park et al. 2024), and InstructMol (Cao et al. 2025) project a molecular graph into the LLM, while others enrich this representation with a 2D image (Liu et al. 2024a), hierarchical motif-level graph tokens (Chen et al. 2024), or a 3D conformer (Li et al. 2024; Kim, Lee, and Hwang 2026). Whether molecular in-formation enters as text or as projected tokens, neither path makes the substructure-level signal legible to the model. 
+
+Molecular GNNs and Explainability. GNNs treat amolecule as a graph of atoms and bonds, learning rep-resentations by message passing between neighboring atoms (Scarselli et al. 2008; Gilmer et al. 2017). To learn representations that transfer across tasks, self-supervised pre-training has become the dominant approach (Hu* et al. 2020; Wang et al. 2022; Liu et al. 2022). Such pretrained GNNs are strong predictors, yet the effect of an individual sub-structure stays hidden within their representations. To ex-pose it, a parallel line of work attributes predictions back to subgraphs, with GNNExplainer (Ying et al. 2019) rank-ing individual nodes and edges and SubgraphX (Yuan et al. 2021) scoring whole connected subgraphs. Following Wu et al. (2023), we adopt substructure masking, which scores each fragment by the prediction change caused when it is removed. Such interpretability is widely viewed as essential for bridging black-box predictors and human-understandable chemistry (Jiménez-Luna, Grisoni, and Schneider 2020; Wellawatte et al. 2023). 
+
+Knowledge-Augmented Molecular Prediction. A sepa-rate line of work augments property prediction with auxil-iary knowledge. For instance, LLM-MPP (Jin et al. 2025) and MolProphecy (Zhao et al. 2025) encode LLM-generated de-scriptions or chemical knowledge and fuse them with molec-ular features. Other approaches focus on retrieving support-ing evidence; MolRAG (Xian et al. 2025) draws on analogous molecules, while CLADD (Lee et al. 2026) employs collab-orative LLM agents that query knowledge bases. Separately, KANO (Fang et al. 2023) builds chemical priors into the GNN by coupling graph contrastive learning with a func-tional group knowledge graph. Across these methods, the supplied evidence is external or holistic, rather than identify-ing how specific substructures influence the target property. 
+
+# Method 
+
+MR-MoL takes four inputs: a task instruction I, a 1D SMILES sequence S, a 2D molecular graph G, and a multi-granular rationale R. The output Y is the answer to the task, produced as text. Two complementary information paths feed the LLM. The graph embedding path turns G into molecular tokens through a GNN encoder and a projector. The rationale path 
+
+masks substructures against a fine-tuned GNN and serial-izes the most influential ones as ranked items. The LLM conditions on the instruction, SMILES sequence, molecular tokens, and rationale to produce Y , as shown in Figure 1. We train MR-MoL in two stages. Stage 1 performs molecu-lar graph-language alignment for the graph embedding path. Stage 2 performs multi-task, rationale-guided instruction tuning for property prediction. 
+
+Molecular Graph-Language Alignment 
+
+The projector module for graph-language alignment follows the Q-Former design (Li et al. 2023), which has been adopted for grounding molecular graphs in LLMs. We initialize the GNN encoder and Q-Former with weights pre-trained on molecule-text data (Liu et al. 2023), and then train them with a newly added linear projection during Stage 1 to align the molecular tokens with the embedding space of our LLM. Given G = ( V, E ), the encoder Eϕ with parameters ϕ
+
+produces atom-level features: 
+
+HG = Eϕ(G), HG ∈ RN ×dg , (1) where N is the number of atoms and dg is the graph hidden dimension. The Q-Former with parameters ψ uses K learn-able queries Q ∈ RK×dq and cross-attends to HG, where dq
+
+is the Q-Former hidden dimension: 
+
+Z = QFormer ψ (Q, H G), Z ∈ RK×dq . (2) A linear projection Wp ∈ Rdq ×dℓ then maps the query em-beddings Z to the LLM hidden dimension dℓ:
+
+M = ZW p, M ∈ RK×dℓ . (3) These molecular tokens M are inserted into the LLM input sequence. 2D Molecular Graph Graph Encoder (GNN) Projector (Q-Former) Instruction  
+
+> Is this molecule active in the SR-HSE assay?
+> 1D SMILES
+> Source Predictor (GNN)
+> 8 Learnable Queries Self-Attention
+> Graph Embedding Path Rationale Path
+> Text Output
+> Self-Attention
+> …
+> Murcko sidechain C=O
+> ……
+> Cross-Attention
+> x6
+
+Large Language Model    
+
+> + LoRA Multi-granular Rationale
+> 2D Molecular Graph
+> 123Murcko scaffold c1ccccc1
+> BRICS fragment O=Cc1ccc(O)cc1
+> …
+> Attribution
+> lowers raises
+
+Figure 1: Overview of MR-MoL. The graph embedding path encodes a 2D molecular graph through a graph encoder and the projector, yielding molecular tokens. The rationale path applies substructure masking to a source predictor, scoring substructures by their attribution. The top-scoring substructures form the items of a multi-granular rationale that is provided to the LLM together with the instruction, SMILES, and molecular tokens, and the model generates the answer to the task. 
+
+Ranked Multi-Granular Rationale 
+
+The rationale is task-conditioned textual evidence built from a fine-tuned GNN. We decompose the molecule into candi-date substructures, score each by its attribution (Wu et al. 2023), and serialize the top ones as ranked text. 
+
+Multi-granular decomposition. For each molecule, we decompose the structure at three granularities, each realized as a view. The Murcko view splits the molecule into its scaf-fold and side chains through Murcko decomposition (Bemis and Murcko 1996). The BRICS view provides retrosyntheti-cally motivated fragments with attachment information (De-gen et al. 2008). The functional group view lists chemically named local motifs such as amide and carbonyl. The three views are complementary, spanning a range of structural granularity from molecular scaffolds down to local motifs. 
+
+Attribution and ranking. Let ft denote the fine-tuned source predictor for task t, whose output ft(G) is the positive-class score for classification or the predicted value for re-gression. Let U(G) be the candidate substructures pooled from the three views, indexed by j. For each substructure 
+
+uj ∈ U (G), the attribution is 
+
+at,j = ft(G) − ft(G \ uj ), (4) where G \ uj is the graph with uj masked. A positive at,j 
+
+means that removing uj lowers the prediction, so the sub-structure drives the prediction up; a negative at,j indicates the reverse. We rank substructures within each molecule by 
+
+|at,j | and keep the top five, those producing the largest change in the source prediction. 
+
+Serialization. The rationale R lists the top five substruc-tures as ranked items. Each item carries three fields, the view type, the substructure, and the effect. The substructure is written as scaffold or side chain SMILES for the Murcko view, as fragment SMILES with attachment points for the BRICS view, and as the group name for the functional group view. The effect field tags the item as toward higher or toward lower , applied to the predicted probability of the target prop-erty for classification and the predicted value for regression. This wording is an attribution about the source predictor, not a chemical mechanism claim. A complete serialized input is given in Appendix B. 
+
+Training 
+
+Two-stage training. Both stages cast learning as instruc-tion following over samples in a chat format, where the molecular tokens replace the molecule-embedding place-holders and the model is trained to generate the target Y .Serving different purposes, the two stages differ in the tar-get Y and the presence of the rationale R. In Stage 1, each sample takes the form (I, S, G, Y ) and the target Y is a molecule description. In Stage 2, each sample takes the form 
+
+(I, S, G, R, Y ), adding the rationale R, and Y is the answer to the property prediction task. Stage 1 makes the molecu-lar tokens legible to the LLM, a grounding step where the rationale plays no role. Stage 2 then inherits these grounded tokens and adds the rationale as task-conditioned evidence for property prediction. 
+
+Objective. We optimize next-token prediction, where the prompt tokens are excluded from the loss and only the an-swer tokens contribute. Writing Y = ( y1, . . . , y T ) for the Tanswer tokens and eX for the embedded input sequence, the answer likelihood factorizes as 
+
+pθ (Y | G, S, I, R ) = 
+
+> T
+
+Y
+
+> m=1
+
+pθ (ym | y<m , eX), (5) and the training loss is its negative log-likelihood, 
+
+LLM = −
+
+> T
+
+X
+
+> m=1
+
+log pθ (ym | y<m , eX). (6) Stage 1 minimizes the loss over the molecule-text data, whose targets are descriptions, and Stage 2 over the multi-task in-struction data, whose targets are property prediction answers. Each stage selects its checkpoint by validation loss. 
+
+# Experiments 
+
+Datasets and Preprocessing 
+
+Our data is organized by training stage. Stage 1 draws molecule-text pairs from PubChem324k (Liu et al. 2023), DrugBank (Knox et al. 2024), Mol-Instructions (Fang et al. 2024), and ChEBI-20 (Edwards, Zhai, and Ji 2021; Hastings et al. 2012). To ensure quality, we keep only pairs whose de-scription spans at least 30 non-whitespace characters, and we drop those duplicated across different molecules. Molecules shared across sources are also deduplicated. This filtering yields 89,919 samples. The instructions for this stage follow Mol-Instructions. We hold out the ChEBI-20 test split as validation data for Stage 1 checkpoint selection. Stage 2 covers eight MoleculeNet datasets (Wu et al. 2018), six classification and two regression, where ClinTox, SIDER, and Tox21 are multi-label. These span physiologi-cal and biophysical classification, such as toxicity (ClinTox, Tox21, SIDER), blood-brain barrier permeability (BBBP), and bioactivity (BACE, HIV), together with physicochemi-cal regression on aqueous solubility (ESOL) and lipophilicity (Lipo). Each dataset is divided 8:1:1 into train, validation, and test sets using a scaffold split, and the per-task sizes are reported in Appendix A. We build the Stage 2 instructions on SMolInstruct (Yu et al. 2024), supplementing the uncov-ered datasets with Claude Opus 4.6 (Anthropic 2026), and evaluate the molecular LLMs with the same instructions. All SMILES are canonicalized with RDKit (2006), and molecules shared between stages are removed. 
+
+Baselines 
+
+We compare MR-MoL against two families of baselines, spe-cialist models and generalist models for property prediction. 
+
+Specialist. We define specialist models as those fine-tuned per task. We include seven such baselines, spanning GNN-based models and molecular LLMs. Here a GNN-based model encodes the molecular graph with a GNN and out-puts the property directly. These models differ in their pre-training strategy. MolCLR (Wang et al. 2022) and Graph-MVP (Liu et al. 2022) use contrastive learning, and Mole-BERT (Xia et al. 2023) combines it with masked atom modeling. MGSSL (Zhang et al. 2021) is motif-generative, and KANO (Fang et al. 2023) augments pretraining with a chemical knowledge graph. Among the molecular LLMs, 3D-MolT5 (Pei et al. 2025) combines 1D and 3D represen-tations, while HIGHT (Chen et al. 2024) uses hierarchical graph tokenization. 
+
+Generalist. We define generalist models as molecular LLMs that are instruction-tuned and applied across many tasks. We include five generalist baselines, grouped by how they represent molecules. LlaSMol (Yu et al. 2024), ChemDFM (Zhao et al. 2024), nach0 (Livne et al. 2024), and MolecularGPT (Liu et al. 2024b) are string-based mod-els that process molecules as 1D sequences such as SMILES or SELFIES. In contrast, GIMLET (Zhao et al. 2023) is a graph-text model that directly encodes 2D molecular graphs. 
+
+Implementation Details 
+
+We use Llama-3.1-8B-Instruct (Grattafiori et al. 2024) as the LLM. For the graph embedding path, the GNN encoder and Q-Former are initialized from MolCA’s (Liu et al. 2023) stage-1 pre-trained weights. The Q-Former uses eight learn-able query tokens and is followed by a projection layer. In Stage 1, we freeze the LLM and train the GNN encoder and the projector. In Stage 2, the GNN encoder stays frozen, and we adapt the LLM with Low-Rank Adaptation (LoRA) (Hu et al. 2022) by training the adapters together with the projec-tor. For each task, we fine-tune a separate GNN initialized from Mole-BERT (Xia et al. 2023) to generate rationales. We optimize with AdamW (Loshchilov and Hutter 2019) under a cosine schedule with linear warmup, and provide the full training and optimization details in Appendix A. Every component of our method is run three times under the same split for statistical robustness. This covers both the GNNs that generate the rationales and all MR-MoL vari-ants in Table 2. Diagnostic experiments perturb only the inference-time input of MR-MoL on the test split. Every other baseline is reproduced in a single run. We fine-tune specialist models on our training split, whereas generalist models are evaluated from their publicly available checkpoints. 
+
+Evaluation Metrics 
+
+We report ROC-AUC for classification and RMSE for regres-sion as the main metrics, following MoleculeNet’s evaluation protocol (Wu et al. 2018). On multi-label datasets, ROC-AUC is computed per endpoint and averaged across endpoints. Unlike GNN-based models, which output the score di-rectly, molecular LLMs including MR-MoL require reading the score from the generated output. In classification, we ap-ply a two-way softmax over the logits of the positive and negative answer tokens (e.g., “Yes” and “No”). With logits 
+
+zYes and zNo , the positive-class score is 
+
+P (Yes) = exp( zYes )exp( zYes ) + exp( zNo ) , (7) which we use for ROC-AUC. In regression, we parse the first valid number, and exclude outputs without a parseable number from the computation. For the direction diagnostic of MR-MoL, we additionally report the Matthews correlation coefficient (MCC) for clas-sification and the mean error (ME) for regression. Classification (ROC-AUC ↑) Regression (RMSE ↓)Model Base LLM BACE BBBP ClinTox HIV SIDER Tox21 ESOL Lipo 
+
+Specialist – GNN-based models 
+
+MolCLR – 81.0 73.1 86.3 75.1 61.4 73.5 1.237 0.711 
+
+MGSSL – 86.6 72.8 71.0 72.7 60.0 72.8 1.303 0.784 GraphMVP – 78.2 67.5 67.6 75.4 61.9 73.2 1.105 0.729 KANO – 80.7 70.1 89.1 72.5 59.9 73.6 0.834 0.712 Mole-BERT – 80.9 73.2 75.4 75.4 62.2 77.3 1.102 0.731 
+
+Specialist – Molecular LLMs 
+
+3D-MolT5 T5-v1.1-base 82.0 70.1 85.9 64.6 55.3 67.5 1.260 0.894 HIGHT Vicuna-7B-v1.3 78.9 68.9 56.1 76.5 58.9 72.9 1.854 0.983 
+
+Generalist – Molecular LLMs 
+
+GIMLET T5-small 59.0 52.6 49.9 49.5 46.8 56.3 7.557 1.545 nach0 T5-base 63.6 71.0 49.0 76.1 52.8 50.7 3.745 0.874 
+
+ChemDFM LLaMA-13B 70.8 50.0 34.0 69.1 53.0 57.3 17.149 3.497 LlaSMol Mistral-7B 56.2 64.9 53.0 68.2 56.4 51.2 4.306 0.879 MolecularGPT Llama-2-7B-chat 61.6 55.7 52.9 69.8 53.6 57.0 12.812 1.149 MR-MoL (ours) Llama-3.1-8B-Instruct 82.6 71.8 73.8 72.0 63.3 74.2 1.210 0.919 
+
+Table 1: Results on eight MoleculeNet property prediction tasks. Classification is reported as ROC-AUC and regression as RMSE. Within the Specialist and Generalist groups, the best score per task is in bold and the overall best across groups is underlined. GNN-based models have no base LLM and are marked –. 
+
+Variant BACE ( ↑) BBBP ( ↑) ClinTox ( ↑) HIV ( ↑) SIDER ( ↑) Tox21 ( ↑) ESOL ( ↓) Lipo ( ↓)w/o G, R 74 .9±2.9 70 .1±1.5 63 .9±3.5 74 .3±1.0 61 .0±1.0 71 .8±1.0 1.892 ±0.037 1.084 ±0.025 
+
+w/o G 78 .3±1.5 71 .0±1.5 66 .3±3.3 74 .4±0.6 60 .6±1.4 73 .2±1.1 1.547 ±0.151 1.089 ±0.015 
+
+w/o R 77 .9±2.3 68 .0±4.1 64 .2±5.9 73 .2±1.8 61 .9±0.4 72 .1±0.9 1.425 ±0.010 1.027 ±0.025 
+
+MR-MoL 82 .6±0.5 71 .8±2.8 73 .8±1.4 72 .0±1.4 63 .3±1.3 74 .2±0.6 1.210 ±0.106 0.919 ±0.006 
+
+Table 2: Ablation of MR-MoL on molecular graph G and rationale R. Classification is reported as ROC-AUC and regression as RMSE. All variants report mean ± std. Best per task in bold. 
+
+# Results and Analysis 
+
+We organize our analysis around the two claims of the intro-duction, improved prediction and effective evidence use. 
+
+Property Prediction Results 
+
+Table 1 reports the property prediction results, and Table 2 reports the ablation. Baselines in Table 1 are grouped into specialist and generalist families. For the ablation, we vary the two channels MR-MoL adds to the LLM, the molecular graph G and the rationale R. W/o G, R removes both chan-nels, leaving only the instruction and SMILES, and w/o G
+
+removes only the graph. Neither uses the Stage 1 checkpoint, as the graph path is absent. W/o R removes the rationale. 
+
+Comparison with baselines. Among the generalist mod-els, MR-MoL outperforms every baseline on six of the eight tasks, and the margin is often substantial. It leads by more than 11 ROC-AUC points on BACE and by nearly 7 on SIDER. The advantage carries over to regression, where ev-ery other generalist exceeds 3.7 RMSE on ESOL against our 
+
+1.210 . We attribute this to the structural evidence MR-MoL receives alongside the 1D and 2D molecule representations. The two exceptions are HIV and Lipo, where nach0 leads. More notably, MR-MoL closes much of the gap to the spe-cialist models, which are fine-tuned per task. It surpasses both molecular LLMs, 3D-MolT5 and HIGHT, on four of the six classification tasks and on ESOL, and on SIDER it achieves the best result across all baselines. Elsewhere in classifica-tion it trails the strongest specialist by at most 4.5 points, with the sole exception of ClinTox, where KANO keeps a clear lead. In regression the strongest GNN-based models retain an advantage on both tasks, as generating numbers remains harder for an LLM. We report output validity, the fraction of parseable answers for molecular LLMs, in Appendix C. 
+
+Ablation. As shown in Table 2, removing the rationale low-ers performance on seven of the eight tasks, with the largest classification drops on ClinTox and BACE, confirming that the rationale carries information the model uses. Removing the graph also hurts most tasks, though typically by a smaller margin on classification. The two channels contribute un-equally across tasks, with the rationale mattering more on classification and the graph being the larger contributor on the regression tasks. This pattern indicates that the rationale complements the molecular graph, and that the model draws on whichever channel is more informative for a given task instead of relying on one alone. The sole exception is HIV, where neither added channel helps and the w/o G,R variant already suffices. Notably, w/o G,R already surpasses the gen-eralist baselines in Table 1 on most tasks, since it shares our Dataset Metric Original Flipped BACE ROC-AUC (MCC) 83 .2 (+0 .49 ) 33 .4 (−0.30 )BBBP ROC-AUC (MCC) 71 .3 (+0 .41 ) 29 .2 (−0.29 )ESOL RMSE (ME) 1.332 (−0.43 ) 1.371 (+0 .19 )Lipo RMSE (ME) 0.928 (+0 .10 ) 1.031 (−0.21 )
+
+Table 3: Direction flipping. Each rationale item’s direction tag is inverted. “Original” and “Flipped” report performance before and after the flip. strong LLM backbone and multi-task instruction tuning. The gains of MR-MoL over this variant thus isolate the contribu-tion of the G and R channels. Extended metrics, including F1, MCC, and accuracy, appear in Appendix C. 
+
+Rationale Diagnostics 
+
+A rationale that raises performance matters only if the model reads it rather than benefiting from its mere presence. We probe this from two sides. Behaviorally, we intervene on the rationale, by flipping a direction, removing an item, or replac-ing a substructure, and measure how the prediction moves on four datasets (BACE, BBBP, ESOL, and Lipo), then trace how the rationale shifts the answer on individual molecules. Chemically, we ask whether the attributions the rationale car-ries reproduce known structure-property relationships. All diagnostics use a single checkpoint of MR-MoL, so the un-perturbed scores differ slightly from Table 1. 
+
+Direction sensitivity. We flip only the direction tag in each item, so that toward higher becomes toward lower and the reverse, while leaving the substructure and its rank intact. A model that reads the tags should move its prediction. Ta-ble 3 reports the effect. On both classification datasets the ROC-AUC falls below chance and the MCC flips sign, so MR-MoL does not merely lose the signal but follows the inverted tag. The reversal is not total, as the MCC magni-tude shrinks rather than mirroring the original, indicating that MR-MoL weighs the direction tag together with other signals. On both regression datasets the RMSE rises while the mean error changes sign, so the direction also steers the numerical prediction. 
+
+Rank sensitivity. Rationale items are ranked by attribution magnitude. For each molecule i we remove the rank-1 item and measure the prediction shift 
+
+∆top ,i =
+
+Pfull (Yes) i − P−top (Yes) i classification ,
+
+ˆyfull ,i − ˆy−top ,i regression ,
+
+(8) where P (Yes) is the positive-class probability and ˆy is the predicted numeric value. The subscript full denotes the pre-diction given the entire rationale, and −top the prediction after removing the rank-1 item. We define ∆rand ,i in the same way, removing instead one item drawn at random from the remaining items below rank 1. We report |∆top | and |∆rand |,the mean of |∆top ,i | and |∆rand ,i | over all molecules. The rank-1 item is the one whose masking most changed the source prediction, so a model that treats rank as importance                             
+
+> Dataset |∆top ||∆rand |ratio p
+> BACE 0.276 0.049 5.6×2×10 −27
+> BBBP 0.263 0.042 6.2×4×10 −22
+> ESOL 0.539 0.192 2.8×7×10 −7
+> Lipo 0.321 0.196 1.6×5×10 −6
+
+Table 4: Rank-1 versus random lower-rank removal. “ratio” is |∆top |/|∆rand |; p is from a paired t-test between the two.             
+
+> Rationale BACE ( ↑)BBBP ( ↑)ESOL ( ↓)Lipo ( ↓)Shuffled 80 .467 .51.386 1.020
+> Original 83 .271 .31.332 0.928
+
+Table 5: Substructure shuffling. “Original” is the intact ra-tionale, while “Shuffled” replaces each item’s substructure with a random one. Classification is reported as ROC-AUC and regression as RMSE. should react most when it is removed. As Table 4 shows, 
+
+|∆top | exceeds |∆rand | by 1.6 to 6.2 times across the four datasets. A paired t-test confirms the gap is significant on every dataset, with all p < 10 −5.
+
+Substructure sensitivity. The first two tests vary the di-rection and the rank, but leave each item’s substructure un-changed. Here we replace only its substructure with a ran-dom one of the same view drawn from the test pool. Ta-ble 5 confirms a drop on every dataset. This shuffling lowers ROC-AUC by 2 to 4 points on BACE and BBBP and raises RMSE on ESOL and Lipo. The model therefore depends on the specific structure each item names. Together, these three interventions show that MR-MoL reads every aspect of a rationale, its direction, its rank, and its substructures. 
+
+Chemical validity of attributions. For the functional group view, we average each group’s signed attribution over the molecules containing it, separately for ESOL and Lipo, whose targets are aqueous solubility ( log S) and lipophilic-ity ( log D). Every group raises predicted solubility and low-ers predicted lipophilicity (Table 6), mirroring the textbook inverse relation captured by the general solubility equa-tion (Jain and Yalkowsky 2001). This direction holds in 88                               
+
+> Functional group ESOL Lipo Primary sulfonamide +1 .06 (100%) −0.92 (100%) Methyl amide +1 .05 (100%) −0.67 (99%) Ester +0 .62 (91%) −0.24 (88%) Ketone +0 .61 (96%) −0.37 (99%) Amide +0 .53 (94%) −0.59 (100%) Nitro +0 .34 (95%) −0.24 (93%) Cyano +0 .19 (92%) −0.14 (93%)
+
+Table 6: Mean signed attribution of seven common polar functional groups, computed for each regression dataset. Parentheses give the percentage of molecules containing the group in which the attribution sign matches the group’s mean. Nalidixic acid           
+
+> (1) without rationale
+> MR-MoL
+> P(Yes) = 0.62
+> answer: Yes multi-granular rationale
+> (2) with rationale
+> MR-MoL
+> P(Yes) = 0.15
+> answer: No P(Yes)
+> 0.62 0.15
+> 01
+> predict No 0.5 predict Yes
+> "Can this molecule permeate the blood-brain barrier?"
+> [functional group] carboxylic acid
+> 0.41
+> [BRICS] Cc1ccc2c(=O)ccnc2n1 0.20
+> [Murcko] CC 0.18
+
+Figure 2: A multi-granular rationale corrects a blood-brain barrier permeability prediction for nalidixic acid. The num-ber beside each substructure in the rationale is its attribution magnitude |at,j |, which ranks the items. The bottom axis shows the resulting shift of P (Yes) , the predicted probabil-ity of the “Yes” label, across the decision boundary. to 100 percent of the molecules that contain each group. Beyond the groups in Table 6, the carboxylic acid is a clear example. It carries the largest negative lipophilicity attribu-tion in our analysis, a mean of −1.75 across 465 molecules in the Lipo dataset. Its near-complete ionization at physio-logical pH sharply lowers log D (Lassalas et al. 2016). The same ionization suppresses blood-brain barrier permeabil-ity (Wager et al. 2010), which the rationale captures in 93 percent of the molecules in the BBBP dataset that contain it. These attributions align with established chemistry, so the evidence the rationale carries is not only readable but chemically grounded. 
+
+Correction of individual predictions. Moving from pop-ulations to individual molecules, we take a molecule that MR-MoL predicts incorrectly without the rationale, and add the rationale to its input. Figure 2 traces how MR-MoL re-solves one case in blood-brain barrier permeability (BBBP).                
+
+> Dataset Molecule Truth No Full Rm. BACE HEA inhibitor Yes 0.27 0.90 0.25
+> ESOL Perylene −8.79 −5.97 −7.10 −3.90
+
+Table 7: Rationale item interventions. Cells show P (Yes) for classification and the predicted value for regression. “No” is the prediction without the rationale, “Full” uses all rationale items, and “Rm.” removes the top-attributed item. “Truth” is the ground-truth label or value. Given nalidixic acid without the rationale, MR-MoL wrongly predicts that it crosses the barrier. In the rationale, the items from the BRICS and Murcko views are tagged as raising permeability, while the functional group carboxylic acid is tagged as lowering it with the largest magnitude. With this evidence, MR-MoL flips to the correct No. The same pattern holds on other tasks. Table 7 shows one molecule each for BACE and ESOL, where the predic-tion without the rationale is wrong and the full rationale corrects it. In each case the most influential substructure is one a chemist would point to, and the direction the ratio-nale assigns it matches known chemistry. For Perylene, the fused-ring scaffold is tagged toward lower solubility, con-sistent with its large hydrophobic surface and stable crystal packing (Jain and Yalkowsky 2001). In the HEA inhibitor, the hydroxyethylamine scaffold is tagged toward higher ac-tivity, consistent with its protonated amine forming a salt bridge with a catalytic aspartate (Maillard et al. 2007). As a further check, deleting this item returns the model to its error, showing that the correction hinges on that specific item. 
+
+# Limitations 
+
+We note several limitations that also point to future direc-tions. First, the rationale inherits the quality of the source predictor and may carry misleading evidence. Stronger attri-bution methods or an ensemble of source predictors could reduce this risk, which we leave to future work. Sec-ond, the Murcko, BRICS, and functional group views are not exhaustive, leaving patterns such as macrocycles and stereochemistry-driven properties uncovered. Third, the ra-tionale channel covers only tasks where the GNN source predictor yields attributions, namely classification and re-gression, leaving tasks such as molecule captioning and re-action prediction beyond its current reach. Extending it to such tasks is another direction for future work. 
+
+# Conclusion 
+
+We presented MR-MoL, a molecular LLM that uses ex-plicit, ranked, GNN-derived structural evidence as a rationale alongside the molecular graph and SMILES. Together they let the model predict molecular properties while ground-ing each prediction in the substructures that drive it. Our diagnostics confirm that the model acts on the rationale’s content, not its presence alone, and that the cues it carries reflect known chemistry. Beyond property prediction, this turns model explanations from a diagnostic readout into an input that sharpens the model itself. References 
+
+Anthropic. 2026. Claude Opus 4.6 System Card. https://www. anthropic.com/claude-opus-4-6-system-card. Accessed: 2026-06-09. Bemis, G. W.; and Murcko, M. A. 1996. The properties of known drugs. 1. Molecular frameworks. Journal of medicinal chemistry ,39(15): 2887–2893. Cao, H.; Liu, Z.; Lu, X.; Yao, Y.; and Li, Y. 2025. Instructmol: Multi-modal integration for building a versatile and reliable molec-ular assistant in drug discovery. In Proceedings of the 31st Interna-tional Conference on Computational Linguistics , 354–379. Chen, Y.; Yao, Q.; Zhang, J.; Cheng, J.; and Bian, Y. 2024. Hight: Hierarchical graph tokenization for graph-language align-ment. arXiv:2406.14021. Chithrananda, S.; Grand, G.; and Ramsundar, B. 2020. Chem-BERTa: large-scale self-supervised pretraining for molecular prop-erty prediction. arXiv:2010.09885. Degen, J.; Wegscheid-Gerlach, C.; Zaliani, A.; and Rarey, M. 2008. On the art of compiling and using ’drug-like’ chemical fragment spaces. ChemMedChem , 3(10): 1503. Edwards, C.; Zhai, C.; and Ji, H. 2021. Text2mol: Cross-modal molecule retrieval with natural language queries. In Proceedings of the 2021 conference on empirical methods in natural language processing , 595–607. Fang, Y.; Liang, X.; Zhang, N.; Liu, K.; Huang, R.; Chen, Z.; Fan, X.; and Chen, H. 2024. Mol-Instructions: A Large-Scale Biomolec-ular Instruction Dataset for Large Language Models. In The Twelfth International Conference on Learning Representations .Fang, Y.; Zhang, Q.; Zhang, N.; Chen, Z.; Zhuang, X.; Shao, X.; Fan, X.; and Chen, H. 2023. Knowledge graph-enhanced molec-ular contrastive learning with functional prompt. Nature Machine Intelligence , 5(5): 542–553. Gilmer, J.; Schoenholz, S. S.; Riley, P. F.; Vinyals, O.; and Dahl, G. E. 2017. Neural message passing for quantum chemistry. In 
+
+International conference on machine learning , 1263–1272. Pmlr. Grattafiori, A.; Dubey, A.; Jauhri, A.; Pandey, A.; Kadian, A.; Al-Dahle, A.; Letman, A.; Mathur, A.; Schelten, A.; Vaughan, A.; et al. 2024. The llama 3 herd of models. arXiv:2407.21783. Hastings, J.; De Matos, P.; Dekker, A.; Ennis, M.; Harsha, B.; Kale, N.; Muthukrishnan, V.; Owen, G.; Turner, S.; Williams, M.; et al. 2012. The ChEBI reference database and ontology for biologically relevant chemistry: enhancements for 2013. Nucleic acids research ,41(D1): D456–D463. Hu, E. J.; Shen, Y.; Wallis, P.; Allen-Zhu, Z.; Li, Y.; Wang, S.; Wang, L.; and Chen, W. 2022. LoRA: Low-Rank Adaptation of Large Language Models. In International Conference on Learning Representations .Hu*, W.; Liu*, B.; Gomes, J.; Zitnik, M.; Liang, P.; Pande, V.; and Leskovec, J. 2020. Strategies for Pre-training Graph Neural Net-works. In International Conference on Learning Representations .Jain, N.; and Yalkowsky, S. H. 2001. Estimation of the aqueous solubility I: Application to organic nonelectrolytes. Journal of Pharmaceutical Sciences , 90(2): 234–252. Jiménez-Luna, J.; Grisoni, F.; and Schneider, G. 2020. Drug dis-covery with explainable artificial intelligence. Nature Machine Intelligence , 2(10): 573–584. Jin, C.; Guo, S.; Zhou, S.; and Guan, J. 2025. Effective and ex-plainable molecular property prediction by chain-of-thought en-abled large language models and multi-modal molecular informa-tion fusion. Journal of Chemical Information and Modeling , 65(11): 5438–5455. Kim, D.; Lee, W.; and Hwang, S. J. 2026. Mol-llama: Towards general understanding of molecules in large molecular language model. Advances in Neural Information Processing Systems , 38: 26921–26960. Knox, C.; Wilson, M.; Klinger, C. M.; Franklin, M.; Oler, E.; Wil-son, A.; Pon, A.; Cox, J.; Chin, N. E.; Strawbridge, S. A.; et al. 2024. DrugBank 6.0: the DrugBank knowledgebase for 2024. Nu-cleic acids research , 52(D1): D1265–D1275. Lassalas, P.; Gay, B.; Lasfargeas, C.; James, M. J.; Tran, V.; Vi-jayendran, K. G.; Brunden, K. R.; Kozlowski, M. C.; Thomas, C. J.; Smith, I., Amos B; Huryn, D. M.; and Ballatore, C. 2016. Struc-ture property relationships of carboxylic acid isosteres. Journal of Medicinal Chemistry , 59(7): 3183–3203. Lee, N.; De Brouwer, E.; Hajiramezanali, E.; Biancalani, T.; Park, C.; and Scalia, G. 2026. Rag-enhanced collaborative llm agents for drug discovery. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, 561–569. Li, J.; Li, D.; Savarese, S.; and Hoi, S. 2023. Blip-2: Bootstrapping language-image pre-training with frozen image encoders and large language models. In International conference on machine learning ,19730–19742. PMLR. Li, S.; Liu, Z.; Luo, Y.; Wang, X.; He, X.; Kawaguchi, K.; Chua, T.-S.; and Tian, Q. 2024. Towards 3d molecule-text interpreta-tion in language models. In International Conference on Learning Representations , volume 2024, 17352–17371. Liu, P.; Ren, Y.; Tao, J.; and Ren, Z. 2024a. Git-mol: A multi-modal large language model for molecular science with graph, image, and text. Computers in biology and medicine , 171: 108073. Liu, S.; Wang, H.; Liu, W.; Lasenby, J.; Guo, H.; and Tang, J. 2022. Pre-training Molecular Graph Representation with 3D Geometry. In International Conference on Learning Representations .Liu, Y.; Ding, S.; Zhou, S.; Fan, W.; and Tan, Q. 2024b. Molecu-larGPT: Open Large Language Model (LLM) for Few-Shot Molec-ular Property Prediction. arXiv:2406.12950. Liu, Z.; Li, S.; Luo, Y.; Fei, H.; Cao, Y.; Kawaguchi, K.; Wang, X.; and Chua, T.-S. 2023. Molca: Molecular graph-language modeling with cross-modal projector and uni-modal adapter. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing , 15623–15638. Livne, M.; Miftahutdinov, Z.; Tutubalina, E.; Kuznetsov, M.; Polykovskiy, D.; Brundyn, A.; Jhunjhunwala, A.; Costa, A.; Aliper, A.; Aspuru-Guzik, A.; et al. 2024. nach0: multimodal natural and chemical languages foundation model. Chemical Science , 15(22): 8380–8389. Loshchilov, I.; and Hutter, F. 2019. Decoupled Weight Decay Reg-ularization. In International Conference on Learning Representa-tions .Maillard, M. C.; Hom, R. K.; Benson, T. E.; Moon, J. B.; Mamo, S.; Bienkowski, M.; Tomasselli, A. G.; Woods, D. D.; Prince, D. B.; Paddock, D. J.; et al. 2007. Design, synthesis, and crystal structure of hydroxyethyl secondary amine-based peptidomimetic inhibitors of human β-secretase. Journal of medicinal chemistry , 50(4): 776– 781. Ouyang, L.; Wu, J.; Jiang, X.; Almeida, D.; Wainwright, C.; Mishkin, P.; Zhang, C.; Agarwal, S.; Slama, K.; Ray, A.; et al. 2022. Training language models to follow instructions with human feedback. Advances in neural information processing systems , 35: 27730–27744. Park, J.; Bae, M.; Ko, D.; and Kim, H. J. 2024. Llamo: Large lan-guage model-based molecular graph assistant. Advances in Neural Information Processing Systems , 37: 131972–132000. Pei, Q.; Yan, R.; Gao, K.; Zhu, J.; and Wu, L. 2025. 3D-MolT5: Leveraging Discrete Structural Information for Molecule-Text Mod-eling. In International Conference on Learning Representations .Ramsundar, B.; Eastman, P.; Walters, P.; Pande, V.; Leswing, K.; and Wu, Z. 2019. Deep Learning for the Life Sciences . O’Reilly Media. https://www.amazon.com/Deep-Learning-Life-Sciences-Microscopy/dp/1492039837. RDKit. 2006. RDKit: Open-source cheminformatics. https://www. rdkit.org. Accessed: 2026-05-06. Ross, J.; Belgodere, B.; Chenthamarakshan, V.; Padhi, I.; Mroueh, Y.; and Das, P. 2022. Large-scale chemical language representa-tions capture molecular structure and properties. Nature Machine Intelligence , 4(12): 1256–1264. Scarselli, F.; Gori, M.; Tsoi, A. C.; Hagenbuchner, M.; and Monfar-dini, G. 2008. The graph neural network model. IEEE transactions on neural networks , 20(1): 61–80. Schütt, K. T.; Sauceda, H. E.; Kindermans, P.-J.; Tkatchenko, A.; and Müller, K.-R. 2018. Schnet–a deep learning architecture for molecules and materials. The Journal of chemical physics , 148(24). Wager, T. T.; Hou, X.; Verhoest, P. R.; and Villalobos, A. 2010. Moving beyond rules: the development of a central nervous sys-tem multiparameter optimization (CNS MPO) approach to enable alignment of druglike properties. ACS Chemical Neuroscience ,1(6): 435–449. Wang, Y.; Wang, J.; Cao, Z.; and Barati Farimani, A. 2022. Molec-ular contrastive learning of representations via graph neural net-works. Nature Machine Intelligence , 4(3): 279–287. Wei, J.; Bosma, M.; Zhao, V.; Guu, K.; Yu, A. W.; Lester, B.; Du, N.; Dai, A. M.; and Le, Q. V. 2022. Finetuned Language Models are Zero-Shot Learners. In International Conference on Learning Representations .Wellawatte, G. P.; Gandhi, H. A.; Seshadri, A.; and White, A. D. 2023. A perspective on explanations of molecular prediction mod-els. Journal of Chemical Theory and Computation , 19(8): 2149– 2160. Wu, Z.; Ramsundar, B.; Feinberg, E. N.; Gomes, J.; Geniesse, C.; Pappu, A. S.; Leswing, K.; and Pande, V. 2018. MoleculeNet: a benchmark for molecular machine learning. Chemical science ,9(2): 513–530. Wu, Z.; Wang, J.; Du, H.; Jiang, D.; Kang, Y.; Li, D.; Pan, P.; Deng, Y.; Cao, D.; Hsieh, C.-Y.; et al. 2023. Chemistry-intuitive expla-nation of graph neural networks for molecular property prediction with substructure masking. Nature communications , 14(1): 2585. Xia, J.; Zhao, C.; Hu, B.; Gao, Z.; Tan, C.; Liu, Y.; Li, S.; and Li, S. Z. 2023. Mole-bert: Rethinking pre-training graph neural networks for molecules. In The Eleventh International Conference on Learning Representations .Xian, Z.; Gu, J.; Li, L.; and Liang, S. 2025. Molrag: unlocking the power of large language models for molecular property prediction. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 15513–15531. Ying, Z.; Bourgeois, D.; You, J.; Zitnik, M.; and Leskovec, J. 2019. Gnnexplainer: Generating explanations for graph neural networks. 
+
+Advances in neural information processing systems , 32. Yu, B.; Baker, F. N.; Chen, Z.; Ning, X.; and Sun, H. 2024. LlaSMol: Advancing Large Language Models for Chemistry with a Large-Scale, Comprehensive, High-Quality Instruction Tuning Dataset. In First Conference on Language Modeling .Yuan, H.; Yu, H.; Wang, J.; Li, K.; and Ji, S. 2021. On explainability of graph neural networks via subgraph explorations. In Interna-tional conference on machine learning , 12241–12252. PMLR. Zhang, Z.; Liu, Q.; Wang, H.; Lu, C.; and Lee, C.-K. 2021. Motif-based graph self-supervised learning for molecular property pre-diction. Advances in Neural Information Processing Systems , 34: 15870–15882. Zhao, H.; Liu, S.; Ma, C.; Xu, H.; Fu, J.; Deng, Z.; Kong, L.; and Liu, Q. 2023. GIMLET: A unified graph-text model for instruction-based molecule zero-shot learning. Advances in Neural Information Processing Systems , 36: 5850–5887. Zhao, J.; Zhou, Q.; Wang, T.; Fan, Y.; Yang, Q.; Jiao, L.; Liu, C.; Guo, Z.; Lu, Q.; Zhou, F.; et al. 2025. MolProphecy: Bridging medicinal chemists’ knowledge and molecular pre-trained models via a multi-modal framework. Journal of Advanced Research .Zhao, Z.; Ma, D.; Chen, L.; Sun, L.; Li, Z.; Xia, Y.; Xu, H.; Zhu, Z.; Zhu, S.; Fan, S.; et al. 2024. Chemdfm: A large language foundation model for chemistry. In Neurips 2024 Workshop Foundation Models for Science: Progress, Opportunities, and Challenges .Zhou, G.; Gao, Z.; Ding, Q.; Zheng, H.; Xu, H.; Wei, Z.; Zhang, L.; and Ke, G. 2023. Uni-Mol: A Universal 3D Molecular Rep-resentation Learning Framework. In The Eleventh International Conference on Learning Representations .Appendix 
+
+This appendix collects additional detail and analysis that support the main paper. References to the main paper are by section name, and each appendix section below is labeled by a letter for reference from the main text. 
+
+# A Experimental Setup 
+
+A.1 Dataset Statistics 
+
+The eight tasks are MoleculeNet datasets (Wu et al. 2018), six binary classification and two regression. BACE asks whether a molecule inhibits human β-secretase 1, and BBBP whether it penetrates the blood-brain barrier. HIV asks whether a molecule inhibits viral replication. ClinTox has two endpoints, clinical-trial toxicity and FDA approval. Tox21 has 12 toxicity assays, seven nuclear-receptor and five stress-response pathways (NR-AR, NR-AR-LBD, NR-AhR, NR-Aromatase, NR-ER, NR-ER-LBD, NR-PPAR-γ, SR-ARE, SR-ATAD5, SR-HSE, SR-MMP, SR-p53). SIDER has 27 side-effect classes from the MedDRA system-organ ontology. The regression tasks are ESOL for aqueous solubility and Lipo for the octanol-water distribution coefficient. Table 8 reports the per-task split sizes. Every task uses an 8:1:1 scaffold split, following the standard MoleculeNet protocol (Wu et al. 2018). For the three multi-label tasks, namely ClinTox, SIDER, and Tox21, we expand each molecule into one query per labeled endpoint, since the model answers a single property at a time. The reported counts are therefore queries, and exceed the number of molecules. The molecule counts, in train/valid/test order, are ClinTox 1,149/148/145, SIDER 1,141/143/143, and Tox21 6,264/783/776. Tox21 departs slightly from the 8:1:1 ratio because unlabeled endpoints are dropped before expansion. The single-label tasks BACE, BBBP, HIV, ESOL, and Lipo have matching query and molecule counts. 
+
+A.2 Reproducibility Details 
+
+We train in two stages, and Table 9 lists the full hyperparameter setting. The base LLM is Llama-3.1-8B-Instruct. Stage 1 aligns the graph path with the LLM embedding space by training the graph encoder and the projector under a three-group learning rate, while the LLM stays frozen. Stage 2 freezes the graph encoder and the LLM, and adapts the LLM with LoRA (Hu et al. 2022) jointly with the projector, where the adapters target the attention projections {q, k, v, o }proj . The projector holds a Q-Former with eight query tokens followed by a linear projection to the LLM. The effective batch multiplies the per-device batch by the gradient-accumulation steps, giving 2 × 32 = 64 in Stage 1 and 2 × 16 = 32 in Stage 2. We select each stage’s checkpoint by the lowest held-out validation loss. The randomly initialized projection receives the largest Stage 1 rate, while the pretrained graph encoder receives the smallest. The graph encoder is a five-layer, 300-dimensional GIN. The Q-Former follows the BLIP-2 design (Li et al. 2023) with a 12-layer SciBERT backbone and six cross-attention layers, all initialized from MolCA (Liu et al. 2023). The projection maps the 768-dimensional Q-Former output to the 4096-dimensional LLM hidden size. 
+
+Stage 1 checkpoint selection. We score every Stage 1 checkpoint by next-token prediction loss and perplexity on the standard ChEBI-20 test split of 3,300 molecules, which we hold out as validation data. Table 10 reports the curve. The loss plateaus near epoch 10, so we initialize Stage 2 from that checkpoint. 
+
+Run variability and checkpoint selection. We repeat the full Stage 2 training three times with random seeds and report the mean and standard deviation, while each baseline is run once. The three runs converge to close validation losses. All diagnostics in the main paper use the run with the lowest validation loss. 
+
+Source predictor. Each task’s rationale comes from a Mole-BERT (Xia et al. 2023) GNN fine-tuned end to end on that task, following the original fine-tuning setup. We use Adam with learning rate 1e −3, no weight decay, batch size 32 , dropout 0.5,mean pooling, and 100 epochs, with no learning-rate schedule. We train each source predictor three times per task, and the rationale uses the checkpoint with the lowest validation loss. The attribution of each item is the masking difference defined in the main paper, and we keep the top five items per molecule. 
+
+Hyperparameter selection. We tune the Stage 2 hyperparameters and select the final configuration by validation loss, as summarized in Table 11. 
+
+Regression targets. For ESOL and Lipo we load the MoleculeNet datasets through DeepChem (Ramsundar et al. 2019), which provides the regression targets already z-normalized with training-split statistics. We keep this normalization when fine-tuning the molecular LLMs, namely MR-MoL and the specialist LLMs, so they generate values on a standardized scale. At evaluation we invert the normalization, and every reported metric is in the original target units. The GNN-based baselines and the source predictor regress the raw values directly. 
+
+Environment. All runs use one NVIDIA RTX 5090 with 32 GB of memory and an Intel Core Ultra 9 285K CPU. The machine runs Ubuntu 24.04.3 LTS with Python 3.12 and CUDA 12.8, and the main libraries are PyTorch 2.11, Transformers 4.57, PEFT 0.19, RDKit 2026.03, and PyTorch Geometric 2.7. Stage 1 takes about 1.5 hours per epoch, and Stage 2 about six hours per epoch. Task Type End. Train Valid Test Total BACE classification 1 1,210 151 152 1,513 BBBP classification 1 1,566 205 194 1,965 ClinTox classification 2 2,298 296 290 2,884 HIV classification 1 32,901 4,113 4,106 41,120 SIDER classification 27 30,807 3,861 3,861 38,529 Tox21 classification 12 63,639 7,151 7,074 77,864 ESOL regression 1 889 109 113 1,111 Lipo regression 1 3,360 420 420 4,200 
+
+Table 8: Stage 2 dataset statistics. “Type” is the prediction task type and “End.” is the number of endpoints. Counts are queries.                                         
+
+> Stage 1 Stage 2 LLM adaptation –LoRA ( r=16 ,α=32 )Trained modules graph encoder, projector LoRA, projector Frozen modules LLM graph encoder, LLM Learning rate 1e −5/5e −5/1e −41e −4/2e −5
+> Optimizer AdamW, wd 0.01 AdamW, wd 0.01
+> Schedule cosine, warmup 0.1cosine, warmup 0.05
+> Effective batch 2×32 = 64 2×16 = 32
+> Max sequence length 1024 1568
+> Epochs 20 5
+> Gradient clip 1.01.0
+> Precision bf16 bf16 Trainable params 99 .9M111 .7M
+
+Table 9: Training configuration for the two stages. The Stage 1 learning rate lists the rates for the graph encoder, the Q-Former, and the linear projection in turn, and the Stage 2 learning rate lists the rates for the LoRA adapters and the projector in turn. 
+
+A.3 Prompt Format and Chat Template 
+
+Both stages format each sample as a single Llama-3.1 chat exchange. Figure 3 shows the skeleton. The system turn sets the assistant role and, in Stage 2, documents the structure of the rationale. The user turn carries the instruction, the molecular tokens, the SMILES sequence, and the rationale. The assistant turn carries the target, a molecule description in Stage 1 and a property answer in Stage 2. The graph path inserts eight molecule-embedding placeholders between the molecule delimiters, one per Q-Former query, and these are overwritten by the projected molecular embeddings. The Stage 2 system prompt is as follows. “You are a scientific assistant. You will be provided with an instruction, molecular embeddings, the corresponding SMILES string, and an optional GNN-derived structural rationale. 
+
+• The rationale is a ranked list of structural items from three decomposition views, namely Murcko, functional group, and BRICS. 
+
+• Items are ranked within the same molecule by the magnitude of the GNN prediction change caused by masking each item. Ranks are not globally calibrated and are not compared across molecules. 
+
+• The effect field describes the direction of the GNN prediction attributed to the substructure, not a ground-truth chemical claim. 
+
+• For BRICS view, the raw BRICS string and attachments are decomposition metadata and connection labels. When a rationale is provided, treat it as auxiliary evidence, not ground truth.” The Stage 1 system prompt keeps only the role sentence, without the rationale description. 
+
+# B Rationale Construction and Analysis 
+
+B.1 Source Predictor Choice 
+
+We initialize the source predictor from Mole-BERT (Xia et al. 2023). Three reasons motivate this choice. First, Mole-BERT is pretrained to reconstruct masked atoms, so partially masked graphs stay in distribution. This is exactly the regime in which masking attribution operates (Wu et al. 2023), since each attribution compares the prediction on the full graph with that on a masked one. Second, its GIN backbone matches the graph encoder of our graph path (Liu et al. 2023), which keeps the two graph modules architecturally aligned. Third, it is a public and reproducible baseline with a fully specified recipe. Epoch NTP PPL Epoch NTP PPL 1 1.174 3.236 11 0.945 2.573 2 1.120 3.065 12 0.954 2.596 3 1.062 2.891 13 0.956 2.601 4 1.041 2.831 14 0.953 2.593 5 1.011 2.749 15 0.958 2.606 6 0.993 2.700 16 0.962 2.617 7 0.993 2.699 17 0.968 2.633 8 0.982 2.671 18 0.981 2.667 9 0.950 2.587 19 0.988 2.686      
+
+> 10 0.943 2.568 20 0.999 2.716
+
+Table 10: Stage 1 validation loss across epochs. NTP is the next-token prediction loss and PPL its perplexity. The selected checkpoint is in bold.                       
+
+> Hyperparameter Search range LoRA learning rate {1e −4,5e −5,1e −5}
+> LoRA (r, α ){(16 ,32) ,(32 ,64) ,(8 ,64) ,(8 ,16) }
+> Target modules attention, or attention +MLP Epochs {3,5,7}
+> Max sequence length {1024 ,1568 ,2048 }
+
+Table 11: Stage 2 hyperparameter search. “Attention” is the attention projections {q, k, v, o }proj and “MLP” the feed-forward projections {gate , up , down }proj .
+
+B.2 Rationale Analysis 
+
+This section examines what the rationales contain in practice, covering how items distribute across the three views, how the views overlap, the attribution statistics, and a serialized example. For each candidate substructure we compute the masking attribution defined in the main paper, rank items within a molecule by absolute attribution, and keep the top five across the three views. 
+
+Granularity composition and overlap. Table 12 reports how the kept items distribute across the three views and how often two items name the same substructure. BRICS contributes the most items overall at 51% , followed by Murcko at 43% and functional groups at 6% . ESOL is the exception, where the Murcko view dominates. Exact duplication across items is uncommon. Two of the five kept items name an identical substructure in 16 .6% of molecules overall, ranging from 0.9% on BACE to 38 .6% 
+
+on ESOL, while three coincide in only 0.5% . The views therefore tend to select distinct substructures, so a rationale spans several granularities rather than repeating one fragment. A rationale holds 4.5 items on average, and 76% of rationales reach the full five. 
+
+Attribution distribution. Figure 4 shows the distribution of signed attributions per task, and Table 13 gives the summary statistics. Classification attributions lie in [−1, 1] , since the source predictor outputs a sigmoid probability, so each attribution is a difference of two probabilities. Regression attributions instead carry the target unit and are unbounded, which gives them far larger standard deviations. Every distribution peaks sharply at zero with heavy tails on both sides, so a typical substructure barely moves the source prediction while a few move it sharply. Across tasks the positive share stays between 40 and 64 percent, so the predictor assigns both prediction-raising and prediction-lowering roles rather than defaulting to one direction. 
+
+Serialized example. Figure 5 shows the first three items of one rationale exactly as stored, for one molecule from the ESOL dataset. The three shown items span all three views, one Murcko, one BRICS, and one functional group entry. The Murcko scaffold and the BRICS fragment (ranks 1 and 2) are tagged toward lower predicted solubility, while the nitro group (rank 3) is tagged toward higher. Because the task is regression, the effect field names the predicted value, here the log aqueous solubility for ESOL. For a classification task the field instead names a probability, as in toward higher predicted probability of blood-brain barrier permeability for BBBP. 
+
+B.3 Number of Rationale Items 
+
+To test whether supplying multiple items helps, we compare the full five-item rationale with a Top-1 rationale that keeps only the highest-attribution item. The two settings are trained identically, differing only in the number of rationale items the model receives during Stage 2 instruction tuning. Table 14 reports both on the headline metric. The five-item rationale outperforms the Top-1 setting on most tasks, with the largest gains on BACE and ClinTox, so the lower-ranked items supply complementary signal. HIV is the exception, where the single item does slightly better. <|start_header_id|>system<|end_header_id|> {system_prompt}<|eot_id|> <|start_header_id|>user<|end_header_id|> {instruction} Molecule: <|start_mol_id|> ... <|end_mol_id|> SMILES: {smiles} {rationale}<|eot_id|> <|start_header_id|>assistant<|end_header_id|> {answer}<|eot_id|> 
+
+Figure 3: Chat template skeleton for both stages. The ... between the molecule delimiters stands for eight molecule-embedding placeholders. 
+
+Task Murcko BRICS FG Dup. 2 Dup. 3 BACE 32.6 65.2 2.3 0.9 0.0 BBBP 42.9 53.2 3.8 12.8 0.4 ClinTox 40.6 53.5 5.9 15.6 0.5 HIV 43.7 51.2 5.0 11.3 0.3 SIDER 41.2 52.9 5.9 17.8 0.8 Tox21 43.1 49.4 7.4 25.3 0.7 ESOL 55.9 38.7 5.4 38.6 0.7 Lipo 36.4 59.2 4.4 10.3 0.3 Overall 42.5 51.2 6.2 16.6 0.5 
+
+Table 12: View composition and cross-view duplication of the kept rationale items. The first three columns give the share of items from each view. FG is the functional group view. “Dup. 2” and “Dup. 3” are the percentages of molecules in which exactly two and exactly three of the five kept items name an identical substructure. 
+
+# C Additional Results 
+
+C.1 Extended Metrics 
+
+The main paper reports the ablation on ROC-AUC and RMSE. Here we report the corresponding threshold metrics for MR-MoL and its three channel-ablated variants, the rationale removed (w/o R), the graph removed (w/o G), and both removed (w/o G, R ). Classification reports the F1 score, the Matthews correlation coefficient (MCC), and accuracy at the 0.5 threshold on P (Yes) ;regression reports the mean absolute error (MAE) and the mean error (ME). With T P , T N , F P , and F N denoting the four confusion-matrix counts, the F1 score is the harmonic mean of precision and recall, 
+
+F1 = 2 T P 
+
+2 T P + F P + F N , (9) and the MCC is 
+
+MCC = T P · T N − F P · F N 
+
+p(T P +F P )( T P +F N )( T N +F P )( T N +F N ) . (10) F1 ignores T N , so it rewards positive-class detection where accuracy does not. MCC ranges over [−1, 1] and uses all four counts, so a model that labels every molecule negative scores 0 rather than the high accuracy such a model attains, which makes MCC the stricter summary on our imbalanced tasks. The MAE is the mean of |ˆy − y| and the ME is the signed mean of ˆy − y,whose sign reveals systematic over- or under-prediction. Table 15 and Table 16 report these metrics. These threshold metrics expose effects that ROC-AUC alone does not reveal. On ClinTox the two variants without a rationale collapse toward the majority class, with F1 near 48 and MCC near zero, which mirrors the large ClinTox gain from the rationale. Accuracy alone is misleading on the heavily imbalanced tasks, where w/o G, R 
+
+reaches high accuracy on ClinTox and HIV yet near-zero MCC, so it labels almost everything negative. Across tasks MR-MoL attains the best F1 on all tasks but BBBP and the best MCC on all but BBBP and SIDER, indicating that the added channels improve the balanced decision quality. 
+
+C.2 Output Validity 
+
+Validity is the fraction of generated answers on the test split that are parseable. Classification validity is 1.0 for every molecular LLM by construction, since the answer is read from the positive and negative token logits. We therefore report only regression 1.0 0.5 0.0 0.5 1.0 10 0
+
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> Count (log)
+
+BACE      
+
+> 1.0 0.5 0.0 0.5 1.0 10 1
+> 10 2
+> 10 3
+> 10 4
+
+BBBP     
+
+> 1.0 0.5 0.0 0.5 1.0 10 1
+> 10 2
+> 10 3
+> 10 4
+
+ClinTox     
+
+> 1.0 0.5 0.0 0.5 1.0 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> 10 5
+
+HIV       
+
+> 1.0 0.5 0.0 0.5 1.0
+> Signed attribution at,j
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> 10 5
+> Count (log)
+
+SIDER       
+
+> 1.0 0.5 0.0 0.5 1.0
+> Signed attribution at,j
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> 10 5
+
+Tox21     
+
+> 505
+> Signed attribution at,j
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+
+ESOL     
+
+> 10 010
+> Signed attribution at,j
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+
+Lipo Figure 4: Distribution of substructure attributions at,j per task, on a logarithmic count axis. Classification (blue) is bounded to the probability range [−1, 1] , regression (orange) is in target units. 
+
+Task n Mean Std +% Range BACE 18,635 0.005 0.120 46.8 [−0.99 , 0.93] 
+
+BBBP 16,120 −0.003 0.146 55.6 [−0.99 , 1.00] 
+
+ClinTox 27,028 0.000 0.103 50.0 [−1.00 , 1.00] 
+
+HIV 329,838 −0.004 0.077 45.2 [−0.94 , 0.99] 
+
+SIDER 465,570 0.005 0.052 40.4 [−0.71 , 0.76] 
+
+Tox21 615,636 −0.004 0.092 42.0 [−0.98 , 0.99] 
+
+ESOL 4,796 −0.241 1.159 63.6 [−9.14 , 2.91] 
+
+Lipo 39,447 0.143 1.330 48.4 [−7.27 , 16 .32] 
+
+Table 13: Summary of the attributions at,j . n is the number of candidate substructures, “Mean” and “Std” the mean and standard deviation of the attributions, “ +% ” the share of positive attributions, and “Range” the minimum and maximum. validity, where a model can emit prose without a parseable number. Table 17 shows the result. MR-MoL and four baselines parse every output, while three generalists miss a small fraction on ESOL. 
+
+C.3 Generalist Baseline Task Coverage 
+
+We evaluate the generalist baselines from their released checkpoints with our own instruction on all eight tasks. Retraining them on our split would turn each released generalist into a task-specific model and defeat the purpose of comparing against generalists, so we keep them as released. As a result, each model has seen a different subset of our eight tasks during its own training, and Table 18 makes this coverage explicit. For every model and task, it marks whether the task was trained ( •), evaluated zero-shot ( ◦), or absent ( −) in that model’s own paper. We report this coverage so that scores can be read in context. A trained task may benefit from having appeared in the model’s own training data, whereas a zero-shot or absent task is evaluated without such exposure. We therefore avoid drawing conclusions from any single cell, and rely on the overall comparison rather than task-by-task claims against these baselines. Ranked structural rationale items for this molecule. 1. type: Murcko scaffold SMILES: O=C(Cn1ccnc1)NCc1ccccc1 effect: toward lower predicted log aqueous solubility 2. type: BRICS fragment SMILES: O=[N+]([O-])c1nccn1 raw BRICS: [9*]n1ccnc1[N+](=O)[O-] attachments: [9] effect: toward lower predicted log aqueous solubility 3. type: functional group name: nitro effect: toward higher predicted log aqueous solubility 
+
+Figure 5: The first three items of a serialized rationale as fed to the LLM, for one molecule from the ESOL dataset with SMILES 
+
+O=C(Cn1ccnc1[N+](=O)[O-])NCc1ccccc1 . The full rationale holds five items. 
+
+Classification (ROC-AUC ↑) Regression (RMSE ↓)Variant BACE BBBP ClinTox HIV SIDER Tox21 ESOL Lipo Top-1 80 .1±0.5 71 .3±1.2 69 .9±2.6 74 .3±0.7 62 .6±1.4 72 .8±0.8 1.216 ±0.052 0.939 ±0.013 
+
+Full 82 .6±0.5 71 .8±2.8 73 .8±1.4 72 .0±1.4 63 .3±1.3 74 .2±0.6 1.210 ±0.106 0.919 ±0.006 
+
+Table 14: Comparison of the Full and Top-1 rationales on the headline metric, mean ± std over three runs. Top-1 keeps only the highest-attribution item, and Full keeps up to five. The better score per task is in bold. 
+
+Variant BACE BBBP ClinTox HIV SIDER Tox21 
+
+F1 score 
+
+w/o G, R 37 .3±10 .2 68 .2±0.3 48 .4±0.0 2.9±3.8 56 .3±0.4 22 .1±2.6
+
+w/o G 67 .8±3.8 75 .3±0.5 53 .2±5.2 12 .3±9.5 59 .4±0.4 23 .1±3.1
+
+w/o R 64 .0±9.8 69 .4±1.5 48 .4±0.0 17 .6±7.1 60 .3±2.7 25 .6±1.8
+
+MR-MoL 72 .9±3.3 72 .5±2.3 60 .2±7.7 29 .0±3.5 63 .0±0.8 31 .7±1.8
+
+MCC 
+
+w/o G, R 0.225 ±.058 0.154 ±.020 0.000 ±.000 0.059 ±.068 0.103 ±.009 0.210 ±.020 
+
+w/o G 0.391 ±.049 0.424 ±.011 0.151 ±.152 0.183 ±.098 0.056 ±.005 0.207 ±.008 
+
+w/o R 0.401 ±.049 0.172 ±.102 0.000 ±.000 0.256 ±.064 0.085 ±.011 0.235 ±.027 
+
+MR-MoL 0.491 ±.027 0.328 ±.072 0.202 ±.138 0.295 ±.034 0.101 ±.015 0.299 ±.014 
+
+Accuracy 
+
+w/o G, R 51 .5±4.2 55 .3±1.6 93 .4±0.0 96 .8±0.0 75 .7±0.5 89 .8±0.2
+
+w/o G 67 .1±3.0 70 .6±0.5 92 .1±1.9 96 .9±0.1 75 .9±0.1 88 .5±1.6
+
+w/o R 65 .8±5.6 57 .9±4.7 93 .4±0.0 97 .0±0.1 75 .9±0.4 89 .8±0.8
+
+MR-MoL 72 .1±2.3 65 .5±3.6 90 .9±2.7 96 .7±0.1 76 .4±0.3 90 .2±0.3
+
+Table 15: Extended classification metrics, mean ± std over three runs. The shaded rows group the results by metric, namely F1 score, MCC, and accuracy. Within each metric block, the best score per task is in bold. 
+
+ESOL Lipo Variant MAE ( ↓) ME MAE ( ↓) ME w/o G, R 1.42 ±.04 0.83 ±.14 0.87 ±.02 −0.06 ±.10 
+
+w/o G 1.18 ±.08 0.39 ±.29 0.86 ±.01 0.23 ±.11 
+
+w/o R 1.14 ±.00 0.23 ±.23 0.82 ±.01 0.02 ±.23 
+
+MR-MoL 0.97 ±.08 −0.27 ±.14 0.73 ±.01 0.07 ±.05 
+
+Table 16: Extended regression metrics, mean ± std over three runs. The lowest MAE per task is in bold. Model ESOL Lipo 
+
+Specialist 
+
+3D-MolT5 1.000 1.000 HIGHT 1.000 1.000 
+
+Generalist 
+
+GIMLET 1.000 1.000 nach0 0.938 1.000 ChemDFM 0.982 1.000 LlaSMol 1.000 1.000 MolecularGPT 0.982 1.000 
+
+Ours 
+
+MR-MoL 1.000 1.000 
+
+Table 17: Regression output validity. 
+
+Model BACE BBBP ClinTox HIV SIDER Tox21 ESOL Lipo LlaSMol − • • • • − • •
+
+ChemDFM • • • • − • − −
+
+nach0 • • − • − − • •
+
+MolecularGPT ◦ ◦ − ◦ − ◦ ◦ ◦
+
+GIMLET ◦ ◦ − ◦ − ◦ ◦ ◦
+
+Table 18: Task coverage of the generalist baselines. • marks a task in the model’s own instruction data, ◦ a task held out but reported in the model’s paper, and − a task absent from that paper.

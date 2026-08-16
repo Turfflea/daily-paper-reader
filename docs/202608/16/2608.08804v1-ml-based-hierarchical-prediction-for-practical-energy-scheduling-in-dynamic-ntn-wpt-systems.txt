@@ -1,0 +1,1121 @@
+Title: ML-Based Hierarchical Prediction for Practical Energy Scheduling in Dynamic NTN-WPT Systems
+
+URL Source: https://arxiv.org/pdf/2608.08804v1
+
+Published Time: Tue, 11 Aug 2026 01:28:21 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+> 1
+
+# ML-Based Hierarchical Prediction for Practical Energy Scheduling in Dynamic NTN-WPT Systems 
+
+Zhanyu Ju, Student Member, IEEE , and Wenchi Cheng, Senior Member, IEEE 
+
+Abstract —With advancements in long-distance wireless power transfer (WPT) and space-based energy technologies, the inte-gration of WPT into non-terrestrial networks (NTNs), hereafter referred to as NTN-WPT, is emerging as a promising approach for next-generation wireless networks. This paper proposes an energy-scheduling approach to jointly optimize energy efficiency, task completion rate, and task waiting time for power transfer from low Earth orbit satellites to terrestrial mobile user devices (UDs). To address the significant energy-scheduling challenges arising from satellite and UD mobility and further exacerbated by channel uncertainty due to stochastic propagation effects, we decompose the problem into three subproblems corresponding to a three-layer predictive framework: 1) a state prediction layer forecasts UD and satellite states; 2) an interaction mapping layer, employing a graph neural network (GNN), models the energy transfer efficiency between them; and 3) a decision-making layer determines the optimal energy allocation plan. We employ distinct machine learning (ML) methods within this framework, tailored to the specific requirements of each layer. Furthermore, balancing these competing objectives presents a challenging multi-objective optimization problem (MOP). We address this by adopting a key multi-objective reinforcement learning (MORL) technique: scalarizing the objectives into a single weighted-sum reward function. This scalarization trans-forms the MOP into a tractable, single-objective problem for the agents to solve. To help the agents balance these competing objectives effectively, we introduce a multi-agent deep learning model that integrates a self-attention mechanism with multi-agent proximal policy optimization (MAPPO). This approach provides a robust and efficient solution for WPT in NTNs, particularly for mission-critical scenarios. Simulation results show that the proposed approach can achieve a better overall trade-off than the baseline methods, maintaining competitive task completion rates and energy efficiency while reducing task waiting times. It also demonstrates robust performance under highly variable conditions. 
+
+Index Terms —Wireless power transfer, non-terrestrial net-works, machine learning, energy scheduling, multi-agent rein-forcement learning, gated recurrent unit, graph neural network. 
+
+I. I NTRODUCTION 
+
+# THE evolution toward sixth-generation (6G) wireless net-works envisions a seamless global fabric integrating non-terrestrial networks (NTNs), such as satellite constellations, 
+
+Zhanyu Ju and Wenchi Cheng (Corresponding Author) are with the School of Telecommunications Engineering, Xidian University, Xi’an 710071, China (e-mail: juzhanyu@stu.xidian.edu.cn; wccheng@xidian.edu.cn). This work was supported in part by the National Natural Science Foundation of China under Grant 62341132. 
+
+to provide ubiquitous connectivity [1], [2]. Concurrently, ad-vancements in space-based power generation, such as large-scale space solar power (SSP) concepts, are enabling NTNs to transition from mere data relays to mobile power sources via space-to-ground wireless power transfer (WPT) [3]–[6]. The integration of WPT within NTNs, hereafter referred to as NTN-WPT, is fundamental to sustaining mission-critical applications on energy-constrained devices without reliance on traditional power infrastructure [7], [8]. The feasibility of this vision is being progressively de-risked; however, mature, deployable satellite-to-ground power delivery still requires substantial physical-layer development. Full-system ground prototypes [9] and ongoing in-orbit demonstration missions, such as Caltech’s demonstration mis-sion [10], are validating key elements of the technology chain. In parallel, a recent comprehensive survey on wireless energy transfer for sustainable space-to-ground 6G infrastruc-ture systematizes practical radio-frequency (RF)- and laser-based WPT mechanisms, energy-provisioning architectures across ground, aerial, and space platforms, and enabling technologies such as massive multiple-input multiple-output (MIMO) energy beamforming, cooperative energy relays, joint waveform/rectifier design, and integrated mobility-aware beam control [11]. A recent white paper from the National Aero-nautics and Space Administration (NASA) also emphasizes that space-based solar power and large-scale space-to-ground WPT remain pre-commercial and require major scaling be-fore deployment [12]. Accordingly, this study focuses on the network-level scheduling layer required by future NTN-WPT systems once the physical layer can deliver sufficient energy. The proposed scheduler is agnostic to whether such link improvement is achieved by large apertures, phased arrays, cooperative relays, advanced rectennas, beam control, or other high-efficiency power-transfer mechanisms. This trend is supported by significant strides in WPT tech-nology, including long-distance transfer efficiency and multi-user delivery [13]–[16]. Simultaneously, the rise of mobile edge computing (MEC) introduces a critical new dimension. As devices offload computationally intensive tasks such as real-time artificial intelligence (AI) inference or robotic con-trol [17], [18], the energy burden shifts from local computation to sustaining the high-availability communication links re-quired for task offloading and completion [19]. This paradigm fundamentally reframes the energy requirement from “keep-
+
+> © 2026 IEEE. Personal use of this material is permitted. Permission from IEEE must be obtained for all other uses, in any current or future media, including reprinting/republishing this material for advertising or promotional purposes, creating new collective works, for resale or redistribution to servers or lists, or reuse of any copyrighted component of this work in other works. arXiv:2608.08804v1 [eess.SY] 9 Aug 2026 2
+
+alive” survival to “task-centric” replenishment, demanding timely and intelligent power delivery to support task success. This focus on energy as the primary service is distinct from traditional simultaneous wireless information and power trans-fer (SWIPT), which balances data and power [20]. These advances establish the physical and architectural basis for NTN-WPT. However, scheduling this energy transfer in a converged NTN-WPT scenario presents a formidable challenge. The core difficulty lies in the high mobility of both orbital transmitters and ground receivers, which induces rapidly changing channel conditions and short, intermittent service windows. This physical volatility is compounded by the sporadic, latency-sensitive energy demands associated with unpredictable MEC task arrivals. This confluence of factors creates a high-dimensional multi-objective optimization prob-lem (MOP), where competing objectives such as energy effi-ciency, fairness, task completion rates, and waiting times must be balanced [21]–[24]. Given the sequential, real-time nature of the decisions under profound uncertainty, this MOP is most accurately framed as a multi-objective reinforcement learning (MORL) challenge [25]. Existing reactive or traditional op-timization methods, reliant on quasi-static assumptions, are ill-equipped for this non-stationary environment, creating a “predictive-scheduling gap” that necessitates a shift toward intelligent, proactive frameworks. 
+
+A. Related Work 
+
+The problem of energy scheduling in WPT networks has been extensively investigated, with research spanning from fundamental optimization techniques to the application of ar-tificial intelligence in dynamic environments. Our work builds upon and extends three key research domains: WPT resource allocation, mobility and trajectory management in aerial and space-based networks, and the application of machine learning for prediction and decision-making. Early research primarily addressed resource allocation in static or quasi-static WPT systems. For instance, foundational studies explored optimal beamforming design to maximize energy transfer efficiency [26] and transmit strategies for multi-user multiple-input multiple-output (MIMO) WPT sys-tems, often employing convex optimization to determine power allocation under various constraints [27]. A significant body of work addresses fairness, a metric also central to our research. Investigators have proposed scheduling policies to ensure quality of service (QoS) and fairness in wireless powered com-munication networks (WPCNs) [28] and developed max-min fairness algorithms for users with nonlinear energy-harvesting characteristics [29]. A parallel and extensive body of research exists in SWIPT, which optimizes the trade-off between information decoding and energy harvesting [30]. Recent efforts in SWIPT have also adopted deep reinforcement learning (DRL) to manage dy-namic resource allocation, particularly in MEC systems where users offload tasks and harvest energy simultaneously [31]. However, these works are fundamentally concerned with a dual objective (information and power). Our research diverges by focusing exclusively on energy scheduling for mission-critical task completion, where energy delivery itself is the primary service, posing a different set of optimization challenges centered on energy efficiency, task latency, and fairness rather than data rates. While our work also targets fairness and efficiency, our approach is data-driven and learning-based, designed to op-erate under the high uncertainty of NTNs rather than relying on precise analytical models and the quasi-static channel assumptions common in both WPT and SWIPT literature. While these studies establish the foundation for resource allocation, they largely overlook the profound impact of mo-bility. The integration of WPT with mobile platforms, such as unmanned aerial vehicles (UAVs) and NTN nodes, introduces the challenge of managing mobility. A substantial body of literature, as surveyed in [32], centers on the joint optimization of UAV trajectory and power allocation using DRL. These efforts have targeted a diverse set of objectives, illustrating the versatility of DRL in this domain. For instance, studies have focused on maximizing system throughput [33], ensur-ing fairness among users [34], [35], and minimizing service latency by optimizing for metrics such as age of information (AoI) [36]–[38]. Such studies show the effectiveness of DRL in managing the complexities of mobile WPT [39]. Further-more, the application of DRL is expanding beyond terrestrial and aerial scenarios to other non-terrestrial environments, such as scheduling WPT in lunar settings [40], which share similar challenges of dynamic and resource-constrained operations. However, these UAV-centric models often assume that ground users are static or follow simplistic, predictable mo-bility patterns. Furthermore, the transition from low-altitude UAVs to low Earth orbit (LEO) satellites introduces fun-damentally different challenges, including orbital mechanics, extreme Doppler shifts, atmospheric attenuation, and signif-icantly greater network dynamics, as highlighted in recent surveys on NTN for 6G [41]. In contrast to existing work, our scenario addresses a more complex, doubly dynamic problem in which both the energy transmitters (satellites) and receivers (user devices) are mobile and their future states are highly uncertain—a defining characteristic of the NTN-WPT problem. Addressing the high dimensionality and profound uncer-tainty inherent in this doubly dynamic problem necessitates a shift away from traditional analytical models toward data-driven, adaptive approaches. The application of machine learn-ing to manage uncertainty and dynamics in wireless networks is increasingly prevalent. In the context of NTNs, deep learn-ing models have been successfully applied for precise LEO satellite orbit prediction [42], [43], a task pertinent to our state prediction layer. DRL, particularly actor-critic methods such as proximal policy optimization (PPO), has emerged as a power-ful tool for decision-making. It has been employed for resource allocation in cognitive radio networks [44] and for dynamic handover management in LEO satellite networks, which shares similarities with our target selection problem [45]. More recently, the field has begun to explore even more ad-vanced paradigms, such as large language models (LLMs) and generative AI, to address complex challenges such as spectrum sharing and autonomous network optimization in satellite and 3
+
+wireless communications [46], [47]. Furthermore, recent work has begun to leverage machine learning for channel modeling and prediction, moving beyond traditional statistical models. Deep learning techniques, for instance, are being used for channel estimation and tracking in highly mobile millimeter-wave (mmWave) systems [48]. Graph neural networks (GNNs) have also shown promise in modeling complex spatial re-lationships for tasks such as user scheduling and channel-related inference in large-scale networks [49], [50]. However, these approaches often focus on optimizing communication throughput. While effective, many of these DRL applications implicitly handle multi-objective scenarios (e.g., balancing throughput and fairness) through ad hoc reward shaping. The explicit framing of these sequential decision problems as MORL chal-lenges, as surveyed in [25], is a more recent and rigorous ap-proach. Recent studies have begun applying MORL techniques specifically to wireless resource allocation, showing an ability to find superior Pareto-optimal trade-offs compared to naive weighted-sum DRL [51]. MORL provides formalisms, such as scalarized reward functions based on weighted-sum scalar-ization [52] or Pareto-based policy learning, to systematically navigate the trade-offs between competing key performance indicators (KPIs). The practical deployment of such intelligent frameworks is further bolstered by advancements in onboard processing. The feasibility of executing neural network infer-ence in orbit has been shown in missions such as Φ-Sat-1 [53], and the development of space-grade field-programmable gate arrays (FPGAs), digital signal processors (DSPs), and other AI accelerators offers a clear path to handling the computational demands of these models in real time [18], [54]–[57]. The proposed framework distinguishes itself by integrating these machine learning (ML)-driven approaches into a cohe-sive, hierarchical pipeline specifically for energy scheduling. Unlike research focusing on a single aspect (e.g., orbit pre-diction or resource allocation in isolation), the framework first explicitly predicts the future dynamic states of all network entities (satellites and user devices). Subsequently, it employs a GNN not to infer communication channel state informa-tion (CSI) but to map these predicted states to an energy transfer interaction model, thereby abstracting the complex environmental physics. Finally, a multi-agent reinforcement learning (MARL) system, explicitly designed to solve the underlying MORL problem via a scalarized reward framework, executes decentralized decision-making based on this predic-tive model. This layered decomposition constitutes a compre-hensive, end-to-end approach not previously explored in the existing literature. In this sense, the contribution complements recent space-to-ground WPT surveys, which identify end-to-end efficiency optimization and the network-level integration of energy, communication, sensing, and computation as key open challenges [11]. 
+
+B. Motivations & Contributions 
+
+Building upon the limitations identified in the related work, our research is motivated by a confluence of three primary factors: the technological readiness for NTN-WPT, the critical operational demand from mobile devices, and the unique, unsolved challenges this scenario presents. To make this motivation concrete, consider an NTN-WPT-assisted disaster-response scenario in which terrestrial power and communication infrastructure has been damaged. A con-stellation of LEO satellites equipped with WPT transmitters periodically passes over the affected area, while rescue UAVs equipped with deployable rectennas, portable energy hubs, and distributed sensor hubs act as energy-receiving user devices (UDs). These hubs can also indirectly support low-power sens-ing and communication terminals carried by first responders through local energy sharing or short-range charging. In this setting, wearable terminals are treated as downstream low-power devices rather than direct NTN-WPT receivers equipped with large rectennas. The UAVs and hubs execute energy-intensive MEC tasks, such as real-time image recognition, victim localization, and environmental monitoring [17], [58]. This type of energy-computation coupling is aligned with the network-level integration of energy, communication, sensing, and computation envisioned for sustainable space-to-ground 6G infrastructures [11]. These UDs move with rescue teams or along UAV trajectories, tasks arrive sporadically in their queues, and each satellite can provide energy service only within a short visibility window. A purely reactive scheduler that charges the currently closest UD may miss a near-future high-efficiency link, leave an urgent task unfinished, or repeat-edly serve UDs with favorable channels while starving others. Therefore, the scheduler must predict near-future satellite and UD states, infer the time-varying WPT coupling for all satellite-UD pairs, and allocate power proactively to balance energy efficiency, task completion, task waiting time, and fairness. This scenario captures the core operational motivation of the hierarchical prediction-mapping-decision framework. This convergence is timely, as the rapid maturation of space-based power generation and long-range WPT technologies provides the foundational components for NTN-WPT [3], [11]. However, effectively harnessing these technologies requires a sophisticated control and scheduling plane that can manage the complexities of a large-scale, dynamic environment. Concurrently, this technological readiness aligns with a critical and growing operational demand: ground and low-altitude UDs are frequently energy-constrained yet must ex-ecute continuous streams of tasks. WPT from NTNs is a critical enabler for extending their operational lifetime and ensuring task completion, but this demands intelligent and timely energy delivery. Satisfying this demand, however, is fundamentally chal-lenging as the NTN-WPT environment presents a unique confluence of obstacles distinct from terrestrial counterparts. Unlike static WPT systems, this environment is characterized by extreme dynamics, stemming from the high mobility of both satellite transmitters and mobile receivers, which leads to rapidly changing topologies and unstable channels. Com-pounding this, LEO satellites offer short service windows —often mere minutes—plagued by complex fading and signif-icant path loss, demanding highly efficient transfer within fleeting opportunities. Finally, a single satellite must serve numerous UDs, creating a multi-user competition scenario 4
+
+where energy efficiency, task priority, and fairness must be jointly optimized, a task for which traditional methods are ill-suited due to the problem’s high dimensionality and profound uncertainty. Directly applying standard MARL to this problem is chal-lenging because the high-mobility scenario creates a volatile and high-dimensional observation space for the agents, pre-venting their policy networks from converging reliably. There-fore, the problem is decoupled by introducing a Prediction Layer and an Interaction Mapping Layer as specialized aux-iliary components instead of relying on a monolithic MARL model. These layers provide structured predictive inputs and reduce the effective dimensionality of the decision problem, thereby transforming an intractable optimization problem into a manageable hierarchical decision process. Building on this foundational insight, this paper makes the following key contributions:  
+
+> •
+
+An Integrated Hierarchical Prediction-Mapping-Decision Framework: We formalize this approach as a novel hierarchical ML framework that decomposes the com-plex energy scheduling problem into three tractable sub-problems: 1) a Prediction Layer to forecast network dynamics, 2) an Interaction Mapping Layer (i.e., GNN) to model energy transfer efficiency, and 3) a MARL-based Decision Layer. This architecture is designed to manage the high dimensionality and uncertainty that can destabilize standard MARL.  
+
+> •
+
+An Attention-based MARL Policy Architecture for Bal-anced Scheduling: For the Decision Layer, we propose a novel policy architecture that integrates a self-attention mechanism within the multi-agent proximal policy opti-mization (MAPPO) framework. This decision-layer archi-tecture enables satellite agents to learn a dynamic, state-contingent strategy to make robust, decentralized schedul-ing decisions, effectively balancing the three competing objectives: energy efficiency, task completion rate, and task waiting time.  
+
+> •
+
+Comprehensive Performance and Robustness Evaluation: We conduct extensive simulations to evaluate the pro-posed framework. Results show that the proposed ap-proach achieves a stronger overall trade-off than a wide range of baseline scheduling algorithms. Furthermore, we assess the system’s robustness under high environmental variability (e.g., fluctuating mobility and task arrivals). The remainder of this paper is organized as follows. Sec-tion II presents the system model and formulates the energy scheduling optimization problem. Section III details the pro-posed hierarchical machine learning framework, including the prediction, mapping, and decision layers. Section IV describes the simulation setup and analyzes the performance of the proposed method against several baseline algorithms. Finally, Section V concludes the paper. II. S YSTEM MODEL AND PROBLEM FORMULATION 
+
+A. System Model 
+
+We consider a dynamic WPT-enabled NTN, as illustrated in Fig. 1. The system comprises a set of mobile energy LEO Satellites UDs Energy Transmission Path LEO Satellite Tracks UD Moving Direction  
+
+> Fig. 1. The NTN-WPT energy scheduling system model.
+
+transmitters and a set of mobile energy receivers operating within a three-dimensional (3D) space over a defined time horizon. The set of energy transmitters, denoted by J =
+
+{1, 2, . . . , J }, represents mobile platforms such as LEO satel-lites or high-altitude platforms (HAPs). Each transmitter j ∈J is characterized by its state at any given time step t,which includes its 3D geographical position, velocity vector, available power budget, and a defined visibility range that limits its service area. The set of energy receivers, denoted by I = {1, 2, . . . , I },consists of various UDs such as UAVs or ground-based sensors. Each receiver i ∈ I is defined by a comprehensive state profile. This profile includes its 3D geographical position (latitude, longitude, and altitude), velocity vector, and critical energy-related attributes. These attributes are its current battery energy level, denoted by Si(t) and also referred to as the state of charge (SoC) in this paper, and its maximum energy storage capacity Ci. Both Si(t) and Ci are measured in energy units. Furthermore, each UD maintains a queue of pending tasks, where each task is associated with a specific energy requirement for its completion. The system also tracks historical data for each UD, such as the reference signal received power (RSRP) from nearby transmitters. 
+
+1) Satellite Orbital Model: The trajectory of each satellite 
+
+j ∈ J , representing a LEO satellite, is governed by orbital mechanics. To predict the future trajectories of LEO satellites, the orbital dynamics of each satellite are modeled in an Earth-centered inertial (ECI) frame using a second-order differential equation. Its state at each discrete time step t ∈ T , where 
+
+T = {0, 1, . . . , T −1} is the collection of simulation steps and 
+
+T is the total number of simulation steps, is defined by a state 5
+
+vector [pj (t), vj (t)] , where pj (t) ∈ R3 and vj (t) ∈ R3 are its position and velocity vectors in an ECI frame. The motion is primarily determined by the Earth’s gravitational pull, but is also subject to various perturbations, such as atmospheric drag, solar radiation pressure, and gravitational effects from other celestial bodies. Its acceleration is expressed as: 
+
+¨pj (t) = aj (t) = agrav ,j (t) + aJ2,j (t) + adrag ,j (t)+ a3rd ,j (t) + asrp ,j (t), (1) where pj (t) is the satellite position vector and its second time derivative ¨pj (t) is the satellite’s total acceleration aj (t). The terms on the right-hand side represent the primary two-body gravitational acceleration ( agrav ,j (t)), and the main perturbing accelerations: aJ2,j (t) due to the Earth’s oblateness ( J2 effect), 
+
+adrag ,j (t) from atmospheric drag, a3rd ,j (t) from third-body gravitational attraction (Sun and Moon), and asrp ,j (t) from solar radiation pressure (SRP) [59]. The above dynamic model is integrated numerically to obtain position and velocity predictions, consistent with orbit-prediction pipelines that combine dynamical modeling with data-driven estimation [42], [59]. 
+
+2) UD Mobility Model: The movement of each UD i ∈ I is modeled as a random walk, representing unpredictable ground or low-altitude mobility [60]. At each discrete time step t ∈ T ,its position pi(t) ∈ R3 is updated based on its velocity vector 
+
+vi(t) and a random displacement: 
+
+pi(t) = pi(t − 1) + vi(t)∆ t + δp,i (t), (2) where δp,i (t) is a random offset drawn from a normal distri-bution N (0 , σ 2 
+
+> p
+
+I) [61]. 
+
+3) Wireless Channel Model: The wireless channel between a high-altitude satellite and a ground-based UD is character-ized by its line-of-sight (LoS) dominance, yet it is susceptible to various atmospheric and environmental factors. The power of the radio frequency (RF) signal received by a UD is primarily determined by the free-space path loss (FSPL), which is a function of the transmission distance and carrier frequency [62]. For clarity, the pairwise link quantities at time 
+
+t are collected into the matrices summarized in Eq. (3): 
+
+
+
+D(t) = [ dj,i (t)] ∈ RJ×I ;
+
+L(t) = [ Lj,i (t)] ∈ RJ×I ;
+
+χ(t) = [ χj,i (t)] ∈ RJ×I ;
+
+P(t) = [ Pj,i (t)] ∈ RJ×I ;
+
+Prx (t) = [ Prx ,j,i (t)] ∈ RJ×I ;
+
+Γch (t) = [ γj,i (t)] ∈ RJ×I ,
+
+(3) where each element corresponds to one satellite-UD link, with 
+
+j ∈ J and i ∈ I . The matrix P(t) denotes the allocated link power-budget matrix; under a physical link model, its elements correspond to RF transmit powers, whereas in the main numerical simulation they are interpreted as normalized scheduling-budget values. The distance element is computed after expressing the satellite and UD positions in a common three-dimensional coordinate frame, i.e., dj,i (t) = ∥pj (t) −
+
+pi(t)∥2. The following expressions therefore define and use the individual elements of these matrices rather than a single scalar shared by all links. For the link from satellite j to UD 
+
+i, with distance element dj,i (t) and carrier frequency f , the path-loss element Lj,i (t) is modeled as: 
+
+Lj,i (t) = 
+
+ 4πd j,i (t)fc
+
+2
+
+, (4) where c is the speed of light. Thus, Eq. (4) specifies the (j, i )-th element of the path-loss matrix L(t).To account for the stochastic nature of the channel, such as variations caused by atmospheric conditions or minor obstruc-tions, we incorporate a log-normal shadowing component. This is modeled as a zero-mean Gaussian random variable on the decibel (dB) scale, which introduces a positive multiplicative shadowing-loss factor χj,i (t) on the linear scale. The effective channel power gain of the (j, i )-th link is defined in Eq. (5): 
+
+γj,i (t) = Gtx ,j Grx ,i 
+
+χj,i (t)Lj,i (t) . (5) Consequently, the received RF power element Prx ,j,i (t) at UD 
+
+i from satellite j using allocated power element Pj,i (t) is given by: 
+
+Prx ,j,i (t) = Pj,i (t)γj,i (t) = Pj,i (t)Gtx ,j Grx ,i 
+
+χj,i (t)Lj,i (t) . (6) Here, Gtx ,j and Grx ,i represent the antenna gains of satellite j
+
+and UD i, respectively, and χj,i (t) is a random shadowing-loss factor that encapsulates the combined effects of atmospheric absorption, rain attenuation, and other stochastic channel im-pairments. These random perturbations simulate the aggregate impact of weather conditions, atmospheric effects, and tempo-rary occlusions, adding realism to the channel dynamics. 
+
+4) Energy Reception and Conversion Model: Upon receiv-ing the RF signal, the UD must convert the captured RF power into usable direct-current (DC) power. This RF-to-DC conver-sion process is inherently nonlinear and is a critical factor in the end-to-end efficiency of the WPT system [20]. Inspired by the practical nonlinear model proposed by Boshkovska et al. [63], we adopt an exponential conversion model to capture the saturation characteristics of the energy-harvesting circuit. However, to better align with physical reality, such as the turn-on threshold of diodes, we enhance this model by introducing a sensitivity threshold, Pth . When the input power falls below this threshold, the conversion efficiency is zero. This modification not only preserves the Boshkovska model’s ability to describe the saturation effect but also more accurately characterizes the circuit’s activation property, which is crucial for making precise resource-allocation decisions. The resulting conversion efficiency, η, depends on the input RF power level. For compact notation in the conversion model, let Pin = Prx ,j,i (t). The RF-to-DC conversion efficiency is captured by the following piecewise function: 
+
+η(Pin ) = 
+
+(
+
+ηmax (1 − e−k(Pin −Pth )), Pin ≥ Pth 
+
+0, Pin < P th 
+
+, (7) where ηmax is the maximum possible efficiency, k is a constant that dictates the steepness of the efficiency curve, and Pth is the sensitivity threshold. To keep the notation consistent with the RF received-power matrix, the link-level harvested DC powers 6
+
+are collected as Pdc (t) = [ Pdc ,j,i (t)] ∈ RJ×I . The element 
+
+Pdc ,j,i (t), i.e., the harvested DC power delivered from satellite 
+
+j to UD i, is therefore 
+
+Pdc ,j,i (t) = η(Prx ,j,i (t)) Prx ,j,i (t). (8) The UD-aggregated DC power is denoted by P tot dc ,i (t) =P 
+
+> j∈J
+
+Pdc ,j,i (t), which is a scalar for UD i after summing all serving satellites. This nonlinear model allows the simulation to penalize scheduling decisions that deliver very low power to UDs, as much of that energy would be lost in the conversion process. 
+
+5) UD Energy Consumption Model: The energy consump-tion at each UD is modeled to include both baseline opera-tional costs and the energy required for executing computa-tional tasks.  
+
+> •
+
+Baseline Consumption: Each UD consumes a constant amount of energy in every time step to maintain basic functions, such as circuitry and standby modes [17], [64]. This is represented as a fixed idle power, Pidle . 
+
+> •
+
+Task-Driven Consumption: We simulate a dynamic work-load where computational tasks arrive at each UD fol-lowing a Poisson process [65]. Each arriving task is characterized by a specific energy requirement, Ereq , and a priority level. Tasks are placed in a first-in, first-out (FIFO) queue, but are processed based on their priority. A UD will attempt to execute the highest-priority task in its queue if its current SoC is sufficient to meet the task’s energy requirement [64], [66]. If the SoC is sufficient, the task is completed, and its energy cost is deducted from the UD’s battery [34]. If the SoC is insufficient, the task remains in the queue, and the UD can only perform its baseline functions. This priority-based task model introduces a critical trade-off in the scheduling problem: balancing the need to charge low-battery UDs against the urgency of supplying energy to UDs with high-priority tasks [67]. The total energy consumed by a UD in a given time step is the sum of its baseline consumption and the energy expended on any completed tasks. 
+
+B. Problem Formulation 
+
+The energy scheduling problem in dynamic NTN-WPT scenarios is a complex, multi-objective optimization challenge. The goal is to determine the optimal power allocation from multiple mobile satellites to multiple mobile UDs over a given time horizon, considering the highly dynamic environment and the diverse needs of the UDs. 
+
+1) Decision Variables: At each discrete time step t ∈ T ,the primary decision variables are the power budgets allocated from each satellite to each UD. Let Pj,i (t) denote the allocated link power budget from satellite j ∈ J to UD i ∈ I at time t.Under a physical link model, this variable may be interpreted in RF power units. In the main numerical simulation, it is interpreted as a normalized scheduling-budget value under the service-level link abstraction described in Section IV-A. 
+
+2) Constraints: The power allocation decisions must adhere to several physical and operational constraints:  
+
+> •
+
+Non-negativity of Allocated Power: The link power bud-get allocated from any satellite to any UD must be non-negative. 
+
+Pj,i (t) ≥ 0, ∀j ∈ J , i ∈ I , t ∈ { 0, . . . , T − 1}. (9)  
+
+> •
+
+Satellite Power-Budget Constraint: The sum of power budgets allocated by any satellite j to all UDs at any time t cannot exceed its available budget, Pmax ,j . In a physical system, this term can represent the RF power cap of satellite j; in the main scheduling simulation, it is used as the normalized scheduling-budget scale. 
+
+X
+
+> i∈I
+
+Pj,i (t) ≤ Pmax ,j , ∀j ∈ J , t ∈ T . (10)  
+
+> •
+
+UD Battery Capacity: The SoC of each UD’s battery must remain within its physical limits [0 , C i].
+
+0 ≤ Si(t) ≤ Ci, ∀i ∈ I , t ∈ T . (11) This is an implicit constraint managed by the UD’s energy reception and consumption model, where excess harvested DC energy is counted as wasted if the battery is full. 
+
+3) Objective Functions: The problem is inherently multi-objective, aiming to balance various performance indicators. The machine learning framework, particularly the MARL decision layer, optimizes a composite reward function that combines these objectives. The key performance metrics con-sidered are:  
+
+> •
+
+Network Energy Efficiency (NEE): Maximizing the ratio of total harvested DC energy at the UDs to the total allocated RF/scheduling-budget energy over the entire simulation duration [20]. 
+
+wNEE =
+
+P
+
+> i∈I
+
+PT −1 
+
+> t=0
+
+P tot dc ,i (t)∆ t
+
+P
+
+> j∈J
+
+P
+
+> i∈I
+
+PT −1 
+
+> t=0
+
+Pj,i (t)∆ t , (12) where P tot dc ,i (t) is the total DC power received by UD 
+
+i at time t. In a physical link model, the denominator corresponds to RF transmit energy; in the normalized service-level simulation, it corresponds to the allocated scheduling-budget energy.  
+
+> •
+
+Task Completion Rate (TCR): Maximizing the proportion of tasks successfully completed by all UDs relative to the total number of tasks that arrived [64]. 
+
+wTCR =
+
+P
+
+> i∈I
+
+P 
+
+> p∈{ 1,2,3}
+
+Ncomp ,i,p 
+
+P
+
+> i∈I
+
+P 
+
+> p∈{ 1,2,3}
+
+Narr ,i,p 
+
+, (13) where Ncomp ,i,p and Narr ,i,p denote the numbers of priority-p tasks completed by and arriving at UD i,respectively, over the simulation horizon T . 
+
+> •
+
+Fairness of Received Energy (FRE): Ensuring an equi-table distribution of received energy among UDs, typi-cally measured using Jain’s fairness index [68]. 
+
+wFRE =
+
+ P  
+
+> i∈I
+
+Erec ,i 
+
+2
+
+|I| P 
+
+> i∈I
+
+E2
+
+> rec ,i
+
+, (14) 7
+
+where Erec ,i = PT −1 
+
+> t=0
+
+P tot dc ,i (t)∆ t is the total DC energy received by UD i. 
+
+> •
+
+Battery Depletion Count (BDC): Minimizing the total number of times any UD’s battery depletes to zero, indicating system robustness and continuous operation. 
+
+wBDC = X
+
+> i∈I
+
+Ndep ,i , (15) where Ndep ,i is the number of battery depletion events for UD i. 
+
+> •
+
+Energy Waste Rate (EWR): Minimizing the proportion of allocated RF/scheduling-budget energy that is converted at the UDs but cannot be stored due to full batteries. 
+
+wEWR =
+
+P 
+
+> i∈I
+
+Ewaste ,i 
+
+P
+
+> j∈J
+
+P
+
+> i∈I
+
+PT −1 
+
+> t=0
+
+Pj,i (t)∆ t , (16) where Ewaste ,i is the accumulated harvested DC energy that cannot be stored by UD i because the battery capacity constraint in Eq. (11) would otherwise be exceeded, and the denominator follows the same physical or normalized interpretation as in NEE.  
+
+> •
+
+Average Task Waiting Time (ATWT): Minimizing the average elapsed time from task arrival to task completion, reflecting the responsiveness of the system [64]. 
+
+wATWT = 1
+
+Ntotalcomp 
+
+X
+
+> k∈K comp
+
+(Tcomp ,k − Tarr ,k ), (17) where Kcomp is the set of all completed tasks, Ntotalcomp =
+
+|K comp | is their count, and Tcomp ,k and Tarr ,k are the completion and arrival times of task k, respectively. 
+
+4) Optimization Problem: Given the highly dynamic nature of satellite and UD mobility, the stochasticity of channel conditions, and the nonlinear energy-harvesting and consump-tion models, this problem is nonconvex and intractable for traditional optimization methods over a long time horizon. The proposed approach aims to find a policy for power allocation {Pj,i (t)} that maximizes a weighted combination of the aforementioned objectives: maximize 
+
+> {Pj,i (t)}
+
+X
+
+> m∈M +
+
+αm · wm − X
+
+> m∈M −
+
+αm · wm
+
+s.t. Pj,i (t) ≥ 0, ∀j ∈ J , i ∈ I , t ∈ T 
+
+X
+
+> i∈I
+
+Pj,i (t) ≤ Pmax ,j , ∀j ∈ J , t ∈ T 
+
+0 ≤ Si(t) ≤ Ci,∀i ∈ I , t ∈ T ,
+
+(18) where M+ = {NEE , TCR , FRE } denotes the set of KPIs to be maximized, and M− = {BDC , EWR , ATWT } denotes the set of KPIs to be minimized. For each m, wm denotes the corresponding scalar KPI value defined in Eqs. (12)–(17). The weights ( αNEE , . . . , α ATWT ) are non-negative hyperparameters that define the desired trade-off among competing objectives. While these can be tuned to prioritize specific operational goals, our study aims for a balanced performance. The se-lection of the specific weights used in our experiments is justified by a sensitivity analysis detailed in Section IV-F. This formulation highlights the need for an intelligent, adaptive solution capable of learning optimal strategies in such acomplex environment, which motivates our machine learning-based approach. III. P ROPOSED ML-BASED SCHEDULING FRAMEWORK 
+
+Building on the problem formulation in Section II, the NTN-WPT energy scheduling problem is characterized by high dimensionality, non-stationarity, and partial observability. A direct application of standard MARL frameworks is impractical for this problem. The fundamental challenge stems from the high mobility of both satellites and UDs, which induces a rapidly changing network state (e.g., channel condi-tions, UD task demands). Feeding this high-dimensional and volatile raw state data directly into the observation space of MARL agents results in the “curse of dimensionality” and an unstable learning environment, making convergence to an effective scheduling solution difficult. To address this core challenge, the proposed framework adopts a hierarchical, decoupled architecture that simplifies the MARL decision task by introducing two specialized auxiliary layers. This results in a three-layer framework: 1) a State Prediction Layer, 2) an Interaction Mapping Layer, and 3) a Decision and Execution Layer. This hierarchical framework decouples the problem to miti-gate convergence difficulties. The Prediction Layer is special-ized to handle the environment’s temporal uncertainty and non-stationarity by forecasting future network states. Subsequently, the Interaction Mapping Layer (i.e., GNN) addresses the rela-tional complexity and dimensionality by compressing the high-dimensional physical states into a low-dimensional, stable energy efficiency matrix. This design significantly simplifies the task of the final Decision Layer: the MARL agents do not process raw, high-dimensional physical states directly. Instead, they execute high-level, multi-objective decision-making based on compact and information-rich features (i.e., predicted effi-ciency and task status) provided by the preceding layers. This separation of concerns allows each specialized model to handle a tractable sub-problem, enabling the overall framework to achieve stable and robust performance in a complex scenario. The models within the Prediction and Interaction Mapping layers are pre-trained to a high level of accuracy on his-torical and simulated data, and are continuously fine-tuned online. Their primary role is to provide a stable and accurate forecast of the environment’s evolution, thereby transforming the volatile raw state into a structured, predictive input. This simplification supports the Decision Layer, where the MARL agents learn the high-level scheduling policy that drives the system’s strategic performance. A key feature of the design is its capacity for online learn-ing. As shown in Fig. 2, the framework continuously refines its predictive and decision-making models during operation by leveraging the most recent historical data, ensuring it adapts to evolving mobility patterns and energy consumption trends. The framework’s operation is sequential and proactive. First, the State Prediction Layer forecasts the future spatio-temporal states of all satellites and UDs, providing the necessary foresight beyond simple reactive scheduling. These predictions are then ingested by the Interaction Mapping Layer, which 8Orbit Predictor User Behavior Predictor          
+
+> GNN Environment MARL
+> Agent 1 Agent 2 Agent j
+> Action Energy Transfer Matrix
+> Prediction Layer Interaction Mapping Layer Decision Layer
+> ... ...
+> Take action a
+> Observation
+> Observation Rewards r
+> Observation s
+> UD Satellite
+> Energy Scheduling Calculate
+> Rewards
+> Execute Collect
+> results
+> Critic Network Actor Network
+> Fig. 2. The ML-based scheduling framework.
+
+employs a GNN to abstract the complex, nonlinear physical relationships into a predictive energy-coupling matrix. Finally, this matrix, along with real-time network status, informs the Decision & Execution Layer, where a MARL system deter-mines an optimal high-level strategy that is subsequently trans-lated via constrained optimization into a concrete, constraint-feasible power-budget schedule for execution. The subsequent sections will provide a detailed exposition of each of these constituent layers. 
+
+A. State Prediction Layer 
+
+The State Prediction Layer serves as the foundational com-ponent of the proposed framework, responsible for forecasting the future states of both the energy transmitters (i.e., satellites) and the energy receivers (i.e., UDs). Accurate prediction is paramount in a dynamic NTN environment, as it enables the subsequent layers to make proactive and optimized scheduling decisions. This layer employs two distinct deep learning models tailored to the specific characteristics of satellite and UD dynamics. 
+
+1) Satellite Trajectory Prediction: To accurately forecast the future trajectories of the non-terrestrial satellites, we em-ploy a predictive model based on a gated recurrent unit (GRU) network. A GRU is a type of recurrent neural network (RNN) particularly well suited to capturing temporal dependencies in sequential data, such as the movement patterns of the satellites. For a given satellite trajectory, let xt ∈ R3 be the 3D coordinate input vector at time t, with the satellite index omitted for notational simplicity, and let ht−1 ∈ RDGRU be the previous temporal hidden state of the GRU. In this subsection, the h-related notation is used only for recurrent temporal states and is not used for graph node embeddings. The GRU’s core operations are: 
+
+
+
+zt = σ(Wz xt + Uz ht−1 + bz ); 
+
+rt = σ(Wr xt + Ur ht−1 + br ); ˜ht = tanh( Whxt + Uh(rt ⊙ ht−1) + bh); 
+
+ht = (1 − zt) ⊙ ht−1 + zt ⊙ ˜ht,
+
+(19) where ht ∈ RDGRU represents the temporal hidden state vector of the GRU at time t, capturing the learned temporal features of the satellite’s trajectory. Its initial value h0 is set to a zero vector. zt and rt are the update and reset gates, ˜ht ∈ RDGRU is the candidate temporal hidden state, σ is the sigmoid function, and ⊙ denotes element-wise multiplication. The model adopts a sequence-to-sequence architecture. It takes as input a sequence of the satellite’s historical 3D coordinates over a defined look-back window. This sequence is processed by a multi-layer GRU network, which generates a compact hidden state vector that encodes the satellite’s motion history. This vector is then fed into a feed-forward network, which acts as the decoder, to generate a probabilistic forecast for the next H time steps. Specifically, the output layer predicts the mean and log-variance of a Gaussian distribution for each of the satellite’s spatial coordinates for each future time step. This probabilistic output is crucial as it quantifies the pre-diction uncertainty, and the predicted mean trajectory defines the satellite’s future visibility window, which is essential for determining potential energy transfer opportunities. 
+
+2) UD Multidimensional State Prediction: Predicting the state of UDs is a more complex, multi-faceted problem, as it involves not only mobility but also energy consumption patterns and wireless channel conditions. To address this, we design a multi-task prediction model based on the Trans-former architecture. The Transformer’s self-attention mecha-nism allows it to effectively weigh the importance of different elements in the UD’s historical state sequence, making it well suited for learning complex, long-range dependencies. The encoder stack is composed of layers, each containing multi-head attention (MHA) and a position-wise feed-forward network (FFN): 
+
+(Z = LayerNorm (X + MHA (X)); 
+
+Xenc = LayerNorm (Z + FFN (Z)) , (20) where X is the input from the previous layer, Z is the interme-diate output after the MHA block, Xenc is the encoder-layer output, and LayerNorm is the layer normalization operation. We use Xenc rather than an h-based symbol to avoid confusion with the GRU temporal hidden state. The MHA mechanism allows the model to weigh the importance of different time steps through an attention operation analogous to Eq. (25). The model receives a sequence of 7-dimensional feature vectors as input, where each vector represents the UD’s state at a past time step. This feature vector comprises the UD’s 3D coordinates, the number of pending tasks for each of the three priority levels, and the measured signal strength from the nearest satellite, which serves as a proxy for channel quality. An initial projection maps the input sequence to a higher-dimensional embedding, which is then processed by a multi-9                                                                   
+
+> TABLE I SUMMARY OF TEMPORAL HIDDEN -S TATE AND GRAPH -E MBEDDING NOTATIONS
+> Symbol Module Dimension / Initialization Meaning
+> htSatellite trajectory GRU RDGRU ;h0=0Temporal hidden state at time t, updated by Eq. (19); it is not a graph embedding.
+> ˜htSatellite trajectory GRU RDGRU ;computed inside each GRU step Candidate temporal hidden state used to update htin Eq. (19).
+> ξ(0)
+> jGNN interaction mapping Rdnode ; linear projection of fjInitial graph embedding of satellite node jgenerated from its predicted-state features.
+> ξ(0)
+> iGNN interaction mapping Rdnode ; linear projection of fiInitial graph embedding of UD node igenerated from its predicted-state features.
+> ξ(k)
+> u,ξ(k)
+> vGNN interaction mapping Rdnode ; initialized by the corresponding
+> ξ(0)
+> uand ξ(0)
+> v
+> Graph embeddings of nodes uand vafter the k-th message-passing layer, where u, v ∈ J ∪ I .
+> ξ(K)
+> j,ξ(K)
+> iGNN interaction mapping Rdnode ; final outputs after KGNN lay-ers Final graph embeddings of satellite jand UD i
+> used by the edge-level efficiency prediction head in Eq. (23).
+
+layer Transformer encoder. The encoder’s output at the final time step, which serves as a summary of the entire history, is then fed into three parallel, task-specific prediction heads. These heads are linear layers responsible for forecasting: 1) the UD’s future 3D position, 2) the anticipated evolution of its task queue, and 3) the expected future signal strength. Each head outputs a probabilistic prediction (mean and log-variance) for its designated state over the future H time steps. This multi-task architecture allows the model to leverage shared representations to efficiently learn and predict the correlated state variables. 
+
+B. Interaction Mapping Layer 
+
+The Interaction Mapping Layer serves as a crucial bridge between the state prediction and the final scheduling decision. Its primary function is to abstract the complex, nonlinear physical interactions of wireless power transfer into a coher-ent and predictive format. A naive MARL approach would require feeding all predicted spatio-temporal data, including positions, velocities, task queues, etc., for all I UDs and J
+
+satellites, directly into each agent’s observation. This leads to an intractably large, high-dimensional, and non-stationary observation space, which destabilizes the learning process (i.e., the curse of dimensionality). The GNN-based layer addresses this problem by acting as a powerful relational feature extractor. Instead of passing raw state data to the decision layer, the GNN preprocesses this complex information. It learns the underlying physical rela-tionships (e.g., path loss, channel fading, nonlinear conversion) and compresses this high-dimensional complexity into a low-dimensional, stable, and highly relevant representation: the predicted energy efficiency matrix Et. This abstraction is the key to making the subsequent MARL problem tractable. To avoid ambiguity between the temporal states used in the prediction models and the graph embeddings used in the interaction mapping model, Table I summarizes the relevant notations. In particular, ht and ˜ht are reserved for the GRU trajectory predictor, while ξ(k) 
+
+> u
+
+denotes the GNN embedding of graph node u at layer k.
+
+1) Graph Construction: To model the spatial and relational dependencies between the network entities, we construct a dynamic bipartite graph, denoted as Gt = ( V, Et), at each decision-making step, where V = J ∪ I is the node set and 
+
+Et is the time-varying edge set. Nodes: The graph is composed of two disjoint node subsets: the set of non-terrestrial satellites ( J ) and the set of ground-based UDs ( I). Edges ( Et): The edges represent the potential wireless power transfer links between the satellites and the UDs. We model the graph as a complete bipartite structure, where an edge exists from every satellite node j ∈ J to every UD node i ∈ I .This construction allows the model to consider all possible charging pairs, enabling the subsequent decision-making layer to perform a global optimization of power allocation. 
+
+2) Feature Engineering: The predictive power of the GNN relies on rich, informative features associated with both the nodes and the edges of the graph. These features are derived directly from the outputs of the Prediction Layer. 
+
+Node Features: To provide the GNN with rich, forward-looking information that captures both expected outcomes and their uncertainties, we engineer feature vectors from the probabilistic outputs of the Prediction Layer. For each satellite 
+
+j ∈ J , the raw feature vector fj ∈ R6 is formed by concate-nating the mean (3 dimensions) and variance (3 dimensions) of its predicted 3D coordinates over the future horizon H.Similarly, for each UD i ∈ I , the raw feature vector fi ∈ R14 
+
+is formed by concatenating the mean (7 dimensions) and variance (7 dimensions) of its predicted multidimensional state (3D position, three task-queue counts, and one signal-strength value). Including the variance as a feature is crucial, as it allows the GNN to learn relational patterns that are robust to prediction uncertainty. These raw feature vectors are then projected into a common graph-embedding space of size dnode 
+
+using the dedicated linear layers in Eq. (21): 
+
+(ξ(0)  
+
+> j
+
+= Wξ
+
+> sat
+
+fj + bξ
+
+> sat
+
+, j ∈ J ;
+
+ξ(0)  
+
+> i
+
+= Wξ
+
+> ud
+
+fi + bξ
+
+> ud
+
+, i ∈ I , (21) where ξ(0)  
+
+> j
+
+, ξ(0)  
+
+> i
+
+∈ Rdnode are the initial GNN node embed-dings, and Wξ
+
+> sat
+
+, Wξ
+
+> ud
+
+, bξ
+
+> sat
+
+, and bξ 
+
+> ud
+
+are trainable projection parameters. The superscript (0) denotes the input layer of the GNN and is not a time index. 10 
+
+Edge Features: Each edge, representing a potential satel-lite-UD link, is attributed with features that characterize the link itself. For the edge from satellite j to UD i, the edge feature vector is denoted by cj,i (t). Its primary input is the predicted mean relative distance between the satellite and the UD over the future time horizon. This scalar value is projected into a higher-dimensional feature vector via a linear layer to enrich its representational capacity. 
+
+3) GNN-based Energy Efficiency Prediction: This layer is designed to predict the average energy transfer efficiency matrix, Et = [ Ej,i (t)] ∈ RJ×I , for the upcoming time window at decision step t. The model operates through a message-passing mechanism over the constructed graph. For a node u
+
+(either satellite j ∈ J or UD i ∈ I ), its initial embedding ξ(0) 
+
+> u
+
+is derived from the engineered node features. The GNN then iteratively refines these graph embeddings over K layers. At each layer k, the update follows a message-aggregation-update paradigm: 
+
+
+
+m(k) 
+
+> v→u
+
+= ϕ(k)(ξ(k−1)  
+
+> u
+
+, ξ(k−1)  
+
+> v
+
+, cu,v (t)); 
+
+ξ(k) 
+
+> u
+
+= ψ(k)
+
+
+
+ξ(k−1)  
+
+> u
+
+, AGG  
+
+> v∈N (u)
+
+n 
+
+m(k)
+
+> v→u
+
+o 
+
+, (22) where ξ(k) 
+
+> u
+
+∈ Rdnode is the graph embedding of node u at layer k. The term cu,v (t) denotes the edge feature vector associated with the satellite-UD link connecting nodes u and 
+
+v; it corresponds to cj,i (t) when the underlying edge connects satellite j and UD i, regardless of the message direction used in the GNN update. The message function ϕ(k), implemented as a multi-layer perceptron (MLP), computes a message m(k)
+
+> v→u
+
+for each neighboring node v based on the graph embeddings of both nodes and their connecting edge. These messages are then aggregated (e.g., via summation) and used by the update function ψ(k), also an MLP, to compute the new node embedding ξ(k) 
+
+> u
+
+. This iterative process allows the node embeddings to be updated with contextual information from across the graph. Consequently, the final embedding for each node encapsulates not only its own predicted state but also its relational characteristics with respect to all other entities in the network. Following several rounds of message passing, a final predic-tion head is employed. For each edge (j, i ), the model takes the concatenated final embeddings of the source satellite node 
+
+j, the destination UD node i, and the edge’s own feature vector as input. This composite vector is fed through a multi-layer perceptron (MLP), which outputs a prediction for the average end-to-end energy transfer efficiency for that specific link over the future horizon. 
+
+Ej,i (t) = fhead ([ ξ(K) 
+
+> j
+
+, ξ(K) 
+
+> i
+
+, cj,i (t)]) , (23) where fhead represents the prediction head MLP, and ξ(K) 
+
+> j
+
+and 
+
+ξ(K) 
+
+> i
+
+are the final learned graph embeddings for satellite j and UD i, respectively, after K layers of message passing. [·, ·, ·]
+
+denotes concatenation. By performing this prediction for all edges, the model generates the complete energy efficiency matrix Et, where each element Ej,i (t) represents the forecasted efficiency from satellite j to UD i at decision step t. This matrix provides a crucial, forward-looking assessment of the network’s power transfer capabilities, forming the primary input for the subse-quent Decision Layer. 
+
+C. Decision and Execution Layer 
+
+The Decision and Execution Layer constitutes the core intelligence of the proposed framework. It is responsible for translating the high-level predictions from the preceding layers into concrete, real-time energy scheduling decisions. This layer operates in two primary stages: first, a MARL framework determines the optimal charging strategy, and second, an action transformation mechanism converts these strategic decisions into a feasible power allocation schedule. 
+
+1) MARL for Decision-Making: We model the energy scheduling problem using a cooperative MARL framework, which is well-suited for the distributed nature of the NTN environment. This approach uses the centralized training and decentralized execution (CTDE) paradigm, enabling decentral-ized execution while training toward a global system objective. 
+
+Agent Definition: Each satellite j ∈ J in the network is formulated as an independent, autonomous decision-making agent. This decentralized structure enables scalability and robustness, as each satellite can make scheduling decisions based on its local perspective of the network state. 
+
+Observation Space: To make an informed decision, each agent j receives a local observation Oj (t) at each time step 
+
+t. This observation is a concatenation of three components: 
+
+Oj (t) = [ gj (t), phist ,j (t), SUD (t)] . 
+
+> •
+
+Energy Landscape Features ( gj (t)): This component summarizes the agent’s charging opportunities. It is de-rived from the j-th row of the predicted energy efficiency matrix Et, denoted as ej (t) ∈ RI . Specifically, gj (t) = [top-K (ej (t)) , mean (ej (t)) , var (ej (t))] ∈ RKtop +2 , where top-K extracts the Ktop highest efficiency values (with 
+
+Ktop = 5 in our implementation), and mean and var provide statistical context.  
+
+> •
+
+Agent Historical Trajectory ( phist ,j (t)): To provide self-awareness of its own motion, the agent’s observation includes its historical trajectory over the past Hhist time steps: phist ,j (t) = (pj (t − Hhist ), . . . , pj (t − 1)) ∈
+
+R3×Hhist . 
+
+> •
+
+Global UD States ( SUD (t)): To enable multi-objective decision-making, the agent is provided with the current state of all UDs, including their battery levels and task queue states: SUD (t) = {(Si(t), τ i(t)) }i∈I , where τi(t)
+
+represents the state of the task queue for UD i. This global information is processed by the attention mechanism within the policy network to prioritize UDs based on system-wide needs. This structured observation provides sufficient information for effective decision-making while maintaining a manageable dimensionality for efficient learning. 
+
+Action Space: At each time step t, each agent j outputs a continuous charging-intention vector yj (t) = [ yj,i (t)] i∈I ∈
+
+RI , where I is the total number of UDs. The local action space for agent j is thus Aj = RI .11 
+
+This vector does not represent a direct power assignment. Instead, the component yj,i (t) represents the agent’s abstract strategic preference or “charging intention” for UD i. This design decouples the complex task of policy learning from the strict power-budget constraints of allocation. The agent’s policy network can focus on the high-level strategic question of “who to charge and with what priority,” operating in an unconstrained continuous space. The low-level task of satisfying power-budget constraints is then offloaded to the deterministic action transformation stage (Eq. (26)) described in Section III-C3. 
+
+Reward Formulation: To guide the agents toward globally optimal behavior, we employ a centralized training approach with a shared global reward signal R(t). After each time step, a comprehensive set of system-level KPIs (as defined in Section II-B3) is calculated. The global reward is then computed as a weighted sum of these metrics: 
+
+R(t) = X
+
+> m∈M +
+
+αmMm(t) − X
+
+> m∈M −
+
+αmMm(t), (24) where Mm(t) is the time-step value of KPI m, and the non-negative weight αm is consistent with Eq. (18). Thus, desirable KPIs in M+ contribute positively, while undesirable KPIs in 
+
+M− are subtracted as penalties. To make these KPIs with disparate scales contribute meaningfully to the reward, we employ a tailored scaling strategy. Metrics with potentially unbounded or large numerical ranges, such as ATWT, are normalized at every time step using a running estimate of their mean and standard deviation. This is a standard technique in DRL for improving learning stability. In contrast, metrics that are naturally expressed as ratios or indices within a consistent range [0 , 1] (e.g., TCR, FRE) are used directly, as they are effectively self-normalized. For event counts such as BDC, which represent sparse penalties, we apply the penalty directly without statistical normalization to provide a consistent and interpretable learning signal for each occurrence. This hybrid approach preserves the direct interpretability of key indicators while supporting overall learning stability. This composite reward signal effectively steers the collective policy of the agents toward maximizing system-wide performance. 
+
+2) Attention-based Policy Network for Multi-Objective Pri-oritization: A fundamental challenge for each agent j is how to allocate its charging-intention vector yj (t) among I differ-ent UDs, especially when facing the four conflicting objectives (i.e., efficiency, fairness, task completion, waiting time). A standard MLP policy network struggles to learn these complex trade-offs. Due to the extreme dynamics, non-stationarity, and high dimensionality inherent in the multi-agent NTN-WPT environment, directly applying non-scalarized multi-objective reinforcement learning (MORL) methods (e.g., those requiring the learning of multidimensional value functions or explicit Pareto fronts) would lead to severe convergence issues and fail to meet the real-time and stability requirements for satellite scheduling. The MAPPO algorithm already contends with a vast exploration space; compounding this with the complexity of learning a Pareto front is computationally impractical. Therefore, the framework adopts a scalarized reward formu-lation. This approach keeps the optimization within a stable Policy Head           
+
+> Layer Normalization
+> Self-Attention Encoder
+> WO
+> Concatenated Residual Connection Layer Normalization
+> MatMul Scale Softmax MatMul
+> Layer Normalization
+> WQWKWV
+> Head 2
+> …
+> Head 2 Head 3
+> …
+> Head 3
+> …
+> …
+> …
+> X
+> Multi-Head
+> Values Values Keys Keys Queries Queries
+> QKV
+> QKTV1
+> 𝑑 𝑘
+> Head iAttention Weights
+> Detailed Structure of the Self-Attention Block
+> Policy Network
+> Input Observations
+> …
+> …Ot-k Ot-2 Ot-1
+> π(at|s t)
+> Action Output
+> Head 1
+> …
+> Head 1
+> Fig. 3. Agent policy network with integrated self-attention layer.
+
+scalar-reward MAPPO form while allowing system operators to inject task preferences through weights, which aligns with practical aerospace operations where mission priorities are often specified a priori .The proposed approach differs from a “naive weighted-sum DRL” method. A naive implementation typically combines a scalarized reward with a simple policy network (e.g., a standard MLP) and arbitrarily chosen weights. This combi-nation forces the agent to learn a single, static policy that represents a fixed trade-off between objectives, regardless of the system’s state. Such a static strategy is suboptimal in a dynamic environment where priorities should shift based on context. In the proposed framework, the weights in the scalarized reward function are determined through extensive sensitivity analysis, as detailed in Section IV-F. This process reflects a scalarization-based exploration of the Pareto front to identify a well-informed and balanced operating point. The scalarized reward is coupled with a policy architecture that enables a dynamic, state-contingent strategy. While the scalar reward defines the long-term optimization goal, the policy network architecture determines the ability to learn an adaptive strategy. To this end, a self-attention mechanism is embedded within each agent’s policy network (Fig. 3). This mechanism enables the agent to dynamically reweight its priorities based on the real-time context encoded in its observation. For example, when a UD’s battery is critically low, the attention mechanism learns to assign a high weight to that UD’s features, effectively prioritizing fairness and system robustness. Conversely, when all UDs are well-charged, it can learn to focus on UDs with superior channel conditions to maximize energy efficiency. This capability to approximate a state-dependent trade-off distinguishes the proposed method from naive weighted-sum approaches. At each time step t, the attention layer computes an agent-specific query ( Qj ) for satellite agent j and a key-value pair (Ki, Vi) for each UD i based on its state embedding.  
+
+> •
+
+Query (Qj ): Encodes agent j’s current “scheduling 12 
+
+intent,” derived from the global state (e.g., identifying whether the overall network currently requires efficiency-oriented scheduling or fairness intervention).  
+
+> •
+
+Key ( Ki): Represents the specific attributes and urgency of UD i, encoding multi-source data such as its battery level, task queue length, and real-time channel conditions.  
+
+> •
+
+Value ( Vi): The underlying feature representation of the UD to be aggregated. The dynamic prioritization is realized through the scaled dot-product interaction between the scheduling intent (Query) and the UD attributes (Key). The attention score is calculated as: 
+
+Attention( Q, K, V ) = softmax 
+
+ QK ⊤
+
+√dk
+
+
+
+V, (25) where dk is the scaling dimension. This score quantifies the relevance of each UD’s current state to the agent’s real-time strategic focus. Through centralized training, the policy net-work learns to generate Queries that adaptively shift attention weights across UDs. For instance, even if the scalar reward heavily weights overall efficiency, a critically low battery state at a specific UD can alter its Key Ki. The agent’s learned Query can then assign a high attention score to that UD, allowing the policy to prioritize task completion or depletion avoidance under the current state. Here, Q, K, and V denote the query, key, and value matrices within the attention module and are unrelated to K, the number of GNN message-passing layers. Consequently, the attention weights generated by the soft-max function serve as a state-contingent resource allocator. This capability distinguishes the proposed approach from a naive weighted-sum method, giving the MAPPO agents the flexibility to dynamically adjust their multi-objective priorities without the computational overhead of maintaining multidi-mensional value functions required by non-scalarized MORL. 
+
+3) Action Transformation and Schedule Execution: The abstract charging-intention vectors {yj (t)}j∈J produced by the MARL agents are stacked into the intention matrix 
+
+Y(t) = [ y1(t), . . . , yJ (t)] ⊤, which must be translated into a constraint-feasible power-budget allocation plan P(t) =[Pj,i (t)] . This is achieved through a constrained optimization stage. The charging intentions in Y(t) are interpreted as desired power-budget preferences. The objective is to find an actual power-budget allocation matrix P(t) that is “closest” to these intentions while adhering to the satellite budget constraints. This is formulated as a convex optimization problem (specif-ically, a quadratic program): 
+
+P(t) = arg min 
+
+> P
+
+∥P − Y′(t)∥2
+
+> F
+
+s.t. Pj,i (t) ≥ 0, ∀j ∈ J , i ∈ I 
+
+X
+
+> i∈I
+
+Pj,i (t) ≤ Pmax ,j ,∀j ∈ J ,
+
+(26) where Y′(t) is the matrix of charging intentions from the MARL agents after non-negative activation and scaling to appropriate power-budget levels, and ∥ · ∥ F is the Frobenius norm. This optimization problem, being a standard quadratic program (QP), can be solved efficiently at each time step using off-the-shelf convex optimization solvers (e.g., via libraries such as CVXPY). For the scale of our simulation ( J = 3 , I =12 ), the single-step solution time is typically on the order of milliseconds, which is negligible compared to the 1-second de-cision interval and thus practical for real-time implementation. For scenarios with even stricter computational constraints, a simpler heuristic-based scaling method can be employed. This method allocates the power budget for each satellite j
+
+proportionally to its non-negative charging intentions when P 
+
+> k∈I
+
+Y ′
+
+> j,k
+
+(t) > 0: Pj,i (t) = Pmax ,j · Y ′
+
+> j,i
+
+(t)/ P 
+
+> k∈I
+
+Y ′
+
+> j,k
+
+(t);otherwise, no power budget is allocated by that satellite in the current time step. While this heuristic is computationally faster, the QP formulation gives the Euclidean projection of the agents’ intentions onto the feasible power-budget space when solved to optimality. The resulting optimized power-budget allocation matrix 
+
+P(t) represents a feasible schedule that is as close as pos-sible to the MARL agents’ strategic intent while respecting the satellite budget and non-negativity constraints. This final schedule is then passed to the simulation environment for execution. 
+
+D. Overall Scheduling Algorithm 
+
+The entire process, combining prediction, mapping, and decision-making, is summarized in Algorithm 1. The frame-work operates in two phases: an offline (or continuous online) training phase to learn the model parameters, and a real-time execution phase for deployment. Here, Nepisodes denotes the number of training episodes. Algorithm 1 outlines the complete workflow of the proposed hierarchical framework. It begins by initializing the learnable parameters (i.e., weights and biases) for the three core compo-nents: the prediction models ( θP ), the GNN-based interaction mapping model ( θG), and the MARL policies ( θπ ). Alongside these models, three distinct replay buffers are initialized to store training data: BP for the prediction layer, BG for the GNN mapping layer, and Bπ for the MARL decision layer. BP
+
+stores tuples of historical state sequences and their correspond-ing ground-truth future states, used for supervised training of the prediction models. Similarly, BG stores graph structures and their associated ground-truth energy efficiency outcomes, enabling supervised training of the GNN. Finally, Bπ stores the trajectories of experiences (i.e., observation, action, reward, next observation) required for updating the MARL policies via the PPO algorithm. For clarity, St denotes the global network state at time t and is distinct from the UD SoC Si(t).The Training Phase is an iterative process designed to optimize all model components. Within each training episode, the framework sequentially performs the three core steps at each time step t:1) Prediction: The state prediction models ( ϕS , ϕ U ) use the historical state sequence Ht to forecast the collection of future satellite and UD states ˆSt+1: t+H , where Ht
+
+contains the past Hhist steps and H denotes the future prediction horizon. 2) Mapping: A bipartite graph Gt is constructed using current and predicted states, which is then processed 13 
+
+by the GNN ( ϕG) to generate the predicted energy efficiency matrix Et.3) Decision & Execution: Each satellite agent j receives a local observation Oj (t) (derived from St and Et) and selects a charging-intention vector yj (t) using its policy 
+
+πj . These vectors are aggregated and transformed into a feasible power-budget schedule P(t) by solving the convex optimization problem in Eq. (26). After executing the schedule, the environment returns the next network state St+1 and a global reward R(t). The collected data tuples are stored in their respective replay buffers. Periodically, the models are updated: the prediction and mapping models are trained via supervised learning (e.g., by minimizing mean squared error (MSE) loss against ground-truth outcomes), while the MARL policies are updated using the MAPPO algorithm. The Execution Phase leverages the fully trained models (with optimized parameters θ∗ 
+
+> P
+
+, θ ∗
+
+> G
+
+, θ ∗ 
+
+> π
+
+) for real-time deploy-ment. For any given network state St, the framework performs a single forward pass through the prediction, mapping, and decision layers to compute and return the feasible power-budget schedule P(t) for immediate execution. In Algo-rithm 1, Ot = {Oj (t)}j∈J denotes the collection of all agents’ local observations. IV. S IMULATION RESULTS AND ANALYSIS 
+
+A. Simulation Setup 
+
+To evaluate the performance of the proposed machine learning-based energy scheduling framework, we developed a comprehensive simulation environment that models a dynamic WPT-enabled NTN. This section details the configuration of the simulations, the performance metrics used for evaluation, and the baseline algorithms against which the proposed solu-tion is compared. 
+
+1) Parameter Configuration: The simulation environment consists of a set of ground-based UDs and several LEO satel-lites acting as mobile energy transmitters. The key parameters for the simulation are summarized in Table II, where RAAN denotes the right ascension of the ascending node. We consider a scenario with 12 UDs and 3 satellites operat-ing over a total duration of 1000 seconds, with decisions made at discrete time steps of 1 second. The UDs are initialized with random positions on a two-dimensional (2D) plane and follow a random-walk mobility model to simulate ground-level movement. Each UD is equipped with a rechargeable battery and is subject to energy consumption from both idle-state maintenance and the execution of randomly arriving tasks with varying energy requirements and priorities. The satellites follow perturbed trajectories, simulating the predictable yet slightly variable paths of LEO satellites. The wireless channel between a satellite and a UD is modeled using the FSPL formula, incorporating path loss, antenna gains, and a log-normal shadowing effect to represent signal fluctuations. Furthermore, a nonlinear model is used to simulate the RF-to-DC energy conversion efficiency at the UD, which depends on the received power level [20]. Because this paper focuses on the scheduling layer rather than the hardware design of satellite 
+
+Algorithm 1 ML-based Energy Scheduling Algorithm 
+
+Initialize: 
+
+Prediction models with parameters θP
+
+Interaction Mapping (i.e., GNN ϕG) with parameters θG
+
+MARL policy for each agent j ∈ J with parameters θπ
+
+Replay buffers BP , BG, Bπ
+
+Phase 1: Training Phase for episode = 1 to Nepisodes do 
+
+Get initial network state S0
+
+for time step t = 0 to T − 1 do 
+
+// — 1. State Prediction Layer — 
+
+Get history Ht from St
+
+Predict future states: 
+
+ˆSt+1: t+H ← ϕS (Ht; θP ), ϕ U (Ht; θP )
+
+// — 2. Interaction Mapping Layer — 
+
+Construct Gt from St and ˆSt+1: t+H
+
+Predict Et ← ϕG(Gt; θG)
+
+// — 3. Decision & Execution Layer — 
+
+Get Oj (t) from St and Et for each j
+
+Select yj (t) ← πj (Oj (t); θπ ), j ∈ J 
+
+Form Y(t) = [ y1(t), . . . , yJ (t)] ⊤
+
+Compute feasible power: 
+
+P(t) ← Solve Eq. (26) using Y(t)
+
+// — Environment Step & Storage — 
+
+Execute P(t); observe St+1 and R(t)
+
+Store (Ht, ˆSt+1: t+H ) in BP
+
+Store (Gt, Et) in BG (with ground truth) Store (Ot, Y(t), R (t), Ot+1 ) in Bπ
+
+St ← S t+1 
+
+// — Model Updates (Periodically) — 
+
+Sample BP and update θP
+
+Sample BG and update θG
+
+Sample Bπ and update θπ (using MAPPO loss) 
+
+end for end for Phase 2: Execution Phase 
+
+Get current state St and history Ht
+
+ˆSt+1: t+H ← ϕS (Ht; θ∗ 
+
+> P
+
+), ϕ U (Ht; θ∗ 
+
+> P
+
+)
+
+Gt ← ConstructGraph (St, ˆSt+1: t+H )
+
+Et ← ϕG(Gt; θ∗
+
+> G
+
+)
+
+Oj (t) ← GetObservation (St, Et), j ∈ J 
+
+yj (t) ← πj (Oj (t); θ∗ 
+
+> π
+
+), j ∈ J 
+
+Y(t) ← [y1(t), . . . , yJ (t)] ⊤
+
+P(t) ← Solve Eq. (26) using Y(t)
+
+return Power-Budget Schedule P(t)
+
+apertures or beamforming arrays, the simulator separates the physical link budget from the normalized scheduling variables used by the learning algorithm. For each satellite-UD link, the physical channel determines a received-power/harvested-energy scale from propagation loss, shadowing, antenna gains, and, when a specific hardware realization is considered, ef-fective aperture or beamforming gains. The scheduling layer then operates on the corresponding normalized received-energy states, using a reference power/energy level for numer-ical tractability and cross-scenario comparison. Accordingly, 14                                                            
+
+> TABLE II KEY SIMULATION PARAMETERS
+> I. Scenario Parameters
+> Number of Satellites ( J)3Number of UDs ( I)12 Simulation Duration 1000.0 s Time Step ( ∆t)1.0 s
+> II. Orbital Dynamics & Satellite Parameters
+> Initial Orbit Altitude ( horb )550 km Initial Orbit Inclination ( ιorb )53 ◦
+> Initial RAAN ( Ω)Random in [0 ◦,360 ◦)
+> Initial Argument of Perigee ( ω)Random in [0 ◦,360 ◦)
+> Initial Mean Anomaly ( M)Random in [0 ◦,360 ◦)
+> Earth Gravitational Constant ( μ)3.986 ×10 14 m3/s 2
+> J2Perturbation Coefficient 1.082 ×10 −3
+> Satellite Mass ( m)250 kg Drag Coefficient ( Cd)2.2 Drag Area ( Adrag )1.0 m 2
+> Normalized Scheduling Budget ( Pmax ,j )1×10 12 W-equivalent Operating Frequency 2.4 GHz
+> III. UD & Task Parameters
+> Task Arrival Rate 5% per time step Task Energy Requirement U(0 .1,1) JTask Priority Levels 3Initial SoC 1.0 J Battery Capacity ( Ci)5.0 J
+> IV. Channel & WPT Parameters
+> Path Loss Model FSPL Reference Antenna Gain (Transmit/Receive) 10.0 dBi Shadowing Standard Deviation ( σχ)3.0 dB RF-to-DC Efficiency Model Nonlinear ( ηmax = 90% )
+> V. ML Framework Hyperparameters
+> Prediction Horizon ( H)10 steps (10 s) Historical Input Window ( Hhist )10 steps (10 s) Predictor Learning Rate 1×10 −4
+> GNN Node Embedding Dimension ( dnode )64 GNN Layers ( K)3MARL Learning Rate 1×10 −2
+> Learning Rate Decay Schedule 0.9 every 500 epochs Total Training Epochs 10,000
+
+Pmax ,j in Table II is a normalized scheduling-budget scale expressed in W-equivalent units under the reference link convention, rather than a deployable RF transmit-power value. Different physical-layer implementations mainly change the mapping from physical RF power to this normalized service-level budget, while the proposed scheduling optimization remains unchanged. For the proposed ML framework, the prediction horizon 
+
+H and the historical input window Hhist are both set to 10 time steps in the simulations, although they represent future and past windows, respectively. The learning rates for the trajectory predictor, UD behavior predictor, and the energy interaction graph neural network are all configured to 1×10 −4.
+
+2) Performance Metrics (KPIs): To evaluate and compare the performance of the scheduling algorithms, we use three primary KPIs. These metrics directly correspond to the key objective functions formulated in Section II-B3, which are cen-tral to our multi-objective optimization problem. Specifically, we measure:  
+
+> •
+
+Network Energy Efficiency (NEE) , as defined in Eq. (12).  
+
+> •
+
+Task Completion Rate (TCR) , as defined in Eq. (13).  
+
+> •
+
+Average Task Waiting Time (ATWT) , as defined in Eq. (17). These KPIs provide a comprehensive view of system perfor-mance, covering efficiency, effectiveness, and responsiveness. 
+
+3) Baseline Algorithms: To benchmark the proposed al-gorithm, we compare it against a wide range of scheduling strategies. These include simple baselines such as Random Scheduler and Round-Robin (RR) Scheduler. We also imple-ment several greedy heuristics that prioritize instantaneous channel quality (i.e., Greedy-Signal-Strength Scheduler) or urgent needs (i.e., Lowest-Battery-First Scheduler). Other poli-cies focus on task-level objectives, such as Greedy-Task-Priority Scheduler. Finally, we include the Max-Min Fairness Scheduler to provide a comprehensive comparison of different scheduling philosophies. 
+
+B. Performance Comparison 1) Comparative Analysis of KPIs: Fig. 4 illustrates the evolution of three selected KPIs over the course of a single simulation run. The x-axis represents the simulation time in seconds, and the y-axis shows the value of each metric calculated cumulatively up to that point. This visualization compares how the ML-based approach and the baselines perform over time. The NEE values in Fig. 4a are on the order of 10 −13 
+
+because they are computed with respect to the normalized scheduling-budget scale in Table II. In this paper, the schedul-ing layer does not optimize antenna aperture, beam synthesis, or rectenna hardware. Instead, it operates on normalized link-level received/harvested-energy states. These states are generated by a physical link budget and then normalized by a reference power/energy level for numerical tractability and cross-scenario comparison. Thus, an explicit effective-aperture-gain parameterization and a normalized scheduling-budget parameterization represent two ways of specifying the same service-level received-energy state seen by the scheduler. For physical interpretation, the received power of a repre-sentative NTN-WPT link can be expressed in the link-budget form given in Eq. (27): 
+
+Prx [dBW ] = PRF [dBW ] + Gtx,eff [dBi ] + Grx,eff [dBi ]
+
+− LFSPL − Laux , (27) where PRF is the RF transmit power, Gtx,eff and Grx,eff may include antenna, aperture, beamforming, focusing, and receive-collection gains, LFSPL is the free-space path loss, and Laux 
+
+collects beam-capture, pointing, and other auxiliary losses. For an aperture with physical area A and aperture efficiency ηap ,the approximate aperture gain is given by Eq. (28): 
+
+Gap [dBi ] = 10 log 10 
+
+ 4πη ap Aλ2
+
+
+
+, (28) where λ is the wavelength. At f = 2 .4 GHz ( λ ≈ 0.125 
+
+m) and a 550-km slant range, the free-space path loss is approximately 154.9 dB. As one illustrative aperture-aware realization, a 1-MW RF source ( 60 dBW), a 1000 -m 2 trans-mitting aperture with ηap = 0 .6 (Gtx,eff ≈ 56 .8 dBi), a 10 -m 2
+
+rectenna aperture with ηap = 0 .6 (Grx,eff ≈ 36 .8 dBi), and 6 15 0 200 400 600 800 1000 
+
+Time (s) 
+
+> 0123
+> Energy Efficiency ( ×10  13 )
+> Proposed Method Greedy (RSRP) Greedy (Task) RoundRobin Random MaxMin Fairness (Task) LowestBatteryFirst
+
+(a) 0 200 400 600 800 1000 
+
+Time (s) 
+
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Task Completion Rate
+> Proposed Method Greedy (RSRP) Greedy (Task) RoundRobin Random MaxMin Fairness (Task) LowestBatteryFirst
+
+(b) 0 200 400 600 800 1000 
+
+Time (s) 
+
+> 0100 200 300 400
+> Average Task Waiting Time (s)  Proposed Method Greedy (RSRP) Greedy (Task) RoundRobin Random MaxMin Fairness (Task) LowestBatteryFirst
+
+(c)  
+
+> Fig. 4. Comparison of the proposed algorithm with baseline algorithms on three selected KPIs. The x-axis represents the simulation time in seconds, and each metric is calculated cumulatively up to that point. (a) Energy efficiency. (b) Task completion rate. (c) Task waiting time.
+
+dB of combined beam-capture and pointing losses yield the link-budget evaluation in Eq. (29): 
+
+Prx [dBW ] = 60 + 56 .8 + 36 .8 − 154 .9 − 6
+
+≈ − 7.3 dBW ≈ 0.19 W. (29) With practical RF-to-DC conversion efficiency included as part of the segmented power-beaming chain [62], [69], this corresponds to a DC power level on the order of 10 −1 W. This illustrative calculation shows how a physically parameterized aperture-aware link budget can map to the normalized service-level received-energy states used in the scheduling simulation. The receive aperture in this illustrative link is consistent with a UAV-mounted rectenna, a portable energy hub, or a distributed sensor hub; low-power wearable or sensing terminals are treated as downstream devices supported indirectly by such hubs. This separation between physical-layer realization and scheduling-layer optimization is important for generality. Changing the transmit aperture, rectenna area, beamform-ing gain, or RF source power mainly changes the mapping from physical RF power to the normalized received-energy state. Once the physical layer, by any suitable high-efficiency WPT mechanism, provides non-negligible deliverable energy above the rectifier activation range, the proposed scheduler determines which UDs should receive energy, when, and under what multi-objective trade-off. Conversely, if the phys-ical link budget remains below the rectifier activation range, all scheduling algorithms have limited charging effect. This positioning is consistent with the current status of space-to-ground WPT, where in-orbit demonstrations such as the Microwave Array for Power-transfer Low-orbit Experiment (MAPLE) have demonstrated beam pointing and detection rather than net positive energy delivery [70], and large-scale NTN-WPT remains a pre-commercial technology requiring further physical-layer development [11], [12]. 
+
+Energy Efficiency and Task Completion Rate: Figs. 4a and 4b show the performance in terms of energy efficiency and task completion rate, respectively. Energy efficiency is the dimensionless ratio of harvested DC energy at the UDs to the total allocated RF/scheduling-budget energy, where a higher value is better. In a physical link model, this denominator corresponds to RF transmit energy; in the main normalized simulation, it corresponds to the normalized scheduling-budget scale in Table II. Similarly, the task completion rate is the dimensionless proportion of successfully completed tasks to the total tasks that arrived, with higher values being preferable. The results show that the proposed ML-based scheduler achieves competitive NEE and TCR rather than maximizing either metric in isolation. Greedy (RSRP) attains a higher NEE, while Greedy (RSRP) and Lowest-Battery-First attain higher TCR values. However, Greedy (RSRP) incurs a sub-stantially longer task waiting time, whereas Lowest-Battery-First has a lower NEE and a slightly longer task waiting time than the proposed method. This behavior is consistent with the multi-objective design of the proposed method, which combines relatively high energy efficiency and competitive task completion with the lowest task waiting time, as discussed next. The resulting policy therefore corresponds to a balanced system-wide operating point rather than one optimized for a narrow objective. 
+
+Task Waiting Time: The effectiveness of the multi-objective approach is also reflected in the average task waiting time, shown in Fig. 4c. A lower value indicates better per-formance. The proposed method achieves the lowest waiting 16                             
+
+> TABLE III AVERAGE FINAL PERFORMANCE AND ONLINE EXECUTION LATENCY
+> COMPARISON OF DRL A LGORITHMS
+> Algorithm NEE TCR ATWT(s) Latency(ms/step)
+> Proposed MAPPO 2.217 ×10 −13 0.650 52.0 0.265
+> MADDPG 2.162 ×10 −13 0.610 60.3 0.323 Single-PPO 2.233 ×10 −13 0.671 49.5 3848.196
+
+time among all tested algorithms. Lowest-Battery-First yields the next-lowest waiting time and a higher TCR, but its NEE is lower than that of the proposed method. Greedy (RSRP) attains higher NEE and TCR values but incurs a substantially longer waiting time, while Round-Robin has both a low TCR and the longest waiting time. Thus, the proposed algorithm maintains the best ATWT while also delivering relatively high energy efficiency and competitive task completion, indicating its capability to manage complex trade-offs and make timely, balanced scheduling decisions. 
+
+2) Robustness Analysis: Fig. 5 evaluates the proposed method in nominal, high-disturbance, and complex environ-ments, including stronger mobility and task-arrival variability. 
+
+C. Comparative Analysis of DRL Algorithms 
+
+A comparative analysis was conducted against two other prominent DRL paradigms: a centralized single-agent PPO and the multi-agent deep deterministic policy gradient (MADDPG) algorithm [71], [72]. Fig. 6 presents one representative training run for each algorithm to illustrate its learning dynamics, whereas Table III reports the final KPI values averaged over repeated evaluation runs. Together, these results highlight the trade-off between average final performance, learning stability, scalability, and real-time feasibility in the NTN-WPT schedul-ing problem. For a controlled comparison, all three DRL algorithms were evaluated within the same hierarchical framework. Specif-ically, they all operated using the same pre-trained State Prediction and GNN-based Interaction Mapping layers, so the observed performance differences mainly reflect the decision-making algorithm itself. 
+
+Centralized Single-Agent PPO: The centralized Single-PPO baseline uses one PPO agent to control all satellites [71]. In the small-scale simulated setting, this centralized policy obtains the best final KPI values among the three DRL variants in Table III. The same table also reports the measured online execution latency averaged over ten random test environments on the same testbed. The centralized Single-PPO required 3848.196 ms per decision step, exceeding the 1.0 s decision interval used in the simulation, whereas the proposed MAPPO framework required only 0.265 ms per decision step under the same timing protocol. This latency gap mainly arises from the centralized joint-action formulation. Single-PPO observes and controls all satellite-UD decisions jointly, so its action represents the whole J ×I power-allocation matrix ( 36 contin-uous link decisions in the simulation). More importantly, these dimensions are coupled by the per-satellite power-budget and allocation constraints. In a discretized view where each link allocation has L candidate levels, the centralized controller 0 200 400 600 800 1000 
+
+Time (s) 
+
+> 2.0 2.2 2.4 2.6 2.8 3.0 3.2
+> Energy Efficiency ( ×10  13 ) Proposed Method Proposed Method (HighDisturbance) Proposed Method (Complex Scenario)
+
+(a) 0 200 400 600 800 1000 
+
+Time (s) 
+
+> 0.6 0.7 0.8 0.9 1.0
+> Task Completion Rate
+> Proposed Method Proposed Method (HighDisturbance) Proposed Method (Complex Scenario)
+
+(b) 0 200 400 600 800 1000 
+
+Time (s) 
+
+> 010 20 30 40 50
+> Average Task Waiting Time (s)  Proposed Method Proposed Method (HighDisturbance) Proposed Method (Complex Scenario)
+
+(c)  
+
+> Fig. 5. Comparison of the proposed algorithm on three selected KPIs in nominal, high-disturbance, and complex scenarios. (a) Energy efficiency. (b) Task completion rate. (c) Task waiting time.
+
+faces LJI possible joint combinations, while a satellite-local controller only needs to handle an I-dimensional local action for each satellite. This combinatorial growth substantially increases the cost of joint-action transformation/projection and makes the control step difficult to parallelize across satellites. By contrast, the proposed MAPPO framework distributes action generation across satellite agents and only requires 17 0 2000 4000 6000 8000 10000        
+
+> Epoch
+> 0.00 0.25 0.50 0.75 1.00 1.25 1.50 1.75
+> Reward Value
+> Proposed Method MADDPG Singleagent PPO
+> Fig. 6. Representative single-run training convergence comparison of MAPPO, MADDPG, and single-agent PPO. Each curve shows the episodic reward from one training run rather than an average over multiple runs.
+
+a lightweight projection step. Thus, Single-PPO serves as a small-scale upper-bound baseline in terms of final KPI values, while MAPPO provides a more scalable and real-time decision structure for NTN-WPT scheduling. 
+
+MADDPG: The on-policy MAPPO algorithm was also compared against MADDPG, a popular off-policy MARL alternative [72]. MADDPG has low online execution latency in the tested setting, with an average of 0.323 ms per decision step in Table III. However, the training stability differs sub-stantially. MADDPG exhibited unstable convergence behavior, with successful convergence occurring in only approximately one in every seven or eight training runs. Fig. 6 intention-ally shows one such successful run to illustrate the learning dynamics. Although its MADDPG curve may overlap with or occasionally exceed the MAPPO curve near the end of this particular run, this single-run behavior does not represent the average outcome over repeated runs. Across repeated evaluations, MADDPG attains a lower average final reward than MAPPO; consistently, its average final NEE, TCR, and ATWT values in Table III are all less favorable. The learn-ing process is also significantly slower and less stable than MAPPO’s. This instability is a well-known challenge for off-policy algorithms in non-stationary environments. Learning from a replay buffer of potentially outdated experiences can lead to incorrect value estimates and divergent updates. In contrast, MAPPO performs on-policy updates using recently collected trajectories and constrains the policy update through the PPO clipping mechanism, making it better suited to this complex cooperative task. In summary, this comparative analysis indicates that MAPPO provides a strong practical balance among learning stability, distributed scalability, real-time feasibility, and final KPI performance for the multi-objective NTN-WPT schedul-ing task. The proposed method preserves competitive KPI values while avoiding the latency and deployment limitations of centralized single-agent control and offering more stable learning than the off-policy MADDPG alternative. 
+
+D. Complexity and Feasibility Analysis 
+
+A brief discussion of the computational overhead, signaling overhead, and real-time feasibility is warranted for practical deployment. 
+
+Computational Overhead: The framework’s computa-tional load is divided into a lightweight online inference phase and an intensive offline training phase. The real-time inference at each time step ∆t is dominated by the three predictive models. The satellite trajectory predictor (i.e., GRU) has a complexity of O(J · Hhist · D2
+
+> GRU
+
+), where DGRU denotes the hidden dimension of the GRU and Hhist denotes the historical input length. The UD state predictor (Transformer) is more demanding, with a complexity of O(I · H2 
+
+> hist
+
+· DTrans ), where 
+
+DTrans denotes the model’s embedding dimension. The GNN-based interaction mapper has a complexity of O(K·J ·I ·d2
+
+> node
+
+).The MARL agents’ policy networks add limited inference overhead. In contrast, the training of all models is com-putationally intensive. Therefore, the proposed deployment strategy involves extensive offline pretraining on historical and simulated data. During online operation, the system primarily performs fast inference, with only periodic, lightweight fine-tuning required to adapt to environmental shifts. This design keeps the heavy computational load of training outside the real-time decision loop. 
+
+Signaling Overhead: The proposed framework requires modest signaling overhead for coordination, which is distinct from high-bandwidth data traffic. The overhead arises from two primary flows, assuming a central unit (e.g., a ground sta-tion) performs the prediction, mapping, and final optimization steps. First, there is an uplink requirement from the UDs to the central unit. At each decision step ( ∆t = 1 .0 s), every UD must report its current state. This state vector includes its 3D position, battery level, measured signal strength, and the number of pending tasks for each priority level. Assuming 32-bit precision for floating-point values (position, battery, and signal strength) and 16-bit precision for task counts, the payload per UD is approximately 208 bits. For the simulated scenario with I = 12 UDs reporting once per second, this results in a total uplink data rate of 12 ×208 bit/s ≈ 2.5 kbit/s. Since the historical sequence is maintained at the central unit, UDs only transmit their current state, and the overhead does not scale with the historical input length Hhist . Second, there is a two-way communication flow between the satellite agents and the central unit. Each of the J satellites sends its learned charging-intention vector yj (t) (an I-dimensional vector of 32-bit values) to the central unit. After solving Eq. (26), the central unit transmits the final power-budget allocation vector {Pj,i (t)}i∈I back to each satellite j. For J = 3
+
+satellites and I = 12 UDs, this two-way exchange amounts to 
+
+3 × 12 × 32 × 2 ≈ 2.3 kbit/s. The total signaling overhead is therefore approximately 2.5 + 2 .3 = 4 .8 kbit/s. This low data rate is modest for modern satellite communication systems and supports the practicality of the framework’s communication requirements. The 1-Hz reporting frequency is sufficient for the system’s dynamics and is considered a low-frequency update rate in the context of control signaling. 
+
+Real-Time Feasibility: The framework’s real-time feasibil-18 
+
+ity hinges on the total online execution latency being signifi-cantly less than the decision time step ∆t (1.0 s in the simu-lation). This ∆t also represents the duration for which a given power-budget allocation schedule is executed. For the scale simulated in this paper ( J = 3 , I = 12 , H = 10 , H hist = 10 ), the computational load is manageable. To provide a concrete benchmark, we measured the average online execution latency of Single-PPO, MADDPG, and MAPPO over ten randomly generated test environments on the same testbed equipped with a 13th Gen Intel Core i5 central processing unit (CPU) and an NVIDIA RTX 4090 graphics processing unit (GPU), leveraging efficient Python numerical libraries. The timing was measured in execution mode after offline training and averaged over the simulated decision sequence. It includes the forward passes of the state-prediction models, the GNN-based interaction mapping, the algorithm-specific actor inference, and the action-transformation/projection step; offline training and communication and propagation delays are excluded. The latency results are integrated with the KPI comparison in Table III. Single-PPO required 3848.196 ms per decision step, exceeding the 1.0-s decision interval, mainly due to its cen-tralized joint-action transformation/projection over the coupled 
+
+J ×I allocation matrix. MADDPG and MAPPO required only 0.323 ms and 0.265 ms, respectively, with MAPPO achieving the lowest measured latency among the tested algorithms. These measurements support the real-time feasibility of the proposed MAPPO-based framework for the simulated scale on commercial off-the-shelf hardware. Moreover, millisecond-level inference is increasingly achievable onboard satellites, as recent advancements in space-grade FPGAs and adaptive compute acceleration platforms provide the necessary parallel computing capabilities to reduce deep-learning inference la-tency [54]–[57]. However, scalability remains a key consider-ation, with the Transformer’s quadratic complexity in Hhist and the GNN’s complexity in J × I being the primary bottlenecks. To address this for larger-scale deployments, two strategies can be employed. First, as mentioned, the pretraining and fine-tuning approach minimizes the online computational burden. Second, the models used in this simulation do not employ any compression techniques such as pruning or quantization. For practical deployment, these methods could be applied to significantly reduce the model size and inference latency, further enhancing real-time feasibility. 
+
+E. Convergence Analysis 
+
+A critical aspect of any reinforcement learning system is its ability to learn and converge to an effective policy. The learning process of the MARL component, which forms the decision-making core of the framework, is analyzed below us-ing the MAPPO curve in Fig. 6. The curve exhibits the classic three phases of reinforcement learning: an initial high-variance 
+
+exploration phase , a subsequent learning and exploitation phase with a steady upward trend, and a final convergence phase where the reward flattens. This empirical observation of convergence is supported by the stabilizing design of the MAPPO update and by the bounded scalar reward used in the formulation. The conver-gence behavior can be understood from the following two aspects. 
+
+1) Stable Policy Improvement: The MAPPO algorithm, which inherits its core update mechanism from PPO, optimizes a clipped surrogate objective function. This clipping mecha-nism constrains each policy update so that the new policy does not deviate excessively from the previous one. Based on trust-region-inspired reinforcement learning theory [71], [73], such constrained updates provide a practical lower-bound-style mechanism for stable policy improvement, although strict monotonic improvement is not guaranteed for every stochastic deep-learning update. In practice, the empirical reward curve observed during training (Fig. 6) naturally exhibits stochastic fluctuations due to environmental randomness and exploration. The steady upward trend of the learning curve therefore indi-cates stable empirical improvement rather than a strictly non-decreasing trajectory. This behavior is further stabilized by the centralized critic, which provides a consistent learning signal to all decentralized actors and mitigates the non-stationarity inherent in multi-agent systems. 
+
+2) Bounded Objective and Empirical Convergence: In the considered NTN-WPT system, the scalarized reward is bounded by the finite operational budget and simulation hori-zon. The total energy that can be allocated is limited by the satellites’ available power budget ( Pmax ,j ), interpreted as the normalized scheduling-budget scale in the main simulation, and by the finite simulation duration. Consequently, all KPIs derived from this process, such as NEE and TCR, are also bounded. This implies that the scalarized reward R(t) and the expected cumulative reward J(θ) have finite upper bounds. As the MAPPO updates progress, the empirical reward curve in Fig. 6 approaches a stable plateau, indicating con-vergence to a stationary scheduling policy in the simulated environment. With the fixed linear scalarization used in Eq. (24), the multi-objective reward is converted into a scalar objective, so the policy-gradient update optimizes a standard scalar-return Markov game rather than a vector-valued reward. Therefore, once the gradient updates approach a stationary point ( ∇J(θ) ≈ 0), the resulting cooperative policy can be interpreted as a locally stable operating point for the weighted objective. From the perspective of multi-objective optimiza-tion, this weighted-sum solution corresponds to a Pareto-consistent trade-off for the selected weight vector, without attempting to recover the entire Pareto front. 
+
+F. Sensitivity Analysis of Reward Weights 
+
+The selection of weights in the scalarized reward function in Eq. (24) is critical because it defines the desired trade-off between competing KPIs. The targeted normalization de-scribed in Section III-C1 brings metrics with disparate scales into a comparable range before weighting, preventing any single metric from dominating the reward signal because of its scale. The final weights were determined through a staged empirical sensitivity analysis. In each stage, the weight of one objective was systematically varied while the remaining weights were fixed at provisional reference values. These fixed values were used only to isolate the effect of the weight 19 40 50 60 70     
+
+> Time (s)
+> 0.2 0.4 0.6 0.8 1.0
+
+Weight  
+
+> 0.30 0.35 0.40 0.45 0.50 0.55 0.60 0.65
+> Rate
+> Energy Efficiency ( ×10 14 )Task Completion Rate Task Waiting Time
+> Fig. 7. Representative sensitivity analysis of system KPIs with respect to the Task Completion Rate weight ( αTCR ), with the other weights fixed at provisional reference values.
+
+under examination and were not necessarily their final selected values. The analysis for the TCR weight is presented as a representative example of this one-weight-at-a-time procedure. As shown in Fig. 7, increasing αTCR under this provisional configuration improves the TCR metric itself, as expected, and reduces ATWT over the examined range, while the NEE changes only modestly. The representative sweep therefore illustrates how a candidate value of αTCR is selected while monitoring its effects on the other displayed KPIs. The same one-weight-at-a-time analysis was repeated for the other objectives, each time using provisional values for the weights not being varied. The vertical dashed line in Fig. 7 indicates the candidate TCR weight identified in this representative sweep; it does not indicate that all of the other weights used to generate the curves are their final values. The candidate weights obtained from the individual sweeps were subsequently combined and evaluated jointly to determine the final weight vector. Consequently, the absolute KPI values in Fig. 7 characterize this intermediate sensitivity experiment and are not expected to coincide with those reported for the final policy in Figs. 4 and 5, or in Table III. This empirical procedure encourages a robust and well-rounded solution rather than one that is overoptimized for a single metric. Based on this comprehensive analysis, the final non-negative weights for the scalarized reward function in Eq. (24) used in our simulations were set as follows: αNEE = 5 .635 × 10 12 ,
+
+αTCR = 0.480 , αBDC = 0.0835 , αEWR = 0.0630 , and 
+
+αATWT = 0 .00865 . The significant disparity in the magnitudes of these weights follows from the hybrid normalization strat-egy detailed in Section III-C1. For instance, the raw value of the normalized-model NEE is on the order of 10 −13 , thus requiring a very large weight to make its contribution to the total reward signal comparable to metrics such as TCR, which is naturally scaled between 0 and 1. Conversely, penalty metrics such as ATWT are statistically normalized, while BDC is a sparse event count. This normalization strategy helps each KPI, despite its inherent scale, exert a meaningful and balanced influence on the agent’s learning process, reflecting the trade-offs identified in our sensitivity analysis. V. C ONCLUSION 
+
+In this paper, we addressed the complex energy-scheduling challenge in dynamic NTN-WPT systems. We proposed a novel hierarchical machine learning framework that decom-poses this high-dimensional problem into three tractable lay-ers: 1) a Prediction Layer to forecast the spatio-temporal dynamics of satellites and UDs; 2) an Interaction Mapping Layer, using a GNN, to model the complex, time-varying energy-transfer efficiencies; and 3) a Decision-Making Layer, based on MARL, to execute robust, decentralized scheduling. This predictive, layered architecture effectively manages the high mobility of both satellites and UDs and the channel uncertainty inherent in NTN-WPT, moving beyond purely reactive strategies. Simulation results support the proposed approach. The framework achieved a stronger overall trade-off among task completion, energy efficiency, and task waiting time instead of optimizing a single KPI in isolation. In par-ticular, it maintained competitive task completion and energy efficiency while providing clear advantages in responsiveness and robustness under complex and high-disturbance condi-tions. Furthermore, the method maintained higher average UD battery energy levels and substantially reduced battery-depletion events. These findings indicate that the hierarchical framework provides a robust and efficient solution, paving the way for reliable autonomous energy scheduling in future NTN-WPT systems. REFERENCES [1] M. M. Azari, S. Solanki, S. Chatzinotas, O. Kodheli, H. Sallouha, A. Colpaert, J. F. Mendoza Montoya, S. Pollin, A. Haqiqatnejad, A. Mostaani, E. Lagunas, and B. Ottersten, “Evolution of non-terrestrial networks from 5G to 6G: A survey,” IEEE Communications Surveys & Tutorials , vol. 24, no. 4, pp. 2633–2672, 2022. [2] P. He, H. Lei, D. Wu, R. Wang, Y. Cui, Y. Zhu, and Z. Ying, “Nonter-restrial network technologies: Applications and future prospects,” IEEE Internet of Things Journal , vol. 12, no. 6, pp. 6275–6299, 2025. [3] O. S. Mizrahi, P. Jahelka, E. Gdoutos, J. Brunet, A. Ayling, A. Fikes, A. Wu, R. Madonna, H. A. Atwater, S. Pellegrino, and A. Hajimiri, “Space solar power generation: A viable system proposal and technoe-conomic analysis,” Joule , vol. 9, no. 6, Jun 2025. [4] X. Che, L. Liu, and W. He, “Assess space-based solar power for European-scale power system decarbonization,” Joule , vol. 9, no. 9, Sep 2025. [5] N. Lior, “Power from space,” Energy Conversion and Management ,vol. 42, no. 15, pp. 1769–1805, 2001. [6] A. Bermudez-Garcia, P. Voarino, and O. Raccurt, “Environments, needs and opportunities for future space photovoltaic power generation: A review,” Applied Energy , vol. 290, p. 116757, 2021. [7] X. Hou, L. Zhou, S. Dong, D. Shi, E. Zhang, G. Chen, and H. Zhang, “The high power electricity generation and WPT demonstration mission – Proposed first step to develop space solar power,” Space Solar Power and Wireless Transmission , vol. 2, no. 2, pp. 73–80, 2025. [8] J. Huang, Y. Zhou, Z. Ning, and H. Gharavi, “Wireless power transfer and energy harvesting: Current status and future prospects,” IEEE Wireless Communications , vol. 26, no. 4, pp. 163–169, 2019. [9] B. Duan, Y. Zhang, G. Chen, Z. Zhao, J. Mi, X. Li, L. Yang, and X. Li, “On the innovation, design, construction, and experiments of OMEGA-based SSPS prototype: The Sun-Chasing Project,” Engineering , vol. 36, pp. 90–101, 2024. [10] A. Fikes, E. Gdoutos, M. Klezenberg, A. Ayling, O. Mizrahi, J. Sauder, C. Sommer, A. Truong, A. Wen, A. Wu, R. Madonna, H. Atwater, A. Ha-jimiri, and S. Pellegrino, “The Caltech Space Solar Power Demonstration One mission,” in 2022 IEEE International Conference on Wireless for Space and Extreme Environments (WiSEE) , 2022, pp. 18–22. 20 
+
+[11] J. Ye, G. Pan, M.-S. Alouini, D. I. Kim, I. Krikidis, E. Hossain, and X. Zhang, “Wireless energy transfer solutions for sustainable connec-tivity infrastructure from space to ground for 6G,” IEEE Journal on Selected Areas in Communications , vol. 44, pp. 4626–4657, 2026. [12] E. Rodgers, E. Gertsen, J. Sotudeh, C. Mullins, A. Hernandez, H. Le, P. Smith, and N. Joseph, “Space based solar power,” National Aeronau-tics and Space Administration, Office of Technology, Policy, and Strat-egy, Washington, DC, USA, White Paper NASA NTRS 20230018600, Jan. 2024, accessed: 2026-06-25. [13] A. Alabsi, A. Hawbani, X. Wang, A. Al-Dubai, J. Hu, S. A. Aziz, S. Kumar, L. Zhao, A. V. Shvetsov, and S. H. Alsamhi, “Wireless power transfer technologies, applications, and future trends: A review,” IEEE Transactions on Sustainable Computing , vol. 10, no. 1, pp. 1–17, 2025. [14] D. Shi, L. Zhang, H. Ma, Z. Wang, Y. Wang, and Z. Cui, “Research on wireless power transmission system between satellites,” in 2016 IEEE Wireless Power Transfer Conference (WPTC) , 2016, pp. 1–4. [15] Y. Zheng, G. Zhang, Z. Huan, Y. Zhang, G. Yuan, Q. Li, G. Ding, Z. Lv, W. Ni, Y. Shao, X. Liu, and J. Zu, “Wireless laser power transmission: Recent progress and future challenges,” Space Solar Power and Wireless Transmission , vol. 1, no. 1, pp. 17–26, 2024. [16] K. Detka and K. Gorecki, “Wireless power transfer – A review,” 
+
+Energies , vol. 15, no. 19, 2022. [17] X. Wang, J. Li, Z. Ning, Q. Song, L. Guo, S. Guo, and M. S. Obaidat, “Wireless powered mobile edge computing networks: A survey,” ACM Comput. Surv. , vol. 55, no. 13s, Jul. 2023. [18] A. Aili, J. Choi, Y. S. Ong, and Y. Wen, “The development of carbon-neutral data centres in space,” Nature Electronics , Oct 2025. [19] C. Wang, Z. Ren, W. Cheng, and H. Zhang, “CDMR: Effective computing-dependent multi-path routing strategies in satellite and terres-trial integrated networks,” IEEE Transactions on Network Science and Engineering , vol. 9, no. 5, pp. 3715–3730, Sep. 2022. [20] Z. Wei, X. Yu, D. W. K. Ng, and R. Schober, “Resource allocation for simultaneous wireless information and power transfer systems: A tutorial overview,” Proceedings of the IEEE , vol. 110, no. 1, pp. 127–149, 2022. [21] N. Gunantara, “A review of multi-objective optimization: Methods and its applications,” Cogent Engineering , vol. 5, no. 1, p. 1502242, 2018. [22] S. Sharma and V. Kumar, “A comprehensive review on multi-objective optimization techniques: Past, present and future,” Archives of Compu-tational Methods in Engineering , vol. 29, no. 7, pp. 5605–5633, Nov 2022. [23] J.-H. Cho, Y. Wang, I.-R. Chen, K. S. Chan, and A. Swami, “A survey on modeling and optimizing multi-objective systems,” IEEE Communications Surveys & Tutorials , vol. 19, no. 3, pp. 1867–1901, 2017. [24] W. Cheng, X. Zhang, and H. Zhang, “Statistical-QoS driven energy-efficiency optimization over green 5G mobile wireless networks,” IEEE Journal on Selected Areas in Communications , vol. 34, no. 12, pp. 3092– 3107, Dec 2016. [25] C. Liu, X. Xu, and D. Hu, “Multiobjective reinforcement learning: A comprehensive overview,” IEEE Transactions on Systems, Man, and Cybernetics: Systems , vol. 45, no. 3, pp. 385–398, 2015. [26] Y. Zeng and R. Zhang, “Optimized training design for wireless energy transfer,” IEEE Transactions on Communications , vol. 63, no. 2, pp. 536–550, 2015. [27] N. Shanin, L. Cottatellucci, and R. Schober, “Optimal transmit strategy for multi-user MIMO WPT systems with non-linear energy harvesters,” 
+
+IEEE Transactions on Communications , vol. 70, no. 3, pp. 1726–1741, 2022. [28] R. Rezaei, N. Omidvar, M. Movahednasab, M. R. Pakravan, S. Sun, and Y. L. Guan, “Efficient, fair, and QoS-aware policies for wirelessly pow-ered communication networks,” IEEE Transactions on Communications ,vol. 68, no. 9, pp. 5892–5907, 2020. [29] A. Bayat and S. Aissa, “Fair scheduling of wireless power transfer to nonlinear energy harvesters,” IEEE Transactions on Green Communica-tions and Networking , vol. 6, no. 2, pp. 1096–1106, 2022. [30] S. Ozyurt, A. F. Coskun, S. Buyukcorak, G. Karabulut Kurt, and O. Kucur, “A survey on multiuser SWIPT communications for 5G+,” 
+
+IEEE Access , vol. 10, pp. 109 814–109 849, 2022. [31] Y. Chen, H. Kang, J. Li, G. Sun, B. Wang, J. Wang, C. Liang, S. Liang, and D. Niyato, “Joint resource management for energy-efficient UAV-assisted SWIPT-MEC: A deep reinforcement learning approach,” IEEE Internet of Things Journal , vol. 12, no. 15, pp. 31 448–31 465, 2025. [32] L. Xie, X. Cao, J. Xu, and R. Zhang, “UAV-enabled wireless power transfer: A tutorial overview,” IEEE Transactions on Green Communi-cations and Networking , vol. 5, no. 4, pp. 2042–2064, 2021. [33] J. Miao, P. Wang, Q. Zhang, and Y. Wang, “Throughput maximization for multi-UAV enabled millimeter wave WPCN: Joint time and power allocation,” China Communications , vol. 17, no. 10, pp. 142–156, 2020. [34] L. Li, G. Xu, Z. Liu, X. Xu, X. Meng, and X. Meng, “Multiobjective optimization of energy efficiency and fairness in AAV-assisted wireless powered MEC systems: A DRL-based approach,” IEEE Internet of Things Journal , vol. 12, no. 14, pp. 28 758–28 775, 2025. [35] S. Muy and J.-R. Lee, “Joint optimization of trajectory, beamforming, and power allocation in UAV-enabled WPT networks using DRL com-bined with water-filling algorithm,” Vehicular Communications , vol. 43, p. 100632, 2023. [36] G. K. Pandey, D. S. Gurjar, S. Yadav, and X. Li, “Deep reinforcement learning for AoI-aware UAV-assisted networks with RF energy harvest-ing,” IEEE Networking Letters , vol. 7, no. 2, pp. 88–92, June 2025. [37] J. Li, J. Li, L. Lv, Z. Ju, and F. Gong, “Multiobjective optimization of AoI and rate for secure dual-functional RIS-assisted networks: A cross-layer design,” IEEE Internet of Things Journal , vol. 12, no. 8, pp. 10 349–10 363, April 2025. [38] J. Wang, W. Cheng, and H. Vincent Poor, “Statistical delay and error-rate bounded QoS provisioning for AoI-driven 6G satellite-terrestrial integrated networks using FBC,” IEEE Transactions on Wireless Com-munications , vol. 23, no. 10, pp. 15 540–15 554, Oct 2024. [39] S. Zhang, H. Gu, K. Chi, L. Huang, K. Yu, and S. Mumtaz, “DRL-based partial offloading for maximizing sum computation rate of wireless pow-ered mobile edge computing network,” IEEE Transactions on Wireless Communications , vol. 21, no. 12, pp. 10 934–10 948, 2022. [40] T. T. Li, S. Li, C. X. Ding, Z. Bao, and M. Alhazmi, “Intelligent wireless power scheduling for lunar multienergy systems: Deep reinforcement learning for real-time adaptive beam steering and vehicle-to-grid energy optimization,” International Transactions on Electrical Energy Systems ,vol. 2025, no. 1, p. 9877968, 2025. [41] M. Giordani and M. Zorzi, “Non-terrestrial networks in the 6G era: Challenges and opportunities,” IEEE Network , vol. 35, no. 2, pp. 244– 251, 2021. [42] F. Caldas and C. Soares, “Machine learning in orbit estimation: A survey,” Acta Astronautica , vol. 220, pp. 97–107, 2024. [43] W. T. Li Bofeng and G. Haibo, “Deep neural network based precise orbit prediction for low Earth orbit (LEO) satellites,” Journal of Geodesy ,vol. 99, no. 9, p. 75, Sep 2025. [44] C. Xu, P. Zhang, and H. Yu, “Lyapunov-guided resource allocation and task scheduling for edge computing cognitive radio networks via deep reinforcement learning,” IEEE Sensors Journal , vol. 25, no. 7, pp. 12 253–12 264, 2025. [45] J.-H. Lee, C. Park, S. Park, and A. F. Molisch, “Handover protocol learning for LEO satellite networks: Access delay and collision min-imization,” IEEE Transactions on Wireless Communications , vol. 23, no. 7, pp. 7624–7637, 2024. [46] Z. Ni, Z. Hua, X. Yang, R. Zhang, S. Wang, and G. Pan, “LLM-aided spectrum-sharing LEO satellite communications,” IEEE Journal on Selected Areas in Communications , vol. 44, pp. 2591–2605, 2026. [47] S. Wang, X. Zhang, Z. Song, Z. Hua, J. Song, J. Wang, G. Pan, and D. Niyato, “Generative AI empowered covert communications: Autonomy, efficiency, and suitability,” IEEE Wireless Communications ,pp. 1–9, 2025. [48] S. Moon, H. Kim, and I. Hwang, “Deep learning-based channel es-timation and tracking for millimeter-wave vehicular communications,” 
+
+Journal of Communications and Networks , vol. 22, no. 3, pp. 177–184, 2020. [49] Z. Zhang, T. Jiang, and W. Yu, “Learning based user scheduling in reconfigurable intelligent surface assisted multiuser downlink,” IEEE Journal of Selected Topics in Signal Processing , vol. 16, no. 5, pp. 1026–1039, 2022. [50] S. He, S. Xiong, Y. Ou, J. Zhang, J. Wang, Y. Huang, and Y. Zhang, “An overview on the application of graph neural networks in wireless networks,” IEEE Open Journal of the Communications Society , vol. 2, pp. 2547–2565, 2021. [51] N. Yang, J. Wen, M. Zhang, and M. Tang, “Multi-objective deep reinforcement learning for mobile edge computing,” in 2023 21st In-ternational Symposium on Modeling and Optimization in Mobile, Ad Hoc, and Wireless Networks (WiOpt) , 2023, pp. 1–8. [52] R. T. Marler and J. S. Arora, “The weighted sum method for multi-objective optimization: New insights,” Structural and Multidisciplinary Optimization , vol. 41, no. 6, pp. 853–862, Jun 2010. [53] G. Giuffrida, L. Fanucci, G. Meoni, M. Batic, L. Buckley, A. Dunne, C. van Dijk, M. Esposito, J. Hefele, N. Vercruyssen, G. Furano, M. Pastena, and J. Aschbacher, “The Φ-Sat-1 mission: The first on-board deep neural network demonstrator for satellite Earth observation,” IEEE 21 
+
+Transactions on Geoscience and Remote Sensing , vol. 60, pp. 1–14, 2022. [54] G. M. Capuano, S. Capuozzo, A. G. M. Strollo, and N. Petra, “Benefits of FPGAs for deep learning acceleration in spacecraft systems,” in 2025 20th International Conference on PhD Research in Microelectronics and Electronics (PRIME) , 2025, pp. 1–4. [55] R. Bedi, “In-orbit artificial intelligence and machine learning on-board processing solutions for space applications: Edge-based and Versal space reference designs: First design-in experiences,” in 2023 European Data Handling & Data Processing Conference (EDHPC) , 2023, pp. 1–4. [56] L. Diana and P. Dini, “Review on hardware devices and software tech-niques enabling neural network inference onboard satellites,” Remote Sensing , vol. 16, no. 21, p. 3957, 2024. [57] G. Furano, G. Meoni, A. Dunne, D. Moloney, V. Ferlet-Cavrois, A. Tavoularis, J. Byrne, L. Buckley, M. Psarakis, K.-O. Voss, and L. Fanucci, “Towards the use of artificial intelligence on the edge in space systems: Challenges and opportunities,” IEEE Aerospace and Electronic Systems Magazine , vol. 35, no. 12, pp. 44–56, 2020. [58] S. Liu, H. Yang, L. Xiao, M. Zheng, H. Lu, and Z. Xiong, “Learning-based resource management optimization for UAV-assisted MEC against jamming,” IEEE Transactions on Communications , vol. 72, no. 8, pp. 4873–4886, 2024. [59] H. A. Embaby, M. N. Ismail, A. H. Ibrahim, and T. M. Habib, “AI-driven modeling and control of low Earth orbit satellites,” Aerospace Systems , vol. 8, no. 1, pp. 1–25, Mar 2025. [60] J. Liu, X. Zhao, P. Qin, S. Geng, and S. Meng, “Joint dynamic task offloading and resource scheduling for WPT enabled space-air-ground power Internet of Things,” IEEE Transactions on Network Science and Engineering , vol. 9, no. 2, pp. 660–677, 2022. [61] T. Camp, J. Boleng, and V. Davies, “A survey of mobility models for ad hoc network research,” Wireless Communications and Mobile Computing , vol. 2, 08 2002. [62] C. T. Rodenbeck, P. I. Jaffe, B. H. Strassner II, P. E. Hausgen, J. O. McSpadden, H. Kazemi, N. Shinohara, B. B. Tierney, C. B. DePuma, and A. P. Self, “Microwave and millimeter wave power beaming,” IEEE Journal of Microwaves , vol. 1, no. 1, pp. 229–259, 2021. [63] E. Boshkovska, D. W. K. Ng, N. Zlatanov, and R. Schober, “Practical non-linear energy harvesting model and resource allocation for SWIPT systems,” IEEE Communications Letters , vol. 19, no. 12, pp. 2082–2085, 2015. [64] J. Zhang, H. Gao, Q. Chen, and J. Li, “Task-oriented energy scheduling in wireless rechargeable sensor networks,” ACM Trans. Sen. Netw. ,vol. 19, no. 4, Jun. 2023. [65] F. Wang, J. Xu, and S. Cui, “Optimal energy allocation and task offloading policy for wireless powered mobile edge computing systems,” 
+
+IEEE Transactions on Wireless Communications , vol. 19, no. 4, pp. 2443–2459, 2020. [66] Y. Lei, J. Yu, D. Cao, Z. Feng, and S. Chan, “An energy urgency priority based mobile charging scheme in wireless rechargeable sensor network,” 
+
+Ad Hoc Networks , vol. 140, p. 103067, 2023. [67] M. O. Farooq, “System and methods for wireless power transfer schedul-ing in a wireless power transfer network,” Array , vol. 16, p. 100246, 2022. [68] R. K. Jain, D.-M. W. Chiu, W. R. Hawe et al. , “A quantitative measure of fairness and discrimination,” Eastern Research Laboratory, Digital Equipment Corporation, Hudson, MA , vol. 21, no. 1, pp. 2022–2023, 1984. [69] P. Jaffe and J. McSpadden, “Energy conversion and transmission mod-ules for space solar power,” Proceedings of the IEEE , vol. 101, no. 6, pp. 1424–1437, 2013. [70] A. Ayling, A. Fikes, O. S. Mizrahi, A. Wu, R. Riazati, J. Brunet, B. Abiri, F. Bohn, M. Gal-Katziri, M. R. M. Hashemi, S. Padmanabhan, D. Russell, and A. Hajimiri, “Wireless power transfer in space using flexible, lightweight, coherent arrays,” Acta Astronautica , vol. 224, pp. 226–243, 2024. [71] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proximal policy optimization algorithms,” CoRR , vol. abs/1707.06347, 2017. [72] R. Lowe, Y. Wu, A. Tamar, J. Harb, P. Abbeel, and I. Mordatch, “Multi-agent actor-critic for mixed cooperative-competitive environments,” in 
+
+Proceedings of the 31st International Conference on Neural Information Processing Systems , ser. NIPS’17. Red Hook, NY, USA: Curran Associates Inc., 2017, pp. 6382–6393. [73] J. Schulman, S. Levine, P. Moritz, M. Jordan, and P. Abbeel, “Trust re-gion policy optimization,” in Proceedings of the 32nd International Con-ference on Machine Learning - Volume 37 , ser. ICML’15. JMLR.org, 2015, pp. 1889–1897.

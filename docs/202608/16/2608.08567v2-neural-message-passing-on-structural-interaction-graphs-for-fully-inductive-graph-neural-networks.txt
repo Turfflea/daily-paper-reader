@@ -1,0 +1,986 @@
+Title: Neural Message Passing on Structural Interaction Graphs for Fully-Inductive Graph Neural Networks
+
+URL Source: https://arxiv.org/pdf/2608.08567v2
+
+Published Time: Fri, 14 Aug 2026 01:14:18 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# Neural Message Passing on Structural Interaction Graphs for Fully-Inductive Graph Neural Networks 
+
+## Omer Yom Tov 1∗, Avigdor Gal 1
+
+> 1
+
+Faculty of Data and Decision Sciences, Technion - Israel Institute of Technology Haifa, Israel omer.y@campus.technion.ac.il, avigal@technion.ac.il 
+
+Abstract 
+
+A central obstacle in building graph foundation models is the input heterogeneity in terms of feature space dimensionality, semantics, and structure. Such heterogeneity limits the capa-bility of graph neural networks to generalize to new graphs with unseen feature spaces. We address the transferability challenge with Sigil, a framework that maps any attributed graph to a unified representation space of fixed dimension. Given a graph, Sigil lifts it to a structural interaction graph, where nodes are the input feature dimensions and weighted, typed edges encode feature alignment across multiple orders of the graph’s connectivity. A relational message-passing net-work embeds each feature dimension into a shared space, transforming the original node features, of arbitrary dimen-sionality, into representations transferable to any downstream graph. By construction, Sigil is equivariant to permutations of nodes, feature dimensions, and labels. Additionally, when the input features are one-hot indicators of discrete relations, Sigil recovers and strictly generalizes existing foundation models for knowledge graph reasoning. A single Sigil model, pre-trained on one graph, delivers strong fully-inductive link pre-diction. Also, Sigil can be used to implement existing knowl-edge graph foundation models. As such, Sigil unifies several existing regimes in graph foundation model design under a single framework. 
+
+## 1 Introduction 
+
+Foundation models that perform inference on unseen tasks without task-specific training have reshaped machine learn-ing in language and vision, yet graph-structured data has re-mained largely outside their reach (Zhao et al. 2025). While a foundation model for text can encode any input through a shared, precomputed token vocabulary, no analogous univer-sal vocabulary exists for graphs. Each graph arrives with its 
+
+own node-feature space, different in dimensionality, in the semantics of each coordinate, and in the label set to be pre-dicted, so a model trained on one graph cannot, in general, even read another. A fully inductive graph model must there-fore generalize across three axes at once: unseen graph struc-ture, unseen feature spaces, and unseen label spaces (Zhao et al. 2025; Finkelshtein et al. 2026). Two largely separate lines of work have made progress on this problem, each capturing part of what a graph foundation model requires. The first targets node classification on arbi-trary graphs. GraphAny (Zhao et al. 2025) casts inference 
+
+> ∗
+
+Corresponding author        
+
+> A) Graph G+ node features X
+> f1 f2 f3
+> 0.9 0.4 0.1
+> B) SIG construction and feature embeddings
+> =
+> C) Transforming node features to a unified space 10100
+> 0.75 0.33
+> D) Zero-shot downstream task
+
+Figure 1: Overview of the Sigil framework. Sigil trans-forms node feature to a unified input space of fixed dimen-sion through message passing on the SIG, constructed from feature interaction on the graph’s connectivity, then passes them to a downstream, zero-shot GNN. as the analytical solution of a set of linear GNNs fused by a permutation-invariant attention, and subsequent models ob-tain unified node representations through tabular foundation models (Hayler et al. 2025; Eremeev et al. 2026), learned view spaces (Lee et al. 2026), or feature-space bridges (Elia-sof et al. 2026). These methods handle arbitrary feature and label spaces and respect the symmetries the setting demands, but they are designed for node classification alone and do not extend to link prediction or to the relational reasoning that structured graphs require. The second line builds knowl-edge graph foundation models (KGFMs) (Galkin et al. 2024; Zhang et al. 2024; Lee, Chung, and Whang 2023; Geng et al. 2023), which achieve striking zero-shot transfer to knowl-edge graphs with entirely unseen entities and relations by constructing a relation graph , a graph whose nodes are rela-tion types and whose edges record how relations co-occur in arXiv:2608.08567v2 [cs.LG] 13 Aug 2026 the structure, and learning transferable representations on it. This relational construction is powerful and principled, but it is fundamentally discrete . It presumes a finite vocabulary of relation types and has no mechanism for continuous node or edge features, which excludes input graphs with continuous feature spaces. These two research directions share a deeper commonality that, to our knowledge, has not been explicitly formalized in prior work. A KGFM’s relation graph is exactly a structure built over the feature space of a knowledge graph, namely its discrete relation types, rather than over nodes. Viewed this way, the relation graph is the discrete instance of a more general object, a graph over feature dimensions whose edges encode how those dimensions interact through the connec-tivity of the underlying graph. If such an object could be constructed for continuous features, it would unify the two research directions mentioned above. It inherits the relational reasoning of KGFMs while accepting the arbitrary feature spaces that node-classification Graph Foundation Models (GFMs) target, and it would apply to node classification and link prediction alike. We realize this object in Sigil ( Structural Interaction 
+
+Graphs for Inductive Learning) (see Figure 1 for overview). Given any graph (Figure 1(A)), Sigil lifts it to a Structural Interaction Graph (SIG): a graph whose nodes are the input feature dimensions and whose weighted, typed edges mea-sure how pairs of features align across multiple orders of the graph’s connectivity. Concretely, Sigil propagates features over increasing neighborhood orders, contrasts the features of adjacent nodes through an interaction operator, and sum-marizes the resulting patterns into a per-order Gram matrix over feature dimensions; stacking these orders yields the SIG (Figure 1(B)). A relational message-passing network then runs on the SIG to embed every feature dimension into a fixed-size space, which in turn maps the original graph, of arbitrary feature dimensionality, into a single unified rep-resentation (Figure 1(C)). Because the parameters of this network act only on the fixed hidden width and never on the input dimension, one trained Sigil model applies to any graph (Figure 1(D)). Crucially, when the input features are the one-hot indicators of discrete relations, the SIG con-struction recovers exactly the relation graph of a KGFM, so Sigil is a strict generalization of KGFMs from discrete to continuous input spaces. In summary, we make the following contributions: 
+
+• We introduce SIG, a structural interaction graph that lifts any attributed graph to a graph over its feature dimensions, and show that it strictly generalizes the relation graph of KGFMs from discrete relation vocabularies to continuous feature spaces (§ 3, § 4). 
+
+• We propose Sigil, a single framework that maps graphs of arbitrary feature and label spaces to a unified repre-sentation and addresses both node classification and link prediction, and we show it is equivariant to node, feature, and label permutations (§4). 
+
+• We evaluate Sigil across three regimes that the liter-ature has treated separately: 11 link prediction bench-marks (7 attributed, 4 non-attributed), inductive knowl-edge graph foundation models’ suite, and 26 node classifi-cation benchmarks. A single Cora-pretrained Sigil is the strongest fully-inductive link predictor on every attributed benchmark and remains competitive on non-attributed graphs. Also, Sigil closely reproduces the performance of existing KGFMs when instantiated on discrete relations and admits more expressive variants. Finally, it is com-petitive with node-classification specific GFMs, ranking best or second-best on 10 of 26 datasets (§5). 
+
+## 2 Preliminaries 
+
+Graph Notations. Let G = ( V, E) be a graph, with n =
+
+|V| nodes and m = |E| edges, where V and E represent the node and edge sets, respectively. Let A ∈ { 0, 1}n×n be the adjacency matrix, where Aij = 1 if and only if (i, j ) ∈ E .Let X ∈ Rn×d be the node feature matrix. We use Xi, : to denote the feature vector of the i-th node, and X:,f to denote the feature values of the f -th feature across all of the nodes. 
+
+Fully Inductive Graph Inference. Graph inference typi-cally involves two task types. First, in a link prediction task, we assume that the full graph is not observable, and that there are missing links (edges) from E. For every node v in a query set Vquery ⊆ V we aim to rank the nodes of the candidate set 
+
+{u ∈ V | (v, u ) /∈ E} on the likelihood of (v, u ) to join E,based on the observable graph G and node features X. Sec-ond, in a node classification task, we assume the existence of node labels Y ∈ { 1, 2, ..., C }n from C distinct classes. At both train and inference time, only a subset of labels Ytrain 
+
+is available for a subset of nodes Vtrain ⊂ V , and the goal is to provide a prediction ˆY for the missing labels Ytest of 
+
+Vtest = V \ V train . Traditionally, both tasks are modeled in a transductive learning setup, where a GNN is trained on the observable training data of G, then inference is performed on the unobservable edges or node labels. Such setup usually does not allow generalization for new graphs. In a fully in-ductive setup, A GNN is expected to perform inference over graphs that were not seen before, and which node feature di-mensions/distributions might differ from what was processed in training. 
+
+Message Passing Neural Networks. Message passing neural networks (MPNNs) (Gilmer et al. 2017) is a sub-class of GNNs that learn latent node representations through an iterative update of a node v’s hidden state with the hidden states of its neighbors Nv . Let h(t) 
+
+> v
+
+∈ Rd be the hidden state of v in iteration t, an MPNN updates the hidden state as follows. 
+
+h(t+1)  
+
+> v
+
+= Upd (h(t) 
+
+> v
+
+, Agg ({{h(t) 
+
+> u
+
+| u ∈ N v }})) (1) where Agg is a learnable aggregation function, aggregating the hidden states of Nv , and Upd is a learnable update func-tion, which outputs a new hidden state for v based on its previous state and the aggregated results of its neighbors’ hidden states. 3 Message Passing on Structural Interaction Graphs 
+
+Our goal is to design a fully inductive GNN that supports inference capabilities on any new graph, with arbitrary fea-ture and label dimension. In this section, we outline Sigil, a framework for designing such GNNs for both link prediction and node classification tasks. Sigil allows generalization to unseen feature and label spaces through learning representa-tions on SIG, a graph lifted from the input graph G, in which the node feature dimensions [d] are the nodes, and the edges represent the alignment of features with respect to various views of G’s connectivity through weights and types. 
+
+3.1 Constructing Structural Interaction Graphs 
+
+To construct the SIG of a graph G, we begin by creating mul-tiple orders for the node features X by performing multiple non-parameterized feature propagations on G. The k-th order feature matrix X(k) ∈ Rn×d is obtained via: 
+
+X(k) = AkX (2) Then, within each order k, we create edge features with an interaction operator g : Rd × Rd → R (e.g. , subtraction or element-wise multiplication). For each edge (i, j ) ∈ E , we create an edge feature x(k) 
+
+> ij
+
+= g(X(k) 
+
+> i, :
+
+, X(k) 
+
+> j, :
+
+). We use these intermediate edge features to construct a new node feature matrix ¯X(k), which satisfies 
+
+¯X(k) 
+
+> i, :
+
+= 1
+
+|N i|
+
+X
+
+> j∈N i
+
+x(k) 
+
+> ij
+
+(3) The resulting ¯X(k) columns characterize how feature values instantiate across nodes with respect to local neighborhoods. Depending on the choice of g, they capture how a node v tend to be similar/different to its neighbors through the feature. To model how aligned these patterns are between two features, we use the Gram matrix on the columns 
+
+¯A(k) =
+
+ ¯X(k)⊤ ¯X(k) ∈ Rd×d (4) The resulting matrix ¯A(k) is a weighted adjacency matrix of a complete, undirected graph over the feature dimensions [d],where the weight between features f, f ′ measures the align-ment of their local patterns, based on the characterization vectors ¯X(k):,f , ¯X(k):,f ′ . Finally, stacking the weighted adjacency matrices ¯A(0) , ¯A(1) , ..., ¯A(k) along the order axis, yields the structural interaction graph Gstruct ∈ Rd×d×k, where edges are typed based on the feature order from which they origi-nate, and weighted according to the feature alignments within the order. 
+
+Extension for Directed Graphs. When G is directed, a node participates in an edge either as its source or as its target, each carrying different information. We therefore split the neighborhood aggregation by direction. Writing N hi =
+
+{j : ( i, j ) ∈ E} and N ti = {j : ( j, i ) ∈ E} , we form two per-node summaries instead of one: 
+
+¯X(k) 
+
+> hi, :
+
+= 1
+
+|N hi |
+
+X 
+
+> j∈N hi
+
+x(k) 
+
+> ij
+
+, ¯X(k) 
+
+> ti, :
+
+= 1
+
+|N ti |
+
+X 
+
+> j∈N ti
+
+x(k) 
+
+> ji
+
+(5) Row i of ¯X(k) 
+
+> h
+
+(resp. ¯X(k) 
+
+> t
+
+) records how feature dimensions instantiate on the edges that leave (respectively enter) node 
+
+i. The Gram summarization is then applied both within and 
+
+across the two channels, yielding four feature-alignment ma-trices per order rather than one, as follows. 
+
+¯A(k) 
+
+> cc ′
+
+=
+
+ ¯X(k)
+
+> c
+
+⊤ ¯X(k) 
+
+> c′
+
+∈ Rd×d, c, c ′ ∈ { h, t } (6) The slice ¯A(k) 
+
+> cc ′
+
+measures how strongly feature f , seen through the c channel, aligns with feature f ′, seen through the c′ chan-nel, at a shared node. Stacking over orders and channel pairs gives the binary-motif SIG Gstruct ∈ Rd×d×4k, whose edge types are now indexed by an (order, channel-pair) tuple. The undirected construction of the previous paragraph is the spe-cial case in which the two channels coincide, collapsing the four slices per order back to one. For simplicity, we formalize the architectures on the undirected case, treating the directed case as an immediate generalization. We provide detailed implementation of the construction pipeline via matrix mul-tiplications in Appendix A. 1
+
+3.2 Learning Representations on the SIG 
+
+The task of fully-inductive node representation learning (FI-NRL), formalized by (Lee et al. 2026), requires out-putting node representation without gradient-based training for graphs of arbitrary dimensionalities. We use pretrained GNNs with weights fitted for the SIG graph vocabulary to allow Sigil to infer informative node representations for the graphs without training on them first. 
+
+Relational Message Passing on the SIG. Following the construction of Gstruct , Sigil embeds each feature f ∈ [d]
+
+to a fixed-sized representation θf ∈ Rdh through running a relational MPNN over Gstruct . We initialize the node feature embeddings Θ(0) according to an initialization policy ( e.g. ,Laplacian Eigenmaps), then update the representation with relational message passing GNN Mstruct (Schlichtkrull et al. 2018) over the order typed edges, as follows. 
+
+Θ(t+1) = Θ (t)Wself +
+
+> K
+
+X
+
+> k=0
+
+¯A(k)Θ(t)Wk (7) where the initial encoding and parameters Wi ∈ Rdh×dh
+
+map the features to a fixed-size dimension dh. The final layer 
+
+Θ(T ) ∈ Rd×dh yields feature embeddings that are learned from local patterns and feature interactions of G, and are used to reshape the original node features X ∈ Rn×d to the new, fixed dimension dh via: 
+
+H = XΘ(T ) ∈ Rn×dh
+
+We can construct Gstruct for any graph, with arbitrary number of nodes, edges or feature dimensions d. Also, the parameters of Mstruct are completely independent of d and output new node features in a fixed dimension dh. Therefore, Sigil effec-tively transforms every possible graph input, with arbitrary dimensions, to the same unified input space that is based both on the original node features and the graph structure. 
+
+> 1All appendices are part of the supplementary material.
+
+Moreover, we can create additional views of the node embed-dings of the propagated node features via H(k) = X(k)Θ(T ),leveraging additional signals in downstream tasks. 
+
+3.3 Using Sigil for Downstream Tasks 
+
+Designing Fully-Inductive Link Prediction Models. 
+
+Link prediction admits a natural end-to-end fully-inductive design under Sigil , since its output space does not depend on any per-graph vocabulary of labels: the same scoring function transfers to any target graph. We exploit this by pairing the SIG embeddings with expressive link prediction GNNs (Zhu et al. 2021; Chamberlain et al. 2023; Wang, Yang, and Zhang 2024) as the architectures that train on the Sigil embedding space, which allows them to inference in zero-shot on any new graph. 
+
+Decoding Labels for Node Classification. Node classi-fication introduces an additional axis of transfer: the label space itself varies across graphs, and Sigil supports sev-eral decoding strategies on top of its unified representation. We can decode the test node labels in an in-context man-ner through closed-form analytical solutions (Zhao et al. 2025), which satisfies label equivariance. An extension of the in-context approach, which preserves fully-inductive end-to-end design, is to decode with tabular foundation models (Ere-meev et al. 2026; Choi et al. 2026). Alternatively, we can use the node representations from Sigil and fit cheap linear/MLP layers to the train-set nodes (Eliasof et al. 2026; Lee et al. 2026), which makes Sigil a node encoder. 
+
+## 4 Properties of Sigil 
+
+In this work, we establish two properties that situate Sigil within the graph foundation model landscape. First, we show that Sigil is a strict generalization of KGFMs: when the input signal is the one-hot indicator of discrete relations, the SIG construction recovers the relation graph of a KGFM (§4.1). Second, we show that the node representations produced by Sigil satisfy the symmetries identified as necessary for gen-eralization in the fully inductive regime (Zhao et al. 2025; Finkelshtein et al. 2026; Zhou et al. 2023). Specifically, the node representations produced by Sigil are equivariant to node permutations, invariant to feature dimension permuta-tions, and, when composed with an equivariant decoder, are also equivariant to label permutations. Complete proofs are given in Appendix C. 
+
+4.1 Generalizing KGFMs to Continuous Input Spaces 
+
+The KGFM relation graph. Let G = (V, E, R) be a knowledge graph with a finite relation vocabulary R, where every edge (i, j ) ∈ E carries a relation type r(i, j ) ∈ R .KGFMs such as ULTRA (Galkin et al. 2024) build a relation graph Grel whose nodes are the |R| relation types and whose typed edges record how pairs of relations co-occur around shared entities, using them to learn transferable relation rep-resentations. ULTRA distinguishes four fundamental rela-tion interactions according to whether the shared entity is a head or a tail of each relation: head-to-head (h2h), tail-to-tail (t2t), head-to-tail (h2t), and tail-to-head (t2h). A relational GNN over Grel then yields a representation of each relation that is a function of these interactions alone, and therefore transfers to any unseen knowledge graph. The key observation is that each fundamental interaction is a product of relation-incidence matrices . Define the head-and tail-incidence matrices Mh, M t ∈ { 0, 1}n×| R| by 
+
+(Mh)v,r = 1[∃ (v, u ) ∈ E : r(v, u ) = r] ,
+
+(Mt)v,r = 1[∃ (u, v ) ∈ E : r(u, v ) = r]
+
+Row v records which relation v participates as a head (tail, respectively). Then the four interaction adjacencies over the relation set R are, up to normalization, 
+
+Ah2h = M ⊤ 
+
+> h
+
+Mh, At2t = M ⊤ 
+
+> t
+
+Mt,
+
+Ah2t = M ⊤ 
+
+> h
+
+Mt, At2h = M ⊤ 
+
+> t
+
+Mh. (8) 
+
+Recovering the relation graph as a SIG. We now show that the SIG construction of §3.1, instantiated on one-hot relation features with the directed in/out separation, produces the matrices of Eq. 8. Encode the relational signal of G as one-hot edge features, 
+
+xij = e r(i,j ) ∈ { 0, 1}d, d = |R| 
+
+so that the feature dimensions [d] are in bijection with the relations R. The SIG is then built over the relation vocabulary. Because G is directed, we apply the in/out variant of the construction (§3.1, following A): at each node we aggregate incident edge features separately over out-edges and in-edges, giving two per-node summaries ¯Xh, ¯Xt. With one-hot edge features and mean (or sum) aggregation, these summaries are exactly the row-normalized head/ tail-incidence matrices 
+
+Mh, M t.
+
+Theorem 1 (Sigil recovers the KGFM relation graph) . Let 
+
+G = ( V, E, R) be a knowledge graph encoded with one-hot relation edge features xij = er(i,j ). Then, with the directed in/out variant of the SIG construction and multiplication, the slices of Gstruct coincide with the four fundamental relation-interaction adjacencies of Eq. 8. Consequently, relational message passing on Gstruct (§3.2) instantiates the relation encoder of a KGFM, and Sigil applied to G reduces to a KGFM. 
+
+Theorem 1 places KGFMs as the discrete special case of Sigil along the two axes of continuity and order. Replacing one-hot indicators with arbitrary continuous features leaves every step of the construction well defined: the incidence ma-trices become real-valued feature summaries and the Gram slices become continuous feature-alignment matrices rather than integer co-occurrence counts. Sigil therefore accepts the continuous node and edge features that KGFMs cannot represent. Additionally, ULTRA’s relation graph is built from entity-sharing motifs, i.e. , relations that meet at a common node (a single hop in G). Sigil’s multi-order propagation 
+
+X(k) = AkX produces a slice ¯A(k) for each order k, so for 
+
+k > 1 the SIG additionally encodes higher-order interac-tions between features/relations that are not adjacent but are connected through length-k walks. Thus, Sigil strictly gen-eralizes KGFMs even when restricted to discrete relations. 4.2 Equivariance to Node, Feature and Label Permutations 
+
+We now formalize the symmetries of Sigil. Let P ∈{0, 1}n×n, Q ∈ { 0, 1}d×d be permutation matrices acting on node feature dimensions, respectively. A relabeling of the input by (P, Q ) transforms the graph as follows. 
+
+A 7 → P AP ⊤, X 7 → P XQ⊤ (9) We first show that the SIG is invariant to node permuta-tions and equivariant to feature permutations, a property that makes it a transferable object, and then propagate this through the model. 
+
+Lemma 1 (Symmetries of the SIG) . For every order k, the SIG slice transforms as ¯A(k) 7 → Q ¯A(k)Q⊤ under the input relabeling (P, Q ). In particular, ¯A(k) is invariant to node permutations P and equivariant to feature permutations Q.
+
+Proposition 1 (Node equivariance and feature invariance of Sigil) . Assume that initialization is equivariant to node per-mutations, i.e. , Θ(0) 7 → QΘ(0) for input relabeling (P, Q ).Then, under the input relabeling (P, Q ), the unified node rep-resentation H = XΘ(T ) is equivariant to node permutations 
+
+P and invariant to feature permutations Q.
+
+Proposition 1 shows that the internal feature embeddings 
+
+Θ(T ) are feature-equivariant (Θ(T ) 7 → QΘ(T )), while the output node representation H is feature-invariant: it does not depend on the ordering or identity of the input feature dimensions at all. This is exactly the requirement for cross-graph transfer articulated by (Zhao et al. 2025; Finkelshtein et al. 2026), and it is what allows a single trained Sigil model to read a graph whose d features it has never seen. For the task of link prediction, symmetries hold for the query-conditioned construction used in KGFMs (Galkin et al. 2024; Zhang et al. 2024; Huang et al. 2025), which main-tains the reduction argument in Proposition 1, and is in line with the symmetries established by (Zhou et al. 2023) for generalization in link prediction. For the task of node classification, pairing Sigil with any equivariant decoder ( e.g. , the closed form analytical solutions used by (Zhao et al. 2025)), ensures label equivariance for Sigil in node classification tasks. 
+
+## 5 Experiments 
+
+We evaluate Sigil on two main tasks, namely link prediction and node classification. For link prediction, we design Sigil-lp, a fully-inductive, zero-shot model that leverages both graph structure and node features through the SIG embed-dings and directly subsumes KGFMs (as discussed in §4.1). This is enabled by the SIG embeddings being of fixed dimen-sion, which is a property that, to the best of our knowledge, is a unique property of Sigil among all existing GFMs. For node classification, we design Sigil-nc, which is a variant that outputs fixed-dimension node embeddings for an arbi-trary graph, and then fit a downstream MLP to adapt to the output space of the task. While not being fully-inductive, this paradigm still exhibits fully-inductive representation learn-ing (Lee et al. 2026), positioning Sigil-nc as a node encoder. These three experiments are three instantiations of a single construction, chosen to unify regimes that the GFM litera-ture has so far treated separately, and are feasible by Sigil via the flexibility of modeling offered by the SIG and its inherent ability to encode both structure and feature spaces to fixed-size node embeddings. Throughout, a single Sigil model is trained on one source graph and applied zero-shot to unseen targets. We instantiate Sigil-lp for link predic-tion and Sigil-nc for node classification. We compare Sigil against fully-inductive methods. Comparisons against trans-ductive models trained directly on each target graph are given for the sake of completion in Appendix E and design-choice ablations are deferred to Appendix F. All experiments were run on two Nvidia A6000 GPUs ( 48 GB of RAM for each) with torch-geometric (Fey and Lenssen 2019); full setups and hyperparameters are in Appendix D. 
+
+5.1 Link Prediction with Continuous Feature Spaces 
+
+Datasets and baselines. We evaluate Sigil-lp on 11 benchmarks in two groups. The first comprises seven 
+
+attributed graphs: citation networks (Yang, Cohen, and Salakhutdinov 2016) (Cora, CiteSeer, PubMed), co-purchase graphs (Shchur et al. 2019) (AmazonComputers, Amazon-Photos), and co-authorship graphs (Shchur et al. 2019) (CoauthorCS, CoauthorPhysics), following (Dong, Guo, and Chawla 2024; Wang, Yang, and Zhang 2024). This is the regime Sigil-lp targets, and the one in which, to the best of our knowledge, there is no existing fully-inductive link predictor that utilizes node features. The second comprises four non-attributed graphs from the benchmark of (Zhang and Chen 2018a; Liao et al. 2026): C.ele, USAir, PB and NS, which carry no innate node features; there we instan-tiate X with DeepWalk embeddings (Perozzi, Al-Rfou, and Skiena 2014) calculated on the train edges for Sigil-lp ini-tializations, so that all methods operate on structural sig-nal alone. We evaluate against two fully-inductive baselines: UniLP (Dong et al. 2025) and TFMLinker (Liao et al. 2026) and against 4 transductive baselines: NBFNet (Zhu et al. 2021), ELPH (Chamberlain et al. 2023), NCNC (Wang, Yang, and Zhang 2024) and MPLP+ (Dong, Guo, and Chawla 2024). Evaluations against transductive baselines (except NBFNet which is Sigil-lp link prediction backbone) are in Appendix E. Detailed experimental setup is in Appendix D. 
+
+Results on Attributed Graphs. Table 1 reports Hits@100 on the citation graphs and Hits@50 elsewhere. On the attributed block, Sigil-lp is the strongest fully-inductive method on every dataset, including the six it has never seen. Against UniLP it leads by 5.83 on CiteSeer, 2.44 on Ama-zonPhotos and 6.58 on CoauthorCS, and ties within noise on PubMed. The advantage is structural rather than inciden-tal: UniLP transfers across graphs by discarding the feature space and falling back on connectivity alone, whereas Sigil-lp reads the target graph’s feature space through the SIG embeddings, which are of fixed dimension dh regardless of the target’s input dimensionality. The advantage also com-pounds with scale: UniLP’s in-context inference exceeds a 24-hour budget yet Sigil-lp completes even with the heavy NBFNet head. The backbone comparison measures the same Attributed Non-attributed                                                                    
+
+> Model Cora CiteSeer PubMed AmzComp AmzPhoto CoCS CoPhys C.ele USAir PB NS
+> Metric H@100 H@100 H@100 H@50 H@50 H@50 H@50 H@50 H@50 H@50 H@50
+> NBFNet 71.65 ±2.27 74.07 ±1.75 58.73 ±1.99 13.14 ±1.04 21.35 ±3.36 71.86 ±0.93 66.71 ±4.39 38.00 ±4.92 52.71 ±5.27 7.17 ±0.08 89.60 ±1.83
+> UniLP 74.01 ±2.58 67.12 ±1.94 59.09 ±0.87 ≥24h 34.71 ±1.48 69.38 ±1.70 ≥24h 65.20 ±4.40 85.98 ±2.00 48.14 ±2.99 89.09 ±2.05
+> TFMLinker –––––––68.62 ±5.97 91.67 ±1.37 47.75 ±2.76 90.46 ±2.43
+> Sigil-lp 77.99 ±1.72 †72.95 ±1.65 60.01 ±1.02 26.25 ±1.70 37.15 ±1.55 75.96 ±1.18 70.28 ±2.54 71.14 ±3.24 89.60 ±1.69 44.05 ±3.66 89.38 ±1.69
+
+Table 1: Link prediction against fully-inductive baselines (Sigil-lp is ours). Sigil-lp , UniLP and TFMLinker are fully-inductive and NBFNet is the (originally transductive )Sigil-lp backbone. Best in bold , second-best underlined. ≥24h marks per-query inference over 24 hours; “–” marks results that were not producible due to lack of published code. † - Sigil-lp is pretrained on Cora. quantity from the opposite direction. Sigil-lp improves over its own NBFNet backbone on six of the seven attributed datasets, from 1.28 points on PubMed to 15.80 on Ama-zonPhotos, even though NBFNet is trained directly on each target graph while Sigil-lp never sees it; CiteSeer is the sole exception, where the per-target-trained backbone retains a 1.12-point edge. Since NBFNet on homogeneous graphs does not consume node features, and the two models are oth-erwise identical in their decoder, this margin isolates what the SIG embeddings contribute. 
+
+Results on Non-attributed Graphs. Averaged over the block, Sigil-lp reaches 73.54 Hits@50 against 72.10 for UniLP and 74.62 for TFMLinker, placing it second of the three fully-inductive methods and ahead of UniLP. Sigil-lp is also the most stable of the three: its mean standard devi-ation over the block is 2.5, against 2.86 for UniLP and 3.13 for TFMLinker, and it is the tightest of the three on Sigil-lp wins on C.ele, is second on USAir and very competitive on NS. Its one clear shortfall is PB, the densest graph in the block, where the absence of features leaves only the structural regularities that heuristic-driven predictors already capture directly. The backbone gap is starkest in this block: without the SIG embeddings, NBFNet trained directly on each target graph reaches 38.00 on C.ele and 52.71 on USAir, against 68.22 and 88.39 for Sigil-lp . We note here that TFMLinker, the leading model, is being powered by a large tabular foun-dation model. Hence, Sigil-lp is competitive while being more parameter efficient and training on less data overall. 
+
+5.2 Implementing KGFMs with Sigil-lp 
+
+Setup. Theorem 1 predicts that instantiating the SIG on one-hot relation indicators at order zero recovers exactly ULTRA’s relation graph. To verify the prediction empiri-cally, we seek to re-implement and reproduce ULTRA within Sigil. We pretrain Sigil-lp on FB15k-237 (Toutanova and Chen 2015), WN18RR (Dettmers et al. 2018) and CoDEx-Medium (Safavi and Koutra 2020), and evaluate under UL-TRA’s published protocol on its two inductive groups, in-ductive (e, r ), with unseen entities and relations (23 graphs), and inductive (e), with unseen entities (18 graphs), alongside the three pretraining graphs. We additionally sweep the SIG order K, which §4.1 identifies as a strict extension of the re-lation graph beyond the single-hop motifs ULTRA encodes. Full setup in Appendix D and complete, per dataset results are in Appendix E.                                   
+
+> Inductive e, r Inductive ePretraining
+> Model MRR Hits@10 MRR Hits@10 MRR Hits@10 Ultra 34.5 51.3 43.1 56.6 40.7 56.8 Sigil (0) 32.6 50.1 39.5 55.0 40.7 55.6 Sigil (1) 32.4 49.2 43.1 56.8 43.7 59.0
+> Sigil (2) 32.3 49.8 43.5 58.3 43.6 58.9
+
+Table 2: KG reasoning results against ULTRA. ULTRA can be reproduced within the Sigil framework by treating KG relations as one-hot feature vectors. Sigil( k) denotes a Sigil-lp model with k-th order SIG. 
+
+Results. Table 2 reports MRR (Mean Reciprocal Rank) and Hits@10. Sigil(0) reproduces ULTRA across all three groups to within 2.1 MRR and 1.2 Hits@10, matching it ex-actly on pretraining MRR (40.7) and exceeding it on entity-inductive Hits@10. Because the relation graph is an actual SIG (Theorem 1), these residuals are attributable to exist-ing differences, such as more complex interaction operators and aggregations of Sigil , that can empirically improve expressivity, consistent with the findings of (Zhang et al. 2024). Higher orders, implemented via sweeps on K val-ues, behave in a regime-dependent way. Relative to Sigil(0), order 2 gains MRR on the entity-inductive group and on the pretraining group, but loses MRR on the fully-inductive 
+
+(e, r ) group. Hence, we do not claim that higher orders are uniformly preferable, consistent with (Huang et al. 2025). Therefore, greater expressivity does not automatically yield better-performing KGFMs, and characterizing when it pays off is a natural extension of the analysis to the multi-order setting. 
+
+5.3 Node Classification 
+
+Datasets and Baselines. We follow GraphAny (Zhao et al. 2025) in dataset selection and splits, evaluating Sigil-nc on 26 benchmarks whose feature dimensionalities and class counts (2 to 70) vary widely. We use feature normal-ization and reduce input feature dimensions beyond 1024 with PCA, following (Finkelshtein et al. 2026). On fea-tureless datasets from (Ribeiro, Saverese, and Figueiredo GraphAny TS-MEAN TAG RGVT Sigil-nc Avg. Acc. (%) 64.51 65.09 71.57 71.78 66.10 # Best (of 26) 0 0 11 10 5# Top-2 (of 26) 1 2 17 22 10 
+
+Table 3: Node classification against fully-inductive baselines, aggregated over the 26 benchmarks; per-dataset results are in Appendix E (Table 13). 2017), we initialize features with DeepWalk (Perozzi, Al-Rfou, and Skiena 2014). We compare against four fully-inductive GFMs designed specifically for node classification: GraphAny (Zhao et al. 2025), TS-MEAN (Finkelshtein et al. 2026), TAG (Hayler et al. 2025) and RGVT (Lee et al. 2026), and defer transductive baselines (MLP, GCN, GAT) to Ap-pendix E. Sigil-nc is pretrained on Cora and applied to every target graph without gradient updates to the SIG encoder. A light MLP is then fitted on the target’s training labels to map the unified representation into its label space. Sigil-nc therefore realizes fully-inductive representation learning in the sense of (Lee et al. 2026), rather than end-to-end fully-inductive classification. Full setup in Appendix D. 
+
+Results. Table 3 reports average accuracy and the winning statistics of GFMs for node classification on the 26-dataset benchmark, with full experimental results available in Ap-pendix E. Sigil-nc does not match the specialized models: at 66.10 it trails RGVT (71.78) and TAG (71.57), while plac-ing above GraphAny (64.51) and TS-MEAN (65.09), and is best on 5 of 26 datasets and best-or-second on 10, whereas GraphAny and TS-MEAN, within a point of it on average, win none and reach the top two on 1 and 2 respectively. Sigil-nc is therefore not uniformly mid-ranked but strong on a subset of graphs and weak on others, and its wins fall on graphs far from Cora in both dimensionality and label space, which indicates that the SIG embeddings enable transferabil-ity to different domains. We attribute the existing gap to the cost of unification. Compressing arbitrary feature spaces into a fixed dh leaves the original coordinates individually inac-cessible to the decoder, which consequently requires more supervision than methods that retain the raw features. In Ap-pendix F, we vary the number of labeled nodes per class to test this. Node classification is thus the weakest of our three regimes, yet the results still signal that learning on SIGs is a valid method for designing node classification KGFMs that can be competitive with existing, established methods. 
+
+## 6 Related Work 
+
+6.1 Graph Foundation Models 
+
+GFMs are designed to learn representations that generalizes across various graph datasets, domains and dimensionalities, unlike GNNs (Kipf and Welling 2017; Hamilton, Ying, and Leskovec 2017; Veličković et al. 2018), which assume fixed feature orderings and dimensions, and are trained in a trans-ductive setting. Several approaches have been proposed for designing GFMs for varying settings, domains, and tasks. These include aligning feature spaces through projections (Xia, Kao, and Huang 2024; Xia and Huang 2024), connect-ing node features a graph structure (Frasca et al. 2024; Galkin et al. 2024; Zhang et al. 2024), using prior-fitted networks and tabular foundation models (Eremeev et al. 2026; Choi et al. 2026; Hayler et al. 2025), and utilizing LLMs for tex-tual attributed graphs (Liu et al. 2024). A key open challenge, not fully addressed by existing approaches, is how to encode many graphs of different domains to a unified latent space. Unlike domains such as natural language processing, where precomputed static embeddings allows for any input to be encoded to the same space, in the graph domain this remains a challenge due to the heterogeneity of graph datasets and variance in their dimensionalities. In this work, we propose a framework that combines the graph structure and the signal from the node/edge features and outputs node embeddings in a unified, transferable input space that can support training of GNNs for zero-shot generalization. 
+
+6.2 Knowledge Graph Foundation Models 
+
+KGFMs are a family of GFMs designed for zero-shot reason-ing on knowledge graphs (KGs), and can infer entities and relations that were unseen during their training by learning transferable relation embeddings from invariant graph mo-tifs and relation interactions on the KG. Notable examples are ULTRA (Galkin et al. 2024), RMPI (Geng et al. 2023), InGRAM (Lee, Chung, and Whang 2023) and TRIX (Zhang et al. 2024), all leveraging a new relation graph, which mod-els co-occurrences of the relations (edge types) in graph motifs of the original KG. Despite the demonstrated general-ization capabilities in the KG domain, these models are still limited to discrete features, and cannot be properly applied to graphs with continuous node/edge features. In this work, we propose a framework that generalizes to continuous fea-tures. By rethinking discrete relation types as one-hot edge feature vectors, we design a model that can be applied to a KG in a discrete case, but is also applicable to graphs with continuous input spaces. 
+
+## 7 Conclusions 
+
+We introduced Sigil, a framework that lifts any attributed graph to a structural interaction graph over its feature dimen-sions and learns transferable representations on it via rela-tional message passing, mapping graphs of arbitrary dimen-sionality into a shared space of fixed width. The construction is equivariant to node, and feature permutations, and re-covers the relation graph of a knowledge graph foundation model exactly when instantiated on one-hot relation indi-cators. Empirically, Sigil-lp is the strongest fully-inductive link predictor on every attributed benchmark and remains competitive on non-attributed graphs; the same construction reproduces ULTRA on its inductive benchmark, and yields a node encoder that ranks best or second-best on 10 of 26 clas-sification benchmarks. Transferability, relational reasoning and edge-level tasks therefore arise from a single mechanism rather than from separate designs. For future work, design-ing and refining architectures for learning on SIGs beyond simple MPNNs is a natural next step, as well as studying the expressive power of SIGs, what information they preserve or lose and how it effects the SIG embeddings. References 
+
+Bojchevski, A.; and Günnemann, S. 2018. Deep Gaussian Embedding of Graphs: Unsupervised Inductive Learning via Ranking. In International Conference on Learning Repre-sentations .Chamberlain, B. P.; Shirobokov, S.; Rossi, E.; Frasca, F.; Markovich, T.; Hammerla, N.; Bronstein, M. M.; and Hans-mire, M. 2023. Graph Neural Networks for Link Prediction with Subgraph Sketching. In ICLR .Choi, J.; Kim, J.; Kang, W.; and Park, N. 2026. Learning Pos-terior Predictive Distributions for Node Classification from Synthetic Graph Priors. arXiv preprint arXiv:2604.19028 .Dettmers, T.; Minervini, P.; Stenetorp, P.; and Riedel, S. 2018. Convolutional 2D knowledge graph embeddings. In 
+
+Proceedings of the Thirty-Second AAAI Conference on Arti-ficial Intelligence and Thirtieth Innovative Applications of Artificial Intelligence Conference and Eighth AAAI Sym-posium on Educational Advances in Artificial Intelligence ,AAAI’18/IAAI’18/EAAI’18. AAAI Press. ISBN 978-1-57735-800-8. Dong, K.; Guo, Z.; and Chawla, N. V. 2024. Pure Message Passing Can Estimate Common Neighbor for Link Predic-tion. In The Thirty-eighth Annual Conference on Neural Information Processing Systems .Dong, K.; Mao, H.; Guo, Z.; and Chawla, N. V. 2025. Uni-versal Link Predictor By In-Context Learning on Graphs. 
+
+Transactions on Machine Learning Research .Eliasof, M.; Mantri, K. S. I.; Bevilacqua, B.; Ribeiro, B.; and Schönlieb, C.-B. 2026. Bridging Input Feature Spaces Towards Graph Foundation Models. In The Fourteenth In-ternational Conference on Learning Representations .Eremeev, D.; Platonov, O.; Bazhenov, G.; Babenko, A.; and Prokhorenkova, L. 2026. GraphPFN: A Prior-Data Fitted Graph Foundation Model. In International Conference on Machine Learning .Fey, M.; and Lenssen, J. E. 2019. Fast Graph Representation Learning with PyTorch Geometric. arXiv:1903.02428. Finkelshtein, B.; Ceylan, I. I.; Bronstein, M.; and Levie, R. 2026. Equivariance everywhere all at once: A recipe for graph foundation models. Advances in Neural Information Processing Systems , 38: 30377–30434. Frasca, F.; Jogl, F.; Eliasof, M.; Ostrovsky, M.; Schönlieb, C.-B.; Gärtner, T.; and Maron, H. 2024. Towards Foundation Models on Graphs: An Analysis on Cross-Dataset Transfer of Pretrained GNNs. arXiv:2412.17609. Galkin, M.; Berrendorf, M.; and Hoyt, C. T. 2022. An Open Challenge for Inductive Link Prediction on Knowledge Graphs. arXiv:2203.01520. Galkin, M.; Yuan, X.; Mostafa, H.; Tang, J.; and Zhu, Z. 2024. Towards Foundation Models for Knowledge Graph Reason-ing. In The Twelfth International Conference on Learning Representations .Geng, Y.; Chen, J.; Pan, J. Z.; Chen, M.; Jiang, S.; Zhang, W.; and Chen, H. 2023. Relational message passing for fully inductive knowledge graph completion. In 2023 IEEE 39th international conference on data engineering (ICDE) , 1221– 1233. IEEE. Gilmer, J.; Schoenholz, S. S.; Riley, P. F.; Vinyals, O.; and Dahl, G. E. 2017. Neural Message Passing for Quantum Chemistry. In Precup, D.; and Teh, Y. W., eds., Proceedings of the 34th International Conference on Machine Learning ,volume 70 of Proceedings of Machine Learning Research ,1263–1272. PMLR. Hamaguchi, T.; Oiwa, H.; Shimbo, M.; and Matsumoto, Y. 2017. Knowledge Transfer for Out-of-Knowledge-Base Enti-ties : A Graph Neural Network Approach. In Proceedings of the Twenty-Sixth International Joint Conference on Artificial Intelligence, IJCAI-17 , 1802–1808. Hamilton, W. L.; Ying, R.; and Leskovec, J. 2017. Inductive Representation Learning on Large Graphs. In NIPS .Hayler, A.; Huang, X.; Ceylan, I. I.; Bronstein, M. M.; and Finkelshtein, B. 2025. Of Graphs and Tables: Zero-Shot Node Classification with Tabular Foundation Models. In 
+
+New Perspectives in Graph Machine Learning .Hu, W.; Fey, M.; Zitnik, M.; Dong, Y.; Ren, H.; Liu, B.; Catasta, M.; and Leskovec, J. 2020. Open Graph Benchmark: Datasets for Machine Learning on Graphs. arXiv preprint arXiv:2005.00687 .Huang, X.; Barceló, P.; Bronstein, M. M.; Ceylan, İ. İ.; Galkin, M.; Reutter, J. L.; and Orth, M. R. 2025. How Expressive are Knowledge Graph Foundation Models? In 
+
+Proceedings of the Forty-second International Conference on Machine Learning .Kipf, T. N.; and Welling, M. 2017. Semi-Supervised Classifi-cation with Graph Convolutional Networks. In International Conference on Learning Representations .Lee, D.; Kong, M.; Jeong, M.; and Yoo, J. 2026. View Space: Learning Representation across Arbitrary Graphs. In 
+
+Forty-third International Conference on Machine Learning .Lee, J.; Chung, C.; and Whang, J. J. 2023. Ingram: Induc-tive knowledge graph embedding via relation graphs. In In-ternational conference on machine learning , 18796–18809. PMLR. Liao, T.; Hu, C.; Sui, Y.; Zhang, X.; Cui, P.; Li, J.; and Zhang, Z. 2026. TFMLinker: Universal Link Predictor by Graph In-Context Learning with Tabular Foundation Models. arXiv:2602.08592. Liu, H.; Feng, J.; Kong, L.; Liang, N.; Tao, D.; Chen, Y.; and Zhang, M. 2024. One for all: Towards training one graph model for all classification tasks. In International conference on learning representations , volume 2024, 20188–20210. Liu, S.; Grau, B.; Horrocks, I.; and Kostylev, E. 2021. IN-DIGO: GNN-Based Inductive Knowledge Graph Comple-tion Using Pair-Wise Encoding. In Ranzato, M.; Beygelz-imer, A.; Dauphin, Y.; Liang, P.; and Vaughan, J. W., eds., 
+
+Advances in Neural Information Processing Systems , vol-ume 34, 2034–2045. Curran Associates, Inc. Mernyei, P.; and Cangea, C. 2022. Wiki-CS: AWikipedia-Based Benchmark for Graph Neural Networks. arXiv:2007.02901. Pei, H.; Wei, B.; Chang, K. C.-C.; Lei, Y.; and Yang, B. 2020. Geom-GCN: Geometric Graph Convolutional Networks. In 
+
+International Conference on Learning Representations .Perozzi, B.; Al-Rfou, R.; and Skiena, S. 2014. DeepWalk: online learning of social representations. In Proceedings of the 20th ACM SIGKDD international conference on Knowl-edge discovery and data mining , KDD ’14, 701–710. ACM. Platonov, O.; Kuznedelev, D.; Diskin, M.; Babenko, A.; and Prokhorenkova, L. 2023. A critical look at evaluation of GNNs under heterophily: Are we really making progress? In 
+
+The Eleventh International Conference on Learning Repre-sentations .Ribeiro, L. F.; Saverese, P. H.; and Figueiredo, D. R. 2017. <i>struc2vec</i>: Learning Node Representations from Structural Identity. In Proceedings of the 23rd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining , KDD ’17, 385–394. ACM. Safavi, T.; and Koutra, D. 2020. CoDEx: A Comprehen-sive Knowledge Graph Completion Benchmark. In Webber, B.; Cohn, T.; He, Y.; and Liu, Y., eds., Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing (EMNLP) , 8328–8350. Online: Association for Computational Linguistics. Schlichtkrull, M.; Kipf, T. N.; Bloem, P.; Van Den Berg, R.; Titov, I.; and Welling, M. 2018. Modeling relational data with graph convolutional networks. In European semantic web conference , 593–607. Springer. Shchur, O.; Mumme, M.; Bojchevski, A.; and Günnemann, S. 2019. Pitfalls of Graph Neural Network Evaluation. arXiv:1811.05868. Teru, K.; Denis, E.; and Hamilton, W. 2020. Inductive re-lation prediction by subgraph reasoning. In International conference on machine learning , 9448–9457. PMLR. Toutanova, K.; and Chen, D. 2015. Observed versus latent features for knowledge base and text inference. In Allauzen, A.; Grefenstette, E.; Hermann, K. M.; Larochelle, H.; and Yih, S. W.-t., eds., Proceedings of the 3rd Workshop on Continuous Vector Space Models and their Compositional-ity , 57–66. Beijing, China: Association for Computational Linguistics. Veličković, P.; Cucurull, G.; Casanova, A.; Romero, A.; Liò, P.; and Bengio, Y. 2018. Graph Attention Networks. Interna-tional Conference on Learning Representations . Accepted as poster. Wang, X.; Yang, H.; and Zhang, M. 2024. Neural Com-mon Neighbor with Completion for Link Prediction. In The Twelfth International Conference on Learning Representa-tions .Xia, L.; and Huang, C. 2024. AnyGraph: Graph Foundation Model in the Wild. arXiv preprint arXiv:2408.10700 .Xia, L.; Kao, B.; and Huang, C. 2024. Opengraph: Towards open graph foundation models. In Findings of the Association for Computational Linguistics: EMNLP 2024 , 2365–2379. Yang, R.; Shi, J.; Xiao, X.; Yang, Y.; Bhowmick, S. S.; and Liu, J. 2023. PANE: scalable and effective attributed network embedding. The VLDB Journal , 32(6): 1237–1262. Yang, Z.; Cohen, W. W.; and Salakhutdinov, R. 2016. Re-visiting semi-supervised learning with graph embeddings. In Proceedings of the 33rd International Conference on In-ternational Conference on Machine Learning - Volume 48 ,ICML’16, 40–48. JMLR.org. Zhang, M.; and Chen, Y. 2018a. Link Prediction Based on Graph Neural Networks. In Bengio, S.; Wallach, H.; Larochelle, H.; Grauman, K.; Cesa-Bianchi, N.; and Garnett, R., eds., Advances in Neural Information Processing Systems ,volume 31. Curran Associates, Inc. Zhang, M.; and Chen, Y. 2018b. Link prediction based on graph neural networks. In Advances in Neural Information Processing Systems , 5165–5175. Zhang, Y.; Bevilacqua, B.; Galkin, M.; and Ribeiro, B. 2024. TRIX: A More Expressive Model for Zero-shot Domain Transfer in Knowledge Graphs. In The Third Learning on Graphs Conference .Zhao, J.; Zhu, Z.; Galkin, M.; Mostafa, H.; Bronstein, M.; and Tang, J. 2025. Fully-inductive Node Classification on Arbitrary Graphs. International Conference on Learning Representations .Zhou, J.; Bevilacqua, B.; and Ribeiro, B. 2023. A Multi-Task Perspective for Link Prediction with New Relation Types and Nodes. arXiv:2307.06046. Zhou, J.; Zhang, Y.; Gao, J.; Zhou, Y.; and Ribeiro, B. 2023. Double equivariance for inductive link prediction for both new nodes and new relation types. arXiv preprint arXiv:2302.01313 .Zhu, Z.; Zhang, Z.; Xhonneux, L.-P.; and Tang, J. 2021. Neu-ral bellman-ford networks: A general graph neural network framework for link prediction. Advances in neural informa-tion processing systems , 34: 29476–29490. A Constructing The SIG 
+
+The SIG is a deterministic, equivariant and parameter-free function of (X, A), computed once per graph and cached. Let ρ
+
+denote row-wise ℓ2 normalization and τ (M) = M/ tr( M) trace normalization (identity when | tr( M)| ≤ ε). 
+
+Views. With ˆA = D− 12 AD − 12 normalized and self-loop-free — so that order 0 (ego) stays distinct from order k (pure k-hop context): 
+
+X(k) = ρ
+
+ ˆAkX
+
+
+
+∈ Rn×d, k = 0 , . . . , K, 
+
+where the recursion runs on the unnormalized iterate and ρ is applied only to the stored view. 
+
+Edge features. Let Bh, Bt ∈ { 0, 1}n×m be the head and tail incidence matrices, defined as: 
+
+Bhie = 1[∃v ∈ V s.t e = ( i, v )] , Btie = 1[∃v ∈ V s.t e = ( v, i )] 
+
+so B⊤
+
+> h
+
+X(k) ∈ Rm×d gathers head-endpoint features. Per-edge features are an entrywise map of the two endpoint blocks, 
+
+F(k) = g(B⊤
+
+> h
+
+X(k), B⊤ 
+
+> t
+
+X(k)) ∈ Rm×d:
+
+(Bt − Bh)⊤X(k)
+
+| {z }
+
+> absdiff
+
+, (B⊤
+
+> h
+
+X(k)) ⊙ (B⊤ 
+
+> t
+
+X(k))
+
+| {z }
+
+> hadamard
+
+,
+
+h
+
+B⊤
+
+> h
+
+X(k) B⊤ 
+
+> t
+
+X(k)i| {z }
+
+> concat
+
+Role aggregation. Each edge feature returns to its endpoints, separately by role, with degree-normalized mean aggregation: 
+
+¯X(k) 
+
+> h
+
+= D−1 
+
+> h
+
+BhF(k), ¯X(k) 
+
+> t
+
+= D−1 
+
+> t
+
+BtF(k) ∈ Rn×d, D∗ = max   diag( B∗1m), In
+
+,
+
+the clamp passing isolated nodes through as zero rows. Row i of ¯X(k) 
+
+> h
+
+is the mean order-k edge feature over the edges where i
+
+is the head. This is the only step that separates the two roles, and it is what makes the construction direction-aware. 
+
+Interactions and stacking. The SIG edge weights are the four role-crossed products, where multiplications cancels the node axis: 
+
+¯A(k) 
+
+> hh
+
+= τ
+
+ ¯X(k)⊤ 
+
+> h
+
+¯X(k)
+
+> h
+
+
+
+, ¯A(k) 
+
+> tt
+
+= τ
+
+ ¯X(k)⊤ 
+
+> t
+
+¯X(k)
+
+> t
+
+
+
+, ¯A(k) 
+
+> ht
+
+= τ
+
+ ¯X(k)⊤ 
+
+> h
+
+¯X(k)
+
+> t
+
+
+
+, ¯A(k) 
+
+> th
+
+= ¯A(k)⊤
+
+> ht
+
+each in Rd×d. Entry (f, f ′) of ¯A(k) 
+
+> ht
+
+accumulates over all nodes how strongly dimension f in the head role aligns with dimension 
+
+f ′ in the tail role - this is the interaction the SIG encodes as an edge between feature nodes f and f ′. Stacking over orders, 
+
+Gstruct = stack Kk=0 
+
+ ¯A(k) 
+
+> hh
+
+, ¯A(k) 
+
+> tt
+
+, ¯A(k) 
+
+> ht
+
+, ¯A(k)
+
+> th
+
+
+
+∈ Rd×d×R, R = 4( K + 1) ,
+
+Special cases. Given native edge features F, the view and edge-feature steps are skipped and F enters role aggregation directly, giving an order-0 SIG with R = 4 . For a knowledge graph, taking F = Z ∈ { 0, 1}m×|R| , the one-hot relation indicator, makes the rows of ¯Xh = BhZ and ¯Xt = BtZ the head/tail relation-role incidences of each nodem and the resulting Gstruct is exactly ULTRA’s relation graph (Galkin et al. 2024). 
+
+## B Complexity Analysis for SIG Construction 
+
+Throughout, n and m are the node and edge counts of the input graph, d the feature dimension, K the number of propagation orders, R = 4( K + 1) the SIG relation count, and ¯k = m/n the average degree. The encoder that consumes the SIG has T
+
+layers and width dh. The construction is deterministic and parameter-free, so it is computed once per graph and cached; every cost below is paid once and amortized over all training steps on that graph. 
+
+Stage-by-stage cost. Each stage of §A streams over either the edge axis or the node axis: 
+
+Stage Time Working memory Retained Views X(k), k = 0 ..K O(Kmd ) O(nd ) O(Knd )
+
+Edge features F(k) O(Kmd ) O(md ) -Role aggregation ¯X(k) 
+
+> h
+
+, ¯X(k) 
+
+> t
+
+O(Kmd ) O(nd ) -Interaction operators ¯A(k) 
+
+> ∗
+
+O(Knd 2) O(d2) O(Kd 2)
+
+Total O K(md + nd 2) O(md + nd ) O(K(nd + d2)) 
+
+The first three stages are all O(Kmd ): ˆA has O(m) nonzeros, so each of the K propagation steps costs O(md ). the entry-wise map g touches each of the m edges once per order, and role aggregation is two sparse products B∗F(k) with m nonzeros each, due to each edge being indicates once in every B∗. Only the interaction stage leaves the edge axis: per order it forms three d × d
+
+products ¯X⊤ ¯X from [d, n ] × [n, d ] operands at nd 2 multiply, adds each. We note here that by capping d at 1024 via dimension reduction (like PCA), we can treat it as a constant, yet we maintain the analysis for the broader, more general case. Figure 2: SIG construction time in ms vs. #nodes (fixed average degree ¯k). 
+
+## C Proofs 
+
+C.1 Proof of Theorem 1 
+
+Proof sketch. By the argument above, the per-node in/out summaries equal Mt and Mh (up to degree normaliza-tion). The Gram summarization ¯A = ¯X⊤ ¯X applied within and across the in/out channels yields the four products 
+
+M ⊤ 
+
+> h
+
+Mh, M ⊤ 
+
+> t
+
+Mt, M ⊤ 
+
+> h
+
+Mt, M ⊤ 
+
+> t
+
+Mh, which are exactly (⋆). Stacking these as typed slices of Gstruct reproduces ULTRA’s relation graph, and the relational MPNN Mstruct of §3.2 has the same functional form as the GNN ULTRA runs on that graph. 
+
+C.2 Proof of Lemma 1 
+
+Proof. The propagated features satisfy X(k) = AkX 7 → (P AP ⊤)k(P XQ⊤) = P AkP ⊤P XQ⊤ = P X(k)Q⊤, using 
+
+P ⊤P = I. Choosing an interaction operator g that acts coordinate-wise in the feature dimension (e.g., absolut difference or element-wise product) gives g(uQ ⊤, vQ ⊤) = g(u, v )Q⊤, so each edge feature obeys x(k) 
+
+> ij
+
+7 → x(k) 
+
+> ij
+
+Q⊤ with edges relabeled by the node permutation. Neighborhood mean aggregation is node-equivariant, hence ¯X(k) 7 → P ¯X(k)Q⊤. Finally, the Gram summarization cancels the node permutation: 
+
+¯A(k) = ¯X(k)⊤ ¯X(k) 7 → (P ¯X(k)Q⊤)⊤(P ¯X(k)Q⊤) = Q ¯X(k)⊤P ⊤P ¯X(k)Q⊤ = Q ¯A(k)Q⊤
+
+C.3 Proof of Proposition 1 
+
+Proof. Assume inductively that Θ(t) 7 → Q Θ(t). The relational update Θ(t+1) = Θ (t)Wself +P 
+
+> k
+
+¯A(k)Θ(t)Wk, whose weights act on the fixed hidden dimension dh, transforms as 
+
+Θ(t+1) 7 → QΘ(t)Wself + X
+
+> k
+
+ Q ¯A(k)Q⊤  QΘ(t)Wk = Q
+
+
+
+Θ(t)Wself + X
+
+> k
+
+¯A(k)Θ(t)Wk
+
+
+
+= Q Θ(t+1) 
+
+so Θ(T ) 7 → Q Θ(T ). Therefore 
+
+H = XΘ(T ) 7 → (P XQ⊤)( QΘ(T )) = P XQ⊤QΘ(T ) = P XΘ(T ) = P H
+
+where Q⊤Q = I eliminates the feature permutation. The auxiliary views H(k) = X(k)Θ(T ) satisfy H(k) 7 → P H(k) by the same argument. 
+
+## D Detailed Experimental Setups 
+
+D.1 Experimental Setup for Link Prediction 
+
+Sigil-lp Architecture. Sigil-lp is designed to inference conditioned node representation as a direct generalization of KGFMs (Galkin et al. 2024; Zhang et al. 2024; Huang et al. 2025). After constructing Gstruct , we leverage two NBFNet modules: Mstruct for Gstruct and the M for G. Given a query node v for which we need to rank candidate nodes u ∈ V , we initialize the SIG node embedding of the feature f as: 
+
+θ(0)   
+
+> f|v
+
+= Xv,f · 1dh
+
+which is the value of the f for v, multiplied by an all-ones vector of dimension dh. This initialization for every feature creates 
+
+conditioned feature embeddings Θ(T ) | v, which in turns enables the downstream model M to learn node representations that are conditioned not only on the structure of v, but also on it’s actual features. The rest of the pipelines follows as the main flow described in §3 - transforming the original node features to Rdh via Θ(T ), which in turns enables M to learn in the weight space of Rdh×dh regardless of the original graph’s dimension. Sigil-lp is trained to minimize cross entropy loss of a positive links against a set of n negative links: 
+
+L = − log p(( v, u )) − 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+log p(( v′
+
+> i
+
+, u ′
+
+> i
+
+)) 
+
+Where (v, u ) ∈ E is a positive link in the graph and {(v′
+
+> i
+
+, u ′
+
+> i
+
+)}ni=1 are negative links that are not in the graph. Table 4: SIGIL-LP architecture parameters for main results. 
+
+Hyperparameter Value 
+
+Shared 
+
+dh 128 Feature preprocessing PCA to 1024, standardize, ℓ2
+
+Edge interaction Absdiff 
+
+SIG encoder 
+
+Layers 3SIG channels R 4 (hh, tt, ht, th) Relation operator DistMult (diagonal wr + shared linear) Normalization / residual LayerNorm; short-cut + boundary re-injection 
+
+Link predictor 
+
+Layers 6Message function DistMult Aggregation PNA Scorer MLP 128 → 128 → 1 (ReLU) Table 5: Training configuration for the Cora-trained SIGIL-LP checkpoint. 
+
+Hyperparameter Value 
+
+Training graph Cora Optimizer AdamW Learning rate 5 × 10 −4
+
+Steps 2,000 Batch size (positive edges) 256 Negatives per positive 1Edge split (train/val/test) 70% / 10% / 20% 
+
+Evaluation. Our evaluation datasets and baselines are briefly discussed in 5.1. For these datasets, we largely follow a conventional evaluation protocol, in which each dataset is splits into train, validation and test links with sizes of 70% /10% /20% 
+
+of the total links in the graph. As Sigil-lp and the other fully-inductive baselines run zero-shot on the graph, the train set can be considered as a context set. For each positive test links, we evaluate its score as ranked against a set of negative links, equals in size to the total set of test positives. For the non-attributed datasets only and the fully-inductive methods only (Sigil-lp and UniLP), we use the validation set edges in test time as part of the train set as an additional context. 
+
+D.2 Experimental Setup for KG Reasoning 
+
+Sigil-lp Architecture. Sigil-lp architecture for the KG reasoning experiment is derived via the special case construction of the SIG, detailed in §A. As each edge feature is ultimately a one hot indicator of a discrete relation, the SIG is exactly the relation Table 6: Sigil-lp architecture parameters for KG results. The SIG order K changes per checkpoint. 
+
+Hyperparameter Value 
+
+Shared 
+
+Hidden dimension dh 64 
+
+Relation-SIG encoder 
+
+Layers 6SIG channels R 4( K+1) = 4 (hh, tt, ht, th) Relation operator DistMult (diagonal wr + shared linear) Normalization / residual LayerNorm; short-cut + boundary re-injection 
+
+Link predictor 
+
+Layers 6Message function DistMult Aggregation sum Scorer MLP 64 → 64 → 1 (ReLU) Table 7: Pretraining configuration for Sigil-lp in the KG experiments. 
+
+Hyperparameter Value 
+
+Pretraining mixture FB15k-237, WN18RR, CoDEx-Medium Optimizer AdamW Learning rate 5 × 10 −4
+
+Steps 20,000 Batch size (query triples) 8graph of a KGFM such as ULTRA. The parameter choices and training regime follows ULTRA to realize the equivalence and subsumption of ULTRA inside Sigil. 
+
+Evaluation. Our evaluation setup is largely based on ULTRA’s KG benchmark, which is based on 54 KGs divided into three sets - inductive (e, r ), inductive (e) and transductive, and 3 pretraining graphs. We evaluate only on the first two + the pretraining graphs. The rest of our experimental setup, including train-test splits and positive-negative sampling is identical to the standard evaluation setups used by the KGFM literature (Galkin et al. 2024; Zhang et al. 2024; Huang et al. 2025). 
+
+D.3 Experimental Setup for Node Classification 
+
+Sigil-nc Architecture. Sigil-nc initialize feature embeddings on the SIG via laplacian eigenmaps, then runs the SIG encoder to produce feature embeddings Θ(T ) which are used to transform the original node features X ∈ Rn×d to Rn×dh . At evaluation time, we fit a light MLP on the fully-inductive node embeddings from Sigil to the label space of the downstream task. Table 8: Sigil-nc architecture parameters for main results. 
+
+Hyperparameter Value 
+
+Shared 
+
+dh 512 
+
+K 3Edge interaction g(xh, x t) Absdiff Feature preprocessing PCA to 1024, standardize, ℓ2
+
+SIG encoder 
+
+Layers 1Relation operator RGCN 
+
+Label decoder 
+
+Head 2-layer MLP Table 9: Training configuration for the Cora Sigil-nc checkpoint. 
+
+Hyperparameter Value 
+
+Training graph Cora Inner objective MLP → CE on train labels Optimizer AdamW Learning rate 1 × 10 −4
+
+Weight decay 1 × 10 −4
+
+Epochs × steps/epoch 10 × 100 = 1 ,000 meta-steps Batch size full train split 
+
+Evaluation. We largely follow GraphAny (Zhao et al. 2025) in benchmark selection, as detailed in §5.3. We use official splits for every dataset where available, otherwise we sample 20 samples per class as training data, then split the reminder evenly for validation and test data. We note that each of the feature views {X(k)}Kk=1 can be transformed using Θ(T ), hence we fit an MLP on the train set for each k and use the validation set to select the best view to evaluate on the test. 
+
+## E Detailed Main Results 
+
+E.1 Link Prediction Results 
+
+Table 10: Link prediction results across attributed and non-attributed benchmarks. Sigil-lp , UniLP and TFMLinker are fully-inductive and evaluated zero-shot on every target graph; all other methods are transductive and trained on each target graph. Best in bold , second-best underlined. ≥24h denotes methods where per-query inference exceeds 24 hours; “–” marks results which are not producible due to lack of published code. 
+
+Attributed Non-attributed 
+
+Dataset Cora CiteSeer PubMed AmzComp AmzPhoto CoCS CoPhys C.ele USAir PB NS Metric H@100 H@100 H@100 H@50 H@50 H@50 H@50 H@50 H@50 H@50 H@50 
+
+Transductive 
+
+NBFNet 71.65 ±2.27 74.07 ±1.75 58.73 ±1.99 13.14 ±1.04 21.35 ±3.36 71.86 ±0.93 66.71 ±4.39 38.00 ±4.92 52.71 ±5.27 7.17 ±0.08 89.60 ±1.83 
+
+MPLP+ 79.93 ±1.35 83.96 ±1.89 81.27 ±1.35 42.21 ±3.56 57.76 ±2.75 75.55 ±1.46 76.36 ±1.40 62.56 ±4.79 85.08 ±1.54 48.01 ±2.94 80.16 ±1.18 
+
+NCNC 89.65 ±1.36 93.47 ±0.95 81.29 ±0.95 36.48 ±4.16 47.98 ±2.36 74.65 ±1.23 75.96 ±1.73 64.45 ±5.10 85.85 ±2.46 47.75 ±6.90 88.25 ±2.25 
+
+ELPH 87.72 ±2.13 93.44 ±0.53 72.99 ±1.43 29.01 ±2.66 43.51 ±2.37 72.26 ±2.58 65.80 ±2.26 60.51 ±5.72 84.52 ±2.08 43.58 ±3.48 86.08 ±0.69 
+
+Fully-inductive 
+
+UniLP 74.01 ±2.58 67.12 ±1.94 59.09 ±0.87 ≥ 24h 34.71 ±1.48 69.38 ±1.70 ≥ 24h 65.20 ±4.40 85.98 ±2.00 48.14 ±2.99 89.09 ±2.05 
+
+TFMLinker – – – – – – – 68.62 ±5.97 91.67 ±1.37 47.75 ±2.76 90.46 ±2.43 
+
+Sigil-lp 77.99 ±1.72 † 72.95 ±1.65 60.01 ±1.02 26.25 ±1.70 37.15 ±1.55 75.96 ±1.18 70.28 ±2.54 68.22 ±2.41 88.39 ±0.67 45.55 ±3.72 88.69 ±1.30 E.2 Knowledge Graph Reasoning Results 
+
+Table 11: Zero-shot KG reasoning results on the 23 inductive (e, r ) graphs from ULTRA’s benchmark (unseen entities and relations). Sigil (K) denotes Sigil-lp with SIG order K. ULTRA numbers are the zero-shot results reported in Table 10 and Table 11 of (Galkin et al. 2024). Best in bold , second-best underlined. 
+
+ULTRA Sigil (0) Sigil (1) Sigil (2) 
+
+Dataset MRR H@10 MRR H@10 MRR H@10 MRR H@10 FB-25 38.8 64.0 35.0 60.7 34.3 60.2 34.8 61.1 FB-50 33.8 54.3 28.7 51.0 29.3 50.4 29.3 51.3 FB-75 40.3 60.4 33.6 55.3 34.2 56.1 33.8 56.5 FB-100 44.9 64.2 34.5 56.6 35.2 57.2 35.0 57.9 WK-25 31.6 53.2 22.5 43.5 22.4 40.2 23.7 44.3 WK-50 16.6 32.4 12.9 27.4 13.1 25.9 12.1 26.5 WK-75 36.5 53.7 31.1 47.1 32.3 46.7 31.6 48.1 WK-100 16.4 28.6 16.3 27.8 16.9 27.3 16.9 28.0 NL-0 34.2 52.3 30.3 48.4 28.4 43.8 28.4 44.4 NL-25 39.5 56.9 27.7 41.3 26.6 38.7 30.5 43.7 NL-50 40.7 57.0 32.2 47.3 27.7 42.9 31.2 45.6 NL-75 36.8 54.7 22.6 40.4 20.3 35.9 22.2 39.4 NL-100 47.1 65.1 34.9 53.8 34.4 53.3 35.1 52.3 Metafam 23.8 64.4 30.9 84.0 34.6 87.8 26.3 74.2 FBNELL 48.5 65.2 45.5 63.3 45.4 62.6 39.6 60.7 MT1 tax 22.4 30.5 41.2 50.2 39.0 50.1 40.6 52.3 
+
+MT1 health 29.8 37.4 37.9 45.8 37.8 46.4 37.5 45.1 MT2 org 9.5 15.9 8.9 14.7 8.6 13.9 9.2 15.8 MT2 sci 25.8 35.4 37.5 53.1 37.1 51.9 37.9 53.7 
+
+MT3 art 25.9 40.2 28.5 43.2 27.9 42.5 28.1 44.4 
+
+MT3 infra 61.9 75.5 63.3 78.2 63.2 77.9 64.2 78.4 
+
+MT4 sci 27.4 44.9 27.8 42.6 28.2 42.8 29.2 45.5 
+
+MT4 health 62.4 73.7 66.5 76.2 67.6 77.1 66.2 77.3 
+
+Average 34.5 51.3 32.6 50.1 32.4 49.2 32.3 49.8 
+
+Table 12: Zero-shot KG reasoning results on the 23 inductive (e) graphs from ULTRA’s benchmark (unseen entities and relations). Sigil (K) denotes Sigil-lp with SIG order K. ULTRA numbers are the zero-shot results reported in Table 10 and Table 11 of (Galkin et al. 2024). Best in bold , second-best underlined. 
+
+ULTRA Sigil (0) Sigil (1) Sigil (2) 
+
+Dataset MRR H@10 MRR H@10 MRR H@10 MRR H@10 FB v1 49.8 65.6 49.6 67.9 48.9 67.2 49.8 67.8 FB v2 51.2 70.0 53.1 71.8 52.0 71.4 53.3 73.2 
+
+FB v3 49.1 65.4 50.0 66.4 48.5 65.4 50.2 66.9 
+
+FB v4 48.6 67.7 48.6 67.7 47.6 66.6 48.9 68.0 
+
+WN v1 64.8 76.8 18.9 38.9 69.1 78.4 69.4 79.4 
+
+WN v2 66.3 76.5 67.6 79.2 68.2 78.0 69.1 78.8 WN v3 37.6 47.6 46.1 59.3 46.0 58.9 45.5 59.8 
+
+WN v4 61.1 70.5 41.9 72.2 64.1 72.5 64.3 72.6 
+
+NELL v1 78.5 91.3 64.2 71.4 64.6 80.6 68.6 90.8 NELL v2 52.6 70.7 53.5 74.7 53.1 73.2 51.3 72.2 NELL v3 51.5 70.2 50.9 71.9 51.3 70.2 49.1 68.5 NELL v4 47.9 71.2 50.3 72.1 52.2 73.2 50.6 72.6 ILPC Small 30.2 44.3 28.7 43.0 27.8 41.6 28.1 43.2 ILPC Large 29.0 42.4 29.8 41.8 27.6 39.3 28.0 41.2 HM 1k 5.9 9.2 6.7 12.5 6.1 10.3 6.8 13.1 
+
+HM 3k 3.7 7.7 6.4 10.6 5.7 10.2 6.4 11.9 
+
+HM 5k 3.4 7.1 5.9 9.7 5.1 8.5 6.0 10.8 
+
+HM indigo 44.0 64.8 38.8 59.3 37.3 57.7 37.8 58.3 
+
+Average 43.1 56.6 39.5 55.0 43.1 56.8 43.5 58.3 E.3 Node Classification Results 
+
+Table 13: Node classification accuracy (%) on 26 benchmarks against transductive and fully-inductive baselines. Best in bold ,second-best underlined. †RGVT is pretrained on ogbn-arxiv. GraphAny, TS-MEAN and Sigil-nc are pretrained on Cora. TAG is pretrained on synthetic datasets. Evaluations for methods other than Sigil-nc are taken from (Lee et al. 2026), including their updated transductive baselines. 
+
+Transductive Fully-Inductive Ours 
+
+Dataset MLP GCN GAT GraphAny TS-MEAN TAG RGVT Sigil-nc Actor 33.95 ±0.80 30.37 ±0.44 28.57 ±0.82 27.91 ±0.16 28.09 ±0.93 31.18 ±0.18 32.68 ±1.26 36.49 ±0.50 
+
+AirBrazil 23.08 ±5.83 63.08 ±3.44 44.62 ±14.54 33.07 ±16.68 39.23 ±5.70 73.08 ±4.03 75.38 ±6.44 39.23 ±5.01 
+
+AirEurope 21.25 ±2.31 41.50 ±0.84 40.00 ±1.93 40.50 ±7.01 35.88 ±6.91 55.38 ±2.30 57.12 ±3.55 38.50 ±6.38 
+
+AirUSA 22.88 ±1.46 53.30 ±1.18 51.24 ±2.90 43.46 ±1.45 42.34 ±2.12 60.50 ±0.80 57.55 ±1.28 48.25 ±3.35 
+
+AmzComp 58.28 ±2.98 84.69 ±0.18 84.43 ±1.28 82.99 ±1.22 81.37 ±1.25 84.33 ±0.33 84.14 ±1.76 72.84 ±2.65 
+
+AmzPhoto 68.20 ±0.88 91.71 ±0.18 89.40 ±0.71 90.14 ±0.93 90.18 ±1.30 89.63 ±0.48 92.29 ±0.44 84.13 ±1.76 
+
+AmzRatings 47.90 ±0.45 49.17 ±0.43 48.99 ±0.56 42.84 ±0.04 42.27 ±1.40 44.34 ±0.32 45.58 ±1.16 48.49 ±2.39 
+
+BlogCatalog 64.11 ±1.95 86.00 ±0.52 55.16 ±4.77 72.52 ±3.22 76.30 ±2.92 79.77 ±1.06 81.39 ±2.75 68.77 ±1.07 
+
+Chameleon 36.62 ±0.87 41.31 ±3.05 39.83 ±2.10 37.99 ±4.54 43.83 ±3.99 44.98 ±1.37 44.74 ±2.17 42.84 ±5.01 
+
+Citeseer 44.40 ±0.44 69.22 ±0.62 69.46 ±1.36 68.90 ±0.07 68.66 ±0.19 68.08 ±0.61 70.12 ±1.47 53.70 ±2.16 
+
+CoCS 85.88 ±0.93 90.60 ±0.09 90.27 ±0.57 90.47 ±0.63 90.92 ±0.47 90.49 ±0.50 92.28 ±0.37 90.12 ±0.41 
+
+CoPhysics 87.43 ±1.98 92.85 ±0.24 91.22 ±2.06 92.70 ±0.54 92.61 ±0.61 92.31 ±0.27 93.18 ±0.51 92.76 ±0.43 
+
+Cornell 67.57 ±5.06 45.41 ±3.52 40.00 ±2.26 64.86 ±1.91 68.65 ±2.42 75.14 ±2.16 74.05 ±2.42 60.54 ±4.52 
+
+DBLP 56.27 ±0.62 79.52 ±1.03 79.07 ±0.78 71.73 ±0.94 66.42 ±3.65 71.92 ±1.46 78.12 ±1.19 75.12 ±0.55 
+
+FullCora 33.54 ±0.64 62.69 ±0.13 60.71 ±0.16 56.73 ±0.41 53.58 ±0.73 54.56 ±0.19 63.26 ±0.75 57.11 ±0.36 
+
+Minesweeper 80.00 ±0.00 80.16 ±0.26 81.70 ±0.53 80.46 ±0.15 80.68 ±0.38 85.83 ±0.13 80.00 ±0.00 85.02 ±0.70 
+
+ogbn-arxiv 55.50 ±0.23 71.19 ±0.30 71.89 ±0.24 58.62 ±0.05 56.33 ±2.58 66.70 ±0.21 70.33 ±0.35 † 71.92 ±0.05 
+
+Pubmed 69.50 ±1.79 76.90 ±0.42 76.26 ±0.70 76.60 ±0.31 74.98 ±0.56 78.96 ±0.43 78.20 ±0.82 77.64 ±1.12 
+
+Questions 97.33 ±0.06 97.06 ±0.02 97.06 ±0.02 97.06 ±0.03 97.02 ±0.01 97.14 ±0.01 97.13 ±0.06 97.12 ±0.05 
+
+Roman 65.80 ±0.35 45.33 ±0.25 43.42 ±0.18 64.25 ±0.64 66.36 ±1.02 74.12 ±0.28 70.53 ±0.70 76.80 ±0.26 
+
+Squirrel 30.36 ±0.78 38.67 ±1.84 38.78 ±2.39 37.25 ±2.65 39.80 ±0.53 46.29 ±1.01 41.77 ±2.06 38.06 ±2.14 
+
+Texas 48.65 ±4.01 51.35 ±2.71 54.05 ±2.41 71.89 ±1.48 73.51 ±4.01 81.08 ±2.09 78.92 ±2.26 62.70 ±6.45 
+
+Tolokers 78.16 ±0.02 80.60 ±0.12 81.67 ±0.18 78.20 ±0.02 78.12 ±0.09 82.82 ±0.15 78.32 ±0.35 80.71 ±0.73 
+
+Wiki 63.79 ±1.77 69.24 ±0.76 58.64 ±1.93 60.56 ±3.62 69.89 ±1.31 70.09 ±0.92 72.26 ±4.66 68.38 ±2.02 
+
+WikiCS 72.72 ±0.43 79.07 ±0.24 79.44 ±0.40 74.39 ±0.71 74.16 ±2.07 79.07 ±0.54 78.92 ±0.58 79.49 ±0.37 
+
+Wisconsin 66.67 ±3.51 37.25 ±1.64 52.94 ±3.10 61.18 ±5.08 61.18 ±11.38 83.14 ±1.33 78.04 ±4.47 71.76 ±8.27 
+
+Average 56.91 65.70 63.42 64.51 65.09 71.57 71.78 66.10 F Additional Experiments 
+
+F.1 Ablations and Parameter Experiments 
+
+Setup. We set to examine the impact of different parameter choices and design choices on the performance of Sigil-lp . We conduct experiments on the order of the SIG K (the number of hops in construction), the choice of the interaction function g
+
+(between Hadamard product and absolute difference), and the number of SIG and Downstream NBFNet layers. 
+
+Results. Figure 3 presents results for selecting between Absdiff and Hadamard interaction operators. We can note that in general, one is not clearly surpassing the other, suggesting that both manages to carry good signals for downstream SIG construction that also might be overlapping. Figure 4a presents results for various SIG orders. Here we can clearly see that between different datasets, there are different optimal choices - which is an expected results and a key limitation for the GFM settings in advance - different structure requires different receptive fields for the representation learning, which is a product of the SIG order for Sigil . Figures 4c and 4b present results for different number of SIG and downstream layers in Sigil-lp . while there is a general improvement with more layers, which creates a more parameterized model, some datasets does not benefit from more layers and performance can degrade, which ties into the insight from the hops experiment - a priori, different GFMs with different structural properties and receptive fields might behave differently in downstream tasks. 
+
+Figure 3: Interaction operator g vs. Hits@50 
+
+F.2 Trainsize for Downstream MLP in Sigil-nc 
+
+As discussed in 5, Sigil effectivly compresses node features of various dimensions to a fixed-size space, and we hypothesized that it is a possible cause for Sigil-nc relative weakness in NC against methods that do not compress the features. We ask whether providing the downstream MLP that adapts the fixed-size representations to the downstream label space more supervision will cause improvements. To answer this question, we conduct the following experiment. We take the pretrained checkpoint on Cora, and for each dataset in the NC evaluation protocol we train multiple MLPs with growing sizes of supervision, going from 1 train sample per class to min(500 , #train+val  
+
+> C
+
+) and inference on test. Results are presented in figure 5. 
+
+F.3 Visualizations of Sigil-nc Learned Space 
+
+Figure 6 presents t-SNE plots of the embeddings space learned by Sigil-nc , against embeddings from a transductive GAT (Veličković et al. 2018). We can see that Sigil-nc manages to outputs meaningful representation which are coherent for the classification tasks even without training of the downstream graphs, and even shows robustness in the embeddings towards more heterophilic graphs, which the GAT has a bias against (based on the known smoothing property of plain message passing). (a) Number of hops k vs. Hits@50 (b) Number of SIG NBNet layers vs. Hits@50 
+
+(c) Number of Downstream NBFNet layers vs. Hits@50 Figure 5: Train size supervision for downstream MLP 
+
+Figure 6: t-SNE plots of Sigil-nc learned space. Datasets are ordered based on heterophiliy. G Dataset Statistics 
+
+Table 14: Statistics and sources for the link prediction benchmarks used in §5.1. Edge counts are undirected ( |E|). For non-attributed graphs, node features are initialized via DeepWalk on train edges and are not innate to the dataset. 
+
+Dataset #Nodes #Edges Avg. deg. Max. deg. #Features Source 
+
+Attributed 
+
+Cora 2,708 5,278 3.90 168 1,433 (Yang, Cohen, and Salakhutdinov 2016) CiteSeer 3,327 4,552 2.74 99 3,703 (Yang, Cohen, and Salakhutdinov 2016) PubMed 19,717 44,324 4.50 171 500 (Yang, Cohen, and Salakhutdinov 2016) AmazonComputers 13,752 245,861 35.76 2,992 767 (Shchur et al. 2019) AmazonPhoto 7,650 119,081 31.13 1,434 745 (Shchur et al. 2019) CoauthorCS 18,333 81,894 8.93 136 6,805 (Shchur et al. 2019) CoauthorPhysics 34,493 247,962 14.38 382 8,415 (Shchur et al. 2019) 
+
+Non-attributed 
+
+C.ele 297 2,148 14.46 134 – (Zhang and Chen 2018b) USAir 332 2,126 12.81 139 – (Zhang and Chen 2018b) PB 1,222 16,714 27.36 351 – (Zhang and Chen 2018b) NS 1,589 2,742 3.45 34 – (Zhang and Chen 2018b) Table 15: Statistics of the 44 knowledge graphs used in the KG reasoning experiment: 3 pretraining graphs, 23 inductive (e, r )
+
+graphs (unseen entities and relations), and 18 inductive (e) graphs (unseen entities). 
+
+Group Dataset Ent. train Ent. infer Rel. train Rel. infer Test Source 
+
+Pretraining 
+
+Pretr. FB15k-237 14,541 14,541 237 237 20,466 (Toutanova and Chen 2015) Pretr. WN18RR 40,943 40,943 11 11 3,134 (Dettmers et al. 2018) Pretr. CoDEx-Medium 17,050 17,050 51 51 10,311 (Safavi and Koutra 2020) 
+
+Inductive (e, r )
+
+(e,r) FB-25 5,190 4,097 163 216 5,716 (Lee, Chung, and Whang 2023) (e,r) FB-50 5,190 4,445 153 205 3,879 (Lee, Chung, and Whang 2023) (e,r) FB-75 4,659 2,792 134 186 3,106 (Lee, Chung, and Whang 2023) (e,r) FB-100 4,659 2,624 134 77 2,329 (Lee, Chung, and Whang 2023) (e,r) WK-25 12,659 3,228 47 74 1,131 (Lee, Chung, and Whang 2023) (e,r) WK-50 12,022 9,328 72 93 3,225 (Lee, Chung, and Whang 2023) (e,r) WK-75 6,853 2,722 52 65 1,144 (Lee, Chung, and Whang 2023) (e,r) WK-100 9,784 12,136 67 37 4,496 (Lee, Chung, and Whang 2023) (e,r) NL-0 1,814 2,026 134 112 763 (Lee, Chung, and Whang 2023) (e,r) NL-25 4,396 2,146 106 120 744 (Lee, Chung, and Whang 2023) (e,r) NL-50 4,396 2,335 106 119 859 (Lee, Chung, and Whang 2023) (e,r) NL-75 2,607 1,578 96 116 607 (Lee, Chung, and Whang 2023) (e,r) NL-100 1,258 1,709 55 53 793 (Lee, Chung, and Whang 2023) (e,r) Metafam 1,316 656 28 28 184 (Zhou, Bevilacqua, and Ribeiro 2023) (e,r) FBNELL 4,636 4,752 100 183 597 (Zhou, Bevilacqua, and Ribeiro 2023) (e,r) MT1 tax 10,000 10,000 10 9 1,834 (Zhou, Bevilacqua, and Ribeiro 2023) (e,r) MT1 health 10,000 10,000 7 7 1,566 (Zhou, Bevilacqua, and Ribeiro 2023) (e,r) MT2 org 10,000 10,000 10 11 2,441 (Zhou, Bevilacqua, and Ribeiro 2023) (e,r) MT2 sci 10,000 10,000 16 16 1,650 (Zhou, Bevilacqua, and Ribeiro 2023) (e,r) MT3 art 10,000 10,000 45 45 3,113 (Zhou, Bevilacqua, and Ribeiro 2023) (e,r) MT3 infra 10,000 10,000 24 27 2,405 (Zhou, Bevilacqua, and Ribeiro 2023) (e,r) MT4 sci 10,000 10,000 42 42 1,388 (Zhou, Bevilacqua, and Ribeiro 2023) (e,r) MT4 health 10,000 10,000 21 20 1,703 (Zhou, Bevilacqua, and Ribeiro 2023) 
+
+Inductive (e)
+
+(e) FB v1 1,594 1,993 180 180 411 (Teru, Denis, and Hamilton 2020) (e) FB v2 2,608 4,145 200 200 947 (Teru, Denis, and Hamilton 2020) (e) FB v3 3,668 7,406 215 215 1,731 (Teru, Denis, and Hamilton 2020) (e) FB v4 4,707 11,714 219 219 2,840 (Teru, Denis, and Hamilton 2020) (e) WN v1 2,746 1,618 9 9 373 (Teru, Denis, and Hamilton 2020) (e) WN v2 6,954 4,011 10 10 852 (Teru, Denis, and Hamilton 2020) (e) WN v3 12,078 6,327 11 11 1,143 (Teru, Denis, and Hamilton 2020) (e) WN v4 3,861 12,334 9 9 2,823 (Teru, Denis, and Hamilton 2020) (e) NELL v1 3,103 833 14 14 201 (Teru, Denis, and Hamilton 2020) (e) NELL v2 2,564 4,586 88 88 935 (Teru, Denis, and Hamilton 2020) (e) NELL v3 4,647 8,048 142 142 1,620 (Teru, Denis, and Hamilton 2020) (e) NELL v4 2,092 7,073 76 76 1,447 (Teru, Denis, and Hamilton 2020) (e) ILPC Small 10,230 6,653 48 48 2,902 (Galkin, Berrendorf, and Hoyt 2022) (e) ILPC Large 46,626 29,246 65 65 10,184 (Galkin, Berrendorf, and Hoyt 2022) (e) HM 1k 36,237 9,899 11 11 476 (Hamaguchi et al. 2017)7 (e) HM 3k 32,118 19,218 11 11 1,349 (Galkin, Berrendorf, and Hoyt 2022) (e) HM 5k 28,601 23,792 11 11 2,124 (Galkin, Berrendorf, and Hoyt 2022) (e) HM indigo 12,721 14,775 229 229 14,904 (Liu et al. 2021) Table 16: Statistics and sources for the node classification datasets used in this paper. 
+
+Dataset #Nodes #Edges #Feature #Classes #Labeled Nodes Train/Val/Test Ratios (%) Category Source 
+
+AirBrazil 131 1074 131 4 80 61.1/19.1/19.8 Homophilic (Ribeiro, Saverese, and Figueiredo 2017) Cornell 183 554 1703 5 87 47.5/32.2/20.2 Heterophilic (Pei et al. 2020) Texas 183 558 1703 5 87 47.5/31.7/20.2 Heterophilic (Pei et al. 2020) Wisconsin 251 900 1703 5 120 47.8/31.9/20.3 Heterophilic (Pei et al. 2020) AirEurope 399 5995 399 4 80 20.1/39.8/40.1 Homophilic (Ribeiro, Saverese, and Figueiredo 2017) AirUSA 1190 13599 1190 4 80 6.7/46.6/46.6 Homophilic (Ribeiro, Saverese, and Figueiredo 2017) Chameleon 2277 36101 2325 5 1092 48.0/32.0/20.0 Heterophilic (Pei et al. 2020) Wiki 2405 17981 4973 17 340 14.1/42.9/43.0 Homophilic (Yang et al. 2023) Cora 2708 10556 1433 7 140 5.2/18.5/36.9 Homophilic (Yang, Cohen, and Salakhutdinov 2016) Citeseer 3327 9104 3703 6 120 3.6/15.0/30.1 Homophilic (Yang, Cohen, and Salakhutdinov 2016) BlogCatalog 5196 343486 8189 6 120 2.3/48.8/48.8 Homophilic (Yang et al. 2023) Squirrel 5201 217073 2089 5 2496 48.0/32.0/20.0 Heterophilic (Pei et al. 2020) Actor 7600 30019 932 5 3648 48.0/32.0/20.0 Heterophilic (Pei et al. 2020) AmzPhoto 7650 238162 745 8 160 2.1/49.0/49.0 Homophilic (Shchur et al. 2019) Minesweeper 10000 78804 7 2 5000 50.0/25.0/25.0 Heterophilic (Platonov et al. 2023) WikiCS 11701 431206 300 10 580 5.0/15.1/49.9 Homophilic (Mernyei and Cangea 2022) Tolokers 11758 1038000 10 2 5879 50.0/25.0/25.0 Heterophilic (Platonov et al. 2023) AmzComp 13752 491722 767 10 200 1.5/49.3/49.3 Homophilic (Shchur et al. 2019) DBLP 17716 105734 1639 4 80 0.5/49.8/49.8 Homophilic (Bojchevski and Günnemann 2018) CoCS 18333 163788 6805 15 300 1.6/49.2/49.2 Homophilic (Shchur et al. 2019) Pubmed 19717 88648 500 3 60 0.3/2.5/5.1 Homophilic (Yang, Cohen, and Salakhutdinov 2016) FullCora 19793 126842 8710 70 1400 7.1/46.5/46.5 Homophilic (Bojchevski and Günnemann 2018) Roman Empire 22662 65854 300 18 11331 50.0/25.0/25.0 Heterophilic (Platonov et al. 2023) Amazon Ratings 24492 186100 300 5 12246 50.0/25.0/25.0 Heterophilic (Platonov et al. 2023) CoPhysics 34493 495924 8415 5 100 0.3/49.9/49.9 Homophilic (Shchur et al. 2019) Questions 48921 307080 301 2 24460 50.0/25.0/25.0 Heterophilic (Platonov et al. 2023) ogbn-arxiv 169343 1166243 128 40 90941 53.7/17.6/28.7 Homophilic (Hu et al. 2020)

@@ -1,0 +1,1835 @@
+Title: Beyond Binary: Continuous State Optimization with Graph-Structured Objectives
+
+URL Source: https://arxiv.org/pdf/2608.09366v1
+
+Published Time: Tue, 11 Aug 2026 02:07:26 GMT
+
+Number of Pages: 34
+
+Markdown Content:
+# Beyond Binary: Continuous State Optimization with Graph-Structured Objectives 
+
+Corinna Cortes Google Research 
+
+corinna@google.com 
+
+Yishay Mansour Tel Aviv University & Google Research 
+
+mansour.yishay@gmail.com 
+
+Mehryar Mohri Google Research & Courant Institute 
+
+mohri@google.com 
+
+August 11, 2026 
+
+Abstract 
+
+Large-scale learning systems often face the challenge of balancing multiple, potentially competing objectives, such as fairness, accuracy, and latency. While recent work has formalized this as an optimization problem over binary states, many real-world control parameters, such as fairness thresholds, diversity mixing rates, or resource budgets, are continuous. In this work, we extend the framework to continuous state spaces . We model the problem as minimizing a sum of linear objectives subject to movement costs that penalize system instability. We capture the local structure of the objectives using a dependency graph (or factor graph), where each objective is determined by a subset of the state attributes. To address the tension between exploration and stability, we propose Lazy Graph-LinUCB , an algorithm that performs lazy updates to minimize switching costs while maintaining near-optimal regret. Beyond stability, we introduce three advanced mechanisms to exploit the underlying graph structure: (1) an asynchronous update schedule that eliminates synchronization overhead in sparse graphs; (2) an adaptive algorithm that learns the graph structure from data; and (3) a joint estimator that leverages data sharing among correlated objectives to significantly tighten regret bounds. Empirically, we demonstrate that these structural exploitations reduce movement costs by more than a factor of three in heterogeneous systems while maintaining similar cumulative losses. 
+
+# 1 Introduction 
+
+Modern machine learning systems are rarely optimized for a single objective. A recommender system, for instance, must balance relevance against diversity, revenue, latency, and various fairness constraints across demographic groups. These objectives are often inherently competing; increasing the diversity of recommendations may degrade relevance, while enforcing strict fairness constraints may increase latency or reduce revenue. Addressing these conflicts requires a framework for navigating the trade-offs in a data-driven manner. Recent work by Awasthi, Cortes, Mansour, and Mohri [2024, 2026] proposed a model for optimizing such systems based on user feedback (complaints). In their model, the system configuration is represented as a state in a Markov Decision Process (MDP), and the goal is to find a configuration that minimizes the aggregate cost-weighted volume of complaints. A key structural insight of their work was the use of a dependency graph ,encoding which criteria are mutually incompatible, and correlation sets to model local dependencies between criteria, allowing for efficient learning even when the number of criteria is large. However, a significant limitation of this prior work is the assumption that system states are binary . Each criterion is modeled as either fixed (satisfied) or unfixed (violated). While this simplifies the analysis, 1arXiv:2608.09366v1 [cs.LG] 10 Aug 2026 it fails to capture the nuance of real-world hyperparameters. For example, fairness constraints typically involve a threshold τ ∈ [ 0, 1] (e.g., the allowable gap in True Positive Rates), where a strict setting yields different feedback dynamics than a loose one. Similarly, diversity mixing rates and resource allocation budgets (e.g., latency targets) are inherently continuous parameters rather than binary switches. In this paper, we propose a natural and powerful extension of the competing objectives framework to continuous state spaces . We replace the binary hypercube {0, 1}k with the continuous domain 
+
+[0, 1]k. To maintain tractability, we generalize the concept of Correlation Sets to Graph-Structured Linear Function Approximation . We assume the loss function can be approximated by a linear model 
+
+ϕ(s)⊺θ, where the feature map ϕ(s) respects the sparsity structure of the underlying dependency graph. Furthermore, we address a critical aspect of continuous control: stability. In the binary setting, switching a criterion incurred a fixed fixing cost . In the continuous setting, we model this as a movement cost proportional to the magnitude of the change ∥st − st−1∥. This introduces a non-trivial trade-off between exploration (moving the state to disjoint regions to learn the loss landscape) and stability (minimizing the cost of adjustment). Our work connects the literature on multi-objective optimization with Linear Bandits [Abbasi-Yadkori et al., 2011] and Bandits with Switching Costs [Cesa-Bianchi et al., 2013, Dekel et al., 2014, Arora et al., 2019, Amir et al., 2022], offering a unified theoretical framework for optimizing complex, continuous parameter spaces under competing feedback. While our algorithms build on established foundations—specifically the OFUL principle (Optimism in the Face of Uncertainty for Linear bandits) [Abbasi-Yadkori et al., 2011] for bandits and Online Gradient Descent for adversarial settings—our primary algorithmic contribution lies in adapting these mechanisms to the graph-structured and sparsity-constrained nature of the competing objectives problem. In the stochastic setting, LazyGraphLinUCB departs from standard lazy bandit algorithms by leveraging a decomposed determinant trigger. While the base algorithm uses synchronized updates, we also introduce an asynchronous variant that monitors local information gain across the dependency graph, ensuring that stability in one objective does not unnecessarily hinder exploration in disjoint graph neighborhoods. In the adversarial setting, we re-purpose the virtual iterate technique not to minimize movement costs (which standard OGD already handles), but to explicitly satisfy operational sparsity budgets, quantifying the precise regret trade-off required to maintain a low-frequency update schedule. 
+
+Contributions. We make four primary contributions. First, we extend the feedback-driven competing objectives framework from binary system configurations to continuous state spaces ,modeling the problem as a graph-structured linear bandit with movement costs. This allows us to capture realistic control parameters such as fairness thresholds and resource budgets while rigorously accounting for stability. Second, we propose LazyGraphLinUCB , a stochastic algorithm that uses a decomposed determinant trigger to minimize switching costs while maintaining optimal prediction regret. Third, we introduce three advanced mechanisms to exploit the underlying graph structure: an asynchronous update schedule that eliminates synchronization penalties in sparse graphs; an 
+
+adaptive routine that learns dependencies from data; and a joint estimator based on a Factor Graph decomposition that tightens regret bounds in dense, correlated systems. Finally, we provide matching minimax lower bounds and empirically demonstrate that our structural exploitations reduce movement costs by more than a factor of three in heterogeneous graph systems, and up to a factor of five in real-world single-objective tasks. The rest of the paper is organized as follows. Section 2 discusses related work. Section 3 presents our continuous-state formulation. Section 4 introduces the LazyGraphLinUCB algorithm and its regret analysis. Section 5 presents advanced strategies for exploiting graph structure, including asynchronous updates and adaptive learning. Section 6 outlines the extension to the adversarial setting. Section 7 provides numerical illustrations to validate the theoretical findings. 22 Related Work 
+
+Our work sits at the intersection of three lines of research: competing objectives optimization, linear bandits, and online optimization with movement costs. 
+
+Competing objectives and feedback-driven optimization. Awasthi, Cortes, Mansour, and Mohri [2024, 2026] introduced a feedback-driven framework for optimizing multiple competing objectives, modeled as an MDP over binary states using incompatibility graphs and correlation sets. Our work extends this framework to continuous state spaces, replacing binary fixes with smooth parameter tuning. This extension is motivated by the vast literature on multi-objective optimization [Sener and Koltun, 2018, Shah and Ghahramani, 2016, Marler and Arora, 2004] and by algorithmic fairness, where criteria such as equal opportunity and calibration are inherently in tension [Kleinberg et al., 2017, Hardt et al., 2016] and fairness thresholds are continuous parameters [Agarwal et al., 2018, Cotter et al., 2019a]. Unlike prior work on fairness in bandits [Joseph et al., 2016, Gillen et al., 2018, Liu et al., 2017] and on agnostic multi-objective algorithms [Cortes et al., 2020], our framework addresses stability explicitly via movement costs and exploits graph sparsity to scale to many criteria. 
+
+Linear bandits. Our stochastic analysis builds on the OFUL framework of Abbasi-Yadkori et al. [2011] and the contextual bandit work of Li et al. [2010]. Graph-structured bandits have been studied in the feedback-graph setting [Alon et al., 2015, Arora et al., 2019], where the graph determines which arm rewards are observed. Our dependency graph plays a different, complementary role: it defines the feature structure of the loss function, enabling decomposed estimation (akin to spectral bandits [Valko et al., 2014] or high-dimensional bandit methods with compatibility conditions [Bastani and Bayati, 2020]) and localized policy updates. 
+
+Bandits and online learning with switching costs. The problem of minimizing regret while limiting the frequency of state changes has been studied for adversarial and stochastic bandits [Dekel et al., 2014, Amir et al., 2022, Cesa-Bianchi et al., 2013, Sherman and Koren, 2021]. These works bound the number of switches; our movement cost instead penalizes the magnitude of each change, capturing the physical reality of continuous-parameter adjustment. In the online convex optimization literature, smoothed or lazy variants have been studied for switching costs [Chen et al., 2018, Zhang et al., 2021, Goel et al., 2019, Andrew et al., 2013, Kalai and Vempala, 2005]. Our Randomized Lazy OGD (Section 6) connects to this line of work, while our stochastic LazyGraphLinUCB 
+
+achieves data-dependent laziness via the determinant-doubling trigger, avoiding the fixed-probability randomization required in adversarial settings. An extended discussion of related work, covering the broader fairness and multi-criteria opti-mization literature in greater depth, is given in Appendix A. 
+
+# 3 Problem Setup 
+
+We model the problem as an online optimization game over T rounds. At each round t, the learner selects a continuous state vector st ∈ [ 0, 1]k.
+
+Notation. We denote the set of criteria (nodes) by V = { 1, . . . , k }. The system state is a vector 
+
+s ∈ S = [ 0, 1]k. We assume an underlying dependency graph G = (V , E ), where N ( i) denotes the neighborhood of i; see Figure 1 for an example. 
+
+Contrast with Binary MDP Models. It is important to distinguish our formulation from the binary state model of Awasthi et al. [2024]. In their work, the system is modeled as an MDP where explicit “fixing actions” induce probabilistic transitions between satisfied and unsatisfied states. In contrast, our continuous framework adopts a “direct control” perspective akin to Bandit 3Convex Optimization. We assume the learner can directly select any configuration st ∈ [ 0, 1]k, but this control comes at the price of a movement cost that penalizes instability. This shift allows us to handle the infinite cardinality of the continuous domain while rigorously modeling the “cost of change” that was previously captured by atomic fixing actions. One could argue that the Bandit model is actually more realistic than an MDP: If an engineer sets a threshold to 0 .7, the system state for that criterion becomes 0 .7. The uncertainty is in the response (user complaints), not in the actuation (whether the knob turns). Since the state transitions are deterministic ( st+1 = st), the complexity of reinforcement learning (planning over long horizons) vanishes. The core difficulty here is not reaching a state, but identifying the optimal state under uncertainty and movement constraints, which is exactly the domain of bandits with switching costs. 
+
+Background: LinUCB. Our approach builds on the OFUL principle [Abbasi-Yadkori et al., 2011]. For a standard linear bandit, one maintains a regularized least-squares estimator ̂ θt =
+
+V−1 
+
+> t
+
+∑tτ =1 xτ yτ with covariance Vt = λreg I + ∑ tτ =1 xτ x⊺ 
+
+> τ
+
+, where λreg is a positive initialization hyper-parameter. The confidence set is Ct = { θ ∶ ∥ θ −̂ θt∥Vt ≤ βt}, where βt =̃ O(√d log t) is the confidence radius (see Lemma 12). We adapt this framework to the multi-objective setting by maintaining k
+
+local estimators. 
+
+3.1 Graph-structured loss 
+
+At round t, the learner selects st and observes a loss vector ℓt(st) ∈ Rk. Let ℓt(st) ∈ Rk be the vector of observed losses at time t, where ℓt,i (st) is the loss associated with criterion i. We assume the expected loss μi(s) = E[ℓt,i (s)] admits a linear representation, but with specific structural constraints imposed by the graph G.
+
+Definition 1 (Graph-Structured Features) . We say the loss is graph-structured with respect to G
+
+if the expected loss for criterion i depends only on the state of its local neighborhood N ( i). Formally, there exist local feature maps ϕi∶ [ 0, 1]∣N ( i)∣ → Rdi and parameters θ∗ 
+
+> i
+
+∈ Rdi such that: 
+
+μi(s) = ⟨ ϕi(s∣N ( i)), θ∗ 
+
+> i
+
+⟩. (1) This formulation aligns with spectral bandits where rewards are smooth over a graph [Valko et al., 2014], though we rely on local sparsity rather than global smoothness. Here, s∣N ( i) denotes the restriction of the state vector s to the indices in N ( i). This assumption generalizes the “Correlation Sets” of Awasthi et al. [2024]. It implies that the loss for criterion i is insensitive to changes in criteria j ∉ N ( i), effectively reducing the dimensionality of the learning problem related to criterion 
+
+i from k to the size of its local neighborhood (see Figure 1). The total expected complaint loss at state s is the sum of individual criteria losses: 
+
+L(s) = 
+
+> k
+
+∑
+
+> i=1
+
+μi(s) = 
+
+> k
+
+∑
+
+> i=1
+
+⟨ϕi(s∣N ( i)), θ∗ 
+
+> i
+
+⟩. (2) We will assume that for all criteria i and state s ∈ S, the feature vectors are bounded in Euclidean norm: ∥ϕi(s)∥ 2 ≤ L. Without loss of generality, we assume features are scaled such that L ≤ 1 and 
+
+λreg ≥ 1, which implies ∥ϕi(s)∥ V−1 
+
+> t,i
+
+≤ 1 as required for the analysis. 
+
+Social Welfare Interpretation. We can view this formulation as a cooperative multi-agent game (see, e.g., [Gentile et al., 2014] for related online multi-agent learning). Each criterion i ∈ V 
+
+acts as an agent trying to minimize its own loss μi(s), which depends on the actions of its neighbors 
+
+N ( i). The global objective L(s) then corresponds to maximizing the social welfare (minimizing the total loss) of the system. 4Correlated Noise Structure. While our analysis assumes for simplicity that the noise terms are independent across criteria, the graph structure implies a natural correlated noise model. If we view noise as arising from latent attributes associated with each node j (e.g., user-specific variance), the realized noise for criterion i can be modeled as ηt,i = ∑ j∈N ( i) ξt,j , where ξt,j are independent noise components. Crucially, since the sum of independent sub-Gaussian variables is itself sub-Gaussian, our regret analysis remains valid under this model (with the variance proxy σ2 scaling with the local degree ∆). Furthermore, such correlations would only strengthen the case for the Joint Estimator (Section 5.3), which could be extended to exploit the resulting non-diagonal noise covariance via Generalized Least Squares. 
+
+3.2 Movement costs 
+
+In continuous control systems, rapid changes to parameters can be disruptive. Thus, unlike standard bandits, changing the state is costly. We model this via a movement cost (or switching cost) that penalizes the distance between consecutive states. 
+
+Cmove (st−1, st) = λ∥st − st−1∥1, (3) where λ > 0 is a regularization parameter controlling the penalty for instability. We choose the 
+
+ℓ1-norm to model the aggregate adjustment effort, though ℓ2 or other norms are possible. 
+
+3.3 Objective: regret minimization 
+
+The goal of the learner is to minimize the cumulative regret, defined as the difference between the learner’s total cost (complaints + movement) and the cost of the optimal static state s∗. Let 
+
+s∗ = argmin s∈S L(s). The regret over horizon T is: 
+
+Reg T =
+
+> T
+
+∑
+
+> t=1
+
+(L(st) − L(s∗)) + 
+
+> T
+
+∑
+
+> t=1
+
+λ∥st − st−1∥1. (4) Note that the comparator is the optimal static state, which of course incurs zero movement cost. 
+
+3.4 Concrete examples of graph-structured bases 
+
+To illustrate the power of this formulation, we consider two specific instances of the feature map ϕi.
+
+Example 1: Pairwise Quadratic Interactions. Consider a case where the loss for criterion 
+
+i depends quadratically on its own setting and the settings of its neighbors. For j ∈ N ( i), let sj
+
+denote the j-th component of s. We can define the basis: 
+
+ϕi(s) = [ 1, s i, s 2 
+
+> i
+
+, {sj }j∈N ( i)∖{ i}, {sisj }j∈N ( i)∖{ i}]⊺ . (5) This captures self-convexity (via s2 
+
+> i
+
+) and pairwise interference (via sisj ), modeling scenarios where increasing the threshold of neighbor j exacerbates the loss of i.
+
+Example 2: Radial Basis Functions (RBF). For highly non-linear dependencies, we can use kernel approximation. Let ki(⋅ , ⋅) be a kernel defined over the subspace [0, 1]∣N ( i)∣ . The feature map 
+
+ϕi corresponds to the Random Fourier Features (RFF) of this kernel. This allows the algorithm to learn arbitrary smooth loss surfaces, provided they respect the local graph structure. 
+
+Connection to Feedback Graphs. Our formulation shares conceptual roots with the literature on Bandits with Feedback Graphs [Alon et al., 2015, Arora et al., 2019]. In that setting, a graph defines which arms’ rewards are observed when a specific arm is played. In our continuous linear 5ij lmx y
+
+> N ( i)
+
+Figure 1: Illustration of Graph-Structured Loss. The shaded region N ( i) represents the local neighborhood of criterion i. The loss ℓt,i depends strictly on the state parameters of nodes within this region ( s∣N ( i)). Changes to distant, non-neighboring nodes (such as x and y) do not affect the gradient for criterion i, enabling LazyGraphLinUCB to decompose the global optimization problem into local sub-problems. setting, the dependency graph G plays an analogous role by defining the information flow : observing the loss components at state st updates the confidence ellipsoids only for the local parameters 
+
+{θ∗ 
+
+> i
+
+}ki=1 associated with the active neighborhoods. Unlike the standard feedback graph setting where information is discrete (observing a neighbor’s reward), our feedback is algebraic: measurements propagate information to other states via the shared linear structure of the local feature maps. 
+
+# 4 Algorithm: Lazy Graph-LinUCB 
+
+We propose an algorithm, LazyGraphLinUCB , that efficiently handles the trade-off between exploration and movement costs by using a lazy update schedule. The algorithm maintains separate linear estimators for each criterion but coordinates their updates to minimize global movement. 
+
+4.1 Algorithm Description 
+
+The algorithm, LazyGraphLinUCB (Algorithm 1), extends the standard LinUCB framework to the loss minimization setting. While the original algorithm was named for the Upper Confidence Bound on rewards, we retain the name to denote the family of algorithms based on optimism in the face of uncertainty. In our minimization context, optimism corresponds to using a Lower Confidence Bound (LCB) . The algorithm operates as follows: 1. Local Estimation: For each criterion i ∈ [ k], maintain a regularized least-squares estimator for 
+
+θ∗ 
+
+> i
+
+using only the features ϕi(s). Let Vt,i be the covariance matrix and ̂ θt,i the estimate at time t.2. Global Optimistic Bound: Construct a global score for the loss function L(s). To ensure exploration, we use the Lower Confidence Bound (LCB), defined as the estimated loss minus the exploration bonus: LCB t(s) = 
+
+> k
+
+∑
+
+> i=1
+
+(⟨ ϕi(s),̂ θt,i ⟩ − βt,i ∥ϕi(s)∥ V−1 
+
+> t,i
+
+) . (6) 3. Lazy Updates: The algorithm maintains an active state sactive . It only re-solves the optimization problem when the determinant of the covariance matrix for any criterion has doubled significantly since the last update. If max i det (Vt,i ) > 2 det (Vlast ,i ), then 
+
+sactive ← argmin 
+
+> s∈S
+
+LCB t(s). (7) 6Algorithm 1 Synchronous Lazy Graph-LinUCB  
+
+> 1:
+
+Input: Dependency Graph G, Regularization λreg , Confidence δ. 
+
+> 2:
+
+Initialize: For all i ∈ [ k]: V0,i = λreg Idi ,̂ θ0,i = 0, τi = 0.  
+
+> 3:
+
+Initialize: Active state sactive ∈ S (arbitrary).  
+
+> 4:
+
+for t = 1 to T do  
+
+> 5:
+
+Check Trigger:  
+
+> 6:
+
+if ∃i ∈ [ k] such that det (Vt−1,i ) > 2 det (Vτi,i ) then  
+
+> 7:
+
+// Sufficient information gained; update active policy  
+
+> 8:
+
+Calculate LCB score: LCB t(s) = ∑ kj=1(⟨ ϕj (s),̂ θt−1,j ⟩ − βt−1,j ∥ϕj (s)∥ V−1 
+
+> t−1,j
+
+) 
+
+> 9:
+
+Update Policy: sactive ← argmin s∈S LCB t(s) 
+
+> 10:
+
+Update Last-Sync Times: τj ← t − 1 for all j ∈ [ k] 
+
+> 11:
+
+end if  
+
+> 12:
+
+Play: s t = sactive  
+
+> 13:
+
+Observe: Loss vector ℓt(st) 
+
+> 14:
+
+Update Estimates:  
+
+> 15:
+
+for i = 1 to k do  
+
+> 16:
+
+Vt,i = Vt−1,i + ϕi(st)ϕi(st)⊺
+
+> 17:
+
+̂ θt,i = V−1 
+
+> t,i
+
+∑tτ =1 ϕi(sτ )ℓτ,i  
+
+> 18:
+
+end for  
+
+> 19:
+
+end for 
+
+Note that the optimization in (7) is non-convex in general. However, in many practical settings (e.g., linear or quadratic bases over convex domains), this optimization is convex or admits efficient approximate solvers. 
+
+Standard LinUCB and Movement Costs. One might ask why the standard LinUCB algorithm cannot be applied directly to this setting. Recall that at every round t, standard LinUCB selects the state st = argmin s∈S LCB t(s). Since the confidence intervals and estimated parameters ̂
+
+θt evolve stochastically with every new observation, the global minimizer of the LCB score can oscillate rapidly. Consequently, standard LinUCB can incur a movement cost of Ω (T ), yielding linear total regret. To address this, our LazyGraphLinUCB algorithm freezes the active policy, updating it only when the information gain (measured by the determinant of the covariance matrix) is sufficient to justify the cost of switching. 
+
+4.2 Theoretical Analysis 
+
+We now derive the regret bound for LazyGraphLinUCB . The analysis relies on three key lemmas: establishing confidence ellipsoids, bounding the number of policy updates (epochs), and bounding the prediction error incurred during the lazy frozen periods. 
+
+4.2.1 Key Lemmas Confidence Sets. We define the confidence sets using the standard self-normalized martingale bounds. For a criterion i, define the regularized least-squares estimator ̂ θt,i = V−1 
+
+> t,i
+
+∑tτ =1 ϕi(sτ )yτ,i .To analyze the regret, we rely on standard self-normalized martingale bounds [Abbasi-Yadkori et al., 2011] to define confidence ellipsoids Ct centered at ̂ θt (see Lemma 12 in Appendix C). Let E denote the good event that the true parameter θ∗ 
+
+> i
+
+lies within the confidence ellipsoid Ct,i 
+
+for all criteria i ∈ [ k] and all rounds t ≥ 1. By a union bound over all i and t, P(E) ≥ 1 − δ. We 7condition the rest of the analysis on E.
+
+Movement Bounds. The algorithm updates sactive only when the determinant of the covariance matrix doubles. Let τ0, . . . , τ M be the update times. We call [τj , τ j+1 − 1] the j-th epoch .
+
+Lemma 2 (Bound on Number of Epochs) . The total number of updates M is bounded by: 
+
+M ≤
+
+> k
+
+∑
+
+> i=1
+
+di log 2 (1 + T L 2
+
+diλreg 
+
+) .
+
+Proof. For a fixed criterion i, let Mi be the number of updates triggered by this criterion. Each update occurs only when det (Vt,i ) > 2 det (Vlast ,i ). The maximum possible determinant is bounded by the trace-determinant inequality: det (VT,i ) ≤ ( λreg + T L 2/di)di . Since each update doubles the determinant, 2 Mi ≤ det (VT,i )/ det (V0,i ). Taking logs yields Mi ≤ di log 2(1 + T L 2 
+
+> diλreg
+
+). Summing over 
+
+k criteria gives the result. 
+
+Prediction Error. A key challenge in lazy algorithms is that we play an action st based on a 
+
+stale covariance matrix Vτ (t). We must bound the error this staleness introduces. 
+
+Lemma 3 (Bounded Error per Epoch) . Under the feature normalization assumption ∥ϕ∥V−1 ≤ 1,for any epoch j, the sum of squared stale norms is bounded by: 
+
+Sj =
+
+> τj+1−1
+
+∑
+
+> t=τj
+
+∥ϕ(st)∥ 2
+
+> V−1
+> τj
+
+≤ 3.
+
+Proof. Let Vstart = Vτj . During an epoch, the active policy is constant, so ϕ(st) = ϕc is constant. The accumulated sum of squares is Sj = Tj ∥ϕc∥2
+
+> V−1start
+
+, where Tj is the epoch length. By the Matrix Determinant Lemma, the determinant at the end of the epoch is det (Vend ) = det (Vstart )( 1 + Sj ).The epoch ends when the determinant doubles. Even accounting for the discrete step overshoot on the final update, the ratio det (Vend )/ det (Vstart ) is bounded by 4. Thus 1 + Sj ≤ 4, implying 
+
+Sj ≤ 3. 
+
+4.2.2 Main Regret Guarantee 
+
+We can now combine these ingredients to bound the total regret. 
+
+Theorem 4 (Regret of Lazy Graph-LinUCB) . Assume the movement cost is bounded by λ per switch. Let di be the dimension of the feature map for criterion i, and dmax = max i di. The cumulative regret of LazyGraphLinUCB is bounded by: 
+
+Reg T ≤̃ O(√T
+
+> k
+
+∑
+
+> i=1
+
+di + λk 2dmax log T ). (8) 
+
+Proof. The total regret decomposes into Prediction Regret and Movement Regret: 
+
+Reg T =
+
+> T
+
+∑
+
+> t=1
+
+(L(st) − L(s∗)) ´¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¸¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¶ 
+
+> Rpred
+
++
+
+> T
+
+∑
+
+> t=1
+
+λ∥st − st−1∥1
+
+´¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¸¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¶ 
+
+> Rmove
+
+. (9) 
+
+1. Movement Regret. By Lemma 2, the total number of switches M is ̃ O(dmax k log T ).Each switch incurs at most a cost of λk (since the domain is [0, 1]k). Thus, Rmove ≤ λkM =̃ 
+
+O(λk 2dmax log T ).82. Prediction Regret. Using standard optimistic arguments, the instantaneous regret is bounded by the confidence width evaluated at the stale matrix: rt ≤ 2 ∑ki=1 βT,i ∥ϕi(st)∥ V−1 
+
+> τ(t),i
+
+.Summing over all epochs j = 1, . . . , M i for criterion i:
+
+> T
+
+∑
+
+> t=1
+
+∥ϕi(st)∥ V−1 
+
+> τ(t),i
+
+≤
+
+> Mi
+
+∑
+
+> j=1
+
+√Tj ⋅ Sj (by Cauchy-Schwarz on epoch j)≤ √3
+
+> Mi
+
+∑
+
+> j=1
+
+√Tj (by Lemma 3 ).
+
+This sum is maximized when Tj = T /Mi, yielding a bound of √3MiT . Since Mi =̃ O(di), and 
+
+βT,i =̃ O(√di), the total prediction regret scales as: 
+
+Rpred ≤
+
+> k
+
+∑
+
+> i=1
+
+βT,i 
+
+√3MiT =̃ O (√T
+
+> k
+
+∑
+
+> i=1
+
+di) .
+
+Adding the movement and prediction terms yields the final bound. 
+
+Corollary 5 (Robustness to Graph Misspecification) . Suppose the learner operates using a proxy graph G′ such that E ⊆ E′ (a super-graph). Let d′ 
+
+> i
+
+denote the feature dimension induced by G′.Then, LazyGraphLinUCB remains valid and guarantees a regret bound scaling with the proxy dimensions: 
+
+Reg T ≤̃ O (√T
+
+> k
+
+∑
+
+> i=1
+
+d′ 
+
+> i
+
++ λk 2d′ 
+
+> max
+
+log T ) . (10) 
+
+Proof. The proof relies on the fact that any linear model defined on a graph G is also realizable on any super-graph G′. By Definition 1, the true expected loss is μi(s) = ⟨ ϕi(s∣N ( i)), θ∗ 
+
+> i
+
+⟩ for some 
+
+θ∗ 
+
+> i
+
+∈ Rdi . Since E ⊆ E′, we have N ( i) ⊆ N ′(i). The features constructed for the proxy graph, 
+
+ϕ′
+
+> i
+
+(s∣N ′(i)), span a space Rd′ 
+
+> i
+
+that contains the subspace spanned by the true features ϕi. Formally, there exists a linear embedding such that the true parameter θ∗ 
+
+> i
+
+can be represented as a vector ̃
+
+θi ∈ Rd′ 
+
+> i
+
+(essentially padding the extra dimensions with zeros), satisfying ⟨ϕ′
+
+> i
+
+(s),̃ θi⟩ = μi(s) for all s.Consequently, the problem remains a valid linear bandit instance with dimension d′
+
+> i
+
+.The regret bound of Theorem 4 depends on the problem dimension through two terms: the confidence radius βt,i (Lemma 12) and the number of updates M (Lemma 2). 1. Validity of Confidence Sets: Since the problem is realizable in Rd′ 
+
+> i
+
+, Lemma 12 applies to the proxy estimator ̂ θ′
+
+> t,i
+
+, ensuring that with high probability, ̃ θi lies within the confidence ellipsoid defined by the proxy covariance matrix V′
+
+> t,i
+
+. The radius β′ 
+
+> t,i
+
+now scales with √d′ 
+
+> i
+
+instead of 
+
+√di.2. Update Bound: Lemma 2 bounds the number of determinant doublings for a matrix of dimension d. Applying this to the d′
+
+> i
+
+-dimensional proxy covariance matrices yields a total update bound M ≤ ∑ ki=1 d′ 
+
+> i
+
+log (1 + T L 2 
+
+> d′
+> iλreg
+
+).Substituting the proxy dimension d′ 
+
+> i
+
+into the regret decomposition (9) yields the stated bound. This confirms that the algorithm is safe: over-estimating the graph structure merely increases the regret bound by a factor depending on the dimension inflation (scaling with d′
+
+> i
+
+/di in the prediction term and d′
+
+> i
+
+/di in the movement term), without introducing bias. 94.3 Minimax Lower Bound 
+
+We now present a lower bound demonstrating that the dependency on the sum of dimensions in our upper bound is tight. 
+
+Theorem 6 (Minimax Lower Bound) . For any learning algorithm, there exists a graph structure G
+
+and a sequence of loss functions such that the expected regret is lower bounded by: 
+
+E[Reg T ] = Ω (√T
+
+> k
+
+∑
+
+> i=1
+
+di) . (11) 
+
+Proof. Consider a graph G consisting of k disjoint components (cliques), where each component i
+
+corresponds to an independent linear bandit problem of dimension di. The loss function decomposes as L(s) = ∑ ki=1 Li(s∣N ( i)), where each Li is governed by an independent parameter θ∗ 
+
+> i
+
+. It is a standard result in the bandit literature (e.g., [Dani et al., 2008]) that the minimax lower bound for a single d-dimensional linear bandit is Ω (d√T ). Since the problems are independent, the learner must solve each simultaneously. The total regret is thus lower bounded by the sum of the regrets of the individual components: 
+
+E[Reg T ] ≥ 
+
+> k
+
+∑
+
+> i=1
+
+Ω(di
+
+√T ) = Ω (√T
+
+> k
+
+∑
+
+> i=1
+
+di)
+
+This confirms that the dependency on the sum of dimensions in our upper bound is tight. 
+
+Comparison to Naive Reduction. One might seek to solve this problem by scalarizing the objective L(s) = ∑ ℓi(s) and applying a standard high-dimensional linear bandit algorithm to the concatenated parameter θ∗ ∈ R∑ di . While the dimension dependence ( ∑ di) would match our result, this naive reduction fails on two fronts. First, Feedback Granularity : By observing only the scalar sum, the learner faces an aggregated noise variance of σ2agg = ∑ ki=1 σ2 
+
+> i
+
+≈ k. This inflates the regret by a factor of √k compared to our component-wise approach which exploits the vector-valued feedback. Second, and most importantly, Stability : The global approach cannot distinguish which local component caused a loss increase. Consequently, it updates the entire parameter vector at once, incurring a movement cost proportional to the global dimension k at every switch, whereas our approach restricts movement costs to local neighborhoods. 
+
+# 5 Exploiting Graph Structure 
+
+While the global Lazy strategy (Section 4) achieves optimal prediction regret, it does not fully leverage the sparsity and correlations inherent in the dependency graph G. In this section, we present three key extensions that exploit this structure: an asynchronous update schedule that minimizes movement costs in sparse graphs, an adaptive procedure that learns the graph structure when it is initially unknown, and a factor-graph decomposition that leverages data sharing among correlated objectives to tighten regret bounds. Table 1 summarizes when each variant is best suited and what additional assumptions it requires. All detailed proofs are deferred to Appendix C. 
+
+5.1 Asynchronous Updates for Sparse Graphs 
+
+In the LazyGraphLinUCB algorithm described above, the update condition is global : if any single criterion triggers a determinant doubling, the entire policy vector sactive is re-optimized. While 10 Table 1: Algorithm Variant Selection Guide. Summary of when to use each variant and what additional assumptions it requires.         
+
+> Variant Best When Key Assumption
+> Global Lazy (Section 4) Dense graph or syn-chronized updates needed None beyond stan-dard linear bandit Async Lazy (Section 5.1) Sparse/heterogeneous graph; criteria learn at different rates Assumption A: LCB objective is PL (satis-fied for large λreg )Adaptive Refine-ment (Section 5.2) Graph structure com-pletely unknown Assumptions B (sig-nal strength) and C (diverse contexts) Joint Estimator (Section 5.3) Dense graph with correlated objectives sharing latent factors Assumption D: factor decomposability
+
+this guarantees regret optimality in the worst case (dense graphs), it may be inefficient for systems with sparse dependency graphs. For instance, learning new information about a latency criterion should ideally not force a reconfiguration of a graph-distant fairness criterion. To exploit sparsity, we propose an asynchronous algorithm, Async-LazyGraphLinUCB , which performs local policy updates. Such a solution is necessary, as global lazy updates are suboptimal for sparse graphs. 
+
+Mechanism. The algorithm maintains the same local estimators but modifies the update schedule: 1. Local Trigger: Each criterion i maintains its own last-update time τi. An update is triggered for criterion i only if det (Vt,i ) > 2 det (Vτi,i ).2. Local Update: When criterion i triggers, we solve for the new active policy sactive by optimizing only the variables in the local neighborhood N ( i), keeping all variables sj for j ∉ N ( i) fixed at their previous values. 
+
+Tie-Breaking: In the event that multiple criteria trigger simultaneously (i.e., ∣A t∣ > 1), we perform a synchronized update over the union of their neighborhoods ⋃i∈A t N ( i). This ensures that coupled dependencies between simultaneously triggering nodes are resolved jointly. 3. Synchronization: The time τi is updated to t. Note that because neighborhoods overlap, an update to N ( i) may effectively update partial state for neighbors j ∈ N ( i), but it does not propagate to the entire graph. 
+
+Assumption A: BCD Convergence. We assume the objective function is sufficiently regular, specifically, that it satisfies the Polyak-Lojasiewicz (PL) condition, such that the Block Coordinate Descent (BCD) updates in the asynchronous procedure converge to the global minimizer with negligible optimality gap. 
+
+When does Assumption A hold? The LCB objective ft(s) = ∑ i(⟨ ϕi,̂ θt,i ⟩ − βt,i ∥ϕi(s)∥ V−1 
+
+> t,i
+
+) is the sum of a strongly convex empirical loss term (the regularizer contributes λreg ∥s∥2/2 per coordinate) and a concave correction (the exploration bonus). For any smooth, bounded feature map ϕi on a compact domain, the Hessian of the exploration bonus is bounded in operator norm by some constant C(ϕi) that depends only on the Lipschitz constant of ϕi and the problem geometry. Consequently, whenever λreg > C(ϕi), the net Hessian is positive definite and the LCB objective is (λreg − C(ϕi)) -strongly convex, hence PL (see Lemma 13 in Appendix C). In particular, as the exploration bonus shrinks over time ( βt,i → 0), this regime is automatically entered. The algorithm is designed to operate in this regularity regime by an appropriate choice of λreg .11 Theoretical Improvement. This asynchronous strategy yields a significantly tighter bound on the movement cost for sparse graphs. In the global strategy, every update incurs a movement cost bounded by the total dimension k (since all si might shift). In the asynchronous strategy, an update initiated by criterion i only shifts coordinates within N ( i), bounding the movement cost by the local degree ∣N ( i)∣ .
+
+Theorem 7 (Regret of Asynchronous Lazy Graph-LinUCB) . Let ∆ = max i ∣N ( i)∣ be the maximum degree of the dependency graph. In the regularity regime where λreg is chosen sufficiently large to satisfy Assumption A (see Lemma 13), the cumulative regret of the asynchronous algorithm is bounded by: 
+
+Reg T ≤̃ O(√T
+
+> k
+
+∑
+
+> i=1
+
+di + λ∆dmax k log T ). (12) 
+
+Proof. We analyze the prediction regret and movement regret separately. 
+
+Part (a): Prediction Regret (Feature Stability). The asynchronous algorithm maintains the invariant that for any criterion i, the active policy was computed using a covariance matrix 
+
+Vτi,i such that det (Vt,i ) ≤ 2 det (Vτi,i ).Unlike the global setting, the feature vector ϕi(st) may vary during an epoch because updates to neighbors j ∈ N ( i) can alter the state s∣N ( i). However, the bound on the sum of squared norms derived in Lemma 3 applies even under time-varying features. Let Gj be the matrix of diverse feature vectors observed for criterion i during its j-th epoch. The sum of squared stale norms is exactly the trace Tr (G⊺ 
+
+> j
+
+V−1 
+
+> τj,i
+
+Gj ). Let μk be the eigenvalues of the matrix V−1/2  
+
+> τj,i
+
+Gj G⊺ 
+
+> j
+
+V−1/2  
+
+> τj,i
+
+. The determinant doubling condition implies: det (I + G⊺ 
+
+> j
+
+V−1 
+
+> τj,i
+
+Gj ) = ∏ 
+
+> k
+
+(1 + μk) ≤ det (Vτj+1,i )
+
+det (Vτj ,i ) ≤ 2. (13) Since μk ≥ 0 and ∏( 1 + μk) ≤ 4 (allowing for discrete overshoot), we must have ∑ μk ≤ 3. Using the inequality x ≤ 3 log (1 + x) which holds for x ∈ [ 0, 3] we bound the trace: 
+
+∑ 
+
+> t∈epoch j
+
+∥ϕi(st)∥ 2
+
+> V−1
+> τj ,i
+
+= ∑ 
+
+> k
+
+μk ≤ 3 ∑
+
+> k
+
+log (1 + μk) = 3 log det (I + G⊺ 
+
+> j
+
+V−1 
+
+> τj,i
+
+Gj ) ≤ 3 log 4 . (14) Thus, the aggregate error contribution of any epoch remains bounded by 3 log 4 regardless of feature variance within the epoch. The rest of the summation proceeds identically to the global case, yielding a prediction regret of ̃ O(√T ∑i di).
+
+Part (b): Prediction Regret (Optimism). The asynchronous algorithm maintains the invariant that the active policy st is the minimizer of the LCB function. Under Assumption A, the block-coordinate updates ensure that st converges to the global optimum, preserving the validity of the standard optimistic regret bound. Specifically, at any time t, for any criterion i, the “lazy” condition det (Vt,i ) ≤ 2 det (Vτi,i ) ensures that the covariance matrix used to compute the active policy ( Vτi,i ) is spectrally similar to the current true covariance ( Vt,i ). Crucially, since the objective 
+
+μi(s) and its LCB depend strictly on the local variables s∣N ( i), optimizing over the neighborhood 
+
+N ( i) while keeping disjoint variables fixed is sufficient to minimize the local LCB contribution. The analysis in Lemma 3 applies locally to each criterion i. The sequence of updates for criterion i
+
+defines a set of local epochs. For any t, let τi(t) be the last time criterion i triggered an update. The instantaneous regret bound (9) becomes: 
+
+rt ≤ 2
+
+> k
+
+∑
+
+> i=1
+
+βT,i ∥ϕi(st)∥ V−1
+
+> τi(t),i
+
+. (15) 12 Since the trigger condition holds, the bound on the sum of squared norms holds. Multiplying by the confidence radius βT,i ≈ √di, the prediction regret sums to ˜O(√T ∑i di), identical to the global case. 
+
+Part (c): Movement Regret. Unlike the global case, an update does not necessarily change the entire state vector s. Let ut,i ∈ { 0, 1} be an indicator that criterion i triggered an update at time 
+
+t. The total number of triggers for criterion i is bounded by Lemma 2 as Mi = ∑ Tt=1 ut,i ≤̃ O(di log T ).When criterion i triggers, the algorithm updates sactive by optimizing over the local neighborhood 
+
+N ( i). Let At = { i∶ ut,i = 1} be the set of triggering criteria at time t. The coordinates of s that change are restricted to the union of neighborhoods: supp (st − st−1) ⊆ ⋃ 
+
+> i∈A t
+
+N ( i). (16) The movement cost at step t is bounded by the number of changed coordinates: 
+
+∥st − st−1∥1 ≤ ∣ ⋃ 
+
+> i∈A t
+
+N ( i)∣ ≤ ∑ 
+
+> i∈A t
+
+∣N ( i)∣ ≤ ∑ 
+
+> i∈A t
+
+∆. (17) Summing over T :
+
+Rmove = λ
+
+> T
+
+∑
+
+> t=1
+
+∥st − st−1∥1 ≤ λ
+
+> T
+
+∑
+
+> t=1
+
+∑
+
+> i∈A t
+
+∆ = λ∆
+
+> k
+
+∑
+
+> i=1
+> T
+
+∑
+
+> t=1
+
+ut,i = λ∆
+
+> k
+
+∑
+
+> i=1
+
+Mi. (18) Substituting Mi ≤̃ O(dmax log T ) yields Rmove ≤̃ O(λ∆kd max log T ).This result highlights that for sparse graphs (where ∆ ≪ k), the asynchronous strategy effectively decouples the learning problems, reducing the dependency on the global dimension k in the movement term. Note that determinant-based triggers are a standard tool for computational efficiency in linear bandits; we repurpose them here for stability. Crucially, a naive application to graph-structured problems leads to a synchronization penalty, where stable criteria update unnecessarily. Our primary contribution is the asynchronous analysis (Theorem 7), which proves that decomposing the trigger conditions is essential for optimal movement costs in heterogeneous systems. 
+
+5.2 Adaptive Graph Learning 
+
+In many applications, the true dependency graph G may be unknown. While relying on a safe super-graph ensures validity (Corollary 5), it incurs suboptimal movement costs. Here, we show that when the true dependencies satisfy a minimum signal strength condition and the contexts are sufficiently diverse, similar to the compatibility conditions required for high-dimensional bandits [Bastani and Bayati, 2020], the learner can adaptively recover the sparse graph structure. The adaptive graph learning mechanism in this section is primarily a theoretical guarantee showing that a priori knowledge of the dependency graph is not strictly necessary for optimal regret. Our goal is not to propose a turnkey algorithm for structure learning under movement costs, but to establish that, under standard identifiability conditions, the learner can provably recover and exploit sparsity without compromising regret rates. Practical variants and empirical evaluation are left to future work. 
+
+Assumption B: Minimum Signal Strength. Let ϕfull (s) be the feature map corresponding to the complete graph. We assume the true parameter θ∗ 
+
+> i, full
+
+is supported on a sparse subset of indices corresponding to the true neighborhood N ( i). For any active neighbor j ∈ N ( i), the dependency is bounded away from zero: ∣θ∗ 
+
+> i,j
+
+∣ ≥ γ > 0. 13 Assumption C: Diverse Contexts. During the warm-up phase, we assume the system visits a diverse set of states such that the minimum eigenvalue of the covariance matrix grows linearly. Formally, there exists κ > 0 such that for any τ , λmin (Vτ,i ) ≥ κτ . This can be enforced by adding isotropic noise to the actions during the warm-up phase. 
+
+Algorithm: Adaptive Graph Refinement. We propose a two-phase strategy: 1. Warm-up Phase: Initialize with the complete graph Gdense with dimension dtotal . Run 
+
+LazyGraphLinUCB for τ rounds. 2. Sparsity Test: At t = τ , for each criterion i, compute the estimator ̂ θτ,i using the dense covariance matrix. Construct the estimated neighborhood ̂ N ( i) = { j ∶ ∣̂ θτ,i,j ∣ > γ/2}.3. Refinement: Update the graph to ̂ G = (V ,̂ E) based on these neighborhoods. For t > τ , resume 
+
+LazyGraphLinUCB using ̂ G (retaining the covariance matrices Vτ,i ). 
+
+Theorem 8 (Regret of Adaptive Graph Refinement) . Let Gdense be the initial dense graph and G be the true sparse graph. Set the warm-up length to: τ = 16 β2 
+
+> T
+> κγ 2
+
+, where βT is the confidence radius for dimension dtotal as defined in Lemma 12. Under Assumptions B and C, with probability at least 
+
+1 − δ, the algorithm recovers the true graph ̂ G = G , and the total regret is bounded by: 
+
+Reg T ≤̃ O ( d1.5total 
+
+κγ 2 + √T
+
+> k
+
+∑
+
+> i=1
+
+di + d2total log T ) . (19) 
+
+Proof. The proof proceeds in three steps: establishing the estimation error bound, proving support recovery, and summing the regret. We start with the guarantee provided by the confidence ellipsoids. From Lemma 12, with probability 1 − δ, for all i:
+
+∥̂ θτ,i − θ∗ 
+
+> i
+
+∥Vτ,i ≤ βτ,i . (20) We relate the Mahalanobis norm to the Euclidean norm using the minimum eigenvalue of Vτ,i . By the definition of the matrix norm, ∥x∥2 
+
+> V
+
+≥ λmin (V)∥ x∥22. Therefore: 
+
+∥̂ θτ,i − θ∗ 
+
+> i
+
+∥2 ≤ 1
+
+√λmin (Vτ,i ) ∥̂ θτ,i − θ∗ 
+
+> i
+
+∥Vτ,i ≤ βτ,i 
+
+√κτ . (21) Since the ℓ∞ norm is bounded by the ℓ2 norm ( ∥x∥∞ ≤ ∥ x∥2), we have the element-wise bound for any component j:
+
+∣̂ θτ,i,j − θ∗ 
+
+> i,j
+
+∣ ≤ βτ,i 
+
+√κτ . (22) We set τ such that the error bound is strictly less than γ/2. Substituting τ = 16 β2 
+
+> T
+
+/( κγ 2) into the error bound yields: 
+
+∣̂ θτ,i,j − θ∗ 
+
+> i,j
+
+∣ ≤ βτ,i 
+
+√
+
+κ 16 β2
+
+> T
+> κγ 2
+
+= γβ τ,i 
+
+4βT
+
+≤ γ
+
+4 . (23) We now consider the thresholding rule: 
+
+• Case 1 (Active): If j ∈ N ( i), then ∣θ∗ 
+
+> i,j
+
+∣ ≥ γ. The triangle inequality implies ∣̂ θτ,i,j ∣ ≥ ∣ θ∗ 
+
+> i,j
+
+∣ − ∣error ∣ ≥ γ − γ/4 = 3γ/4. Since 3 γ/4 > γ/2, the index j is correctly included. 
+
+• Case 2 (Inactive): If j ∉ N ( i), then θ∗ 
+
+> i,j
+
+= 0. The error bound implies ∣̂ θτ,i,j ∣ ≤ γ/4. Since 
+
+γ/4 < γ/2, the index j is correctly excluded. 14 C1 C21234Overlap: {2, 3}
+
+Figure 2: Factor Graph Decomposition. Illustration of two overlapping cliques. Nodes 2 and 3 participate in both interaction C1 and C2. While a node-wise estimator treats these dependencies independently (counting the shared dimension twice), the Joint Estimator exploits the overlap to learn unique parameters for each clique, reducing the effective dimension deff .Thus, at t = τ , we have ̂ G = G . The total regret decomposes into the warm-up phase and the refined phase. During the warm-up ( t = 1 . . . τ ), we play isotropic noise, incurring per-round regret O(√dtotal ) (the confidence width of the dense estimator). The total warm-up regret is thus 
+
+O(τ ⋅ √dtotal ). Substituting τ ≈ dtotal /( κγ 2), this cost is ̃ O(d1.5total /( κγ 2)) . For the remaining T − τ
+
+rounds, we run the algorithm on the true sparse graph, incurring regret ̃ O(∑ ki=1 di
+
+√T ). Summing these yields the final bound. 
+
+Regime of Validity. The regret bound consists of a constant learning cost (scaling with γ−2)and a term scaling with √T . This bound is meaningful when the horizon is sufficiently long to amortize the warm-up phase, specifically when T ≫̃ Ω(γ−4). In the regime of extremely weak signals (γ ≤ T −1/4), the cost of distinguishing the true support outweighs the benefits of sparsity within the horizon T . In such cases, the learner is better off defaulting to the conservative super-graph strategy (Corollary 5), effectively treating weak signals as noise. 
+
+5.3 Data Sharing for Correlated Objectives 
+
+The regret bounds in Section 4 scale with ∑ki=1 di, treating each criterion as an independent learning task. However, the graph structure often implies stronger correlations: neighbors i and j in the dependency graph typically depend on the same underlying state variables or latent factors. In this section, we show that by formalizing the global structure explicitly as a Factor Graph decomposition, a standard realistic assumption in graphical models (see e.g., [Cortes et al., 2016]), we can further reduce the regret. 
+
+Assumption D: Factor Decomposability. We assume the global loss function L(s) decom-poses over the maximal cliques C of the graph G:
+
+L(s) = ∑ 
+
+> C∈C
+
+⟨ψC (s∣C ), w∗ 
+
+> C
+
+⟩, (24) where ψC are local feature maps for each clique and w∗ 
+
+> C
+
+∈ RdC are unique clique parameters. This differs from the node-wise assumption in (1) ( μi(s) = ⟨ ϕi, θ∗ 
+
+> i
+
+⟩). There, θ∗ 
+
+> i
+
+aggregates all factors affecting node i. Here, we disentangle them. For instance, if i and j share a clique C, they share the parameter w∗ 
+
+> C
+
+. This is physically realistic in systems where constraints share underlying physics (e.g., two fairness constraints depending on the same sensitive attribute coefficients). 
+
+Algorithm: Joint-LazyGraphLinUCB. We construct a Joint Estimator by concatenating all unique clique parameters into a single vector θ∗ 
+
+> joint
+
+∈ Rdeff , where deff = ∑ C∈C dC . At each round 15 t, the learner receives a feedback vector Yt = ℓt(st) ∈ Rk. We treat this as a single linear bandit problem with a macro-action st and a vector-valued reward. The estimator minimizes the joint regularized least squares objective. The update rule is global: sactive is updated only when the determinant of the joint covariance matrix doubles. 
+
+Theorem 9 (Regret of Joint Estimator) . Let deff = ∑ C∈C dC be the sum of the dimensions of the maximal cliques. The cumulative regret of the Joint-LazyGraphLinUCB is bounded by: 
+
+Reg T ≤̃ O (deff 
+
+√kT + λk 2dmax log T ) . (25) 
+
+Proof. We analyze the prediction regret by treating the problem as a linear bandit with matrix-valued features. At each round t, the learner observes Yt = Ψ(st)θ∗ 
+
+> joint
+
++ ηt ∈ Rk, where Ψ (st) ∈ Rk×deff 
+
+is the block-sparse feature matrix where the c-th block contains the features ψC (s∣C ). The ridge estimator ̂ θt minimizes the joint regularized objective, with covariance Vt = λI + ∑ tτ =1 Ψ(sτ )⊺Ψ(sτ ).Standard self-normalized martingale bounds for vector-valued martingales [Abbasi-Yadkori et al., 2011] guarantee that with high probability, ∥̂ θt − θ∗
+
+> joint
+
+∥Vt ≤ βt, where βt =̃ O(√deff ).The instantaneous regret is bounded by the confidence width of the joint estimator using standard OFUL arguments: 
+
+rt = L(st) − L(s∗) ≤ 2βt∥Ψ(st)⊺1∥V−1 
+
+> t
+
+= 2βt
+
+√
+
+1⊺(Ψ(st)V−1 
+
+> t
+
+Ψ(st)⊺)1. (26) Crucially, for any PSD matrix A, we have the algebraic bound 1⊺A1 ≤ k ⋅ tr (A). This introduces the explicit dependency on the number of objectives k:
+
+rt ≤ 2βt
+
+√k
+
+√
+
+tr (Ψ(st)V−1 
+
+> t
+
+Ψ(st)⊺). (27) Summing over T rounds and applying the Matrix Elliptical Potential Lemma [Abbasi-Yadkori et al., 2011]: 
+
+> T
+
+∑
+
+> t=1
+
+rt ≤ 2βt
+
+√k
+
+¿ÁÁÀT
+
+> T
+
+∑
+
+> t=1
+
+tr (Ψ(st)V−1 
+
+> t
+
+Ψ(st)⊺) ≤ 2βt
+
+√k
+
+¿ÁÁÀT ⋅ 2deff log (1 + T L 2
+
+deff λ ). (28) Substituting βt ≈ √deff , we obtain Rpred ≤̃ O(deff 
+
+√kT ).
+
+Comparison to Node-Wise Bound. The standard bound (Theorem 4) scales with ∑ki=1 di.In the Factor model, the joint estimator scales with deff 
+
+√k = (∑ C dC )√k. Consider a dense case where k nodes form a single clique of dimension D. The Node-wise bound scales as kD . The Joint bound scales as D√k. Thus, the joint estimator improves the regret by a factor of √k in dense, highly correlated systems, see Figure 2. 
+
+# 6 Adversarial Setting 
+
+We also extend our framework to the adversarial full-information setting, where loss functions 
+
+ℓt(⋅) are arbitrary convex functions chosen by an adversary. Unlike the stochastic setting, smart 
+
+determinant-based laziness is not possible. To satisfy a strict switching budget M , we propose 
+
+Randomized Lazy OGD , which maintains a virtual OGD iterate but updates the deployed state 
+
+st only with probability p = M /T .We prove this achieves E[Reg T ] ≤ ˜O(D G T /√M ), where D is the diameter and G is the Lipschitz constant (Theorem 10), quantifying the price of sparsity : regret degrades from √T to T /√M . An extension for heterogeneous budgets M = ( M1, . . . , M k) is also provided. 16 In many real-world scenarios, user feedback may not be stochastic but rather driven by changing population drifts or even adversarial behavior. We now extend our framework to the adversarial setting. 
+
+6.1 Problem Setup 
+
+In this setting, the loss functions ℓt(s) are arbitrary convex functions chosen by an adversary. The objective is to minimize the regret with movement costs: 
+
+Reg T =
+
+> T
+
+∑
+
+> t=1
+
+(ℓt(st) + λ∥st − st−1∥1) − 
+
+> T
+
+∑
+
+> t=1
+
+ℓt(s∗). (29) It is established that standard Online Gradient Descent (OGD) with learning rate η ∝ 1/√T
+
+achieves the optimal ̃ O(√T ) regret for this objective [Cesa-Bianchi et al., 2013]. However, standard OGD updates the system state st at every time step. In large-scale production systems, such high-frequency updates ( T switches) are often operationally prohibitive. Full Information Setting. Unlike the stochastic bandit setting in Section 4, we assume here a Full Information (Online Convex Optimization) setting where the learner observes the gradient ∇ℓt after every round. We reference bandit lower bounds (specifically the T 2/3 rate) in the analysis below solely for context: they serve as a useful baseline to illustrate how strictly limiting the switching budget M degrades the regret of a full-information algorithm to rates typically associated with limited feedback. Sparsity Constraint. We consider a practical setting where the learner is constrained by a 
+
+switching budget M ≪ T . The goal is to minimize the regret in (29) subject to the constraint that the expected number of updates is at most M .
+
+6.2 Algorithm: Randomized Lazy OGD 
+
+To address the need for sparsity, we use a Randomized Lazy OGD strategy. The core idea is to decouple the learning process from the state actuation. We maintain a virtual OGD iterate wt that updates at every step to track the loss landscape, but we only update the actual deployed state st
+
+with probability p.
+
+Algorithm 2 Randomized Lazy OGD  
+
+> 1:
+
+Input: Learning rate η, Switching probability p, Initial state s0 ∈ S. 
+
+> 2:
+
+Initialize virtual state w1 = s0. 
+
+> 3:
+
+for t = 1 to T do  
+
+> 4:
+
+Play st and observe loss function ℓt(⋅) (and gradient ∇ℓt(st)).  
+
+> 5:
+
+Virtual Update:  
+
+> 6:
+
+wt+1 = ΠS (wt − η∇ℓt(st))  
+
+> 7:
+
+Lazy State Update:  
+
+> 8:
+
+Sample zt ∼ Bernoulli (p). 
+
+> 9:
+
+if zt = 1 then  
+
+> 10:
+
+st+1 = wt+1 
+
+> 11:
+
+else  
+
+> 12:
+
+st+1 = st 
+
+> 13:
+
+end if  
+
+> 14:
+
+end for 
+
+17 Unlike the stochastic setting where smart data-dependent updates are possible, the adversarial setting fundamentally limits our ability to be lazy. We analyze a randomized update schedule not as a novel algorithm per se, but to quantify the unavoidable regret trade-off between stability and accuracy. This mirrors the general trade-off between regret and movement costs (or “service costs”) in online convex optimization [Andrew et al., 2013]. Theorem 10 establishes the price of sparsity ,showing how regret degrades from √T as the switching budget tightens, and recovering the classical 
+
+T 2/3 rate in the regime of very small switching budgets. 
+
+6.3 Regret guarantees 
+
+The following theorem characterizes the trade-off between the sparsity budget M and the achievable regret. 
+
+Theorem 10 (Regret with Sparsity Budget) . Let the loss functions ℓt be convex, G-Lipschitz, and defined over a domain of diameter D (where D bounds both the ℓ1 and ℓ2 diameters). For any switching budget M ∈ [ 1, T ], running Algorithm 2 with switching probability p = M /T and learning rate η = DGT 
+
+√ M 
+
+> 2
+
+guarantees: 
+
+E[Reg T ] ≤ λDM + O (DG T
+
+√M ) . (30) 
+
+Proof. We analyze the expected regret of Randomized Lazy OGD . Let ft(s) = ℓt(s). The total regret decomposes into the loss regret and the movement cost. 
+
+E[Reg T ] = E [
+
+> T
+
+∑
+
+> t=1
+
+(ft(st) − ft(s∗))] ´¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¸¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¶ 
+
+> loss regret
+
++ E [
+
+> T
+
+∑
+
+> t=1
+
+λ∥st − st−1∥1]´¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¸¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¶ 
+
+> movement cost
+
+.
+
+The state st changes only when the Bernoulli variable zt−1 = 1. Thus, we have 
+
+E[∥ st − st−1∥1] = P(zt−1 = 1) ⋅ E[∥ wt − st−1∥1] ≤ pD. 
+
+Summing over T steps gives E[Rmove ] ≤ pT λD . Now, to bound the loss regret, we use the convexity of ft.
+
+ft(st) − ft(s∗) ≤ ⟨∇ ft(st), st − s∗⟩ = ⟨∇ ft(st), st − wt⟩´¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¸¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¶ 
+
+> Coupling Error
+
++ ⟨∇ ft(st), wt − s∗⟩´¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¸¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¶ 
+
+> Virtual Regret
+
+. (31) The sequence wt follows standard Online Gradient Descent on the linearized loss functions ˜ft(w) = ⟨∇ ft(st), w⟩. Using the standard OGD bound: 
+
+> T
+
+∑
+
+> t=1
+
+⟨∇ ft(st), wt − s∗⟩ ≤ D2
+
+2η + η
+
+2
+
+> T
+
+∑
+
+> t=1
+
+∥∇ ft(st)∥ 2 ≤ D2
+
+2η + ηT G 2
+
+2 . (32) For the Coupling Error, using the Lipschitz property ( ∥∇ ft(st)∥ ≤ G) and the geometric distribution of the staleness ( t − τ (t)) with mean 1 /p:
+
+E [⟨∇ ft(st), st − wt⟩] ≤ G E[∥ st − wt∥] ≤ ηG 2
+
+p . (33) 18 Summing over T gives E[Coupling Error ] ≤ T ηG 2 
+
+> p
+
+. Combining the bounds, the total expected regret is upper bounded by: 
+
+E[Reg T ] ≤ pT λD 
+
+´¹¹¹¹¸¹¹¹¹¹¶ 
+
+> Movement Cost
+
++ D2
+
+2η + ηT G 2
+
+2
+
+´¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¸¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¶ 
+
+> Virtual OGD Regret
+
++ T ηG 2
+
+p
+
+´¹¹¹¹¹¸¹¹¹¹¹¶ 
+
+> Coupling Error
+
+. (34) We are given a switching budget M . To ensure the expected number of switches is at most M , we set the switching probability to: 
+
+p = MT .
+
+Substituting p = M /T into (34): 
+
+E[Reg T ] ≤ M λD + ( D2
+
+2η + ηT G 2
+
+2 ) + T 2ηG 2
+
+M .
+
+Assuming the sparsity regime M ≪ T , the term T 2ηG 2 
+
+> M
+
+dominates ηT G 2 
+
+> 2
+
+. We simplify the objective to balancing the Virtual Regret (specifically the D2/2η term) against the Coupling Error: Bound (η) ≈ M λD + D2
+
+2η + T 2ηG 2
+
+M .
+
+Minimizing the η-dependent terms yields the optimal learning rate: 
+
+D2
+
+2η2 = T 2G2
+
+M Ô⇒ η∗ = DT G 
+
+√ M
+
+2 .
+
+Substituting η∗ back into the bound: 
+
+D2
+
+2η∗ + T 2η∗G2
+
+M = D2T G 
+
+2D√M /2 + T 2G2
+
+MDT G 
+
+√ M
+
+2 = √2 DT G 
+
+√M .
+
+Thus, the final bound is: 
+
+E[Reg T ] ≤ M λD + O (DG T
+
+√M ) .
+
+This completes the proof. This result quantifies the price of sparsity :
+
+• Unconstrained ( M = T ): The algorithm reduces to standard Online Gradient Descent. While this yields optimal prediction regret ( O(√T )), the bound on movement costs becomes linear (O(T )). 
+
+• Optimal Trade-off ( M = Θ(T 2/3)): We recover a total regret rate of O(T 2/3). This matches the minimax rate for bandit problems with switching costs. 
+
+• High Sparsity ( M = √T ): The regret degrades to O(T 3/4), illustrating the unavoidable cost of freezing the state in an adversarial environment. 19 Unlike the stochastic setting where “smart” data-dependent updates are possible, the adversarial setting limits our ability to exploit stable epochs. We analyze a randomized update schedule to quantify the regret trade-off inherent to lazy gradient-based strategies. While perturbation-based methods [Kalai and Vempala, 2005] can achieve ̃ O(√T ) regret with ̃ O(√T ) switches for linear losses, they often require full optimization oracles. In contrast, our approach applies efficiently to 
+
+general convex losses . Theorem 10 establishes the price of sparsity for this lazy strategy, showing how regret degrades from √T as the switching budget tightens. Note that, under the optimal switching budget ( M ≈ T 2/3), this full-information strategy recovers the O(T 2/3) rate, mirroring the minimax lower bound for bandits with switching costs [Dekel et al., 2014]. The parameter p
+
+explicitly controls the trade-off between the system’s stability and its ability to track the optimal parameters. This can be viewed as an optimization problem. From the proof of Theorem 10, the upper bound on the regret is approximately: Bound (p) ≈ pT λD 
+
+´¹¹¹¹¸¹¹¹¹¹¶ 
+
+> Movement Cost
+
++ ηT G 2
+
+p
+
+´¹¹¹¹¹¸¹¹¹¹¹¶ 
+
+> Coupling Error
+
++C. (35) The first term reflects the penalty for instability: a higher p leads to more frequent switches. The second term reflects the coupling error , the divergence between the active system state st and the virtual learner wt. Minimizing this bound with respect to p (for a fixed learning rate η) yields the optimal fixed switching probability: 
+
+p∗ ∝√
+
+ηG 2
+
+λD . (36) This result offers a principled heuristic: the switching frequency should be inversely proportional to the square root of the movement penalty λ.
+
+6.4 Extension: Heterogeneous Stability Budgets 
+
+The standard Randomized Lazy OGD applies a uniform switching probability p across all dimensions. However, in the conflicting objectives setting, different criteria often possess different stability requirements. For example, a fairness threshold might require strict stability (low update frequency) to avoid public outcry, while an internal mixing rate might tolerate frequent updates. We can extend our framework to support heterogeneous sparsity budgets . Let s be decomposed into k independent components (or blocks) with distinct switching budgets M = ( M1, . . . , M k). We assume the loss function decomposes additively, ℓt(s) = ∑ ki=1 ℓt,i (si), which is consistent with the graph-structured formulation in Section ?? (where blocks correspond to disjoint cliques). 
+
+Algorithm: Component-Wise Lazy OGD. We run k parallel instances of the virtual update logic. For each component i:1. Maintain virtual iterate wt,i .2. Sample switching variable zt,i ∼ Bernoulli (pi) independent of other components. 3. Update deployed state st,i ← wt,i only if zt,i = 1. 
+
+Theoretical Guarantee. By setting pi = Mi/T and tuning component-specific learning rates 
+
+ηi, we achieve a refined regret bound that sums the localized costs rather than scaling with the global dimension. 
+
+Corollary 11 (Regret with Heterogeneous Budgets) . Let the loss ℓt decompose into k components with diameters Di and Lipschitz constants Gi. Given a vector of budgets M, the expected regret is 
+
+20 0 50 100 150 200 250 300         
+
+> Round t
+> 1.0
+> 0.8
+> 0.6
+> 0.4
+> 0.2
+> 0.0
+> Action Value  xt, 1
+> Stability: Action Trajectory (Dim 1)
+> Standard LinUCB (Single Run) Lazy Graph-LinUCB (Single Run)
+> 050 100 150 200 250 300
+> Round t
+> 0510 15 20 25
+> Total  L1 Distance (Mean ± Std Dev)
+> Efficiency: Cumulative Movement Cost
+> Standard Cost (Mean) Lazy Cost (Mean)
+
+Figure 3: Impact of Lazy Updates. (Left) The trajectory of the selected action st (di-mension 1). Standard LinUCB (grey) exhibits constant jitter, while LazyGraphLinUCB (or-ange) freezes the action. (Right) Cumulative movement cost averaged over 100 runs. The stan-dard algorithm accumulates linear cost ( ≈ 22), while the lazy strategy saturates ( ≈ 8). 0 100 200 300 400 500 600         
+
+> Round t
+> 050 100 150 200
+> Cumulative  L1 Cost
+> Full Cost Comparison (Averaged over 10 runs)
+> Standard Global Lazy Async Lazy
+> 0100 200 300 400 500 600
+> Round t
+> 010 20 30 40 50 60
+> Cumulative  L1 Cost
+> Zoomed: Global vs Async (Heterogeneous Cliques - Averaged over 10 runs)
+> Global Lazy (Sync) Async Lazy (Local)
+
+Figure 4: Scalability of Asynchronous Up-dates. (Left) Comparison against the standard baseline. (Right) Zoomed comparison of lazy strategies. Global Lazy (orange) suffers from synchronization penalties, while Async Lazy 
+
+(blue) decouples components, reducing movement costs by 3.1× (see Table 2). 
+
+bounded by: 
+
+E[Reg T ] ≤ 
+
+k
+
+∑
+
+i=1
+
+(λD iMi + O (DiGi
+
+T
+
+√Mi
+
+)) . (37) This extension is significant because it allows the system designer to spend sparsity where it is most needed. Unlike the global strategy which pays a regret penalty governed by the worst-case stability constraint ( Mmin ), the component-wise strategy isolates the cost of stability to the specific criteria that require it. 
+
+# 7 Numerical Illustrations 
+
+To validate our theoretical findings, we conducted two synthetic experiments and one real-world application. Our primary contribution is theoretical; these experiments are not large-scale bench-marks, but numerical illustrations isolating and validating specific mechanisms predicted by our analysis: the reduction of jitter and the elimination of synchronization overhead. 
+
+7.1 Single-Clique Stability Analysis 
+
+We first compared LazyGraphLinUCB against standard LinUCB on a simple d = 2 dimensional linear bandit problem over T = 300 rounds. The goal was to minimize a noisy linear loss function 
+
+ℓt(s) = ⟨ s, θ ∗⟩ + N t(0, σ 2). The parameters used were λreg = 0.1, β = 0.5 for the exploration term, and noise parameter σ = 0.5. Both algorithms rely on the same regularized least-squares estimator; the critical difference lies in the update schedule. Standard LinUCB updates its policy at every step to the minimizer of the current LCB, whereas LazyGraphLinUCB only updates when the determinant of the covariance matrix doubles. We note that the cumulative prediction regret for both algorithms was statistically indistinguishable, confirming that the stability gains did not come at the cost of accuracy. 
+
+Stability vs. Jitter. Figure 3 (Left) illustrates the core mechanism of our algorithm. Because the estimator ̂ θt fluctuates with every noisy sample, the standard LinUCB action st jitters constantly. In contrast, LazyGraphLinUCB freezes the action for stable epochs. The initial fluctuations in the first ≈ 20 rounds correspond to the rapid shrinkage of the confidence ellipsoid (where the determinant doubles frequently). However, as t increases, the updates become exponentially rare. 21 Cost Reduction. Figure 3 (Right) confirms our regret bounds. The standard algorithm incurs linear movement cost (Ω (T )), making it unusable in systems with high switching penalties. Our lazy algorithm maintains logarithmic movement cost ( O(log T )) while provably retaining the optimal ̃
+
+O(√T ) prediction accuracy. (Note: In our experiments, the cumulative prediction regret of the Lazy algorithm was statistically indistinguishable from the Standard algorithm; we omit the redundant learning curves for brevity.) 
+
+7.2 Heterogeneous Graph Scalability 
+
+To validate the benefits of our graph-structured approach, we simulated a larger system with 
+
+k = 10 independent criteria (cliques), each of dimension d = 2. To mirror real-world conditions where different objectives learn at different rates (e.g., a noisy CTR objective vs. a stable Latency 
+
+objective), we introduced heterogeneity by assigning a random stiffness parameter λreg ,i ∈ [ 0.01 , 2.0]
+
+to each clique. The higher the λreg ,i , the longer it will take for a clique to reach its triggering threshold. The results in Figure 4 highlight the critical importance of the asynchronous extension (Sec-tion 5.1). Under Global Lazy , all cliques are forced to update whenever any criterion triggers, so even stiff (slow-learning) cliques update frequently despite gathering little new information. Async Lazy (Theorem 7) eliminates this waste. As shown in Table 2, stable components (e.g., Clique 9) incur a 3 .7× waste factor under the global strategy as it is updated 41 times vs. 11 times under the asynchronous strategy; decoupling updates reduces total system-wide moves by isolating changes to the relevant local neighborhood. Table 2: Mechanism of Efficiency (Excerpt). Comparison of update counts for representative cliques. Volatile cliques update frequently in both strategies; stable cliques freeze in Async but are forced to move in Global. See Appendix D for the full breakdown of all 10 cliques.                    
+
+> Clique Type Stiffness, Global, Async, Waste
+> λreg moves moves factor
+> Volatile (ID 4) 0.19 41 15 2.7 ×
+> Stable (ID 9) 1.40 41 11 3.7 ×
+> Total (All 10) -410 131 3.1 ×
+
+7.3 Real-World Data: Fairness Threshold Tuning 
+
+To validate our framework in a realistic setting, we applied it to a fairness tuning task using the 
+
+Adult Census dataset . We trained a logistic regression classifier to predict income > $50K and formulated the problem of tuning the decision threshold τ ∈ [ 0, 1] as a bandit problem with inherent conflicting objectives: maximizing accuracy of the income prediction while minimizing the Equal Opportunity gap. Specifically, we scalarize the global objective as the sum of the error rate and the fairness violation: 
+
+L(τ ) = ( 1 − Accuracy (τ )) + ∣ TPR male (τ ) − TPR female (τ )∣ .
+
+To capture the non-linear dependence of these metrics on the threshold, we use a quadratic feature map ϕ(τ ) = [ 1, τ, τ 2]⊺. We initialized the threshold at a low value ( τ = 0.2) to observe the learning trajectory as the agent discovers the high-threshold region ( τ ≈ 0.9) required for fairness. We used 
+
+λreg = 5 to initialize the covariance matrix V. To simulate realistic feedback variability, we added 22 0 25 50 75 100 125 150 175 200   
+
+> Round t
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0
+> Threshold  (Acc vs Fairness)
+> Fairness Threshold Learning Curve
+> Standard LinUCB Lazy Graph-LinUCB Standard Lazy 0246810 12 14 16
+> Total  L1 Distance Moved
+> 14.0 2.5
+> Cumulative Movement Cost (Reduction: 5.7x)
+
+Figure 5: Fairness Threshold Tuning on Adult Dataset. (Left) Mean learning trajectory ( ±1std. dev.) over 10 independent trials. The Lazy algorithm (blue) consistently tracks the optimal threshold with significantly reduced variance compared to the standard LinUCB approach (grey). (Right) Cumulative movement cost. The Lazy strategy significantly reduces operational churn, achieving a ≈ 5.7× reduction in total movement cost. zero-mean Gaussian noise ( σ = 0.05) to the observed losses. While this experiment focuses on a single parameter ( k = 1) and thus does not exercise the graph sparsity mechanisms (illustrated in Section 7.2), it serves to empirically validate the efficiency and stability of the continuous-state 
+
+Lazy formulation on a realistic, non-convex loss surface, complementing the structural verification in the synthetic experiments. 
+
+Results. Figure 5 (Left) shows the mean threshold trajectory averaged over 10 random seeds. Both algorithms successfully converge to the fair region ( τ ≈ 0.9). However, the standard LinUCB algorithm (grey) exhibits high variance and frequent oscillations due to sensitivity to batch noise. In contrast, LazyGraphLinUCB (blue) demonstrates a stable learning curve with tight confidence bands, filtering out transient noise. Figure 5 (Right) demonstrates that the stability translates directly to operational efficiency. In this context, we define operational efficiency as the minimization of policy churn (unnecessary parameter updates that trigger system maintenance costs (e.g., cache invalidation or downstream re-computations) without yielding performance gains). The Lazy strategy reduces the average cumulative movement cost by a factor of 5.7 × (14.0 vs 2.5) compared to the standard LinUCB greedy approach. The error bars confirm that this gain is statistically significant and robust across different random initializations. 
+
+# 8 Limitations 
+
+We discuss the main assumptions and limitations of our framework. First, non-convex LCB optimization : minimizing the LCB objective (7) is non-convex in general; in dense graphs where the local dimension di is large, even approximate solvers may be costly. The lazy schedule amortizes this cost (at most O(dmax k log T ) solves over T rounds), and Section 5.1 restricts solutions to low-dimensional local neighborhoods. Second, stationarity of the dependency graph : the adaptive graph learning mechanism (Section 5.2) assumes the underlying dependency structure is fixed. If dependencies drift over time, a sliding-window or discounted covariance approach would be needed. Third, Assumption A in the asynchronous algorithm : the PL condition (formally justified in Lemma 13) holds when λreg is sufficiently large; in practice this trades exploration for convergence speed. Finally, our experiments focus on synthetic benchmarks and a single-parameter real-world task ( k = 1); large-scale evaluation of the graph mechanisms on real multi-criterion systems is left to future work. 23 9 Conclusion 
+
+We presented a comprehensive extension of the feedback-driven competing objectives framework to continuous state spaces. Replacing binary states with a continuous domain and modeling local dependencies via graph-structured linear function approximation yields a more realistic model for tuning hyperparameters such as fairness thresholds and diversity rates. We addressed stability via movement costs, showing that a lazy update strategy achieves sub-linear regret in both stochastic and adversarial settings. Furthermore, the dependency graph is not merely a constraint but a source of efficiency: an asynchronous schedule minimizes movement in sparse systems, an adaptive 
+
+algorithm learns dependencies from data, and a factor-graph decomposition tightens regret bounds. Future work includes large-scale empirical evaluation and extending the factor-graph analysis to non-linear function approximators. 
+
+# Acknowledgments 
+
+YM’s work is supported in part by European Research Council (ERC) under the European Union’s Horizon 2020 research and innovation program (grant agreement No. 882396), by the Israel Science Foundation, the Yandex Initiative for Machine Learning at Tel Aviv University and a grant from the Tel Aviv University Center for AI and Data Science (TAD). 24 References 
+
+Y. Abbasi-Yadkori, D. P´ al, and C. Szepesv´ ari. Improved algorithms for linear stochastic bandits. In 
+
+Advances in Neural Information Processing Systems , volume 24, pages 2312–2320, 2011. A. Agarwal, A. Beygelzimer, M. Dud´ ık, J. Langford, and H. Wallach. A reductions approach to fair classification. In International Conference on Machine Learning , pages 60–69. PMLR, 2018. N. Alon, N. Cesa-Bianchi, O. Dekel, and T. Koren. Online learning with feedback graphs: Beyond bandits. In Conference on Learning Theory , pages 23–47. PMLR, 2015. I. Amir, N. Cesa-Bianchi, T. Koren, and Y. Mansour. Better best of both worlds bounds for bandits with switching costs. In Advances in Neural Information Processing Systems , volume 35, 2022. L. Andrew, S. Barman, K. Ligett, M. Lin, A. Meyerson, A. Roytman, and A. Wierman. A tale of two metrics: Simultaneous bounds on competitiveness and regret. In Conference on Learning Theory , pages 741–763. PMLR, 2013. R. Arora, T. V. Marinov, and M. Mohri. Bandits with feedback graphs and switching costs. In 
+
+Advances in Neural Information Processing Systems , volume 32. Curran Associates, Inc., 2019. P. Awasthi, C. Cortes, Y. Mansour, and M. Mohri. A theory of learning with competing objectives and user feedback. In R. P. Barneva, V. E. Brimkov, C. Gentile, and A. Pacchiano, editors, 
+
+Artificial Intelligence and Image Analysis - 18th International Symposium on Artificial Intelligence and Mathematics, ISAIM 2024 , volume 14494 of Lecture Notes in Computer Science , pages 10–49. Springer, 2024. P. Awasthi, C. Cortes, Y. Mansour, and M. Mohri. Balancing fairness: Learning with conflicting objectives and user feedback. Annals of Mathematics and Artificial Intelligence (AMAI), to appear , 2026. A. Backurs, P. Indyk, K. Onak, B. Schieber, A. Vakilian, and T. Wagner. Scalable fair clustering. In Advances in Neural Information Processing Systems , volume 32, pages 12892–12903, 2019. H. Bastani and M. Bayati. Online decision-making with high-dimensional covariates. The Review of Economic Studies , 87(6):2765–2807, 2020. O. Bastani, X. Zhang, and A. Solar-Lezama. Probabilistic verification of fairness properties via concentration. Proceedings of the ACM on Programming Languages , 3(OOPSLA):1–27, 2019. R. K. Bellamy, K. Dey, M. Hind, S. C. Hoffman, S. Houde, K. Kannan, P. Lohia, J. Martino, S. Mehta, A. Mojsilovic, et al. AI Fairness 360: An extensible toolkit for detecting, understanding, and mitigating unwanted algorithmic bias. arXiv preprint arXiv:1810.01943, 2018. A. Beutel, J. Chen, T. Doshi, H. Qian, L. Wei, Y. Wu, L. Heldt, Z. Zhao, L. Hong, E. H. Chi, et al. Fairness in recommendation ranking through pairwise comparisons. In Proceedings of the 25th ACM SIGKDD , 2019. L. E. Celis, D. Straszak, and N. K. Vishnoi. Ranking with fairness constraints. In International Colloquium on Automata, Languages and Programming (ICALP) , 2018. N. Cesa-Bianchi, O. Dekel, and O. Shamir. Online learning with switching costs and other adaptive adversaries. In Advances in Neural Information Processing Systems , volume 26, pages 1160–1168, 2013. 25 N. Chen, G. Goel, and A. Wierman. Smoothed online convex optimization in high dimensions via online balanced descent. In Proceedings of the 21st International Conference on Artificial Intelligence and Statistics , pages 1574–1583. PMLR, 2018. F. Chierichetti, R. Kumar, S. Lattanzi, and S. Vassilvitskii. Fair clustering through fairlets. In 
+
+Advances in Neural Information Processing Systems , 2017. C. Cortes, V. Kuznetsov, M. Mohri, and S. Yang. Structured prediction theory based on factor graph complexity. In Advances in Neural Information Processing Systems , volume 29, pages 2514–2522, 2016. C. Cortes, M. Mohri, J. Gonzalvo, and D. Storcheus. Agnostic learning with multiple objectives. 
+
+Advances in Neural Information Processing Systems , 33:20485–20495, 2020. A. Coston, K. N. Ramamurthy, D. Wei, K. R. Varshney, S. Speakman, Z. Mustahsan, and S. Chakraborty. Fair transfer learning with missing protected attributes. In Proceedings of the AAAI/ACM Conference on AI, Ethics, and Society , pages 91–98, 2019. A. Cotter, M. Gupta, H. Jiang, N. Srebro, K. Sridharan, S. Wang, B. Woodworth, and S. You. Training well-generalizing classifiers for fairness metrics and other data-dependent constraints. 
+
+Journal of Machine Learning Research , 20(26):1–50, 2019a. A. Cotter, H. Jiang, and K. Sridharan. Two-player games for efficient non-convex constrained optimization. In Algorithmic Learning Theory (ALT 2019) , volume 98 of Proceedings of Machine Learning Research , pages 300–332. PMLR, 2019b. V. Dani, T. P. Hayes, and S. M. Kakade. Stochastic linear optimization under bandit feedback. In Proceedings of the 21st Annual Conference on Learning Theory (COLT) , pages 355–366. Omnipress, 2008. O. Dekel, J. Ding, T. Koren, and Y. Peres. Bandits with switching costs: T 2/3 regret. In Proceedings of the 46th Annual Symposium on the Theory of Computing , pages 459–468. ACM, 2014. S. Doroudi, P. S. Thomas, and E. Brunskill. Importance sampling for fair policy selection. In 
+
+Conference on Uncertainty in Artificial Intelligence (UAI) , 2017. C. Dwork, M. Hardt, T. Pitassi, O. Reingold, and R. Zemel. Fairness through awareness. In 
+
+Proceedings of the 3rd Innovations in Theoretical Computer Science Conference , pages 214–226, 2012. A. Feller, E. Pierson, S. Corbett-Davies, and S. Goel. A computer program used for bail and sentencing decisions was labeled biased against blacks. it’s actually not that clear. The Washington Post, October 2016. C. Gentile, S. Li, and G. Zappella. Online clustering of bandits. In International Conference on Machine Learning , pages 757–765, 2014. S. Gillen, C. Jung, M. Kearns, and A. Roth. Online learning with an unknown fairness metric. In 
+
+Advances in Neural Information Processing Systems , 2018. G. Goel, Y. Lin, H. Sun, and A. Wierman. Online optimization with memory and switching costs. 
+
+Proceedings of the ACM on Measurement and Analysis of Computing Systems , 3(1):1–25, 2019. 26 V. Gupta, P. Nokhiz, C. D. Roy, and S. Venkatasubramanian. Equalizing recourse across groups. arXiv preprint arXiv:1909.03166, 2019. M. Hardt, E. Price, and N. Srebro. Equality of opportunity in supervised learning. In Advances in Neural Information Processing Systems , 2016. T. B. Hashimoto, M. Srivastava, H. Namkoong, and P. Liang. Fairness without demographics in repeated loss minimization. In International Conference on Machine Learning , pages 1929–1938. PMLR, 2018. S. Jabbari, M. Joseph, M. Kearns, J. Morgenstern, and A. Roth. Fairness in reinforcement learning. In International Conference on Machine Learning , pages 1617–1626. PMLR, 2017. Y. Jin and B. Sendhoff. Pareto-based multiobjective machine learning: An overview and case studies. 
+
+IEEE Transactions on Systems, Man, and Cybernetics, Part C , 38(3):397–415, 2008. M. Joseph, M. Kearns, J. H. Morgenstern, and A. Roth. Fairness in learning: Classic and contextual bandits. In Advances in Neural Information Processing Systems , pages 325–333, 2016. A. Kalai and S. Vempala. Efficient algorithms for online decision problems. Journal of Computer and System Sciences , 71(3):291–307, 2005. M. Kearns, A. Roth, and S. Sharifi-Malvajerdi. Average individual fairness: Algorithms, generaliza-tion and experiments. In Advances in Neural Information Processing Systems , volume 32, pages 8240–8249, 2019. J. Kleinberg, S. Mullainathan, and M. Raghavan. Inherent trade-offs in the fair determination of risk scores. In Innovations in Theoretical Computer Science Conference (ITCS) , 2017. A. Lamy, Z. Zhong, A. K. Menon, and N. Verma. Noise-tolerant fair classification. In Advances in Neural Information Processing Systems , pages 294–305, 2019. L. Li, W. Chu, J. Langford, and R. E. Schapire. A contextual-bandit approach to personalized news article recommendation. In Proceedings of the 19th International Conference on World Wide Web , pages 661–670, 2010. L. T. Liu, S. Dean, E. Rolf, M. Simchowitz, and M. Hardt. Delayed impact of fair machine learning. In International Conference on Machine Learning , pages 3150–3158. PMLR, 2018. Y. Liu, G. Radanovic, C. Dimitrakakis, D. Mandal, and D. C. Parkes. Calibrated fairness in bandits. arXiv preprint arXiv:1707.01875, 2017. R. T. Marler and J. S. Arora. Survey of multi-objective optimization methods for engineering. 
+
+Structural and multidisciplinary optimization , 26(6):369–395, 2004. A. K. Menon and R. C. Williamson. The cost of fairness in binary classification. In Conference on Fairness, Accountability and Transparency , pages 107–118, 2018. M. Mohri, G. Sivek, and A. T. Suresh. Agnostic federated learning. In International Conference on Machine Learning , pages 4615–4625. PMLR, 2019. H. Narasimhan, A. Cotter, M. Gupta, and S. Wang. Pairwise fairness for ranking and regression. In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence , volume 34-04, pages 5248–5255, 2020. 27 M. Schmidt, C. Schwiegelshohn, and C. Sohler. Fair coresets and streaming algorithms for fair k-means clustering. In International Workshop on Approximation and Online Algorithms , pages 232–251. Springer, 2019. O. Sener and V. Koltun. Multi-task learning as multi-objective optimization. In Advances in Neural Information Processing Systems , volume 31, pages 2901–2911, 2018. A. Shah and Z. Ghahramani. Pareto frontier learning with expensive correlated objectives. In 
+
+International Conference on Machine Learning , pages 1919–1927. PMLR, 2016. U. Sherman and T. Koren. Lazy OCO: Online convex optimization on a switching budget. In 
+
+Proceedings of the 34th Conference on Learning Theory , pages 3972–3988. PMLR, 2021. S. Tsirtsis and M. Gomez-Rodriguez. Decisions, counterfactual explanations and strategic behavior. In Advances in Neural Information Processing Systems , volume 33, pages 1671–1682, 2020. M. Valko, R. Munos, B. Kveton, and T. Koc´ ak. Spectral bandits for smooth graph functions. In 
+
+International Conference on Machine Learning , pages 46–54, 2014. S. Wang, W. Guo, H. Narasimhan, A. Cotter, M. Gupta, and M. I. Jordan. Robust optimization for fairness with noisy protected groups. In Advances in Neural Information Processing Systems ,volume 33, pages 5330–5343, 2020. G. Zhang, Y. Wang, P. Fagan, and J. Chen. Online convex optimization with continuous switching constraint. In Advances in Neural Information Processing Systems , volume 34, pages 20361–20373, 2021. 28 Contents of Appendix 
+
+A Extended Related Work 30 
+
+A.1 Multi-Objective Optimization and Competing Criteria . . . . . . . . . . . . . . . . . . 30 A.2 Algorithmic Fairness: Classification, Ranking, and Clustering . . . . . . . . . . . . . . 30 A.3 Inherent Tension Between Multiple Metrics . . . . . . . . . . . . . . . . . . . . . . . . . 30 A.4 Long-Term Feedback Dynamics and MDP-Based Fairness . . . . . . . . . . . . . . . . 31 A.5 Fairness in Online Learning and Bandits . . . . . . . . . . . . . . . . . . . . . . . . . . . 31 A.6 Monitoring, Auditing, and Feedback Mechanisms . . . . . . . . . . . . . . . . . . . . . 31 
+
+B Preliminaries 32 
+
+B.1 Background: Linear Stochastic Bandits (LinUCB) . . . . . . . . . . . . . . . . . . . . . 32 
+
+C Detailed Proofs 33 
+
+C.1 Lemma 12 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 33 C.2 Supporting Lemma for Assumption A . . . . . . . . . . . . . . . . . . . . . . . . . . . . 33 
+
+D Full Trigger Analysis 34 
+
+29 A Extended Related Work 
+
+Our work extends and connects to a broad literature on multi-objective optimization, algorithmic fairness, and online learning. We survey the most relevant threads below, explaining how they motivate our continuous-state formulation and contrast with it. 
+
+A.1 Multi-Objective Optimization and Competing Criteria 
+
+There is a vast body of literature on optimizing multiple metrics or objectives simultaneously. Works by Mohri et al. [2019] and Cortes et al. [2020] design “agnostic” algorithms that compete with any linear or convex combination of a fixed set of base objectives L1, . . . , L k. Another major line of research seeks Pareto-optimal solutions [Jin and Sendhoff, 2008, Sener and Koltun, 2018, Shah and Ghahramani, 2016, Marler and Arora, 2004]. In multi-task learning, objective conflicts are commonly addressed via gradient manipulation or constrained optimization [Sener and Koltun, 2018]. The key difference with our framework is that we do not commit to a fixed linear combination or Pareto front; instead, we learn from user feedback which configuration of the continuous parameters best satisfies the objectives. A closely related and direct predecessor of the current paper is the work of Awasthi, Cortes, Mansour, and Mohri [2024], which introduced the feedback-driven multi-criteria model using an incompatibility graph and binary states. The present work extends that model to continuous state spaces, replaces binary “fix/unfix” actions with continuous parameter tuning, and replaces MDP state enumeration with graph-structured linear bandit learning. The journal version of that work [Awasthi et al., 2026] further develops the adversarial setting, which we adapt in Section 6. 
+
+A.2 Algorithmic Fairness: Classification, Ranking, and Clustering 
+
+The problem of satisfying multiple fairness constraints has been extensively studied. In the classification setting, Agarwal et al. [2018] reduce the fair classification problem to a sequence of cost-sensitive classification problems, and Cotter et al. [2019a,b] use two-player game formulations to handle non-convex constraints. These works typically tailor algorithms to specific group fairness notions (e.g., demographic parity, equal opportunity) as fixed binary constraints. In contrast, our framework treats all criteria uniformly and optimizes their continuous thresholds jointly. Fairness in ranking [Celis et al., 2018, Beutel et al., 2019, Narasimhan et al., 2020] and clustering [Chierichetti et al., 2017, Schmidt et al., 2019, Backurs et al., 2019] has also received significant attention, typically with fixed fairness criteria. Work on individual fairness [Dwork et al., 2012, Kearns et al., 2019] considers settings where fairness is a distributional condition over individuals. The motivation for our continuous-state model is precisely that real-world fairness interventions involve thresholds —e.g., the maximum allowed gap in True Positive Rates between demographic groups—rather than binary constraints. Setting τ = 0.05 vs. τ = 0.10 produces meaningfully different system behavior, and the optimal threshold must be learned from deployed-system feedback. This is the regime our model directly addresses. 
+
+A.3 Inherent Tension Between Multiple Metrics 
+
+Several works demonstrate that multiple “reasonable” fairness criteria are fundamentally incompati-ble. Kleinberg et al. [2017] prove that calibration and equal opportunity cannot be simultaneously satisfied except in degenerate cases. Feller et al. [2016] discuss the COMPAS recidivism tool, where optimizing one group’s false positive rate necessarily worsens another metric. Menon and Williamson [2018] study the trade-off between accuracy and false positive/negative rates. 30 Our dependency graph G directly encodes these incompatibility structures: an edge (i, j ) ∈ E
+
+means that optimizing criterion i affects criterion j, making the pair impossible to independently optimize. This graph-theoretic encoding allows us to leverage sparse incompatibility structure for efficient continuous optimization, generalizing the incompatibility graphs of Awasthi, Cortes, Mansour, and Mohri [2024] to the continuous-threshold setting. 
+
+A.4 Long-Term Feedback Dynamics and MDP-Based Fairness 
+
+Several works study the long-term consequences of optimizing multiple conflicting criteria. Liu et al. [2018] show that minimizing a constrained loss to equalize certain criteria can increase 
+
+disparate impact in the long run. Hashimoto et al. [2018] develop algorithms for repeated loss minimization that minimize such disparate impact. These works highlight that the interaction between objectives plays out over time, motivating a dynamic, feedback-driven framework rather than static optimization. Closer to our MDP-based setting, Jabbari et al. [2017] study reinforcement learning in MDPs subject to fairness constraints: the algorithm may not take action a over a′ if the long-term reward of a is lower than a′. They show that finding a near-optimal policy satisfying this criterion requires time exponential in the state-space size—underscoring the importance of structure (our dependency graph) for efficient learning. Doroudi et al. [2017] show that off-policy importance sampling can violate natural fairness criteria, and present corrective algorithms. Our work differs from this line in a crucial respect: we do not commit to a fixed definition of quality or a fairness metric. The states in our MDP correspond to configurations of continuous parameters , and the graph encodes which parameters interact. This makes our framework applicable to arbitrary criteria (fairness, diversity, latency, revenue) without specialization, and our algorithms are agnostic to the definition of the criteria themselves. 
+
+A.5 Fairness in Online Learning and Bandits 
+
+Fairness constraints in online and bandit settings have been studied by Joseph et al. [2016] (mer-itocratic fairness in classic and contextual bandits), Gillen et al. [2018] (online learning with an unknown fairness metric), and Liu et al. [2017] (calibrated fairness in bandits). These works define specific fairness conditions and aim to satisfy them while minimizing regret. Our framework generalizes beyond fairness bandits by treating each criterion (including fairness) as a competing linear objective with a continuous threshold, and by explicitly modeling the movement costs incurred when thresholds are adjusted. 
+
+A.6 Monitoring, Auditing, and Feedback Mechanisms 
+
+A key assumption of our stochastic model is that the algorithm can observe the losses associated with different criteria at each time step. In practice, this relates to the problem of monitoring and auditing deployed systems. There has been considerable work on developing probabilistic verification of fairness properties [Bastani et al., 2019], AI fairness toolkits [Bellamy et al., 2018], and learning from noisy sensitive attributes [Coston et al., 2019, Lamy et al., 2019, Wang et al., 2020]. Our framework abstracts this monitoring layer: we assume a pre-processing step (possibly using the tools above) that produces per-criterion loss signals, and we focus on the online optimization problem that follows. The counterfactual explanation work of Tsirtsis and Gomez-Rodriguez [2020] and recourse algorithms of Gupta et al. [2019] complement our approach by providing actionable interpretation of the decisions made by a system optimized by our framework. 31 B Preliminaries 
+
+We denote the set of criteria (vertices) by V = { 1, . . . , k }. The system state is represented by a vector s ∈ S = [ 0, 1]k. We assume the system starts at an arbitrary initial state s0 ∈ S (e.g., the zero vector) chosen by the learner. For a vector x ∈ Rd, we denote its ℓ2-norm by ∥x∥2 and its weighted norm with respect to a positive definite matrix A by ∥x∥A = √x⊺Ax .
+
+Dependency Graph. We assume the existence of an underlying undirected graph G = (V , E )
+
+that captures the dependency structure between criteria. We denote by N ( i) the neighborhood of vertex i in G, including i itself. The graph represents dependencies between losses: the loss for criterion i depends only on the state attributes of its neighbors j ∈ N ( i). A criterion i is insensitive to changes in criteria j ∉ N ( i). And example is provided in Figure 1 in the main paper. 
+
+B.1 Background: Linear Stochastic Bandits (LinUCB) 
+
+The core building block of our approach is the Linear Upper Confidence Bound (LinUCB) algorithm, originally popularized by Li et al. [2010] for personalized recommendation. In the standard linear bandit setting, at each round t, the learner chooses an action xt from a decision set Dt ⊂ Rd
+
+and observes a reward yt = ⟨ xt, θ ∗⟩ + ηt, where ηt is zero-mean sub-Gaussian noise and θ∗ ∈ Rd is an unknown parameter vector. The goal is to maximize the cumulative reward (or equivalently, minimize regret). Because θ∗ is unknown, the learner must balance exploitation (choosing actions that appear best) with exploration (choosing uncertain actions to learn θ∗). LinUCB solves this using the principle of Optimism in the Face of Uncertainty (OFUL). Ridge Regression Estimator. The algorithm maintains a regularized least-squares estimate of θ∗.Let Xt be the matrix of actions played up to time t, and Yt be the vector of observed rewards. The estimator is: ̂
+
+θt = V−1
+
+> tt
+
+∑ 
+
+> τ=1
+
+xτ yτ , where Vt = λreg I +
+
+> t
+
+∑ 
+
+> τ=1
+
+xτ x⊺ 
+
+> τ
+
+. (38) Here, Vt is the covariance matrix (or Gram matrix) which captures the certainty of the learner in different directions of the feature space. Confidence Ellipsoids. To analyze the regret, we rely on the self-normalized martingale bounds derived by Abbasi-Yadkori et al. [2011]. They showed that with high probability, the true parameter 
+
+θ∗ lies within an ellipsoid centered at ̂ θt:
+
+Ct = { θ ∈ Rd∶ ∥ θ −̂ θt∥Vt ≤ βt}, (39) where ∥z∥A = √z⊺Az is the Mahalanobis norm and βt is a radius parameter scaling with √d log t.Geometrically, directions corresponding to “large” eigenvectors of Vt (directions explored frequently) have narrow confidence intervals, while unexplored directions remain uncertain. 
+
+Decision Rule. LinUCB selects the action that maximizes the reward plausible under the confidence set: 
+
+xt+1 = argmax 
+
+> x∈D t
+
+max 
+
+> θ∈C t
+
+⟨x, θ ⟩ = argmax 
+
+> x∈D t
+
+(⟨ x, ̂ θt⟩ + βt∥x∥V−1 
+
+> t
+
+) . (40) The term ⟨x, ̂ θt⟩ represents the expected reward, while βt∥x∥V−1 
+
+> t
+
+is the exploration bonus. Our algorithm, LazyGraphLinUCB , adapts this framework by maintaining k local estimators and freezing the active policy sactive while monitoring the covariance matrix Vt to minimize movement costs. 32 C Detailed Proofs 
+
+C.1 Lemma 12 
+
+Lemma 12 (Confidence Ellipsoid [Abbasi-Yadkori et al., 2011]) . For any δ ∈ ( 0, 1), with probability at least 1 − δ, for all t ≥ 0 and all i ∈ [ k], the true parameter θ∗ 
+
+> i
+
+satisfies: 
+
+∥̂ θt,i − θ∗ 
+
+> i
+
+∥Vt,i ≤ βt,i , (41) 
+
+where βt,i = σ
+
+√
+
+di log ( 1+tL 2/λreg  
+
+> δ
+
+) + λ1/2reg ∥θ∗ 
+
+> i
+
+∥2.
+
+C.2 Supporting Lemma for Assumption A 
+
+Lemma 13 (Justification of Assumption A) . Let ϕi∶ S → Rdi be a feature map that is G-Lipschitz and twice continuously differentiable on the compact domain S = [ 0, 1]k. Let ft(s) = ∑ tτ =1⟨ϕi(s),̂ θt,i ⟩ − 
+
+βt,i ∥ϕi(s)∥ V−1 
+
+> t,i
+
+be the LCB objective for criterion i at time t. Define the curvature bound 
+
+C(ϕi) = sup 
+
+> s∈S
+
+∥∇ 2 
+
+> s
+
+∥ϕi(s)∥ V−1 
+
+> t,i
+
+∥op .
+
+For any smooth, bounded ϕi, C(ϕi) < ∞ is finite and depends only on the Lipschitz constant of ϕi,the diameter of S, and the initialization scale λreg . Whenever λreg > βt,i ⋅ C(ϕi), the global LCB objective LCB t(s) = ∑ i ft(s) is (λreg − βt,i C(ϕi)) -strongly convex in s. In particular, it satisfies the Polyak-Lojasiewicz (PL) condition with parameter μPL = 2(λreg − βt,i C(ϕi)) > 0, ensuring that BCD converges to the global minimizer (Assumption A). Proof. The LCB objective for criterion i splits as: 
+
+ft(s) = ⟨ ϕi(s),̂ θt,i ⟩´¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¸¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¶  
+
+> linear in ϕi
+
+− βt,i ∥ϕi(s)∥ V−1
+
+> t,i
+
+´¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¸¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¶ 
+
+> exploration bonus
+
+.
+
+The first term is linear in ϕi(s) and the second is a square-root form composed with the feature map. 
+
+Hessian of the regularizer. The ridge regularizer contributes a term λreg  
+
+> 2
+
+∥s∥2 to the loss that is implicitly encoded through Vt,i . Its Hessian satisfies ∇2( λreg  
+
+> 2
+
+∥s∥2) = λreg I ≻ 0. 
+
+Hessian of the exploration bonus. Let g(s) = ∥ ϕi(s)∥ V−1 
+
+> t,i
+
+= ( ϕi(s)⊺V−1 
+
+> t,i
+
+ϕi(s)) 1/2. By the chain rule and the compactness of S, there exists a constant C(ϕi) < ∞ such that ∥∇ 2 
+
+> s
+
+g(s)∥ op ≤ C(ϕi)
+
+uniformly over s ∈ S and all t. This bound follows since ϕi is G-Lipschitz: the Hessian of g involves at most second-order derivatives of ϕi, which are bounded on the compact domain. 
+
+Strong convexity. By the above, the Hessian of LCB t satisfies: 
+
+∇2LCB t(s) ⪰ λreg I − βt,i C(ϕi)I = ( λreg − βt,i C(ϕi)) I.
+
+When λreg > βt,i C(ϕi), this is strictly positive definite, so the objective is strongly convex and thus satisfies the PL condition with μPL = 2(λreg − βt,i C(ϕi)) .
+
+Finite threshold. The bound C(ϕi) is finite for any smooth, bounded ϕi. In particular: (i) for the pairwise quadratic basis (Example 1), C(ϕi) = 0 since ϕi is quadratic and g has bounded curvature; (ii) for RBF kernels via Random Fourier Features (Example 2), C(ϕi) scales as the squared bandwidth of the kernel. Thus, a finite threshold λ∗ 
+
+> reg
+
+= βT C(ϕi) always exists and the algorithm satisfies Assumption A whenever λreg > λ∗
+
+> reg
+
+.33 D Full Trigger Analysis 
+
+Table 3 provides the complete breakdown of update counts for the heterogeneous graph experiment in Section 7.2. Table 3: Full Trigger Analysis. Breakdown of update counts by clique stiffness ( λreg ). In the Global strategy, stable cliques (e.g., ID 9) are forced to match the update frequency of volatile ones (e.g., ID 4). 
+
+Clique ID Stiffness ( λreg ) Global Moves Async Moves Waste Factor 
+
+4 0.19 (Volatile) 41 15 2.7 ×
+
+2 0.25 41 14 2.9 ×
+
+5 0.67 41 14 2.9 ×
+
+6 0.86 41 13 3.2 ×
+
+1 1.06 41 13 3.2 ×
+
+7 1.11 41 13 3.2 ×
+
+8 1.26 41 13 3.2 ×
+
+3 1.28 41 14 2.9 ×
+
+9 1.40 (Stable) 41 11 3.7 ×
+
+0 1.61 (Stable) 41 11 3.7 ×
+
+Total - 410 131 3.1 ×
+
+34

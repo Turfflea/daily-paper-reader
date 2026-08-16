@@ -1,0 +1,1034 @@
+Title: Pareto-Aware Hierarchical Reinforcement Learning for Online Resource Allocation in RIS-assisted Large-Scale IoT Systems
+
+URL Source: https://arxiv.org/pdf/2608.13032v1
+
+Published Time: Fri, 14 Aug 2026 00:47:08 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+> 1
+
+# Pareto-Aware Hierarchical Reinforcement Learning for Online Resource Allocation in RIS-assisted Large-Scale IoT Systems 
+
+Wenhan Xu, Graduate Student Member, IEEE, Jiashuo Jiang, Member, IEEE, and Danny H.K. Tsang, Life Fellow, IEEE 
+
+Abstract —With the rapid evolution of 5G and emerging 6G networks, reconfigurable intelligent surfaces (RIS) have become a critical technology for enhancing wireless communication scenar-ios. However, optimizing RIS-assisted multi-user systems typically introduces high-dimensional physical layer variables and non-convex Pareto-optimal rate sets, posing severe computational challenges for real-time applications. To address these limita-tions, this paper proposes a dimension-reduced, hierarchical reinforcement learning (RL) framework, termed Pareto-aware autoencoder-assisted RL (PAAERL), to optimize online resource allocation in RIS-assisted Internet of Things (IoT) networks. Our approach first substitutes high-dimensional continuous RIS beamforming variables with lower-dimensional weight vectors that strictly represent the Pareto-optimal frontier, theoretically avoiding geometric information loss across both convex and non-convex rate regions. To further mitigate the curse of di-mensionality in dense networks, an autoencoder architecture is integrated to execute a secondary, data-driven compression phase, mapping the priority space into a highly condensed contin-uous latent action space. Extensive simulations conducted across practical communication scenarios, including multi-user mobile edge computing (MEC) networks, demonstrate that the proposed PAAERL framework drastically reduces offline training times, accelerates online policy convergence, and significantly decreases overall network costs compared to state-of-the-art benchmarks, underscoring its exceptional scalability and practical viability for next-generation intelligent IoT environments. 
+
+Index Terms —Reconfigurable Intelligent Surface, Reinforce-ment Learning, Pareto Optimization, Space Aggregation, Internet of Things 
+
+I. I NTRODUCTION 
+
+Driven by the vision of next-generation B5G and emerging 6G wireless networks, the internet of things (IoT) is transition-ing toward a paradigm of massive, ubiquitous connectivity and pervasive intelligence [1]. To fulfill the stringent quality-of-service (QoS) demands of modern application scenarios—such as ultra-reliable low-latency communications (URLLC) [2] and high-throughput edge processing—the integration of mo-bile edge computing (MEC) [3] and unmanned aerial vehicles 
+
+Wenhan Xu is with the Internet of Things Thrust, Hong Kong University of Science and Technology (Guangzhou), Guangzhou, Guangdong 511400, China (e-mail: wxube@connect.ust.hk). Jiashuo Jiang is with Department of Industrial Engineering and Decision Analytics, Hong Kong University of Science and Technology, Hong Kong 99907, China (e-mail: jsjiang@ust.hk). Danny H.K. Tsang is with the Internet of Things Thrust, Hong Kong University of Science and Technology (Guangzhou), Guangzhou, Guangdong 511400, China, and also with the Department of Electronic and Computer Engineering, The Hong Kong University of Science and Technology, Clear Water Bay, Hong Kong SAR, China (e-mail: eetsang@ust.hk). 
+
+(UAVs) [4] has emerged as a promising architecture. While MEC servers alleviate the computational burden of resource-constrained IoT devices through task offloading, UAVs offer highly flexible, dynamic deployment to provide over-the-air coverage [5]. However, the performance of these cooperative networks remains fundamentally constrained by severe path loss, unpredictable blockages, and multi-user interference in-herent to high-frequency fading channels. To mitigate these electromagnetic impediments, reconfig-urable intelligent surfaces (RIS) have attracted profound at-tention as a revolutionary technology capable of transforming the wireless propagation environment from a passive, random medium into an active, software-programmable entity [6]. By dynamically adjusting the phase shifts and reflection ampli-tudes of a massive array of low-cost passive meta-elements, an RIS can intelligently reshape channel realizations and establish robust, effective line-of-sight (LoS) links between base stations (BSs) and mobile users (MUs) [7]. Despite these paradigm-shifting benefits, the joint optimization of active beamforming variables at the BS and passive reflection variables at the RIS introduces formidable mathematical hurdles. Traditional optimization frameworks—such as alternating optimization (AO) [8] and successive convex approximation (SCA) [9] are inherently iterative and scale poorly as the number of RIS elements and IoT devices expands. Solving these high-dimensional, tightly coupled non-convex problems within a single channel coherence interval inflicts prohibitive compu-tational latency, rendering traditional model-driven paradigms impractical for real-time, online deployment in highly dynamic IoT environments. To optimize multi-objective or multi-user networks, char-acterizing the Pareto-optimal boundary of the achievable rate region is fundamental. The most common approach utilized in existing literature is the linear scalarization technique, known as the weighted sum-rate maximization problem [10]. By as-signing fixed or dynamic priority weights to different users, the high-dimensional resource configuration is effectively mapped onto the Pareto frontier. Under the assumption of a convex rate region, adjusting the priority profile sequentially traces out the entire upper boundary of the feasible rate space via supporting hyperplanes. However, due to severe multi-user interference, transceiver hardware limitations, and non-linear cascade channel links, the true achievable rate region of a practical RIS-assisted multi-user network is inherently non-convex. Prior works [11], [12] have pointed out that in non-arXiv:2608.13032v1 [cs.NI] 13 Aug 2026 2
+
+convex rate spaces, linear weighted sum-rate maximization acts only as an outer approximation. Consequently, manip-ulating priority weights through traditional weighted sum-rate formulation inevitably experiences information loss, failing to capture or reach the optimal Pareto solution intervals located within the ”dented” or non-convex portions of the boundary. To bypass the computational overhead of online optimiza-tion, reinforcement learning (RL) has emerged as a power-ful paradigm for real-time resource management [13]. RL agents learn near-optimal control policies through continuous interactions with the wireless environment, shift the heavy computational burden offline, and execute decisions rapidly online via neural network inference [14]. A twin-delayed deep deterministic policy gradient (TD3) framework was proposed in [15] to optimize the joint active/passive beamforming and finite blocklength allocation under realistic, non-ideal RIS amplitude impairments to address the stringent requirements of URLLC in industrial automation. Nonetheless, applying standard continuous RL algorithms such as deep deterministic policy gradient (DDPG), soft actor-critic (SAC), TD3 or proximal policy optimization (PPO) directly to RIS systems encounters severe action space explosion [16]. A standard RIS configuration vector contains hundreds of continuous ampli-tude and phase control variables, leading to an incredibly vast exploration space. Under an uncompressed, high-dimensional action space, RL agents often suffer from slow convergence, gradient instability, or failing to discover meaningful reward paths entirely. While some existing works attempt to discretize the action space or use multi-agent RL (MARL) to split the variable workload [17], they often break the coupled physical properties between active beamforming and passive reflection, yielding degraded system performance. 
+
+A. Motivation and Contribution 
+
+Differing from the aforementioned research, this paper aims to bridge the gap between model-driven geometric optimality and data-driven learning efficiency in the RIS scenario. Our previous work has made some contributions to similar opti-mization problems in RIS scenarios [18]–[20]. Rather than forcing a RL agent to learn the raw physical parameters of the RIS components directly which triggers a catastrophic action space explosion or relying on conventional weighted sum-rate profiles which suffer information loss in non-convex domains [21], we introduce a directional max-min scaling optimization problem. By constructing a bijective, direction-based mapping from a low-scale weight vector directly to the exact Pareto-optimal set, we collapse the search dimensionality without any theoretical loss of information. To further accel-erate online execution in highly dynamic IoT environments, we seamlessly couple this geometric mapping with a data-driven autoencoder (AE) architecture [22]. We proposed a Pareto-aware autoencoder-aided RL (PAAERL) algorithm to solve the online resource allocation in RIS-assisted large scale IoT systems. The AE compresses the weight space into an ultra-low-dimensional latent representation, forcing the DRL agent to operate in a highly condensed action space while the accompanying decoder efficiently reconstructs the target prior-ity vectors. This hybrid model-plus-data compression strategy                     
+
+> TABLE I PARAMETERS NOTATION
+> Parameters Notation
+> k, m kth MU, and mth RIS element
+> K, M Number of MUs, and RIS elements
+> t, ∆TTime-slot index and length of time slot
+> fkTransmit beamforming vector at the MU
+> HkCSI from MU to BS
+> GRe CSI from RIS to BS
+> HRe,k CSI from MU to RIS
+> σ2Variance of noise
+> ΦDiagonal RIS phase-shifting matrix
+> θm, β mPhase and amplitude of RIS elements
+> RkAchievable data rate (bit/s/Hz)
+> RAchievable rate region
+> a,sAction and state of RL
+> rReward of RL
+
+enables a highly efficient hierarchical decision architecture tailored for real-time online optimization in complex RIS-assisted IoT systems. 
+
+B. Notations 
+
+In this paper, lowercase letters x, bold lowercase letters 
+
+x, and bold uppercase letters X denote the scalars, vectors, and matrices, respectively. |x| is the absolute value of the scalar x. x∗ is the complex conjugate of the scalar x. The conditional expectation E{x|y} represents the expected value of the random variable x given the condition y, computed with respect to the conditional distribution of x given y. ∥x∥ is the 2-norm of vector x. Furthermore, XT , XH , and |X| are the transpose, conjugate transpose, and determinant of a matrix X,respectively. diag (x) is a square matrix that has the vector x
+
+on the diagonal. The notation O(·) denotes the asymptotic upper bound of an algorithm’s computational complexity. Other primary notations in this paper are summarized in Table. I. II. S YSTEM MODEL 
+
+As illustrated in Fig. 1, we consider an RIS-aided multi-user wireless communication system, where each MU is con-nected to a single BS. The deployment of RIS in this system model aims to enhance the quality of the channel of wireless communication by dynamically adjusting the amplitude and phase shift of the reflecting signal, thus improving resource utilization, reducing interference, and increasing the strength of the signal. 
+
+A. Channel Model 
+
+We consider a system where a transmitted signal x is reflected by an M -element RIS to a receiver y. The received signal is modeled as: 
+
+y =
+
+> M
+
+X
+
+> m=1
+
+hmgmβmejθ m
+
+!
+
+x + η (1) 3RIS-BS Link  MU-RIS Link  MU-BS Link      
+
+> RIS
+> 𝐆𝐆𝑅𝑅𝑒𝑒
+> 𝐇𝐇𝑘𝑘
+> 𝐇𝐇𝑅𝑅𝑒𝑒 ,𝑘𝑘
+> BS
+> MU 1MU 𝐾𝐾
+> MU 𝑘𝑘
+> …
+> Fig. 1. The wireless communication model of an uplink RIS-aided IoT system.
+
+where hm and gm are the first and second link channel coef-ficients, θm and βm represent the RIS phase and amplitude, respectively, and η is the noise with variance σ2.As shown in Fig. 1, we consider the uplink wireless communication model of MUs connected to a single BS separately and the intercellular interference is ignored. In the RIS-aided multi-user wireless communication system, each MU has NM U antenna, while the BS has NBS antennas. The controller of system can enhance both energy and spectral efficiency by designing the reflecting phase shifts of the RIS, which consists of M reflection elements. K MUs connected to the BS require computation offloading. The wireless signal 
+
+sk transmitted from the kth MU to the BS is given by 
+
+sk = fkxk, (2) where fk represents the transmit beamforming vector used by the kth MU for transmitting the symbol vector to the BS, and 
+
+xk represents the symbol transmitted from the kth MU to the BS. Hence, the received signal at the BS can be written as 
+
+y =
+
+> K
+
+X
+
+> k=1
+
+Hksk
+
+| {z }
+
+> Direct signal
+
++
+
+> K
+
+X
+
+> k=1
+
+GRe ΦH Re,k sk
+
+| {z }
+
+> Reflecting signal
+
++η, (3) where Φ = diag {β1ejθ 1 , β 2ejθ 2 , ..., β M ejθ M } denotes the diagonal matrix of the RIS phase shifts and amplitudes, 
+
+{θm, β m} is the phase shift and amplitude of the mth re-flecting element of the RIS [23], and η is the noise vector with variance σ2. As shown in Fig. 1, the CSI for the MU-BS link, RIS-BS link, and MU-RIS link are Hk, GRe , and HRe,k ,respectively. The MUs demonstrate quasi-static characteristics, while the perfect CSI varies with the time slot t. Each time slot has a fixed duration ∆T , and all events occurring within the current time slot are processed in the subsequent time slot. Thus, the three CSI parameters Hk, GRe , and HRe,k here can be written as Hk(t), GRe (t), and HRe,k (t). To simplify the expression, ¯Hk(t) is introduced: 
+
+¯Hk(t) = GRe (t)Φ(t)HRe,k (t) + Hk(t). (4) In Eq. (3), y(t) can be decomposed into received signal, extra interference, and additional noise when we focus on the transmitted signal from the kth MU to the BS. Therefore, the different components are shown as 
+
+y(t) = 
+
+> K
+
+X
+
+> i=1
+
+¯Hi(t)fi(t)xi(t) + η
+
+= ¯Hk(t)fk(t)xk(t)
+
+| {z }
+
+> Signal
+
++
+
+> K
+
+X
+
+> i=1 ,i ̸=k
+
+¯Hi(t)fi(t)xi(t)
+
+| {z }
+
+> Interference
+
++η, ∀k. 
+
+(5) Therefore, the uplink achievable data rate per unit of band-width from the kth MU to the BS is denoted by 
+
+Rk = log 1 + || ¯Hkfk|| 2
+
+PKi̸=k || ¯Hifi|| 2 + σ2
+
+!
+
+(6) 
+
+B. Optimization Objective 
+
+The primary objective is to minimize a cost function fobj of the achievable data rate Rk and other optimization variables in the specific problem for MU k, defined by: 
+
+P1 : min  
+
+> Z
+
+{fobj (R, X )}
+
+s.t. || fk(t)|| 2 ≤ P max k , ∀k, (7a) 
+
+βm(t) ∈ [0 , 1] , ∀m, (7b) 
+
+θm(t) ∈ [0 , 2π), ∀m, (7c) other constraints , (7d) where X represents the other optimization variables in the spe-cific problem, Z = {f , β, θ, X } represents all the optimization variables, f = {f1, f2, ..., fK } represents all the beamforming vectors, R = [ R1, R 2, . . . , R K ]T is the achievable rate vector, and P max k is the maximum transmission energy for MU k.III. P ROPOSED HIERARCHICAL DECISION ALGORITHM 
+
+A. Dimensionality Reduction via Pareto Optimization 
+
+In the considered RIS-assisted IoT uplink network, the system performance is characterized by the application-specific variables X (e.g., resource allocation or task of-floading parameters) and the achievable rate vector R =[R1, R 2, . . . , R K ]T , which is a function of the transmit beam-forming vectors f = {f1, f2, ..., fK }, the RIS phase shift vector θ = [ θ1, θ 2, . . . , θ M ]T , and the RIS amplitude vector 
+
+β = [ β1, β 2, . . . , β M ]T . The feasible set of all optimization variables Z = {f , β, θ, X } is constrained by power budgets, RIS hardware limitations (where 0 ≤ βm ≤ 1 and 0 ≤ θm <
+
+2π), QoS, and other specific requirements. The achievable rate region of the system is defined as the set of all rate vectors that can be simultaneously attained: 
+
+R = {(R1, . . . , R K ) | Rk ≤ log 2 (1 + γk(f , β, θ)) , ∀k. }
+
+(8) 4
+
+where γk denotes the signal-to-interference-plus-noise ratio (SINR) for user k:
+
+γk = || ¯Hkfk|| 2
+
+PKi̸=k || ¯Hifi|| 2 + σ2 . (9) Regardless of the non-convexity or complexity of the un-derlying objective function—whether it involves latency min-imization, energy efficiency, or sum-rate maximization—any efficient operating point must lie on the Pareto boundary of 
+
+R. Formally, a rate vector R∗ is Pareto optimal if there exists no other feasible R ∈ R such that Rk ≥ R∗ 
+
+> k
+
+for all 
+
+k ∈ { 1, . . . , K } and Rj > R ∗ 
+
+> j
+
+for at least one j.The rationale for focusing on the Pareto boundary is twofold:  
+
+> •
+
+Resource Efficiency: Any point in the interior of R is strictly sub-optimal, as at least one user’s rate could be increased by reconfiguring {f , β, θ} without detrimental effects on others.  
+
+> •
+
+Unified Representation: By characterizing the Pareto frontier, we decouple the physical layer resource inter-action (governed by the RIS and beamforming) from the high-level policy or utility function. Consequently, the high-dimensional optimization over 
+
+{f , β, θ, X } can be equivalently reduced to finding a weight vector ω or a priority profile that maps to a specific point on the Pareto boundary. This dimensionality reduction is vital for online IoT optimization, enabling real-time decision-making in environments characterized by complex variable coupling. Standard RIS optimization requires solving for beamforming vectors fk, RIS phases θm, and amplitudes βm. Instead of optimizing these directly, we propose using weight vectors 
+
+ω that correspond to the Pareto-optimal solution set. The dimensionality of ω is far lower than the original RIS variables. 
+
+B. Weighted Sum-rate Optimization 
+
+While weighted sum-rate optimization is mature, it requires solving a traditional maximum weighted sum-rate problem at time slot t:
+
+P2 : max  
+
+> f,β,θ
+> K
+
+X
+
+> k=1
+
+ωk(t)Rk(t)
+
+s.t. || fk(t)|| 2 ≤ P max k . ∀k, (10a) 
+
+βm(t) ∈ [0 , 1] , ∀m, (10b) 
+
+θm(t) ∈ [0 , 2π), ∀m, (10c) where ωk is the weight of kth MU at the BS. Clearly, given a set of {ωk, ∀k}, a set of {fk, β m, θ m, ∀k, m } can be solved. We can calculate {Rk, ∀k} using Eq. (6). By solving P2, we obtained a set of mappings from {ωk, ∀k} to {Rk, ∀k}.For any given ω, the solution to this linear scalarization yields a rate vector R(ω) that is theoretically guaranteed to lie on the Pareto boundary. However, to justify the substitution of high-dimensional variables {f , β, θ, X } with the low-scale weight vector ω in a hierarchical decision framework, it is imperative that the set of all points generated by ω spans the entire Pareto frontier. We argue that when the achievable rate region R is a convex set, maximization of the weighted sum-rate is a sufficient characterization of the Pareto boundary. Specifically, according to the Supporting Hyperplane Theo-rem, for any point R∗ on the upper boundary of a convex set 
+
+R, there exists a supporting hyperplane with a non-negative normal vector ω such that ωT R∗ ≥ ωT R for all R ∈ R . This implies that every Pareto optimal point can be recovered by solving the weighted sum-rate problem with a corresponding weight profile. In this context, the weight vector ω serves as a sufficient statistic for the RIS configuration, capturing all the degrees of freedom necessary to achieve any optimal resource allocation state. While the interference-limited nature of RIS-assisted IoT systems often results in non-convex rate regions, the convex hull of R can be achieved through strategies such as time-sharing. Under such conditions, the mapping from ω to 
+
+R ensures complete coverage of the operationally relevant Pareto region, thereby validating the proposed dimensionality reduction. 
+
+C. Generalization to Non-Convex Rate Regions and Direc-tional Mapping 
+
+While the convexity of the achievable rate region R can theoretically be ensured through time-sharing strategies, such approaches encounter significant practical impediments in RIS-assisted IoT systems. Specifically, the frequent reconfig-uration of RIS phase shifts and amplitudes within a single transmission frame imposes a prohibitive overhead on the control link and may exceed the hardware switching rate limits. Consequently, within a quasi-static time slot, the rate region R is generally non-convex due to the complex coupling between the RIS reflection coefficients and the multi-user interference. In such non-convex scenarios, the conventional weighted sum-rate maximization may fail to capture the points residing in the ”dented” or non-convex portions of the Pareto boundary. To circumvent this limitation and ensure a comprehensive characterization of the Pareto set without relying on convexity assumptions, we propose an alternative optimization frame-work based on directional mapping. We observe that for any high-dimensional Pareto optimal point R∗, the ray originating from the coordinate origin and passing through R∗ is unique. This implies a one-to-one correspondence between the set of Pareto optimal points and the set of direction vectors in the positive orthant. By leveraging this geometric property, we can parameterize the entire Pareto frontier using a normalized weight vector 
+
+ω, which now represents the slope of the ray rather than the normal of a supporting hyperplane in the weighted sum-rate problem. To find the unique Pareto optimal point associated with a specific direction ω, we formulate the following opti-mization problem: 5
+
+P3 : max  
+
+> f,β,θ,R s
+
+Rs
+
+s.t. Rk(t) ≥ ωP T k Rs, ∀k, (11a) 
+
+|| fk(t)|| 2 ≤ P max k , ∀k, (11b) 
+
+βm(t) ∈ [0 , 1] , ∀m, (11c) 
+
+θm(t) ∈ [0 , 2π), ∀m, (11d) In this formulation, Rs acts as a scaling factor that pushes the rate vector along the direction {ωP T  
+
+> 1
+
+, ω P T  
+
+> 2
+
+, ..., ω P T K } until it reaches the boundary of the feasible region R. Unlike the weighted sum-rate method, this max-min scaling approach is guaranteed to reach any point on the Pareto boundary regardless of whether the region is convex or non-convex. This transformation effectively reduces the search space for the optimal RIS configuration from high-dimensional physical variables to a low-scale directional weight space, providing a robust theoretical foundation for our hierarchical RL decision algorithm. 
+
+D. Problem Transformation and Solution Methodology 
+
+Problem P3 is a non-convex optimization problem due to the following reasons: First, the achievable rate Rk is a non-convex function of the beamforming vectors f =
+
+{f1, f2, ..., fK } and the RIS parameters {β, θ} due to the multi-user interference and the product of optimization variables in the effective channel. Second, the constant power constraint on f and the phase shift constraints on θ define non-convex feasible sets. To tackle these challenges, we observe that for fixed 
+
+{f , β, θ}, the objective Rs is linearly constrained, and for a fixed Rs, the problem reduces to a feasibility check. Exploiting this structure, we propose a two-layered solution framework. 
+
+1) Outer Layer: Binary Search for Rs: Since the achievable rate is bounded by the system’s physical capacity, the optimal 
+
+R∗ 
+
+> s
+
+can be efficiently found using a binary search method over the interval [0 , R max ].
+
+2) Inner Layer: Feasibility Sub-problem: For a given can-didate Rs = ¯Rs, we solve a feasibility problem to determine the existence of a configuration {f , β, θ} that satisfies all constraints: 
+
+P4 : max   
+
+> f,β,θ
+
+0
+
+s.t. Rk(t) ≥ ωP T k Rs, ∀k, (12a) 
+
+|| fk(t)|| 2 ≤ P max k , ∀k, (12b) 
+
+βm(t) ∈ [0 , 1] , ∀m, (12c) 
+
+θm(t) ∈ [0 , 2π), ∀m, (12d) Eq. (12a) can be simplified: 
+
+Rk(t) ≥ ωP T k Rs, ∀k (13a) 
+
+log 1 + || ¯Hkfk|| 2
+
+PKi̸=k || ¯Hifi|| 2 + σ2
+
+!
+
+≥ ωP T k Rs, ∀k (13b) 
+
+|| ¯Hkfk|| 2
+
+PKi̸=k || ¯Hifi|| 2 + σ2 ≥ 2ωP T k Rs − 1, ∀k, (13c) 
+
+|| ¯Hkfk|| 2 ≥ (2 ωP T k Rs − 1)( 
+
+> K
+
+X
+
+> i̸=k
+
+|| ¯Hifi|| 2 + σ2), ∀k. (13d) Therefore, the feasibility sub-problem can be simplified to: 
+
+P4a : max   
+
+> f,β,θ
+
+0
+
+s.t. || ¯Hkfk|| 2 ≥ Γk(
+
+> K
+
+X
+
+> i̸=k
+
+|| ¯Hifi|| 2 + σ2), ∀k, (14a) 
+
+|| fk(t)|| 2 ≤ P max k , ∀k, (14b) 
+
+βm(t) ∈ [0 , 1] , ∀m, (14c) 
+
+θm(t) ∈ [0 , 2π), ∀m, (14d) where Γk = 2 ωP T k Rs − 1 is a constant. The feasibility sub-problem P4a is inherently non-convex due to two primary factors: the strong coupling between the active beamforming vectors f and the passive RIS reflection coefficients (embed-ded within ¯H), and the non-convexity of the lower-bounded quadratic terms in the Signal-to-Interference-plus-Noise Ratio (SINR) constraint. Firstly, we relax the feasibility problem of 
+
+P4a:
+
+P5 : min  
+
+> f,β,θ,d
+> K
+
+X
+
+> k=1
+
+dk
+
+s.t. || ¯Hkfk|| 2 + dk ≥ Γk(
+
+> K
+
+X
+
+> i̸=k
+
+|| ¯Hifi|| 2 + σ2), ∀k, (15a) 
+
+|| fk(t)|| 2 ≤ P max k , ∀k, (15b) 
+
+βm(t) ∈ [0 , 1] , ∀m, (15c) 
+
+θm(t) ∈ [0 , 2π), ∀m, (15d) where dk is the relax factor of the constraints Eq. (14a). To transform P5 into a tractable form, we decouple the variables using an Alternating Optimization (AO) framework and con-vexify the constraints via Successive Convex Approximation (SCA). Furthermore, let v = [ v1, . . . , v M ]T ∈ CM ×1 denote the RIS reflection vector, where vm = βmejθ m .
+
+3) Active Beamforming Optimization (Fixed RIS Coeffi-cients): For a given RIS configuration v(n) at the n-th itera-tion, the effective channel ¯Hk is fixed. The SINR constraint in P5 can be expressed as: 
+
+|| ¯Hkfk|| 2 + dk ≥ Γk
+
+X
+
+> i̸=k
+
+|| ¯Hifi|| 2 + σ2
+
+ , ∀k. (16) This constraint remains non-convex because the left-hand side is a convex quadratic function forming a lower bound. To address this, we apply the SCA technique by utilizing 6
+
+the first-order Taylor expansion to construct a global linear underestimator. For any given local point f (n) 
+
+> k
+
+, the signal power is bounded by: 
+
+|| ¯Hkfk|| 2 ≥ 2Re 
+
+n
+
+(f (n) 
+
+> k
+
+)H ¯HHk ¯Hkfk
+
+o
+
+− || ¯Hkf (n) 
+
+> k
+
+|| 2
+
+≜ L(fk, f (n) 
+
+> k
+
+), ∀k. 
+
+(17) By replacing the non-convex term with its convex surrogate 
+
+L(fk, f (n) 
+
+> k
+
+), and relaxing the strict equality power constraint to a convex inequality, which is known to be tight at optimality, the beamforming optimization sub-problem becomes: 
+
+P5a : min 
+
+> f
+> K
+
+X
+
+> k=1
+
+dk
+
+s.t. L(fk, f (n) 
+
+> k
+
+) + dk ≥ Γk
+
+X
+
+> i̸=k
+
+|| ¯Hifi|| 2 + σ2
+
+ , ∀k, 
+
+|| fk|| 2 ≤ P max k , ∀k. 
+
+(18) Problem P5a is a standard convex quadratically constrained problem (QCP) that can be solved optimally using interior-point methods via solvers such as CVX. 
+
+4) RIS Configuration Optimization (Fixed Beamforming): 
+
+Next, we optimize the RIS reflection vector ˜v while fixing the beamforming vectors {fk, ∀k}. The received signal power from user k can be reformulated to isolate ˜v:
+
+˜v = [ v1, ..., v M , v M +1 ]T = [ β1ejθ 1 , ..., β M ejθ M , 1] T . (19) 
+
+|| ¯Hkfk|| 2 = 
+
+> M+1
+
+X 
+
+> i=1
+> M+1
+
+X
+
+> j=1
+
+ak,i,j v∗ 
+
+> i
+
+vj , (20) where v∗ 
+
+> i
+
+is the complex conjugate of vi, ak,i,j is constant complex scalar, and ak,i,j = a∗
+
+> k,j,i
+
+. The channel gain can be rewritten as: 
+
+|| ¯Hkfk|| 2 = ˜ vH Ak ˜v, ∀k, (21) where the corresponding semi-definite matrix: 
+
+Ak =
+
+
+
+ak, 1,1 · · · ak, 1,M +1 
+
+... . . . ...
+
+ak,M +1 ,1 · · · ak,M +1 ,M +1 
+
+ , ∀k. (22) Consequently, the SINR constraint with respect to ˜v is formulated as: 
+
+˜vH Ak ˜v ≥ Γk
+
+X
+
+> i̸=k
+
+˜vH Ai ˜v + σ2
+
+ (23) Similar to the beamforming sub-problem, the left-hand side introduces non-convexity. Applying SCA, we define the first-order lower bound around the previous iterate ˜v(n):
+
+˜vH Ak ˜v ≥ 2Re 
+
+n
+
+(˜ v(n))H Ak ˜v
+
+o
+
+− (˜ v(n))H Ak ˜v(n)
+
+≜ T (˜ v, ˜v(n), Ak), ∀k. 
+
+(24) The physical limitations of the RIS elements require |vm| ≤ 
+
+1 for m = 1 , . . . , M , and vM +1 = 1 . Thus, the RIS sub-problem is given by: 
+
+P5b : min 
+
+> ˜v
+> K
+
+X
+
+> k=1
+
+dk
+
+s.t. T (˜ v, ˜v(n), Ak) + dk ≥ Γk
+
+X
+
+> i̸=k
+
+˜vH Ai ˜v + σ2
+
+ , ∀k, 
+
+|vm|2 ≤ 1, m = 1 , . . . , M, vM +1 = 1 .
+
+(25) This is a convex quadratically constrained quadratic prob-lem (QCQP). The overall feasibility of P4 is determined by alternately solving P5a and P5b. Since the SCA lower bounds guarantee that the objective value is non-decreasing and bounded, the AO process is guaranteed to converge to a stationary point of the feasibility problem. By iteratively updating Rs and solving the corresponding feasibility sub-problems, the algorithm converges to the Pareto optimal boundary point along the ray ωP T . This approach en-sures that the high-dimensional resource allocation is uniquely and optimally mapped to the low-scale weight space, facili-tating real-time execution in dynamic IoT environments. This approach ensures no theoretical information loss regardless of region convexity. Based on the preceding analysis, we have established a deterministic mapping M : ωP T → R∗, where R∗ denotes the unique Pareto optimal rate vector obtained by solving problem P3 for a given direction ωP T . Since the directional mapping M is surjective over the entire Pareto frontier of the achievable rate region R, it ensures that every efficient operating point of the RIS-assisted IoT system can be uniquely represented by a low-dimensional weight vector ωP T .This geometric correspondence facilitates a significant paradigm shift in the system’s optimization strategy. Specif-ically, we can substitute the high-dimensional and tightly coupled physical layer variables, including the beamforming vectors f , the RIS phase shifts θ, and the reflection amplitudes 
+
+β, with the low-scale weight vector ωP T as the primary decision variable. Crucially, this dimensionality reduction is information-lossless from an optimization perspective. Given that any phys-ically meaningful objective function (e.g., minimizing system latency, maximizing energy efficiency, or total sum-rate) is typically a non-decreasing function of the individual user rates 
+
+Rk, the global optimum for such objectives is mathematically guaranteed to reside on the Pareto boundary. Consequently, by searching within the low-dimensional space of ωP T instead of the original high-dimensional variable space, we can attain the global optimum while drastically reducing the search space complexity. This transformation provides the theoretical foundation for our hierarchical decision framework, where a high-level RL agent can focus on optimizing the weight profile ωP T , while the low-level physical configurations are efficiently handled by the directional mapping M.7
+
+Algorithm 1 Pareto-Aware Hierarchical Decision Algorithm using RL with PPO agent for Online RIS-aided IoT system 
+
+Input: Upper limit of episodes, upper limit of steps per episode, learning factor. 
+
+Result: The policy of RL: P P O (s, a). 
+
+> 1:
+
+Action space: a = {ωP T , X } . 
+
+> 2:
+
+State space: s = {Hk, GRe , HRe,k , Y, ∀k}. 
+
+> 3:
+
+Initialize a random policy P P O (s, a) for each s and a. 
+
+> 4:
+
+repeat  
+
+> 5:
+
+Initialize a(0) with a random feasible action.  
+
+> 6:
+
+Initialize s(0) with a(0) and system settings.  
+
+> 7:
+
+t = 0 . 
+
+> 8:
+
+repeat  
+
+> 9:
+
+Select the next action a(t+1) from the current policy 
+
+P P O and current state s(t) using PPO method.  
+
+> 10:
+
+Perform the next action a(t+1) by solving P3: 
+
+> 11:
+
+Set Rmin s = 0 , and find Rmax s when P4 has no feasible solution.  
+
+> 12:
+
+repeat  
+
+> 13:
+
+Rs = Rmin s +Rmax s 
+
+> 2
+> 14:
+
+if P4 has feasible solution then  
+
+> 15:
+
+Rmin s = Rs 
+
+> 16:
+
+else  
+
+> 17:
+
+Rmax s = Rs 
+
+> 18:
+
+end if  
+
+> 19:
+
+until Rmax s − Rmin s < ϵ , ϵ is the accuracy require-ment.  
+
+> 20:
+
+Update the next state s(t+1) with a(t+1) . 
+
+> 21:
+
+Observe the reward r(t+1) from {a(t+1) , s(t+1) }. 
+
+> 22:
+
+Store {a(t+1) , s(t+1) , r (t+1) } into the trajectory buffer G. Update RL policy network via PPO using collected trajectory batch G. 
+
+> 23:
+
+t = t + 1 . 
+
+> 24:
+
+until Upper limit of steps per episode.  
+
+> 25:
+
+Clear the trajectory buffer G. 
+
+> 26:
+
+until Upper limit of episodes or convergence. In the RL framework, the action space is a = {ωP T , X } ,where X represents the other optimization variables in the specific problem. The state space consists of channel state information Hk, GRe , HRe,k and other state information Y
+
+in the specific problem: 
+
+s = {Hk, GRe , HRe,k , Y, ∀k}. (26) The reward function as the negative of the objective in P1
+
+at time slot t: r = −fobj (R, X ). Therefore, the Pareto-aware hierarchical decision algorithm using RL (PARL) is shown as Algorithm 1. 
+
+E. Secondary Compression of Action Space using Autoen-coder 
+
+While the direction-based priority mapping M : ωP T →
+
+R∗ proposed in the previous subsection effectively collapses the high-dimensional physical space of active beamform-ing and passive reflection coefficients into a K-dimensional priority vector, directly deploying RL over ωP T may still 𝐟𝐟 
+
+## 𝜷𝜷 
+
+## 𝜽𝜽 
+
+## 𝓧𝓧 
+
+## 𝝎𝝎 𝑃𝑃𝑃𝑃 
+
+## 𝓧𝓧 
+
+Solving  𝒫𝒫 3
+
+## 𝓩𝓩 
+
+Autoencoder 
+
+## 𝝎𝝎 𝑃𝑃𝑃𝑃 
+
+## 𝓧𝓧 
+
+Input 
+
+## 𝓩𝓩 
+
+## �𝝎𝝎 𝑃𝑃𝑃𝑃 
+
+## �𝓧𝓧 
+
+Output 
+
+Code 
+
+Encoder 
+
+Decoder  
+
+> Fig. 2. The structure of autoencoder.
+
+pose challenges in massive IoT networks where K is large. Furthermore, spatial correlation among user distributions and recurring environmental dynamics often introduce statistical redundancies within the priority vector space. To exploit these latent statistical regularities and achieve an ultra-low-dimensional action representation for the RL agent, we intro-duce a data-driven secondary compression framework utilizing an autoencoder (AE) as shown in Fig. 2. Unlike model-driven geometric projections, the AE archi-tecture is entirely data-driven and relies on extracting low-dimensional continuous manifolds from optimal configuration profiles. Consequently, the secondary compression framework necessitates a dedicated offline pre-training phase. We first execute the primary directional mapping algorithm over a diverse set of random channel realizations and varying network states. By iteratively performing the binary search over Rs and solving the convex feasibility sub-problems P5a
+
+and P5b, we accumulate a comprehensive offline dataset 
+
+Dtrain = {{ ωP T , X } (1) , {ωP T , X } (2) , . . . , {ωP T , X } (Nsa )}.Each entry represents an optimized K+KX -dimensional target priority profile residing strictly on the Pareto boundary, where 
+
+KX is the dimension of X
+
+The pre-trained dataset is subsequently used to optimize a symmetric deep neural network structure comprising an encoder and a decoder. The encoder ( Eϕ): Takes the optimized, uncompressed pri-ority vector X = {ωP T , X } ∈ RK+KX as input. Through a series of fully connected layers parameterized by weights and biases ϕ, it projects the vector into an ultra-low-dimensional bottleneck layer, yielding the latent continuous code vector 
+
+Z ∈ Rd×1, where d < K + KX . This latent vector Z acts as the condensed, highly efficient action space explored directly by the high-level RL policy network. The decoder ( Dψ ): Tasked with reversing the compression operation to maintain physical consistency. Parameterized by 8
+
+weights ψ, the decoder takes the latent representation Z
+
+from the bottleneck layer and maps it back to the original dimensionality, generating a reconstructed priority vector ˆX =
+
+{ ˆωP T , ˆX } ∈ RK+KX .The network parameters {ϕ, ψ } are jointly optimized offline by minimizing the mean squared error (MSE) reconstruction loss via backpropagation: 
+
+min 
+
+> ϕ,ψ
+
+1
+
+Nsa Nsa X
+
+> n=1
+
+∥X(n) − D ψ (Eϕ(X(n))) ∥2, (27) where Nsa represents the size of the dataset. Once the offline training converges, the frozen Decoder network is embedded directly into the online execution loop as an intermediate translation tier between the RL policy and the physical layer optimization module. The precise cascading mechanics of the online hybrid decision pipeline operate as follows:  
+
+> •
+
+Macro-Decision Generation: At each time slot t, the DRL agent observes the low-dimensional network state space and outputs a continuous latent action vector Z(t) from its squeezed action space.  
+
+> •
+
+Data-Driven Decompression: The latent code Z(t) is instantly fed into the feedforward Decoder network 
+
+Dψ , which outputs the reconstructed priority profile 
+
+{ ˆωP T (t), ˆX (t)}. 
+
+> •
+
+Model-Driven Projection: To insulate the system from neural reconstruction noise, { ˆωP T (t), ˆX (t)} is passed directly to the model-driven feasibility loop. The system solves the inner problems P4 via the algorithm mentioned above. By sequentially chaining the statistical dimensionality re-duction of the autoencoder with the exact geometric mapping of the directional max-min problem, the framework creates a robust ”firewall” against the curse of dimensionality. The RL agent benefits from fast training convergence in an opti-mized continuous action space ( Z), while the physical layer constraints are guaranteed to satisfy strict Pareto optimality conditions without information loss if AE can perfectly replace the original parameters with a small number of parameters. If AE cannot perfectly replace parameters, it will only cause a small amount of performance loss. 
+
+F. Complexity 
+
+The offline training complexity of the PAAERL algorithm is primarily governed by the synchronization between data-driven neural network backpropagation and the model-driven geometric projection loops. The total asymptotic training com-plexity of the PAAERL algorithm can be expressed as: 
+
+O(PAAERL ) = O (NI NB (NRL + NP A )) (28) where NI denotes the total number of training iterations, 
+
+NB represents the number of gradient updates executed per iteration, NRL is the floating-point operations required for a single training step, and O(NP A ) is the complexity of binary search and solve P4. The complexity is given by: 
+
+O(NP A ) = O
+
+
+
+log 2
+
+ ϵ0
+
+ϵ
+
+
+
+· NP4
+
+
+
+(29) 
+
+Algorithm 2 Pareto-Aware Autoencoder-aided RL (PAAERL) Algorithm 
+
+Input: Upper limit of episodes, upper limit of steps per episode, learning factor. 
+
+Result: The policy of RL: P P O (s, a). 
+
+> 1:
+
+Action space: a = {Z} . 
+
+> 2:
+
+State space: s = {Hk, GRe , HRe,k , Y, ∀k}. 
+
+> 3:
+
+Initialize a random policy P P O (s, a) for each s and a. 
+
+> 4:
+
+repeat  
+
+> 5:
+
+Initialize a(0) with a random feasible action.  
+
+> 6:
+
+Initialize s(0) with a(0) and system settings.  
+
+> 7:
+
+t = 0 . 
+
+> 8:
+
+repeat  
+
+> 9:
+
+Select the next action a(t+1) from the current policy 
+
+P P O and current state s(t) using PPO method.  
+
+> 10:
+
+Use AE to obtain the original parameters 
+
+{ωP T , X } (t+1) from Z(t+1) . 
+
+> 11:
+
+Perform the next action a(t+1) by solving P3. 
+
+> 12:
+
+Update the next state s(t+1) with a(t+1) . 
+
+> 13:
+
+Observe the reward r(t+1) from {a(t+1) , s(t+1) }. 
+
+> 14:
+
+Store {a(t+1) , s(t+1) , r (t+1) } into the trajectory buffer G. Update RL policy network via PPO using collected trajectory batch G. 
+
+> 15:
+
+t = t + 1 . 
+
+> 16:
+
+until Upper limit of steps per episode.  
+
+> 17:
+
+Clear the trajectory buffer G. 
+
+> 18:
+
+until Upper limit of episodes or convergence. where log 2(ϵ0/ϵ ) represents the maximum number of bisection steps required for the binary search to achieve an accuracy tolerance of ϵ, and O(NP4) denotes the complexity required to solve sub-problems P4 for K MUs. In most RL setups, the number of required iterations NI
+
+typically scales polynomially with the uncompressed state-action product Nstate Naction . However, by cascading the data-driven autoencoder’s structural condensation with the exact boundary projection of problem P3, PAAERL dramatically truncates the required exploration volume. IV. S IMULATION AND APPLICATION 
+
+The theoretical framework established in the previous sec-tions possesses a system-agnostic quality, rendering it applica-ble to a broad spectrum of multi-user communication scenarios incorporating RIS. In principle, any optimization objective that is a monotonic function of the users’ achievable rates can be efficiently solved within this low-scale hierarchical structure. To demonstrate the versatility and extensibility of the proposed method, we consider its application to a RIS-assisted MEC system as a representative case study. In a typical RIS-assisted MEC environment, multiple MUs generate computation-intensive tasks that can be either pro-cessed locally or offloaded to an edge server via RIS-augmented uplink channels. The optimization problem in such a system is significantly more complex, as it involves the joint allocation of communication resources (beamforming vectors 
+
+f and RIS coefficients {θ, β}) and secondary computing resources (local CPU frequencies, and edge server scheduling). 9
+
+In dynamic operational scenarios, new computation tasks arrive stochastically at each time slot according to a task arrival process. Accumulated tasks at each MU form a local buffer queue. Each MU is assigned an achievable uplink transmission rate determined by the joint beamforming parameters f , θ,and β. MUs transmit data from the task buffer queue to the edge server at their allocated uplink rates while concurrently executing local computation at a separate CPU processing rate. The primary objective is to minimize the accumulated weighted cost combining the spatial average latency ¯D(t) and energy consumption ¯E(t) at time slot t. The spatial average latency across K active MUs is expressed as: 
+
+¯D(t) = 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+Dk(t), (30) where Dk(t) denotes the task execution latency experienced by the kth MU at time slot t. Concurrently, ¯E(t) captures the aggregate energy overhead, encompassing local CPU com-putation energy at each MU, and edge computation energy consumed by the server. The joint dynamic optimization problem is formulated as follows: 
+
+P6 : min   
+
+> f,β,θ,cM U ,c
+> T
+
+X
+
+> t=1
+
+λt−1  ξ1 ¯D(t) + ξ2 ¯E(t)
+
+s.t. || fk(t)|| 2 ≤ P max k , ∀k, t (31a) 
+
+βm(t) ∈ [0 , 1] , ∀m, t (31b) 
+
+θm(t) ∈ [0 , 2π), ∀m, t (31c) 
+
+cM U k (t) ≤ cM U,max k , ∀k, t (31d) 
+
+c(t) ≤ cmax , ∀t, (31e) where T is the total number of time slots, λ ∈ [0 , 1) is the temporal discount factor, and ξ1, ξ 2 ≥ 0 are design weighting parameters prioritizing delay and energy metrics, respectively. Furthermore, cM U k (t) denotes the local computation process-ing rate (bit/s) at the kth MU subjected to the local computing capacity constraint cM U,max k , and c(t) represents the overall processing rate assigned by the edge server, subject to its peak computing capacity constraint cmax . Since the problem operates over a predetermined finite time horizon, choosing a discount factor λ close to 1 ensures long-term optimization stability while maintaining convergence. To solve problem P6 via RL, we align the policy objective by defining the immediate reward function at time slot t as: 
+
+r(t) = −ξ1 ¯D(t) − ξ2 ¯E(t). (32) Maximizing the cumulative expected reward 
+
+E
+
+hPTt=1 λt−1r(t)
+
+i
+
+corresponds directly to minimizing the original objective function in P6. Detailed queueing models and MEC system formulations built on similar dynamic principles can be found in relevant research works [24]–[26]. By employing the proposed hierarchical decision algorithm, the high-level RL agent is tasked with navigating the low-dimensional space of rate proportions ωP T and high-level offloading strategies, rather than dealing with the microscopic adjustments of RIS elements. Since the latency and energy consumption are directly governed by the achievable uplink rate Rk, the optimal resource configuration for any given offloading decision must still reside on the Pareto boundary of the rate region. Consequently, the RL agent can effectively delegate the physical layer coordination to the P3 mapping, ensuring that for any selected strategy, the RIS and beamforming parameters are always in their Pareto-optimal state. This separation of concerns not only stabilizes the learning process of the RL agent in dynamic IoT environments but also ensures that the system achieves the theoretical lower bound of the cost function with significantly reduced computational overhead. Such a framework can be further extended to other emerging architectures, including STAR-RIS and UAV-relayed networks, where high-dimensional coupling is a persistent bottleneck. To validate the efficacy, convergence properties, and resource-allocation performance of the proposed Pareto-aware autoencoder-aided RL (PAAERL) framework, we establish a comprehensive simulation environment for a multi-user RIS-assisted network. For a fair and rigorous performance evalua-tion, we compare PAAERL against five baseline paradigms. These benchmark algorithms are strategically categorized based on their optimization criteria (weighted sum-rate vs. Pareto-optimality) and their dimensionality reduction strate-gies (model-driven, data-driven, or uncompressed), as detailed below:  
+
+> •
+
+RL: This baseline represents the standard model-free, end-to-end data-driven approach widely utilized in ex-isting literature. In this scheme, the RL agent directly observes the raw channel state information and outputs the high-dimensional physical layer configuration param-eters without any prior space compression.  
+
+> •
+
+WSRRL: The weighted sum-rate assisted RL algo-rithm utilizes a conventional model-driven compression method. Instead of exploring the physical variable space directly, the DRL agent outputs a priority weight vector 
+
+ω. A low-level optimization solver then maximizes the conventional weighted sum-rate objective function based on these weights to determine f , θ, and β. 
+
+> •
+
+PARL: The Pareto-aware RL algorithm represents an ab-lation version of our proposed framework that isolates the model-driven tier. It exclusively employs the directional max-min scaling optimization problem P3 developed in Section III to map the K-dimensional weight vector ωP T 
+
+directly onto the true Pareto-optimal frontier.  
+
+> •
+
+AERL: The autoencoder-assisted RL baseline utilizes a purely data-driven action-embedding paradigm. It does not employ any communication-theoretic or geometric optimization models. Instead, an offline pre-trained Au-toencoder compresses the raw, high-dimensional physical variables ( f , β, θ) directly into a compact continuous la-tent code Z. The DRL agent executes its exploration and policy updates entirely within this unconstrained latent space, and the decoder maps Z back into the physical layer parameters. This benchmark serves to contrast a purely black-box AI dimensionality reduction approach against our hybrid model-plus-data compression pipeline.  
+
+> •
+
+WSRAERL: The weighted sum-rate autoencoder-assisted 10                                     
+
+> TABLE II SIMULATION SETTING
+> Parameter Value Parameter Value
+> Frequency 2.4GHz Bandwidth 1MHz
+> M64 K10 Noise 3.16 ×10 −11 Agent type PPO Layer 128 neurons Activat. func. ReLU Minimum batch 128 Discount factor 0.995 Clip factor 0.2 Replay memory 10000
+> ∆T2s GPU RTX4080 080 160 240 320 400 480 560 640 720
+> Iterations
+> 345678910 11 12 13 10 4
+> RL WSRRL PARL AERL WSRAERL PAAERL
+> Fig. 3. The convergence behavior of our proposed PAAERL with benchmarks.
+
+RL algorithm is a hybrid benchmark that combines con-ventional linear scalarization with neural network com-pression. In this scheme, the framework first maps the resource configuration space to a K-dimensional priority weight vector ω, which is subsequently compressed into a lower-dimensional latent representation using a data-driven Autoencoder. The DRL agent outputs a condensed action that is decoded into ω and evaluated via the conventional weighted sum-rate optimization solver. 
+
+A. Performance comparison 
+
+In this section, we evaluate the performance of the proposed PAAERL framework against the baseline algorithms. The primary metric of concern is the total system cost, defined as the weighted combination of multi-user task execution latency and device energy consumption under a highly dy-namic, interference-limited RIS-assisted MEC environment. The simulation settings are shown in Table. II. 
+
+1) Convergence speed comparison: Fig. 3 illustrates the total system cost as a function of the training iterations across different resource management strategies. The RL baseline exhibits the poorest performance and fails to show stable signs of convergence within the observed timeline. This behavior directly confirms the severity of the action space explosion. Without compression, the high-dimensional continuous domain of raw beamforming vectors and large-scale RIS elements forces the agent into isotropic, blind ex-ploration, making it highly improbable to discover cooperative 4 6 8 10 12 14 16     
+
+> Number of users
+> 2345678910 11 12 10 4
+> RL WSRRL PARL AERL WSRAERL PAAERL
+> Fig. 4. The total cost Cvs. number of users of our proposed PAAERL and benchmarks.
+
+reward pathways. In contrast, algorithms embedded with data-driven action reduction, such as AERL, WSRAERL, and the proposed PAAERL, exhibit steep learning curves in the early training phases from 0 to 150 iterations. By utilizing the deep autoencoder to map policies onto an ultra-low-dimensional latent continuous code Z, the agent circumvents the curse of dimensionality. The smoothed gradient updates significantly stabilize the training trajectory, allowing the policy network to rapidly isolate highly efficient macro-decisions. The steady-state costs of WSRRL and WSRAERL saturate at a signifi-cantly higher plateau compared to the Pareto-aware frame-works. This discrepancy highlights the mathematical limitation of linear scalarization in interference-limited communication links. Because the true achievable rate region under tightly coupled multi-user interference and non-convex RIS phase constraints is non-convex, the conventional weighted sum-rate formulation can only trace the outer convex hull. It system-atically skips over the dented inner boundaries of the true rate region, causing critical geometric information loss and forcing the network into sub-optimal resource configurations. Both PARL and the proposed PAAERL converge to the lowest system cost boundary. This validates the effectiveness of our directional max-min scaling optimization problem P3. By projecting weight vectors along a clean, bijective directional ray toward the Pareto-optimal frontier, our approach captures optimal operating points in both convex and non-convex rate spaces without theoretical loss of optimality. 
+
+2) Impact of different number of users of proposed PAAERL and benchmarks: As observed from Fig. 4, the total network cost for all considered frameworks increases with the number of users K, which is a direct consequence of the escalated task offloading volume and aggregated multi-user interference. In particular, the conventional RL baseline exhibits catastrophic performance degradation, with its network cost accelerating dramatically as K increases. This trend underlines the fatal flaw of uncompressed RL in dense networks. Because the di-mensions of the active beamforming vectors f and the passive RIS configuration parameters are highly tied to the number of 11 8 16 32 64 128 256    
+
+> Number of RIS elements
+> 33.5 44.5 55.5 66.5 77.5 10 4
+> RL WSRRL PARL AERL WSRAERL PAAERL
+> Fig. 5. The total cost Cvs. number of RIS elements of our proposed PAAERL and benchmarks.
+
+users, scaling K triggers a compound explosion in the dimen-sionality of the action space. The conventional model-driven compression benchmarks, namely WSRRL and WSRAERL, achieve lower network costs than Conventional RL, yet their performance gap relative to the proposed PAAERL continu-ously widens as the network scale expands. In a sparse net-work with small K, multi-user interference is relatively mild, rendering the non-convex ”dented” regions of the achievable rate region less pronounced. Thus, traditional weighted sum-rate boundary tracking remains reasonably close to optimal. However, as K scales up, the mutual coupling between active transceiver beams and passive RIS reflections induces severe co-channel interference, causing the true achievable rate region to become highly non-convex. The proposed PAAERL frame-work consistently outperforms all other benchmark paradigms across the entire user spectrum, maintaining the lowest net-work cost and displaying a highly favorable, sublinear growth curve. While PARL successfully preserves optimal boundary information through the directional max-min scaling problem 
+
+P3, its execution efficiency faces bottlenecks at high values of 
+
+K because the policy network must still directly manipulate a K-dimensional priority vector ωP T .
+
+3) Impact of different number of RIS elements of proposed PAAERL and benchmarks: To assess the impact of passive beamforming capabilities on system-wide trade-offs, we ana-lyze the network cost under a varying number of RIS reflecting elements M . Fig. 5 illustrates the total system cost as a function of M , revealing an intriguing divergence between uncompressed model-free search paradigms and action-space-reduced frameworks. The conventional RL scheme maintains the highest network cost across the entire spectrum of M ,followed by the AERL baseline. For conventional RL, ex-panding M to 256 triggers an immediate explosion in the physical layer variable domain, resulting in severe gradient dilution. The agent is forced into blind exploration, which yields highly sub-optimal beamforming and phase config-urations that fail to minimize execution costs. For AERL, although the data-driven autoencoder succeeds in compressing 4 6 8 10 12 14 16  
+
+> Number of users
+> 10 1
+> 10 2
+> 10 3
+> Training time (s)
+> RL WSRRL PARL AERL WSRAERL PAAERL
+> Fig. 6. The training time vs. number of users of our proposed PAAERL and benchmarks.
+
+the unconstrained action landscape into a low-dimensional code, it operates entirely without communication-theoretic or geometric optimization boundaries. Consequently, when M
+
+grows large, the neural reconstruction errors within the de-coder become more pronounced, causing AERL to settle into a noticeably higher cost plateau than the model-assisted algo-rithms. Frameworks equipped with secondary neural network compression—namely our proposed PAAERL and the hybrid WSRAERL baseline—settle into a moderate cost tier. This behavior represents a minor structural trade-off: while the deep autoencoder enables exceptionally fast policy convergence and decouples the agent from large user variables, the statistical approximation introduced during the latent space mapping 
+
+Z → ωP T introduces subtle reconstruction variances. These variances prevent the agent from extracting the absolute lowest mathematical cost under highly complex channel conditions. Conversely, the un-embedded benchmarks PARL and WSRRL, which pass the priority weight vectors directly to the inner-loop convex optimization solvers without any neural bottle-neck approximation, achieve the lowest total system costs. 
+
+4) Algorithm Efficiency Comparison: As illustrated in Fig. 6, the conventional RL baseline demands the highest training time across all user densities. This excessive time expenditure is a direct artifact of the action space explosion. In an uncom-pressed scenario, expanding the number of users requires the neural network to output exponentially larger matrix variables for multi-user active beamforming and multi-element RIS phase configurations. The baselines WSRRL, PARL, and WS-RAERL yield noticeable time reductions compared to raw RL, yet they still exhibit a steep upward growth curve as K scales from 4 to 16. This upward trend highlights the computational bottleneck induced by traditional iterative optimization sub-problems in the execution loop. In frameworks like WSRRL and PARL, the high-level policy outputs a K-dimensional weight profile. Consequently, as the number of users grows, the dimensionality of the RL action space expands proportion-ally. The proposed PAAERL framework consistently maintains the shortest training time across the entire user spectrum, 12 
+
+demonstrating an exceptionally flat execution curve that scales sub-linearly with K. This outstanding computational efficiency is attributed to our cascaded dual-compression architecture. By cascading the data-driven autoencoder with the model-driven directional mapping, the high-level RL policy is completely isolated from the raw physical dimensions of the network. The policy network operates entirely within a steady, low-dimensional latent continuous code space Z. This decoupling guarantees that the gradient exploration velocity remains ro-bust even in dense user deployments. V. C ONCLUSION 
+
+This paper presented a novel hierarchical RL-based opti-mization framework, designated as PAAERL, to achieve real-time, online resource allocation in RIS-assisted multi-user IoT networks. To systematically break the curse of dimensionality triggered by high-dimensional active and passive beamforming configurations, we introduced a cascaded dual-compression architecture. Specifically, the framework first maps the high-dimensional physical layer parameters onto a low-scale weight space via a directional max-min scaling problem formulation. This model-driven tier mathematically guarantees strict Pareto-optimality across both convex and non-convex rate regions without any theoretical geometric information loss. To further alleviate exploration overhead in dense user deployments, a data-driven deep autoencoder was seamlessly integrated to perform a secondary action space reduction, embedding the priority profile into a highly condensed latent representation. Extensive simulations under practical multi-user MEC network conditions confirmed that our proposed PAAERL approach substantially outperforms conventional model-free RL and classic weighted sum-rate optimization baselines. For future work, extending this dual-compression architec-ture to accommodate highly dynamic mobility models, such as machine-learning-driven trajectory designs for airborne RIS or UAV platforms, presents a promising and impactful research direction. REFERENCES [1] W.-C. Chien, G. Jeon, and H.-H. Cho, “Multi-objective optimization of 3-D cell deployment in sustainable B5G/6G networks: Balancing perfor-mance and sustainability,” IEEE Trans. Network Service Management ,vol. 22, no. 4, pp. 3077–3091, 2025. [2] Y. Liu, C. She, Y. Zhong, W. Hardjawana, F.-C. Zheng, and B. Vucetic, “Graph neural networks for quality of service improvement in interference-limited ultra-reliable and low-latency communications,” 
+
+IEEE Trans. Vehicular Technol. , vol. 73, no. 3, pp. 3718–3732, 2023. [3] J. Huang, F. Liu, and J. Zhang, “Multi-dimensional QoS evaluation and optimization of mobile edge computing for IoT: A survey,” Chinese J. Electronics , vol. 33, no. 4, pp. 859–874, 2024. [4] A. M. Huroon, Y.-C. Huang, and L.-C. Wang, “Energy-efficient trans-mission strategy for UAV-RIS 2.0 assisted communications using rate splitting multiple access,” IEEE Trans. Wireless Commun. , vol. 25, pp. 5246–5261, 2026. [5] E. T. Michailidis, M.-G. Volakaki, N. I. Miridakis, and D. Vouyioukas, “Optimization of secure computation efficiency in UAV-enabled RIS-assisted MEC-IoT networks with aerial and ground eavesdroppers,” 
+
+IEEE Trans. Commun. , vol. 72, no. 7, pp. 3994–4009, 2024. [6] Y. Liu, X. Liu, X. Mu, T. Hou, J. Xu, M. Di Renzo, and N. Al-Dhahir, “Reconfigurable intelligent surfaces: Principles and opportunities,” IEEE communications surveys & tutorials , vol. 23, no. 3, pp. 1546–1577, 2021. [7] E. Basar, G. C. Alexandropoulos, Y. Liu, Q. Wu, S. Jin, C. Yuen, O. A. Dobre, and R. Schober, “Reconfigurable intelligent surfaces for 6G: Emerging hardware architectures, applications, and open challenges,” 
+
+IEEE Vehicular Technol. Magaz. , vol. 19, no. 3, pp. 27–47, 2024. [8] T. Jiang and W. Yu, “Interference nulling using reconfigurable intelligent surface,” IEEE J. Selected Areas Commun. , vol. 40, no. 5, pp. 1392– 1406, 2022. [9] J. Wang, S. Luo, Y. Li, W. Xie, X. Li, and A. Nallanathan, “Double self-sustainable reconfigurable intelligent surfaces aided wireless communi-cations,” IEEE Trans. Vehicular Technol. , vol. 73, no. 11, pp. 17 869– 17 874, 2024. [10] J. Tang, Z. Lv, J. Xiao, J. Wu, and B. Shim, “Weighted sum-rate maximization by joint antenna grouping and movable RIS deployment,” 
+
+IEEE Trans. Wireless Commun. , 2025. [11] M. Jiang, Y. Li, G. Zhang, and M. Cui, “Achievable rate region maxi-mization in intelligent reflecting surfaces-assisted interference channel,” 
+
+IEEE Trans. Vehicular Technol. , vol. 70, no. 12, pp. 13 406–13 412, 2021. [12] W. Huang, Y. Zeng, and Y. Huang, “Achievable rate region of MISO interference channel aided by intelligent reflecting surface,” IEEE Trans. Vehicular Technol. , vol. 69, no. 12, pp. 16 264–16 269, 2020. [13] H. Peng and L.-C. Wang, “Energy harvesting reconfigurable intelligent surface for UAV based on robust deep reinforcement learning,” IEEE Trans. Wireless Commun. , vol. 22, no. 10, pp. 6826–6838, 2023. [14] H. Peng, Y.-T. Lin, C.-Y. Ho, and L.-C. Wang, “Energy efficiency optimization for IoT systems with reconfigurable intelligent surfaces: A self-supervised reinforcement learning approach,” IEEE Trans. Wireless Commun. , 2025. [15] R. Hashemi, S. Ali, N. H. Mahmood, and M. Latva-Aho, “Deep reinforcement learning for practical phase-shift optimization in RIS-aided MISO URLLC systems,” IEEE Internet Things J. , vol. 10, no. 10, pp. 8931–8943, 2022. [16] H. Le, M. Ibrahim, O. Bedir, J. Tao, and S. Ekin, “Learning to focus: CSI-free hierarchical MARL for reconfigurable reflectors,” arXiv preprint arXiv:2604.05165 , 2026. [17] M. Zeng, Y. Zhao, J. Wang, and Z. Fei, “Multiple reconfigurable intelli-gent surfaces aided V2X offloading networks: A federated reinforcement learning-based approach,” IEEE Trans. Vehicular Technol. , vol. 75, no. 1, pp. 1281–1294, 2026. [18] W. Xu, J. Yu, Y. Wu, and D. H. K. Tsang, “Joint channel estima-tion and reinforcement-learning-based resource allocation of intelligent-reflecting-surface-aided multicell mobile edge computing,” IEEE Inter-net Things J. , vol. 11, no. 7, pp. 11 862–11 875, 2023. [19] W. Xu, C. Pan, Y. Yuan, Y. Wu, and D. H. K. Tsang, “Reconfigurable intelligent surface aided mobile fog computing: A space aggregation-based Lyapunov driven reinforcement learning approach,” IEEE Trans. Mobile Comput. , vol. 25, no. 3, pp. 3809–3823, 2026. [20] W. Xu, Y. Yuan, and D. H. K. Tsang, “Enhancing fog computing through intelligent reflecting surface assistance: A Lyapunov driven reinforcement learning approach,” in 2024 IEEE 10th World Forum on Internet of Things (WF-IoT) . IEEE, 2024, pp. 759–764. [21] H. Guo, Y.-C. Liang, J. Chen, and E. G. Larsson, “Weighted sum-rate maximization for reconfigurable intelligent surface aided wireless networks,” IEEE Trans. Wireless Commun. , vol. 19, no. 5, pp. 3064– 3076, 2020. [22] T. Erpek, Y. E. Sagduyu, A. Alkhateeb, and A. Yener, “Autoencoder-based communications with reconfigurable intelligent surfaces,” in 2021 IEEE Internation. Symposium Dynamic Spectrum Access Networks (DySPAN) . IEEE, 2021, pp. 242–247. [23] H. Lu, Y. Zeng, S. Jin, and R. Zhang, “Aerial intelligent reflecting surface: Joint placement and passive beamforming design with 3D beam flattening,” IEEE Trans. Wireless Commun. , vol. 20, no. 7, pp. 4128– 4143, 2021. [24] Y. Jia, C. Zhang, Y. Huang, and W. Zhang, “Lyapunov optimization based mobile edge computing for internet of vehicles systems,” IEEE Trans. Commun. , vol. 70, no. 11, pp. 7418–7433, 2022. [25] S. Bi, L. Huang, H. Wang, and Y.-J. A. Zhang, “Lyapunov-guided deep reinforcement learning for stable online computation offloading in mobile-edge computing networks,” IEEE Trans. Wireless Commun. ,vol. 20, no. 11, pp. 7519–7537, 2021. [26] P. Di Lorenzo, M. Merluzzi, and E. C. Strinati, “Dynamic mobile edge computing empowered by reconfigurable intelligent surfaces,” in 2021 IEEE 22nd International Workshop Signal Process. Advances Wireless Commun. (SPAWC) . IEEE, 2021, pp. 526–530.
