@@ -1,0 +1,1679 @@
+Title: HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models
+
+URL Source: https://arxiv.org/pdf/2608.09031v1
+
+Published Time: Tue, 11 Aug 2026 01:45:09 GMT
+
+Number of Pages: 24
+
+Markdown Content:
+# HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models 
+
+Isuru Herath ∗
+
+Carnegie Mellon University 
+
+iherath@andrew.cmu.edu 
+
+Arin Gopakumar ∗
+
+UC Berkeley 
+
+aringopakumar@berkeley.edu 
+
+Sharan Sahu ∗
+
+Cornell University 
+
+ss4329@cornell.edu 
+
+# Abstract 
+
+Graph neural networks typically propagate information through repeated message-passing layers, coupling the distance over which information travels with the number of nonlinear transformations applied. This coupling can make deep architectures difficult to optimize and can lead to over-smoothing, over-squashing, and the loss of long-range information. Linearized Graph Sequence Models (LGSMs) address this issue by separating information depth from pro-cessing depth and treating the successive propagation states of each node as a sequence. However, existing LGSMs construct these sequences using fixed graph operators, limiting their ability to adapt propagation to the input graph, node features, and downstream task. We introduce HOPPER, an end-to-end learnable extension of LGSM that learns how hop sequences should be extracted before they are processed by a modern state-space model. Our framework supports feature-conditioned, structure-aware, graph- and hop-adaptive propagation mech-anisms while preserving permutation equivariance. Standard adjacency-based and non-backtracking LGSM sequences arise as special cases of our proposed extractor family. We show that HOPPER is state-of-the-art or competitive across the ECHO-S YNTH benchmark, and that varying the maximum neighborhood size of message backtracking cancellation (i.e. structural memory window) can optimize accuracy on the LRIM physics-based long-range dependency bench-mark. These results demonstrate that learnable sequence extraction provides a flexible and effective approach to long-range graph representation learning. 
+
+# 1 Introduction 
+
+Message-passing neural networks (MPNNs) are a standard architecture for graph learning [18, 29]. By repeatedly aggregating local neighborhoods, they expand their receptive fields, but long-range propagation requires many layers, coupling two distinct computational dimensions: information depth , how far information travels through the graph, and processing depth , how many nonlinear transformations are applied. As depth increases, fixed-dimensional representations must compress in-creasingly large neighborhoods, leading to over-squashing, representation collapse, and optimization difficulties [2, 14, 46], particularly for long-range graph tasks [15]. Meanwhile, modern sequence models, including Transformers [47] and selective state-space models such as Mamba and Mamba2 [12, 19], efficiently model long-range dependencies. Applying them directly to graphs is challenging because graphs lack a canonical node ordering; existing graph sequence models therefore use node prioritization, neighborhood tokenization, random walks, or learned permutations [4, 49], introducing an additional graph serialization problem. Linearized Graph Sequence Models (LGSMs) provide an alternative [37]. Rather than treating the nodes of a graph as a sequence, LGSM treats the successive propagation messages from each node as a sequence over information depth. A state-space model then processes this sequence independently for each node, explicitly decoupling propagation depth from nonlinear processing depth. However, existing LGSMs construct these sequences using fixed operators, such as normalized adjacency 
+
+> ∗
+
+Equal contribution. Preprint. Preliminary work. arXiv:2608.09031v1 [cs.LG] 10 Aug 2026 HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models 
+
+propagation or non-backtracking recurrences. Although these sequences depend on graph topology, their propagation rules are fixed across graphs, features, tasks, and information depths. Since useful neighborhood ranges and propagation scales can vary across learning problems [1, 10, 50, 54], a fixed extractor may provide a suboptimal sequence that the downstream state-space model cannot recover from. We introduce HOPPER, an end-to-end learnable extension of LGSM that learns how hop sequences are extracted. HOPPER preserves the separation of information depth and processing depth, while introducing feature-conditioned attention, a hypernetwork that learns graph- and hop-adaptive combi-nations of structural graph operators, finite structural memory windows [1, 10, 22, 47]. The resulting sequence is processed by a stack of Mamba2-based SSM blocks [12]. Because sequence processing occurs along information depth rather than an ordering of nodes, HOPPER preserves permutation equivariance without graph serialization. Standard adjacency-based and non-backtracking LGSM sequences are recovered as special cases, retaining their inductive biases while enabling adaptive propagation. HOPPER achieves the best performance on eccentricity and single-source shortest-path prediction in ECHO-S YNTH while remaining competitive on diameter, while on LRIM-16, M = 8 
+
+yields the best performance among the evaluated memory windows. 
+
+Related work. Long-range graph learning has been approached through deeper and rewired message-passing architectures, graph transformers, and multi-hop graph filters [27, 30, 31, 41, 42, 44, 52, 55]. Recent graph state-space models construct sequences through neighborhood tokenization, random walks, node prioritization, or learned permutations [4, 28, 45, 49]. HOPPER instead builds on LGSM and combines adaptive graph filtering, feature-conditioned propagation, hypernetworks, and permutation-invariant graph summarization [22, 33, 48, 53]. We survey the broader literature on long-range graph learning in Appendix A. 
+
+# 2 Background 
+
+2.1 Notation 
+
+Let G = ( V, E) be an undirected graph with n = |V| nodes and m = |E| edges, and let deg( v) denote the degree of v ∈ V . We write A ∈ Rn×n for the adjacency matrix, where Auv = 1 iff (u, v ) ∈ E ,and D ∈ Rn×n for the diagonal degree matrix, with Dvv = deg( v). The symmetrically and random-walk normalized adjacency matrices are Asym = D−1/2AD −1/2 and Arw = D−1A, respectively. Let X ∈ Rn×Fin be the input node-feature matrix, with hidden representation H = XW in ∈ Rn×d.For sequence length L, a hop sequence is S = ( S(0) , . . . , S(L−1) ), where S(l) ∈ Rn×d represents node states at information depth l. We use [A∥B] for feature-wise concatenation and vec( A) for row-wise vectorization. Unless otherwise specified, attention softmax is row-wise over the key dimension, LayerNorm is applied over the feature dimension, and MLP denotes a standard learnable multilayer perceptron. 
+
+2.2 Graph Neural Networks 
+
+Message-passing neural networks (MPNNs) [18] learn node representations through repeated local neighborhood aggregation. Starting from H(0) = H, a generic message-passing layer updates the representation of node v as 
+
+h(t+1)  
+
+> v
+
+= ψ(t) 
+
+h(t) 
+
+> v
+
+, ϕ (t) n 
+
+h(t) 
+
+> u
+
+: u ∈ N (v)
+
+o 
+
+, (1) where ϕ(t) is a permutation-invariant neighborhood aggregator and ψ(t) is a learnable nonlinear transformation. For common architectures such as GCNs [29], this update takes the matrix form 
+
+H(t+1) = σ
+
+
+
+Asym H(t)W(t)
+
+, (2) up to the usual inclusion of self-loops, where W(t) ∈ Rd×d is learnable and σ is a point-wise nonlinearity. Crucially, each message-passing layer simultaneously propagates information one hop farther through the graph and applies another nonlinear transformation. Consequently, incorporating information from nodes at graph distance r requires at least r message-passing layers, tightly coupling 
+
+information depth to processing depth . Increasing the receptive field therefore also increases the number of sequential transformations, which can make deep GNNs difficult to optimize and can exacerbate phenomena such as over-smoothing and the attenuation of long-range information. 
+
+> 2HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models
+
+2.3 Linearized Graph Sequence Models 
+
+Linearized Graph Sequence Models (LGSMs) [37] decouple information propagation from nonlinear processing. Rather than interleaving neighborhood aggregation and nonlinear transformations as in message-passing GNNs, LGSMs first construct, for each node, a sequence of representations at increasing information depths. Given H ∈ Rn×d, a fixed graph propagator produces 
+
+S(l) = Pl(A, D)H, l = 0 , . . . , L − 1, (3) where Pl(A, D) ∈ Rn×n determines how information is propagated to depth l. For example, adjacency-power propagation uses 
+
+S(l) = A l
+
+> sym
+
+H, (4) so that S(l) aggregates information from nodes within l hops. The resulting states form S ∈ Rn×L×d,with the sequence associated with node v given by 
+
+sv =  S(0)  
+
+> v, :
+
+, . . . , S(L−1) 
+
+> v, :
+
+ ∈ RL×d. (5) A shared sequence model Φ : RL×d → RL×d is then applied independently to each node sequence. Thus, the sequence length L controls how far information propagates through the graph, while the depth and capacity of Φ control how that information is processed. This separation removes the one-to-one coupling between information depth and processing depth present in conventional message passing. A key limitation, however, is that existing LGSMs construct these sequences using fixed, hand-designed propagation rules that are shared across graphs and information depths. Consequently, the manner in which information is propagated cannot adapt to the structure or features of a particular graph, nor can it vary across hops to emphasize different propagation behaviors at different information depths. This can force the downstream sequence model to compensate for information that was poorly propagated by the fixed extractor. 
+
+# 3 Methodology 
+
+3.1 Learnable Hop Extraction 
+
+Linearized Graph Sequence Models (LGSMs) separate graph propagation from nonlinear sequence processing, but construct the hop sequence using a fixed propagation rule. For example, adjacency powers: S(l) = A l
+
+> sym
+
+H, (6) non-backtracking: B(0) = I, B(1) = A, B(2) = A2 − D,
+
+B(l) = AB (l−1) − (D − I)B(l−2) , S(l) = B(l)H. (7) Here, I ∈ Rn×n denotes the identity matrix. HOPPER retains the separation between propagation and processing, but replaces the fixed sequence extractor with a learnable, permutation-equivariant map SEQ θ : ( H, A, D) 7 −→ S ∈ Rn×L×d.
+
+H = XW in SEQ θ (A,D)
+
+−−−−−−−−→ S ∈ Rn×L×d Nblk ×Φω
+
+−−−−−−−→ Z ∈ Rn×L×d ρ
+
+−→ ˆy, (8) where SEQ θ denotes the learnable hop extractor and Φω : RL×d → RL×d denotes the sequence pro-cessor consisting of Nblk processing blocks. The resulting hop sequence is processed independently for each node. In particular, for each v ∈ V ,
+
+Zv, :,: = Φ ω (Sv, :,:) , Sv, :,: ∈ RL×d, (9) yielding Z ∈ Rn×L×d. A task-specific readout ρ then produces ˆy = ρ(Z). Thus, Φω operates along information depth l independently for each node and requires no canonical ordering of the graph nodes. 
+
+> 3HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models
+
+Figure 1: Standard LGSMs extract hop sequences using a fixed propagation rule shared across graphs and depths. HOPPER instead learns a graph and hop-adaptive sequence extractor through a permutation-invariant graph summary, hop-conditioned coefficients, a finite-memory linear structural recurrence, and an output-only feature-attention correction. 
+
+3.2 Hypernetwork-Conditioned Structural-State Recurrence 
+
+The key contributions of our work to LGSMs are in the sequence extraction step. This work is a step toward fully learnable sequence extraction, achieved through four key ideas: a linear structural state U(k) accumulated across hops that is never normalized within the recurrence, a hypernetwork that produces hop-dependent propagation coefficients conditioned on a permutation-invariant graph summary and hop embedding, a finite memory window of size M , and a feature-attention term applied only to the output. 
+
+Permutation-invariant structural graph summary. To condition propagation on the input graph while remaining invariant to node ordering and independent of graph size, we first construct a fixed-dimensional graph summary. We augment each initial node representation with one-hop neighborhood information: 
+
+Hnbr = Arw H, Hstr = [ H | Hnbr ] ∈ Rn×2d. (10) Let Qs ∈ RK×d denote K learnable seed queries, and define 
+
+Ks = Hstr Ws 
+
+> K
+
+, Vs = Hstr Ws 
+
+> V
+
+, (11) where Ws 
+
+> K
+
+, Ws 
+
+> V
+
+∈ R2d×d. The seed queries cross-attend to the node representations: 
+
+Hlat = softmax 
+
+ QsK⊤
+
+> s
+
+√d
+
+
+
+Vs ∈ RK×d. (12) Finally, 
+
+hgraph = vec( Hlat ) ∈ RKd . (13) Since the attention aggregates over the node dimension, permuting the nodes does not change hgraph .Moreover, its dimension Kd does not depend on n.
+
+Hop-conditioned coefficient generation. A learned step embedding ek is concatenated with 
+
+hgraph , and an MLP emits 3M + 1 scalars: 
+
+[α(k) 
+
+> A
+
+, α(k) 
+
+> D
+
+, α(k) 
+
+> I
+
+, β k] = MLP([ hgraph ∥ ek]) ∈ R3M +1 . (14) Conditioning on the graph summary allows the propagation rule to vary across graphs, while the hop embedding allows it to vary with information depth. 
+
+> 4HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models
+
+Linear structural-state recurrence. The linear structural state is updated using a window of the 
+
+M previous structural states: 
+
+U(k) =
+
+> M
+
+X
+
+> j=1
+
+
+
+α(k) 
+
+> A
+
+[j]A + α(k) 
+
+> D
+
+[j]D + α(k) 
+
+> I
+
+[j]I
+
+
+
+U(k−j), U(0) = H, U(i< 0) = 0. (15) At each hop, U(k) remains a linear function of H. Keeping normalization, nonlinear activations, and attention outside the recurrence preserves the polynomial structure required to recover the fixed LGSM extractors. Applying A and D directly reproduces this algebra exactly, but the resulting operators grow with node degree and become numerically unstable over long hop sequences, which we discuss in Appendix B. 
+
+Feature-attention correction. At each hop, an attention matrix computed from the original node features provides a gated correction to the structural state: 
+
+Fk = softmax 
+
+ QkK⊤
+
+> k
+
+√d
+
+
+
+, S(k) = LayerNorm 
+
+
+
+U(k) + βkFkU(k)
+
+, (16) where Qk = HW (k) 
+
+> Q
+
+and Kk = HW (k) 
+
+> K
+
+. The attention correction modifies only the extracted state S(l). Consequently, feature attention can enrich the extracted sequence without introducing nonlinearities into the structural recurrence in Eq. (15). 
+
+# 4 Theoretical Analysis 
+
+We now characterize the theoretical properties of the learned sequence extractor. Our analysis establishes four main results. First, HOPPER remains permutation equivariant despite conditioning its propagation rule on the input graph. Second, its structural states admit graph-adaptive finite-degree polynomial representations that retain finite-hop locality and contain standard LGSM propagators as special cases. Third, this richer polynomial family can achieve optimal long-range sensitivity under a common spectral stability constraint. Finally, it can preserve nonstationary spectral information across information depth that vanishes under repeated adjacency propagation. We defer all proofs to Appendix C. 
+
+4.1 Permutation equivariance 
+
+A graph model should not depend on the arbitrary ordering assigned to its nodes. For HOPPER, this property is not immediate because the propagation coefficients themselves are generated from a learned summary of the input graph. We therefore first establish that graph-conditioned sequence extraction preserves the required permutation symmetry. 
+
+Theorem 4.1.1 (Permutation equivariance of the sequence extractor) . Let P ∈ Rn×n be any permutation matrix, and define A′ = PAP ⊤ and H′ = PH . Suppose the feature-attention maps are permutation equivariant, so that Q′ 
+
+> k
+
+= PQ k and K′ 
+
+> k
+
+= PK k, and that LayerNorm is applied independently to each node with shared parameters. Then, for every k ≥ 0, U′(k) = PU (k) and 
+
+S′(k) = PS (k). Consequently, 
+
+SEQ θ (PH , PAP ⊤) = P SEQ θ (H, A),
+
+where P acts on the node dimension of the hop sequence. 
+
+Theorem 4.1.1 shows that graph-conditioned propagation does not introduce a dependence on the arbitrary labeling of the nodes. In particular, the permutation-invariant graph summary ensures that relabeling the input graph leaves the hypernetwork-generated propagation coefficients unchanged. The structural recurrence and feature-attention correction then transform equivariantly, so relabeling the graph simply applies the same permutation to every node representation in the extracted sequence. Since the downstream sequence model is shared across nodes, a permutation-invariant readout further ensures that graph-level predictions are unchanged. 
+
+> 5HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models
+
+4.2 Graph-adaptive polynomial structure 
+
+Having established that the learned extractor respects graph symmetry, we next characterize the class of propagation operators generated by its structural recurrence. Although the coefficients of the structural recurrence depend on the input graph and node features, the recurrence has a simple algebraic form once these coefficients are fixed. The following result shows that each structural state corresponds to a finite-degree graph polynomial and therefore retains the locality of standard message-passing operators. 
+
+Theorem 4.2.1 (Structural state has an adaptive polynomial structure) . Fix a graph G = ( V, E)
+
+and node representations H, and let {α(k) 
+
+> A
+
+, α(k) 
+
+> D
+
+, α(k) 
+
+> I
+
+}L−1 
+
+> k=1
+
+denote the coefficients generated by the hypernetwork. Define Γ(0) = I, Γ(i) = 0 for i < 0, and, for k ≥ 1,
+
+Γ(k) =
+
+> M
+
+X
+
+> j=1
+
+
+
+α(k) 
+
+> A
+
+[j]A + α(k) 
+
+> D
+
+[j]D + α(k) 
+
+> I
+
+[j]I
+
+
+
+Γ(k−j).
+
+Then U(k) = Γ(k)H for every k ≥ 0. Conditional on the generated coefficients, Γ(k) is a noncom-mutative polynomial in A and D of degree at most k. Moreover, if dG (u, v ) > k , then [Γ(k)]uv = 0 .Consequently, the k-th structural state satisfies 
+
+U(k) 
+
+> u
+
+= X  
+
+> v:dG(u,v )≤k
+
+[Γ(k)]uv Hv .
+
+Thus, conditional on the hypernetwork coefficients, U(k) is linear in H and directly propagates information over at most k graph hops. Since the coefficients themselves depend on hgraph , the overall map H 7 → U(k) need not be linear. 
+
+Theorem 4.2.1 separates locality from adaptivity. For fixed hypernetwork outputs, HOPPER remains a finite-hop linear graph propagator whose support cannot extend beyond the corresponding infor-mation depth. Across graph-feature inputs, however, the coefficients of this polynomial can change through hgraph . The propagation rule can therefore adapt to the graph, node features, and information depth without sacrificing the locality structure of graph propagation. 
+
+4.3 Learned sequence extraction can recover classic propagation schemes 
+
+Theorem 4.2.1 raises a natural question: does learning the propagation rule preserve the fixed extractors already used successfully by LGSMs? The next result shows that these operators remain exact special cases of the HOPPER recurrence. In particular, appropriate choices of the recurrence coefficients recover adjacency-power and non-backtracking propagation exactly. The same recurrence can also realize stable polynomial filters that are not available from repeated adjacency powers alone. 
+
+Theorem 4.3.1 (Containment of fixed LGSM extractors and stable Chebyshev propagation) . Suppose 
+
+M ≥ 2 and the structural recurrence is instantiated with {S, A, D, I}, where 
+
+U(k) =
+
+> M
+
+X
+
+> j=1
+
+
+
+α(k) 
+
+> S
+
+[j]S + α(k) 
+
+> A
+
+[j]A + α(k) 
+
+> D
+
+[j]D + α(k) 
+
+> I
+
+[j]I
+
+
+
+U(k−j), U(0) = H, U(i) = 0 for i < 0.
+
+Then the following propagation sequences are recovered as special cases. (i) Normalized-adjacency propagation. Setting α(k) 
+
+> S
+
+[1] = 1 for every k ≥ 1 and all remaining coefficients to zero gives U(k) = SkH. In particular, taking S = Asym recovers the adjacency-based LGSM sequence in Eq. (6) .(ii) Non-backtracking propagation. Setting α(1)  
+
+> A
+
+[1] = 1 , α(2)  
+
+> A
+
+[1] = 1 , and α(2)  
+
+> D
+
+[2] = −1, and for every k ≥ 3 setting α(k) 
+
+> A
+
+[1] = 1 , α(k) 
+
+> D
+
+[2] = −1, and α(k) 
+
+> I
+
+[2] = 1 , with all remaining coefficients equal to zero, gives U(k) = B(k)H, where {B(k)}k≥0 is the non-backtracking recurrence in Eq. (7) .(iii) Chebyshev propagation. Suppose additionally that S is symmetric and σ(S) ⊆ [−1, 1] . Setting 
+
+α(1)  
+
+> S
+
+[1] = 1 , and for every k ≥ 2 setting α(k) 
+
+> S
+
+[1] = 2 and α(k) 
+
+> I
+
+[2] = −1, with all remaining co-efficients equal to zero, gives U(k) = Tk(S)H, where Tk is the degree-k Chebyshev polynomial 
+
+> 6HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models
+
+of the first kind. Moreover, ∥Tk(S)∥2 ≤ 1 and hence ∥U(k)∥F ≤ ∥ H∥F for every k ≥ 0. In particular, one can take S = Asym .
+
+Theorem 4.3.1 shows that learnable sequence extraction preserves the propagation mechanisms used by existing LGSMs while supporting a broader class of graph polynomials. We state the result for a slight generalization of our structural recurrence that includes an additional graph shift S, with the original recurrence recovered by setting its corresponding coefficients to zero. Taking S = Asym 
+
+recovers normalized-adjacency propagation and stable Chebyshev propagation, while adjacency-power and non-backtracking propagation remain exact special cases through the original operators. This choice is also directly connected to the random-walk normalization used in our experiments. Since Arw = D−1/2Asym D1/2, the two operators are similar. Under the change of coordinates 
+
+eU(k) = D1/2U(k), the experimental recurrence can equivalently be expressed using Asym as its graph shift. This symmetric representation allows us to exploit the spectrum of Asym in [−1, 1] and will be central to our analysis of over-squashing and over-smoothing. 
+
+4.4 Learned sequence extractor can prevent over-squashing and over-smoothing 
+
+Finally, we study whether this larger propagation family can improve the transmission of information over long graph distances. A direct comparison of sensitivities is only meaningful under a stability constraint, since arbitrarily large Jacobians could otherwise be obtained simply by amplifying the propagation operator. We therefore restrict our attention to the following class of polynomial propagators: 
+
+Definition 1 (Uniformly stable polynomial propagators) . For r ≥ 1, define the class of degree-r
+
+uniformly stable polynomial propagators by 
+
+Pr := 
+
+(
+
+p ∈ R[x] : deg( p) ≤ r and ∥p∥L∞([ −1,1]) = sup 
+
+> x∈[−1,1]
+
+|p(x)| ≤ 1
+
+)
+
+.
+
+For a symmetric graph operator with spectrum in [−1, 1] , every p ∈ P r satisfies ∥p(G)∥2 ≤ 1.Thus, all propagators in Pr obey the same spectral stability constraint, which allows their long-range sensitivities to be compared directly. 
+
+Theorem 4.4.1 (Optimal stable long-range sensitivity) . Let G ∈ Rn×n be symmetric with σ(G) ⊆
+
+[−1, 1] , and suppose Guv = 0 whenever u̸ = v and (u, v ) /∈ E . For nodes u, v ∈ V satisfying 
+
+dG (u, v ) = r ≥ 1,
+
+sup 
+
+> p∈P r
+
+∂[p(G)H]u
+
+∂Hv 2
+
+= 2 r−1|[Gr ]uv |. (17) 
+
+The optimum is attained by the Chebyshev polynomial p = Tr. In comparison, power propagation satisfies 
+
+∂[Gr H]u
+
+∂Hv 2
+
+= |[Gr ]uv |.
+
+Thus, whenever [Gr ]uv ̸ = 0 , Chebyshev propagation improves first-arrival sensitivity by a factor of 
+
+2r−1 while remaining non-expansive. 
+
+Theorem 4.4.1 follows from the interaction between graph distance and polynomial degree. If 
+
+dG (u, v ) = r, every term of degree strictly less than r vanishes in the (u, v ) entry. First-arrival sensitivity is therefore determined entirely by the leading coefficient of the polynomial. Among all polynomials in Pr, the Chebyshev polynomial has the largest possible leading coefficient, equal to 2r−1. It therefore maximizes first-arrival sensitivity without increasing the spectral norm of the propagator. The improvement becomes particularly transparent on regular graphs. 
+
+Corollary 4.4.1 (Long-range sensitivity on regular graphs) . Let G be a q-regular graph and let 
+
+G = Asym = q−1A. If dG (u, v ) = r and Nr (u, v ) denotes the number of shortest paths of length r
+
+from v to u, then 
+
+∂[Ar
+
+> sym
+
+H]u
+
+∂Hv 2
+
+= Nr (u, v )
+
+qr , ∂[Tr (Asym )H]u
+
+∂Hv 2
+
+= 2 r−1 Nr (u, v )
+
+qr . (18) 
+
+> 7HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models
+
+In particular, when q = 2 and Nr (u, v ) = 1 , power propagation has sensitivity 2−r while Chebyshev propagation has sensitivity 1/2 for every r.
+
+Theorem 4.4.1 therefore identifies a propagation rule realizable by HOPPER that achieves the strongest possible first-arrival sensitivity among uniformly stable degree-r polynomials. The regular-graph case illustrates that this difference can be exponential in graph distance. This provides a direct way through which a richer sequence extractor can mitigate the attenuation of long-range information associated with over-squashing. Finally, we analyze whether informative variation across the graph remains present throughout a long hop sequence. Repeated normalized-adjacency propagation suppresses eigencomponents associated with eigenvalues of magnitude strictly smaller than one. As information depth increases, the resulting representations concentrate in the stationary eigenspace. For an LGSM, however, the downstream sequence model receives all intermediate hop states. This motivates measuring how much nonstationary spectral information remains available on average across the entire sequence. 
+
+Theorem 4.4.2 (Preservation of spectral information across information depth) . Let Asym = QΛQ ⊤,and let Π be the orthogonal projector onto the eigenspace associated with eigenvalue 1. Assume every remaining eigenvalue satisfies |λi| < 1. Define 
+
+H⊥ = ( In − Π)H, ρ = max   
+
+> λi̸=1
+
+|λi| < 1.
+
+For adjacency-power propagation V(ℓ) = Aℓ
+
+> sym
+
+H,
+
+∥(In − Π)V(ℓ)∥F ≤ ρℓ∥H⊥∥F , (19) 
+
+and therefore 
+
+lim 
+
+> L→∞
+
+1
+
+L
+
+> L−1
+
+X
+
+> ℓ=0
+
+∥(In − Π)V(ℓ)∥2 
+
+> F
+
+= 0 . (20) 
+
+In contrast, for the Chebyshev sequence U(ℓ) = Tℓ(Asym )H,
+
+lim 
+
+> L→∞
+
+1
+
+L
+
+> L−1
+
+X
+
+> ℓ=0
+
+∥(In − Π)U(ℓ)∥2 
+
+> F
+
+= 12 ∥H⊥∥2 
+
+> F
+
+. (21) A common way to measure over-smoothing in GNNs is via the Dirchlet energy [3, 43]. Given a feature matrix H ∈ Rn×d, we define the Dirchlet energy E(H) := Tr  H⊤∆H  where ∆ denotes the normalized graph Laplacian [11]. To see why this quantity measures over-smoothing, note that if we use an unweighted graph G, then one can write the Dirchlet energy as follows: 
+
+E(H) = X
+
+> (u,v )∈E
+
+hu
+
+√du
+
+− hv
+
+√dv
+
+> 2
+
+,
+
+where du = P|V|  
+
+> v′=1
+
+Auv ′ is the degree of node u. As neighboring node representations hu and hv
+
+become more similar, the Dirchlet energy will tend towards 0. A simple consequence of Theorem 4.4.2 is that E(Ak
+
+> sym
+
+H) → 0 whereas lim L→∞ 1
+
+> L
+
+PL−1 
+
+> ℓ=0
+
+E (Tℓ(Asym )H) → 12 E(H). Thus provided that the initial Dirchlet energy is non-zero, HOPPER can avoid the systematic loss of informative nonstationary spectral content that occurs under adjacency-power propagation. 
+
+# 5 Experimental Evaluation 
+
+We evaluate HOPPER on the ECHO benchmark [38], which consists of synthetic graph property pre-diction tasks designed to test long-range information propagation. We focus on three ECHO-S YNTH 
+
+tasks: graph diameter prediction (D IAM ), node eccentricity prediction (E CC ), and single-source shortest-path prediction (S SSP ). Each task requires the model to aggregate structural information over many hops, making the benchmark well suited for evaluating the effectiveness of graph sequence extraction at large information depths. We compare HOPPER against the published ECHO baselines, including classical message-passing GNNs, dynamics and physics-inspired graph networks, graph transformers, rewiring-based multi-hop 
+
+> 8
+
+HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models 
+
+methods, and LGSM [37], our closest sequence-based baseline. We follow the ECHO evaluation protocol and use the same data splits, training objective, and test metrics for all tasks. Additional model configurations, optimization details, and dataset statistics are provided in Appendix B. 
+
+Table 1: Performance on synthetic graph property prediction tasks from E CHO -S YNTH , which are designed to require long-range information propagation. We report test MSE and MAE for diameter (D IAM ), eccentricity (E CC ), and single-source shortest-path (S SSP ) prediction. HOPPER achieves the best performance on E CC and S SSP , while LGSM performs best on D IAM . Results are reported as mean ± standard deviation over three seeds. 
+
+DATASET DIAM ECC SSSP 
+
+MSE ↓ MAE ↓ MSE ↓ MAE ↓ MSE ↓ MAE ↓
+
+A-DGN 4.818 ± 0.108 1.151 ± 0.038 35 .967 ± 0.492 4.981 ± 0.037 4.425 ± 0.879 1.176 ± 0.140 
+
+DRew 3.756 ± 0.170 1.243 ± 0.047 32 .247 ± 0.148 4.651 ± 0.020 6.589 ± 0.015 1.279 ± 0.011 
+
+GCN 22 .872 ± 2.766 3.832 ± 0.262 39 .706 ± 0.460 5.233 ± 0.034 9.743 ± 0.757 2.102 ± 0.094 
+
+GCNII 9.696 ± 0.568 2.005 ± 0.093 39 .911 ± 0.518 5.241 ± 0.030 10 .369 ± 3.575 2.128 ± 0.429 
+
+GIN 7.238 ± 1.153 1.630 ± 0.161 34 .454 ± 1.201 4.869 ± 0.092 11 .868 ± 2.689 2.234 ± 0.271 
+
+GPS 10 .454 ± 0.610 2.160 ± 0.098 33 .346 ± 0.226 4.758 ± 0.021 1.255 ± 0.113 0.472 ± 0.050 
+
+GRIT 3.877 ± 0.295 1.014 ± 0.046 38 .667 ± 1.903 5.091 ± 0.158 0.147 ± 0.083 0.121 ± 0.013 
+
+GraphCON 16 .427 ± 1.419 2.969 ± 0.189 43 .505 ± 0.017 5.474 ± 0.001 52 .104 ± 0.016 5.734 ± 0.011 
+
+PH-DGN 6.699 ± 2.728 1.627 ± 0.398 37 .510 ± 1.416 5.068 ± 0.126 4.656 ± 3.013 1.323 ± 0.485 
+
+SWAN 4.950 ± 0.265 1.121 ± 0.070 34 .208 ± 0.578 4.840 ± 0.045 2.905 ± 1.556 0.896 ± 0.232 
+
+LGSM 3.089 ± 0.389 0.859 ± 0.044 13 .549 ± 0.539 2.430 ± 0.070 0.040 ± 0.008 0.076 ± 0.009 
+
+HOPPER (ours) 3.200 ± 0.528 0.973 ± 0.040 6.571 ± 2.656 1.820 ± 0.386 0.021 ± 0.008 0.035 ± 0.002 
+
+Table 1 reports HOPPER achieves the best results on eccentricity and single-source shortest-path prediction, while remaining competitive with LGSM on diameter. We further evaluate HOPPER on the hard LRIM-16 benchmark [36], a node-level regression task defined on 16 × 16 periodic Ising grids with long-range interactions. Unlike the structural prediction tasks in E CHO -S YNTH , LRIM requires predicting the local energy associated with each node from a spin configuration whose interactions extend over long graph distances. This provides a complementary setting for evaluating whether the extracted hop sequence can capture long-range dependencies beyond purely structural graph properties. Further information about both datasets can be found in Appendix B. 
+
+Table 2: LRIM test performance for different memory window sizes M , reported as log 10 (MSE test )
+
+(mean ± standard deviation over two seeds). 
+
+Window size M 2 4 8 16 log 10 (MSE test ) ↓ −3.451 ± 0.069 −3.440 ± 0.040 −3.505 ± 0.063 −3.502 ± 0.081 
+
+Table 2 shows that performance varies across window sizes, with M = 8 achieving the strongest result among the settings considered. This suggests that the amount of structural memory retained during sequence extraction can meaningfully affect performance. 
+
+# 6 Conclusion 
+
+We introduced HOPPER, an end-to-end learnable extension of LGSM that learns hop sequence extraction prior to state-space processing. By decoupling information depth from nonlinear processing depth, HOPPER enables long-range propagation without over-smoothing, while avoiding any canonical node ordering. On the E CHO benchmark, HOPPER achieves the best results on eccentricity and single-source shortest-path prediction while remaining competitive on diameter. On LRIM-16, performance varies with the structural memory window, highlighting the flexibility of learned hop extraction. Extending HOPPER to real-world molecular domains remains a natural direction for future work. Code is available at https://anonymous.4open.science/r/HOPPER-0593/ .
+
+9HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models 
+
+# References 
+
+[1] Sami Abu-El-Haija, Bryan Perozzi, Amol Kapoor, Nazanin Alipourfard, Kristina Lerman, Hrayr Harutyunyan, Greg Ver Steeg, and Aram Galstyan. MixHop: Higher-order graph convolutional architectures via sparsified neighborhood mixing. In Proceedings of the 36th International Conference on Machine Learning , volume 97 of Proceedings of Machine Learning Research , pp. 21–29. PMLR, 2019. URL https://proceedings.mlr.press/v97/abu-el-haija19a. html . 2, 14 [2] Uri Alon and Eran Yahav. On the bottleneck of graph neural networks and its practical implications. In International Conference on Learning Representations , 2021. URL https: //openreview.net/forum?id=i80OPhOCVH2 . 1, 14 [3] Álvaro Arroyo, Alessio Gravina, Benjamin Gutteridge, Federico Barbero, Claudio Gallicchio, Xiaowen Dong, Michael Bronstein, and Pierre Vandergheynst. On vanishing gradients, over-smoothing, and over-squashing in gnns: Bridging recurrent and graph learning. Advances in Neural Information Processing Systems , 38:74356–74393, 2026. 8 [4] Ali Behrouz and Farnoosh Hashemi. Graph mamba: Towards learning on graphs with state space models. arXiv preprint arXiv:2402.08678 , 2024. URL https://arxiv.org/abs/ 2402.08678 . 1, 2, 14 [5] Ali Behrouz, Ali Parviz, Mahdi Karami, Clayton Sanford, Bryan Perozzi, and Vahab Mirrokni. Best of both worlds: Advantages of hybrid graph sequence models. In Proceedings of the 42nd International Conference on Machine Learning , volume 267 of Proceedings of Machine Learning Research , pp. 3533–3561. PMLR, 2025. URL https://proceedings.mlr.press/ v267/behrouz25a.html . 14 [6] Charles Bordenave, Marc Lelarge, and Laurent Massoulié. Non-backtracking spectrum of random graphs: Community detection and non-regular ramanujan graphs. In 2015 IEEE 56th Annual Symposium on Foundations of Computer Science , pp. 1347–1357. IEEE, 2015. doi: 10.1109/FOCS.2015.86. 14 [7] Marc Brockschmidt. GNN-FiLM: Graph neural networks with feature-wise linear modulation. In Proceedings of the 37th International Conference on Machine Learning , volume 119 of 
+
+Proceedings of Machine Learning Research , pp. 1144–1152. PMLR, 2020. URL https: //proceedings.mlr.press/v119/brockschmidt20a.html . 14 [8] Andrea Ceni, Alessio Gravina, Claudio Gallicchio, Davide Bacciu, Carola-Bibiane Schönlieb, and Moshe Eliasof. Message-passing state-space models: Improving graph learning with modern sequence modeling. arXiv preprint arXiv:2505.18728 , 2025. URL https://arxiv. org/abs/2505.18728 . 14 [9] Ming Chen, Zhewei Wei, Zengfeng Huang, Bolin Ding, and Yaliang Li. Simple and deep graph convolutional networks. In Proceedings of the 37th International Conference on Machine Learning , volume 119 of Proceedings of Machine Learning Research , pp. 1725–1735. PMLR, 2020. URL https://proceedings.mlr.press/v119/chen20v.html . 14 [10] Eli Chien, Jianhao Peng, Pan Li, and Olgica Milenkovic. Adaptive universal generalized PageRank graph neural network. In International Conference on Learning Representations ,2021. URL https://openreview.net/forum?id=n6jl7fLxrP . 2, 14 [11] F.R.K. Chung. Spectral Graph Theory . Conference Board of Mathematical Sciences. American Mathematical Society, 1997. ISBN 9780821803158. URL https://books.google.com/ books?id=4IK8DgAAQBAJ . 8 [12] Tri Dao and Albert Gu. Transformers are SSMs: Generalized models and efficient algorithms through structured state space duality. In Proceedings of the 41st International Conference on Machine Learning , volume 235 of Proceedings of Machine Learning Research , pp. 10041– 10071. PMLR, 2024. URL https://proceedings.mlr.press/v235/dao24a.html . 1, 2, 14 [13] Michaël Defferrard, Xavier Bresson, and Pierre Vandergheynst. Convolutional neural networks on graphs with fast localized spectral filtering. In Advances in Neural Information Processing Systems , volume 29, 2016. URL https://proceedings.neurips.cc/paper/2016/hash/ 04df4d434d481c5bb723be1b6df1ee65-Abstract.html . 14 
+
+> 10 HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models
+
+[14] Francesco Di Giovanni, T. Konstantin Rusch, Michael M. Bronstein, Andreea Deac, Marc Lackenby, Siddhartha Mishra, and Petar Veliˇ ckovi´ c. How does over-squashing affect the power of GNNs? Transactions on Machine Learning Research , 2024. ISSN 2835-8856. URL 
+
+https://openreview.net/forum?id=KJRoQvRWNs . 1, 14 [15] Vijay Prakash Dwivedi, Ladislav Rampášek, Mikhail Galkin, Ali Parviz, Guy Wolf, Anh Tuan Luu, and Dominique Beaini. Long range graph benchmark. In Ad-vances in Neural Information Processing Systems , volume 35, pp. 22326–22340, 2022. URL https://proceedings.neurips.cc/paper_files/paper/2022/hash/ 8c3c666820ea055a77726d66fc7d447f-Abstract-Datasets_and_Benchmarks.html .1, 14 [16] Fabrizio Frasca, Emanuele Rossi, Davide Eynard, Benjamin Paul Chamberlain, Michael M. Bronstein, and Federico Monti. SIGN: Scalable inception graph neural networks. In ICML 2020 Workshop on Graph Representation Learning and Beyond , 2020. URL https://arxiv. org/abs/2004.11198 . 14 [17] Johannes Gasteiger, Aleksandar Bojchevski, and Stephan Günnemann. Predict then propagate: Graph neural networks meet personalized PageRank. In International Conference on Learning Representations , 2019. URL https://openreview.net/forum?id=H1gL-2A9Ym . 14 [18] Justin Gilmer, Samuel S. Schoenholz, Patrick F. Riley, Oriol Vinyals, and George E. Dahl. Neural message passing for quantum chemistry. In Proceedings of the 34th International Conference on Machine Learning , volume 70 of Proceedings of Machine Learning Research , pp. 1263–1272. PMLR, 2017. URL https://proceedings.mlr.press/v70/gilmer17a.html . 1, 2 [19] Albert Gu and Tri Dao. Mamba: Linear-time sequence modeling with selective state spaces. In First Conference on Language Modeling , 2024. URL https://openreview.net/forum? id=tEYskw1VY2 . 1, 14 [20] Albert Gu, Karan Goel, and Christopher Ré. Efficiently modeling long sequences with structured state spaces. arXiv preprint arXiv:2111.00396 , 2021. URL https://arxiv.org/abs/2111. 00396 . 14 [21] Benjamin Gutteridge, Xiaowen Dong, Michael M. Bronstein, and Francesco Di Giovanni. DRew: Dynamically rewired message passing with delay. In Proceedings of the 40th Inter-national Conference on Machine Learning , volume 202 of Proceedings of Machine Learning Research , pp. 12252–12267. PMLR, 2023. URL https://proceedings.mlr.press/v202/ gutteridge23a.html . 14 [22] David Ha, Andrew M. Dai, and Quoc V. Le. Hypernetworks. In International Conference on Learning Representations , 2017. URL https://openreview.net/forum?id=rkpACe1lx .2, 14 [23] William L. Hamilton, Rex Ying, and Jure Leskovec. Inductive representation learning on large graphs. In Advances in Neural Information Processing Sys-tems , volume 30, 2017. URL https://proceedings.neurips.cc/paper/2017/hash/ 5dd9db5e033da9c6fb5ba83c7a7ebea9-Abstract.html . 14 [24] Ki-ichiro Hashimoto. Zeta functions of finite graphs and representations of p-adic groups. In 
+
+Automorphic Forms and Geometry of Arithmetic Varieties , volume 15 of Advanced Studies in Pure Mathematics , pp. 211–280. Kinokuniya and Academic Press, 1989. 14 [25] Mingguo He, Zhewei Wei, Zengfeng Huang, and Hongteng Xu. BernNet: Learning arbitrary graph spectral filters via bernstein approximation. In Advances in Neural Information Processing Systems , volume 34, 2021. URL https://proceedings.neurips.cc/paper/2021/hash/ 76f1cfd7754a6e4fc3281bcccb3d0902-Abstract.html . 14 [26] Yinan Huang, Siqi Miao, and Pan Li. What can we learn from state space models for machine learning on graphs? arXiv preprint arXiv:2406.05815 , 2024. URL https://arxiv.org/ abs/2406.05815 . 14 [27] Kedar Karhadkar, Pradeep Kr. Banerjee, and Guido Montúfar. FoSR: First-order spectral rewiring for addressing oversquashing in GNNs. In International Conference on Learning Representations , 2023. URL https://openreview.net/forum?id=3YjQfCLdrzz . 2, 14 [28] Jinwoo Kim, Olga Zaghen, Ayhan Suleymanzade, Youngmin Ryou, and Seunghoon Hong. Revisiting random walks for learning on graphs. arXiv preprint arXiv:2407.01214 , 2024. URL 
+
+https://arxiv.org/abs/2407.01214 . 2, 14 
+
+> 11 HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models
+
+[29] Thomas N. Kipf and Max Welling. Semi-supervised classification with graph convolutional networks. In International Conference on Learning Representations , 2017. URL https: //openreview.net/forum?id=SJU4ayYgl . 1, 2, 14 [30] Johannes Klicpera, Stefan Weißenberger, and Stephan Günnemann. Diffusion im-proves graph learning. In Advances in Neural Information Processing Systems ,volume 32, 2019. URL https://proceedings.neurips.cc/paper/2019/hash/ 23c894276a2c5a16470e6a31f4618d73-Abstract.html . 2, 14 [31] Devin Kreuzer, Dominique Beaini, William L. Hamilton, Vincent Létourneau, and Prudencio Tossou. Rethinking graph transformers with spectral attention. In Advances in Neural Infor-mation Processing Systems , volume 34, 2021. URL https://proceedings.neurips.cc/ paper/2021/hash/4b29fa4efe4fb7bc667c7b301b74d52d-Abstract.html . 2, 14 [32] Florent Krzakala, Cristopher Moore, Elchanan Mossel, Joe Neeman, Allan Sly, Lenka Zde-borová, and Pan Zhang. Spectral redemption in clustering sparse networks. Proceedings of the National Academy of Sciences , 110(52):20935–20940, 2013. doi: 10.1073/pnas.1312486110. 14 [33] Juho Lee, Yoonho Lee, Jungtaek Kim, Adam R. Kosiorek, Seungjin Choi, and Yee Whye Teh. Set transformer: A framework for attention-based permutation-invariant neural networks. In Proceedings of the 36th International Conference on Machine Learning , volume 97 of 
+
+Proceedings of Machine Learning Research , pp. 3744–3753. PMLR, 2019. URL https: //proceedings.mlr.press/v97/lee19d.html . 2, 14 [34] Qimai Li, Zhichao Han, and Xiao-Ming Wu. Deeper insights into graph convolutional networks for semi-supervised learning. In Proceedings of the AAAI Conference on Artificial Intelligence ,volume 32, 2018. URL https://ojs.aaai.org/index.php/AAAI/article/view/11604 .14 [35] Meng Liu, Hongyang Gao, and Shuiwang Ji. Towards deeper graph neural networks. In 
+
+Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining , pp. 338–348, 2020. doi: 10.1145/3394486.3403076. 14 [36] Joël Mathys, Henrik Christiansen, Federico Errica, Takashi Maruyama, and Francesco Alesiani. LRIM: a physics-based benchmark for provably evaluating long-range capabilities in graph learning. In The Fourteenth International Conference on Learning Representations , 2026. URL 
+
+https://openreview.net/forum?id=IAZXEX1dVV . 9, 15, 16 [37] Joël Mathys, Basil Rohner, Saku Peltonen, and Roger Wattenhofer. From message-passing to linearized graph sequence models. arXiv preprint arXiv:2605.12358 , 2026. URL https: //arxiv.org/abs/2605.12358 . 1, 3, 9, 14 [38] Luca Miglior, Matteo Tolloso, Alessio Gravina, and Davide Bacciu. Can you hear me now? a benchmark for long-range graph propagation. In International Conference on Learning Representations , 2026. URL https://openreview.net/forum?id=DgkWFPZMPp . 8, 15 [39] Kenta Oono and Taiji Suzuki. Graph neural networks exponentially lose expressive power for node classification. In International Conference on Learning Representations , 2020. URL 
+
+https://openreview.net/forum?id=S1ldO2EFPr . 14 [40] Antonio Orvieto, Samuel L. Smith, Albert Gu, Anushan Fernando, Ça˘ glar Gülçehre, Razvan Pascanu, and Soham De. Resurrecting recurrent neural networks for long sequences. In Proceed-ings of the 40th International Conference on Machine Learning , volume 202 of Proceedings of Machine Learning Research . PMLR, 2023. URL https://proceedings.mlr.press/v202/ orvieto23a.html . 14 [41] Ladislav Rampášek, Mikhail Galkin, Vijay Prakash Dwivedi, Anh Tuan Luu, Guy Wolf, and Dominique Beaini. Recipe for a general, powerful, scalable graph trans-former. In Advances in Neural Information Processing Systems , volume 35, pp. 14501– 14515, 2022. URL https://proceedings.neurips.cc/paper_files/paper/2022/ hash/5d4834a159f1547b267a05a4e2b7cf5e-Abstract-Conference.html . 2, 14 [42] Yu Rong, Wenbing Huang, Tingyang Xu, and Junzhou Huang. DropEdge: Towards deep graph convolutional networks on node classification. In International Conference on Learning Representations , 2020. URL https://openreview.net/forum?id=Hkx1qkrKPr . 2, 14 [43] T Konstantin Rusch, Michael M Bronstein, and Siddhartha Mishra. A survey on oversmoothing in graph neural networks. arXiv preprint arXiv:2303.10993 , 2023. 8 
+
+> 12 HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models
+
+[44] Hamed Shirzad, Ameya Velingker, Balaji Venkatachalam, Danica J. Sutherland, and Ali Kemal Sinop. Exphormer: Sparse transformers for graphs. In Proceedings of the 40th Interna-tional Conference on Machine Learning , volume 202 of Proceedings of Machine Learning Research , pp. 31613–31632. PMLR, 2023. URL https://proceedings.mlr.press/v202/ shirzad23a.html . 2, 14 [45] Jan Tönshoff, Martin Ritzert, Hinrikus Wolf, and Martin Grohe. Walking out of the weisfeiler leman hierarchy: Graph learning beyond message passing. Transactions on Machine Learning Research , 2023. URL https://openreview.net/forum?id=vgXnEyeWVY . 2, 14 [46] Jake Topping, Francesco Di Giovanni, Benjamin Paul Chamberlain, Xiaowen Dong, and Michael M. Bronstein. Understanding over-squashing and bottlenecks on graphs via curvature. In International Conference on Learning Representations , 2022. URL https://openreview. net/forum?id=7UmjRGzp-A . 1, 14 [47] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need. In Advances in Neural Information Processing Systems , volume 30, pp. 5998–6008, 2017. URL https: //proceedings.neurips.cc/paper/7181-attention-is-all-you-need . 1, 2 [48] Petar Veliˇ ckovi´ c, Guillem Cucurull, Arantxa Casanova, Adriana Romero, Pietro Liò, and Yoshua Bengio. Graph attention networks. In International Conference on Learning Representations ,2018. URL https://openreview.net/forum?id=rJXMpikCZ . 2, 14 [49] Chloe Wang, Oleksii Tsepa, Jun Ma, and Bo Wang. Graph-mamba: Towards long-range graph sequence modeling with selective state spaces. arXiv preprint arXiv:2402.00789 , 2024. URL 
+
+https://arxiv.org/abs/2402.00789 . 1, 2, 14 [50] Keyulu Xu, Chengtao Li, Yonglong Tian, Tomohiro Sonobe, Ken-ichi Kawarabayashi, and Stefanie Jegelka. Representation learning on graphs with jumping knowledge networks. In Proceedings of the 35th International Conference on Machine Learning , volume 80 of 
+
+Proceedings of Machine Learning Research , pp. 5453–5462. PMLR, 2018. URL https: //proceedings.mlr.press/v80/xu18c.html . 2, 14 [51] Keyulu Xu, Weihua Hu, Jure Leskovec, and Stefanie Jegelka. How powerful are graph neural networks? In International Conference on Learning Representations , 2019. URL https: //openreview.net/forum?id=ryGs6iA5Km . 14 [52] Chengxuan Ying, Tianle Cai, Shengjie Luo, Shuxin Zheng, Guolin Ke, Di He, Yan-ming Shen, and Tie-Yan Liu. Do transformers really perform badly for graph repre-sentation? In Advances in Neural Information Processing Systems , volume 34, pp. 28877–28888, 2021. URL https://proceedings.neurips.cc/paper/2021/hash/ f1c1592588411002af340cbaedd6fc33-Abstract.html . 2, 14 [53] Manzil Zaheer, Satwik Kottur, Siamak Ravanbakhsh, Barnabás Póczos, Ruslan Salakhutdi-nov, and Alexander J. Smola. Deep sets. In Advances in Neural Information Processing Systems , volume 30, 2017. URL https://proceedings.neurips.cc/paper/2017/hash/ f22e4747da1aa27e363d86d40ff442fe-Abstract.html . 2, 14 [54] Jialin Zhao, Yuxiao Dong, Ming Ding, Evgeny Kharlamov, and Jie Tang. Adaptive diffusion in graph neural networks. In Advances in Neural Information Processing Systems , volume 34, pp. 23321–23333, 2021. URL https://proceedings.neurips.cc/paper/2021/hash/ c42af2fa7356818e0389593714f59b52-Abstract.html . 2, 14 [55] Lingxiao Zhao and Leman Akoglu. PairNorm: Tackling oversmoothing in GNNs. In Inter-national Conference on Learning Representations , 2020. URL https://openreview.net/ forum?id=rkecl1rtwB . 2, 14 
+
+> 13 HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models
+
+# A Related Work 
+
+Learning long-range dependencies on graphs. Although MPNNs effectively model local structure, they often struggle with long-range dependencies because of over-smoothing, over-squashing, and vanishing gradients [2, 14, 34, 39, 46]. These limitations affect standard architectures such as GCN, GraphSAGE, and GIN on tasks requiring global context [15, 23, 29, 51]. Proposed remedies include deeper residual architectures and normalization methods [9, 42, 55], graph rewiring and diffusion [21, 27, 30], and Graph Transformers such as SAN, Graphormer, GPS, and Exphormer [31, 41, 44, 52]. These methods improve communication between distant nodes through modified connectivity, global attention, or more stable deep computation. 
+
+Multi-hop and adaptive graph propagation. A related line of work represents graph information across several neighborhood scales. APPNP separates feature transformation from personalized PageRank propagation [17], while Jumping Knowledge Networks combine representations from different message-passing depths [50]. MixHop and SIGN explicitly construct features from multiple powers or diffusions of the graph operator [1, 16], and DAGNN adaptively combines representations obtained at different propagation depths [35]. GPR-GNN and BernNet learn flexible graph filters through generalized PageRank and Bernstein polynomial parameterizations [10, 25], while adaptive diffusion methods learn task-dependent propagation behavior [54]. Feature-conditioned methods such as GAT and GNN-FiLM further adapt local message passing to node representations [7, 48]. Collectively, these works show that the useful propagation operator and neighborhood range are strongly dependent on the data and task. 
+
+State-space and sequence models for graphs. Structured state-space models such as S4, LRU, Mamba, and Mamba2 provide efficient alternatives to attention for long-range sequence modeling [12, 19, 20, 40]. Recent graph architectures adapt these models by constructing sequences through neighborhood tokenization, random walks, node prioritization, or learned permutations [4, 28, 45, 49]. Hybrid Graph Sequence Models combine graph-specific local encoders with global sequence processors [5]. Other approaches incorporate state-space computation directly into graph architectures: Graph State Space Convolution constructs permutation-equivariant graph operators using state-space kernels and invariant aggregation [26], while Message-Passing State-Space Models embed recurrent state-space dynamics within message passing and analyze their long-range information flow [8]. These works explore different choices for defining a sequence axis while retaining graph structure and permutation symmetries. 
+
+Linearized Graph Sequence Models. Linearized Graph Sequence Models interpret the successive propagation states of each node as a sequence over information depth [37]. This formulation separates information depth from nonlinear processing depth and allows modern sequence models to process node-wise propagation trajectories without imposing an ordering over graph nodes. LGSM considers normalized-adjacency and non-backtracking sequence extractors and studies how their design affects sensitivity, stability, and information flow. Adjacency-based extraction is closely connected to polynomial graph filters and diffusion-based propagation [10, 13, 30], while non-backtracking extraction draws on classical operators from spectral graph theory and community detection [6, 24, 32]. Our architecture builds on the LGSM framework and draws from adaptive graph filtering, feature-conditioned propagation, hypernetworks, and permutation-invariant graph summarization [22, 33, 48, 53]. 
+
+> 14
+
+HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models 
+
+# B Additional Methodological an Experimental Details 
+
+Operator Paths for the Structural Recurrence. The structural recurrence in Eq. (15) uses the unnormalized adjacency and degree matrices A and D. We refer to this as the exact path because it exactly recovers the polynomial structure of the fixed LGSM extractors. In particular, the contain-ment results of Theorem C.2.2, including the non-backtracking recurrence in Eq. (7), hold without approximation. The exact path can become numerically unstable at large information depths. Since 
+
+A and D are unnormalized, the magnitude of the structural state can grow rapidly with the hop index, reflecting the combinatorial growth in the number of walks represented by the recurrence. While this unnormalized formulation is necessary for the exact containment results above, it can lead to poor numerical conditioning and overflow for sufficiently long hop sequences. For longer hop sequences, we instead use bounded propagation operators to improve numerical stability. Specifically, we replace 
+
+A with the random-walk matrix Arw = D−1A and D with I − D−1, yielding the normalized path 
+
+U(k) =
+
+> M
+
+X
+
+> j=1
+
+
+
+α(k) 
+
+> A
+
+[j]Arw + α(k) 
+
+> D
+
+[j]( I − D−1) + α(k) 
+
+> I
+
+[j]I
+
+
+
+U(k−j), (22) with the same initial conditions as Eq. (15). Unlike the exact path, these operators avoid the degree-dependent growth of the unnormalized recurrence and remain numerically stable at larger information depths. As an additional safeguard against numerical overflow, we clip U(k) to a fixed numerical range. No clipping occurs in any of our reported experiments, so the characterization of Theorem C.2.1 applies throughout. We use the exact path for L ≤ 20 and the normalized path for 
+
+L > 20 . Accordingly, all experiments in Section 5 use the normalized recurrence in Eq. (22), with 
+
+L = 40 for ECHO-S YNTH and L = 32 for LRIM . 
+
+Dataset Summaries. Tables 3 and 4 summarize the datasets used in our experiments. Statistics for ECHO-S YNTH are reproduced from Miglior et al. [38], with the indented rows corresponding to its constituent graph families. For LRIM-16 [36], the reported structural statistics are exact rather than averaged, since every graph has the same 16 × 16 periodic grid structure and differs only in its spin configuration. 
+
+Table 3: Summary of the datasets used in our experiments. ECHO-S YNTH is taken from Miglior et al. [38], while LRIM-16 follows the long-range graph benchmark setting of Mathys et al. [36]. Neither dataset uses edge features. 
+
+DATASET STRUCTURE / N ODE INPUT PREDICTION TARGET 
+
+ECHO-SYNTH [38] Synthetic graph families with random scalar node features and a source indicator for S SSP 
+
+Graph diameter, node eccentricity, and S SSP distance LRIM-16 (hard) [36] 
+
+16 × 16 periodic Ising grid with binary spin states Node-wise energy change ∆Ei
+
+Table 4: Dataset statistics. ECHO-S YNTH statistics are reproduced from Miglior et al. [38] and reported as mean ± standard deviation. Statistics for LRIM-16 [36] are exact. Undirected edges are counted once.                                                                                                                                     
+
+> DATASET GRAPH STATISTICS FEATURES / T ASKS
+> # Graphs Nodes Degree Edges Diameter Node Edge Tasks ECHO-S YNTH [38] 10,080 83 .69 ±66 .24 2.53 ±1.19 211 .63 ±209 .39 28 .50 ±6.92 2–3
+> line 1,680 75 .60 ±27 .32 2.37 ±0.10 90 .10 ±33 .89 28 .50 ±6.92 2–3
+> ladder 1,680 56 .52 ±13 .82 2.92 ±0.02 82 .54 ±20 .72 28 .50 ±6.92 2–3
+> grid 1,680 193 .10 ±93 .10 2.95 ±0.12 288 .32 ±145 .29 28 .50 ±6.92 2–3
+> tree 1,680 60 .42 ±17 .17 1.96 ±0.01 59 .42 ±17 .17 28 .50 ±6.92 2–3
+> caterpillar 1,680 34 .71 ±7.96 1.94 ±0.02 33 .71 ±7.96 28 .50 ±6.92 2–3
+> lobster 1,680 81 .79 ±25 .46 1.97 ±0.01 80 .79 ±25 .46 28 .50 ±6.92 2–3LRIM-16 (hard) [36] 10,000 256 4.00 512 16 1–1
+
+15 HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models 
+
+LRIM Training Setup. 
+
+Dataset. We use the hard 16 ×16 variant of LRIM [36], with interaction decay σ = 0 .6, corresponding to the strongest long-range dependency setting. Each graph is a periodic grid with 256 nodes, and the task is node-level energy regression on the original target scale. We use 8,000 /1,000 /1,000 graphs for training, validation, and testing, respectively. 
+
+Model. All experiments use the hypernetwork-conditioned extractor of Section 3.2 with sequence length L = 32 , 8 processing blocks, hidden dimension d = 64 , SSM state dimension 64 , and hypernetwork hidden dimension 128 . Since L > 20 , we use the normalized recurrence in Eq. (22). The memory window M is the only model parameter varied in Table 2. 
+
+Optimization. We train with AdamW using a learning rate of 3 × 10 −4, batch size 32 , and gradient clipping at 1.0. Training proceeds for at most 300 epochs with early stopping on validation loss using a patience of 100 epochs. Each configuration is evaluated with seeds {0, 1} under the same training budget. 
+
+Evaluation. Following the LRIM evaluation convention, we compute log 10 (MSE) separately for each seed and report the mean and standard deviation across seeds. This differs from applying log 10 
+
+after averaging the MSE across seeds. 
+
+Memory window. We evaluate M ∈ { 2, 4, 8}. The extractor requires O(LM |E| d) computation for sparse propagation, while the memory required by the batched recurrence scales linearly with M . We therefore restrict the sweep to these window sizes. 
+
+> 16
+
+HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models 
+
+# C Theoretical Properties of HOPPER 
+
+C.1 Permutation Equivariance of HOPPER 
+
+One of the main desirable properties a graph model should satisfy is insensitivity to arbitrary labeling of its nodes. For HOPPER, this requires more than equivariance of the structural recurrence, since the propagation coefficients themselves are generated from a learned graph-level summary. We therefore first show that this summary is invariant to node permutations. We then use this result to establish permutation equivariance of the complete sequence extractor. 
+
+Lemma C.1.1 (Permutation invariance of the graph summary) . Let P ∈ Rn×n be any permutation matrix, and define A′ = PAP ⊤ and H′ = PH . Let hgraph be the structural graph summary defined in Eqs. (10) –(13) . Then hgraph (H′, A′) = hgraph (H, A).Proof of Lemma C.1.1. By definition, we have A′ 
+
+> rw
+
+= PA rw P⊤. Using this with Eq. (10) gives us 
+
+X′ 
+
+> nbr
+
+= A′
+
+> rw
+
+H′ = PX nbr . Hence X′ 
+
+> str
+
+= PX str , and therefore K′ 
+
+> s
+
+= PK s and V′ 
+
+> s
+
+= PV s.Notice that the seed queries Qs are independent of the node ordering. Thus we have 
+
+Qs(K′
+
+> s
+
+)⊤ = QsK⊤ 
+
+> s
+
+P⊤. Moreover, row-wise softmax commutes with permutations of its columns: 
+
+softmax row (ZP ⊤) = softmax row (Z)P⊤. It follows that 
+
+H′ 
+
+> lat
+
+= softmax row 
+
+ QsK⊤ 
+
+> s
+
+P⊤
+
+√d
+
+
+
+PV s
+
+= softmax row 
+
+ QsK⊤
+
+> s
+
+√d
+
+
+
+P⊤PV s = Hlat .
+
+Therefore, since hgraph = vec( Hlat ), we conclude that h′ 
+
+> graph
+
+= hgraph .The preceding lemma ensures that relabeling the graph does not change the input to the coefficient-generating hypernetwork. Consequently, the same hop-dependent propagation coefficients are produced under any node permutation. This allows permutation equivariance of the structural recurrence and feature-attention correction to be established jointly. 
+
+Theorem C.1.1 (Permutation equivariance of the sequence extractor) . Let P ∈ Rn×n be any permutation matrix, and define A′ = PAP ⊤ and H′ = PH . Suppose the feature-attention maps are permutation equivariant, so that Q′ 
+
+> k
+
+= PQ k and K′ 
+
+> k
+
+= PK k, and that LayerNorm is applied independently to each node with shared parameters. Then, for every k ≥ 0, U′(k) = PU (k) and 
+
+S′(k) = PS (k). Consequently, 
+
+SEQ θ (PH , PAP ⊤) = P SEQ θ (H, A),
+
+where P acts on the node dimension of the hop sequence. Proof of Theorem C.1.1. By Lemma C.1.1, h′ 
+
+> graph
+
+= hgraph . Since the hop embedding ek is independent of the node ordering, Eq. (14) therefore yields identical coefficients α(k) 
+
+> A
+
+, α(k) 
+
+> D
+
+, α(k) 
+
+> I
+
+,and βk on the original and relabeled graphs. We first show U′(k) = PU (k) by induction on k. The claim holds at k = 0 since U′(0) = H′ =
+
+PH = PU (0) . Moreover, D′ = PDP ⊤. Assuming U′(k−j) = PU (k−j) for the preceding states in the recurrence, Eq. (15) gives 
+
+U′(k) =
+
+> M
+
+X
+
+> j=1
+
+
+
+α(k) 
+
+> A
+
+[j]PAP ⊤ + α(k) 
+
+> D
+
+[j]PDP ⊤ + α(k) 
+
+> I
+
+[j]I
+
+
+
+PU (k−j)
+
+= P
+
+> M
+
+X
+
+> j=1
+
+
+
+α(k) 
+
+> A
+
+[j]A + α(k) 
+
+> D
+
+[j]D + α(k) 
+
+> I
+
+[j]I
+
+
+
+U(k−j)
+
+= PU (k).
+
+Next, Q′ 
+
+> k
+
+= PQ k and K′ 
+
+> k
+
+= PK k imply F′ 
+
+> k
+
+= PF kP⊤, since row-wise softmax satisfies 
+
+softmax row (PZP ⊤) = P softmax row (Z)P⊤. Hence U′(k) + βkF′
+
+> k
+
+U′(k) = P(U(k) + βkFkU(k)).
+
+17 HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models 
+
+Finally, row-wise LayerNorm commutes with node permutations, so Eq. (16) yields S′(k) = PS (k).The result follows for every hop k.Theorem C.1.1 shows that HOPPER preserves the defining symmetry of graph-structured data despite using graph-conditioned and hop-dependent propagation rules. In particular, learning the sequence extractor does not introduce a dependence on a canonical node ordering: relabeling the input graph simply relabels the node dimension of every extracted hop representation. This property is preserved by the downstream sequence-processing stage because the same sequence model is applied independently to each node. Combining node-level equivariance with a permutation-invariant graph readout therefore yields permutation invariance of the complete graph-level predictor. 
+
+Corollary C.1.1 (Permutation invariance of graph-level predictions) . Suppose the downstream sequence-processing block applies the same map Φ : RL×d → RL×d independently to each node, and let ρ be a permutation-invariant graph-level readout. Let hgraph (X, A) denote the resulting graph representation, and define the graph-level predictor by f (X, A) = g(hgraph (X, A)) for any prediction head g. Then, for every permutation matrix P, f (PX , PAP ⊤) = f (X, A).Proof of Corollary C.1.1. By Theorem C.1.1, relabeling the graph by P permutes the node di-mension of the sequence representation by the same permutation. Since the same map Φ is applied independently to every node, the downstream node-level representation remains permu-tation equivariant. Hence, if Z and Z′ denote the corresponding node-level outputs on (X, A)
+
+and (PX , PAP ⊤), respectively, then Z′ = PZ . Permutation invariance of ρ therefore gives 
+
+hgraph (PX , PAP ⊤) = ρ(Z′) = ρ(PZ ) = ρ(Z) = hgraph (X, A). Applying the prediction head g
+
+to both sides yields f (PX , PAP ⊤) = f (X, A).As a consequence, the graph-level prediction depends only on the underlying attributed graph and not on the arbitrary ordering of its nodes. In particular, isomorphic labeled representations of the same graph necessarily receive identical graph-level predictions. 
+
+C.2 Graph-Adaptive Polynomial Representations and Recovery of Classical Propagation Schemes in HOPPER 
+
+We next characterize the structural propagation family induced by the learnable recurrence. Although the recurrence coefficients are generated adaptively from the input graph and node features, condi-tioning on these coefficients shows that each structural state is obtained by applying a finite graph polynomial to the input representation. This characterization shows that the structural state passes information over at most k graph hops and the manner in which HOPPER generalizes fixed graph propagation operators. 
+
+Theorem C.2.1 (Structural state has an adaptive polynomial structure) . Fix a graph G = ( V, E)
+
+and node representations H, and let {α(k) 
+
+> A
+
+, α(k) 
+
+> D
+
+, α(k) 
+
+> I
+
+}L−1 
+
+> k=1
+
+denote the coefficients generated by the hypernetwork. Define Γ(0) = I, Γ(i) = 0 for i < 0, and, for k ≥ 1,
+
+Γ(k) =
+
+> M
+
+X
+
+> j=1
+
+
+
+α(k) 
+
+> A
+
+[j]A + α(k) 
+
+> D
+
+[j]D + α(k) 
+
+> I
+
+[j]I
+
+
+
+Γ(k−j).
+
+Then U(k) = Γ(k)H for every k ≥ 0. Conditional on the generated coefficients, Γ(k) is a noncom-mutative polynomial in A and D of degree at most k. Moreover, if dG (u, v ) > k , then [Γ(k)]uv = 0 .Consequently, the k-th structural state satisfies 
+
+U(k) 
+
+> u
+
+= X  
+
+> v:dG(u,v )≤k
+
+[Γ(k)]uv Hv .
+
+Thus, conditional on the hypernetwork coefficients, U(k) is linear in H and directly propagates information over at most k graph hops. Since the coefficients themselves depend on hgraph , the overall map H 7 → U(k) need not be linear. 
+
+> 18
+
+HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models 
+
+Proof of Theorem C.2.1. We first show that U(k) = Γ(k)H. The claim is immediate for k = 0 , since 
+
+U(0) = H = Γ(0) H, and both U(i) and Γ(i) vanish for i < 0. Suppose the claim holds for all indices smaller than k. Applying the induction hypothesis to Eq. (15) gives 
+
+U(k) =
+
+> M
+
+X
+
+> j=1
+
+
+
+α(k) 
+
+> A
+
+[j]A + α(k) 
+
+> D
+
+[j]D + α(k) 
+
+> I
+
+[j]I
+
+
+
+Γ(k−j)H
+
+= Γ(k)H.
+
+The same recursion shows inductively that Γ(k) is a noncommutative polynomial in A and D. Indeed, 
+
+Γ(0) = I has degree zero, and multiplying any term of Γ(k−j) by A or D increases its degree by at most one. Since j ≥ 1, every resulting term has degree at most (k − j) + 1 ≤ k.It remains to establish the locality claim. We proceed again by induction. For k = 0 , Γ(0) = I, so 
+
+[Γ(0) ]uv = 0 whenever u̸ = v. Suppose that [Γ(r)]uv = 0 whenever dG (u, v ) > r for every r < k .Since D and I are diagonal, left multiplication by either operator does not enlarge the support of 
+
+Γ(k−j). Left multiplication by A can enlarge its support by at most one graph hop. Hence each term in the recursion for Γ(k) can be nonzero at (u, v ) only if dG (u, v ) ≤ (k − j) + 1 ≤ k. Therefore 
+
+[Γ(k)]uv = 0 whenever dG (u, v ) > k .Using U(k) = Γ(k)H and the support property above gives U(k) 
+
+> u
+
+= P  
+
+> v:dG(u,v )≤k
+
+[Γ(k)]uv Hv . For fixed hypernetwork coefficients, Γ(k) is independent of H, so the resulting map is linear in H. In HOPPER, however, these coefficients are generated from hgraph , which itself depends on H. Hence the unconditional map H 7 → U(k) is not necessarily nonlinear. Theorem C.2.1 separates two complementary sources of adaptivity in HOPPER. Conditional on the generated coefficients, the k-th structural state is a linear graph polynomial whose direct dependence is restricted to the k-hop neighborhood. Across different graph-feature inputs, however, the coefficients of this polynomial may change through hgraph . Thus, HOPPER retains the locality of finite-hop graph propagation while allowing the propagation rule itself to adapt to the input graph, node features, and information depth. 
+
+Theorem C.2.2 (Containment of fixed LGSM extractors and stable Chebyshev propagation) . Suppose 
+
+M ≥ 2 and the structural recurrence is instantiated with {S, A, D, I}, where 
+
+U(k) =
+
+> M
+
+X
+
+> j=1
+
+
+
+α(k) 
+
+> S
+
+[j]S + α(k) 
+
+> A
+
+[j]A + α(k) 
+
+> D
+
+[j]D + α(k) 
+
+> I
+
+[j]I
+
+
+
+U(k−j), U(0) = H, U(i) = 0 for i < 0.
+
+Then the following propagation sequences are recovered as special cases. (i) Normalized-adjacency propagation. Setting α(k) 
+
+> S
+
+[1] = 1 for every k ≥ 1 and all remaining coefficients to zero gives U(k) = SkH. In particular, taking S = Asym recovers the adjacency-based LGSM sequence in Eq. (6) .(ii) Non-backtracking propagation. Setting α(1)  
+
+> A
+
+[1] = 1 , α(2)  
+
+> A
+
+[1] = 1 , and α(2)  
+
+> D
+
+[2] = −1, and for every k ≥ 3 setting α(k) 
+
+> A
+
+[1] = 1 , α(k) 
+
+> D
+
+[2] = −1, and α(k) 
+
+> I
+
+[2] = 1 , with all remaining coefficients equal to zero, gives U(k) = B(k)H, where {B(k)}k≥0 is the non-backtracking recurrence in Eq. (7) .(iii) Chebyshev propagation. Suppose additionally that S is symmetric and σ(S) ⊆ [−1, 1] . Setting 
+
+α(1)  
+
+> S
+
+[1] = 1 , and for every k ≥ 2 setting α(k) 
+
+> S
+
+[1] = 2 and α(k) 
+
+> I
+
+[2] = −1, with all remaining co-efficients equal to zero, gives U(k) = Tk(S)H, where Tk is the degree-k Chebyshev polynomial of the first kind. Moreover, ∥Tk(S)∥2 ≤ 1 and hence ∥U(k)∥F ≤ ∥ H∥F for every k ≥ 0.Proof of Theorem C.2.2. For part (i), the specified coefficients reduce the structural recurrence to 
+
+U(k) = SU (k−1) . Since U(0) = H, induction immediately gives U(k) = SkH for every k ≥ 0.
+
+19 HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models 
+
+For part (ii), the stated coefficients give U(1) = AH and U(2) = AU (1) − DU (0) = ( A2 − D)H.For every k ≥ 3, the recurrence becomes 
+
+U(k) = AU (k−1) − (D − I)U(k−2) .
+
+Thus, if U(k−1) = B(k−1) H and U(k−2) = B(k−2) H, then 
+
+U(k) =
+
+
+
+AB (k−1) − (D − I)B(k−2) 
+
+H = B(k)H.
+
+The result follows by induction. For part (iii), the specified coefficients yield U(0) = H, U(1) = SH , and, for every k ≥ 2,
+
+U(k) = 2 SU (k−1) − U(k−2) . Since the Chebyshev polynomials satisfy T0(x) = 1 , T1(x) = x, and 
+
+Tk(x) = 2 xT k−1(x) − Tk−2(x), induction gives U(k) = Tk(S)H.It remains to establish stability. Since S is symmetric, write S = QΛQ ⊤ with Q orthogonal and 
+
+λi ∈ [−1, 1] for every eigenvalue λi. By the spectral theorem, Tk(S) = QTk(Λ)Q⊤, and therefore 
+
+∥Tk(S)∥2 = max  
+
+> i
+
+|Tk(λi)| ≤ 1,
+
+where the final inequality follows applying Lemma D.0.1 i.e. Tk(cos θ) = cos( kθ ) and |cos( kθ )| ≤ 1
+
+for k ∈ Z+. Consequently, ∥U(k)∥F = ∥Tk(S)H∥F ≤ ∥ Tk(S)∥2∥H∥F ≤ ∥ H∥F , which proves the claim. Theorem C.2.2 shows that the flexibility introduced by HOPPER does not come at the expense of the propagation mechanisms used by existing LGSMs: both adjacency-power and non-backtracking extraction remain exact special cases of the learned recurrence. At the same time, the recurrence admits propagation schemes unavailable to these fixed extractors. In particular, Chebyshev propaga-tion remains uniformly non-expansive with information depth while producing qualitatively different graph-adaptive polynomial representations. 
+
+C.3 Optimal Stable Long-Range Sensitivity in HOPPER 
+
+We next study how strongly information from a distant node can influence a representation at the first information depth at which the two nodes can interact. A direct comparison of sensitivities is only meaningful under a stability constraint, since arbitrarily large Jacobians could otherwise be obtained simply by amplifying the propagation operator. We therefore restrict our attention to the following class of polynomial propagators: 
+
+Definition 2 (Uniformly stable polynomial propagators) . For r ≥ 1, define the class of degree-r
+
+uniformly stable polynomial propagators by 
+
+Pr := 
+
+(
+
+p ∈ R[x] : deg( p) ≤ r and ∥p∥L∞([ −1,1]) = sup 
+
+> x∈[−1,1]
+
+|p(x)| ≤ 1
+
+)
+
+.
+
+If S is symmetric with σ(S) ⊆ [−1, 1] , then every p ∈ P r satisfies ∥p(S)∥2 ≤ 1 by the spectral theorem. Thus, Pr consists of degree-r polynomial propagators that are uniformly non-expansive over the spectral interval [−1, 1] .For nodes u, v with dG (u, v ) = r, all polynomial terms of degree strictly smaller than r vanish in the (u, v ) entry. Consequently, the first-arrival sensitivity of a degree-r polynomial propagator is determined entirely by its leading coefficient. The following classical extremal property of Chebyshev polynomials therefore identifies the largest sensitivity attainable within Pr .
+
+Lemma C.3.1 (Extremal leading coefficient of Chebyshev polynomials) . Let p(x) = ar xr + · · · +
+
+a0 ∈ P r for r ≥ 1. Then |ar | ≤ 2r−1. Moreover, equality is attained by the Chebyshev polynomial 
+
+Tr .Proof of Lemma C.3.1. By Lemma D.0.1, Tr ∈ P r, and the Chebyshev recurrence shows that its leading coefficient is 2r−1. It remains to show that no polynomial in Pr has a larger leading coefficient. 
+
+> 20 HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models
+
+Suppose, for contradiction, that |ar | > 2r−1. Replacing p by −p if necessary, we may assume 
+
+ar > 2r−1, and define q(x) = (2 r−1/a r )p(x). Then q and Tr have the same leading coefficient, while sup x∈[−1,1] |q(x)| < 1. Hence h = Tr − q has degree at most r − 1.For j = 0 , . . . , r , let xj = cos( jπ/r ). By Lemma D.0.1, Tr (xj ) = ( −1) j . Since |q(xj )| < 1,the values h(xj ) alternate in sign. The intermediate value theorem therefore gives at least one root of h between each pair of consecutive points xj and xj+1 , so h has at least r distinct roots. This contradicts deg( h) ≤ r − 1. Thus |ar | ≤ 2r−1, and equality is attained by Tr .Combining Lemma C.3.1’s extremal property with graph-distance locality yields the following main result: 
+
+Theorem C.3.1 (Optimal stable long-range sensitivity) . Let S ∈ Rn×n be symmetric with σ(S) ⊆
+
+[−1, 1] , and suppose Suv = 0 whenever u̸ = v and {u, v } /∈ E . Let u, v ∈ V satisfy dG (u, v ) = r ≥
+
+1. Then 
+
+sup 
+
+> p∈P r
+
+∂[p(S)H]u
+
+∂Hv 2
+
+= 2 r−1 |[Sr ]uv | ,
+
+and the supremum is attained by the Chebyshev propagator p = Tr .In particular, ∥∂[Tr (S)H]u/∂ Hv ∥2 = 2 r−1|[Sr ]uv |, whereas standard power propagation satisfies 
+
+∥∂[Sr H]u/∂ Hv ∥2 = |[Sr ]uv |. Hence, whenever [Sr ]uv ̸ = 0 , Chebyshev propagation achieves a factor 2r−1 improvement in first-arrival sensitivity over power propagation while remaining non-expansive, i.e., ∥Tr (S)∥2 ≤ 1.Proof of Theorem C.3.1. Let p(x) = ar xr + · · · + a0 ∈ P r . Since dG (u, v ) = r and S is supported on the edges of G, we have [Sj ]uv = 0 for every 0 ≤ j < r . Indeed, a nonzero contribution to [Sj ]uv 
+
+would imply a walk from v to u using at most j graph edges, contradicting dG (u, v ) = r. Therefore, 
+
+[p(S)] uv = ar [Sr ]uv .Writing Z = p(S)H gives Zu = P 
+
+> w∈V
+
+[p(S)] uw Hw, and hence 
+
+∂Zu
+
+∂Hv
+
+= [ p(S)] uv Id = ar [Sr ]uv Id.
+
+It follows that ∥∂Zu/∂ Hv ∥2 = |ar || [Sr ]uv |. By Lemma C.3.1, |ar | ≤ 2r−1, and therefore 
+
+∂[p(S)H]u
+
+∂Hv 2
+
+≤ 2r−1 |[Sr ]uv | .
+
+The Chebyshev polynomial Tr belongs to Pr and has leading coefficient 2r−1, so it attains equality. This proves the optimality claim. Finally, taking p(x) = xr gives standard power propagation and yields ∥∂[Sr H]u/∂ Hv ∥2 = |[Sr ]uv |.Whenever [Sr ]uv ̸ = 0 , the ratio between Chebyshev and power-propagation sensitivities is therefore 
+
+2r−1. The non-expansiveness ∥Tr (S)∥2 ≤ 1 follows from Lemma D.0.1. Theorem C.3.1 gives a direct comparison between the fixed power propagation used by adjacency-based LGSM and a propagation rule used by HOPPER. At graph distance r, standard power propagation has first-arrival sensitivity |[Sr ]uv |, whereas Chebyshev propagation amplifies this quantity by the factor 2r−1. Importantly, this is achieved without sacrificing spectral stability as both propagators remain non-expansive when σ(S) ⊆ [−1, 1] . Moreover, the Chebyshev choice attains the largest possible first-arrival sensitivity over the entire class Pr . Thus under uniform spectral stability and a fixed propagation degree, HOPPER can realize the strongest possible direct transmission of information between nodes first connected at hop r.The next result applies this characterization to obtain corresponding guarantees for regular graphs. 
+
+Corollary C.3.1 (Long-range sensitivity on regular graphs) . Let G be a q-regular graph, so that 
+
+Asym = q−1A. Let u, v ∈ V satisfy dG (u, v ) = r, and let Nr (u, v ) denote the number of shortest paths of length r from v to u. Then 
+
+∂[Ar
+
+> sym
+
+H]u
+
+∂Hv 2
+
+= Nr (u, v )
+
+qr , ∂[Tr (Asym )H]u
+
+∂Hv 2
+
+= Nr (u, v )2
+
+ 2
+
+q
+
+r
+
+.
+
+> 21 HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models
+
+In particular, if q = 2 and Nr (u, v ) = 1 , then the sensitivity of power propagation is 2−r, whereas the sensitivity of Chebyshev propagation is 1/2, independent of r.Proof of Corollary C.3.1. Since Asym = q−1A, we have [Ar
+
+> sym
+
+]uv = q−r [Ar ]uv . The entry [Ar ]uv 
+
+counts length-r walks from v to u. Since dG (u, v ) = r, every such walk is a shortest path, and therefore [Ar ]uv = Nr (u, v ). The result now follows directly from Theorem C.3.1. Corollary C.3.1 makes this improvement particularly clear when q = 2 . Along a unique shortest path, the sensitivity of adjacency-power propagation decays exponentially as 2−r , whereas the Chebyshev sensitivity remains equal to 1/2 for every distance r. Thus, the increased graph-adaptive polynomial expressivity of HOPPER can substantially mitigate over-squashing relative to LGSM. 
+
+C.4 Avoidance of Sequence-Level Spectral Over-Smoothing in HOPPER 
+
+We next study over-smoothing across the full propagation sequence. Under repeated adjacency propagation, spectral components associated with eigenvalues of magnitude strictly smaller than one decay with depth, causing deep representations to concentrate in a stationary eigenspace. This spectral collapse, known as oversmoothing, causes node representations to progressively lose nonstationary information that distinguishes different regions of the graph. Since LGSM passes all intermediate propagation states to the downstream sequence model, we therefore ask whether this informative nonstationary spectral information remains available across the sequence as the maximum propagation depth increases. The following elementary property of Chebyshev polynomials will be used to characterize their average spectral response across information depth. 
+
+Lemma C.4.1 (Average energy of Chebyshev modes) . For every λ ∈ (−1, 1) ,
+
+lim 
+
+> L→∞
+
+1
+
+L
+
+> L−1
+
+X
+
+> k=0
+
+Tk(λ)2 = 12 .
+
+Proof of Lemma C.4.1. Write λ = cos θ for some θ ∈ (0 , π ). By Lemma D.0.1, Tk(λ) = cos( kθ ).Using cos 2(x) = (1 + cos(2 x)) /2 gives 
+
+1
+
+L
+
+> L−1
+
+X
+
+> k=0
+
+Tk(λ)2 = 12 + 12L
+
+> L−1
+
+X
+
+> k=0
+
+cos(2 kθ ).
+
+It suffices to show the second term goes to zero. Since θ ∈ (0 , π ), we have e2i θ̸ = 1 , and the geometric-series identity yields PL−1 
+
+> k=0
+
+e2i kθ = (1 − e2i Lθ )/(1 − e2i θ ). Using the inequality |1 − eix| ≤ 2,one notices that the magnitude of the sum is uniformly bounded and is independent of L. Thus as 
+
+L → ∞ , L−1 PL−1 
+
+> k=0
+
+cos(2 kθ ) → 0.Lemma C.4.1 shows that, for every nonstationary eigenmode λ ∈ (−1, 1) , the squared Chebyshev response does not decay with information depth when averaged across hops. Instead, its Cesàro average converges to 1/2. This contrasts sharply with adjacency powers, whose response to the same mode decays geometrically as |λ|k. The next result generalizes this to the full graph representation: 
+
+Theorem C.4.1 (Preservation of spectral information across information depth) . Let Asym ∈ Rn×n
+
+be symmetric with eigendecomposition Asym = QΛQ ⊤. Let Π denote the orthogonal projector onto the eigenspace associated with eigenvalue 1, and suppose that every remaining eigenvalue satisfies 
+
+|λi| < 1. Define H⊥ = ( I − Π)H and ρ = max λi̸ =1 |λi| < 1.Consider the adjacency-power sequence V(k) = Ak
+
+> sym
+
+H and the Chebyshev sequence U(k) =
+
+Tk(Asym )H. Then, for every k ≥ 0,
+
+∥(I − Π)V(k)∥F ≤ ρk∥H⊥∥F ,
+
+and consequently ∥(I − Π)V(k)∥F → 0 as k → ∞ and 
+
+lim 
+
+> L→∞
+
+1
+
+L
+
+> L−1
+
+X
+
+> k=0
+
+∥(I − Π)V(k)∥2 
+
+> F
+
+= 0 .
+
+> 22
+
+HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models 
+
+In contrast, the Chebyshev sequence satisfies 
+
+lim 
+
+> L→∞
+
+1
+
+L
+
+> L−1
+
+X
+
+> k=0
+
+∥(I − Π)U(k)∥2 
+
+> F
+
+= 12 ∥H⊥∥2 
+
+> F
+
+.
+
+Thus, while the nonstationary spectral component of adjacency-power propagation vanishes with information depth, the Chebyshev sequence preserves a nonvanishing fraction of this component on average across hops. Proof of Theorem C.4.1. Let q1, . . . , qn denote the orthonormal eigenvectors of Asym , and write 
+
+H = Pni=1 qic⊤ 
+
+> i
+
+. Since Π projects onto the eigenspace corresponding to λi = 1 , we have H⊥ =P  
+
+> λi̸=1
+
+qic⊤ 
+
+> i
+
+. For adjacency-power propagation, 
+
+(I − Π)V(k) = X 
+
+> λi̸=1
+
+λki qic⊤ 
+
+> i
+
+.
+
+Orthogonality of the eigenvectors therefore gives 
+
+∥(I − Π)V(k)∥2 
+
+> F
+
+= X 
+
+> λi̸=1
+
+|λi|2k∥ci∥22 ≤ ρ2k∥H⊥∥2 
+
+> F
+
+.
+
+Taking square roots yields the first claim. Moreover, 
+
+1
+
+L
+
+> L−1
+
+X
+
+> k=0
+
+∥(I − Π)V(k)∥2 
+
+> F
+
+≤ ∥H⊥∥2
+
+> F
+
+L
+
+> L−1
+
+X
+
+> k=0
+
+ρ2k ≤ ∥H⊥∥2
+
+> F
+
+L(1 − ρ2) ,
+
+which converges to zero as L → ∞ . For Chebyshev propagation, the spectral theorem gives 
+
+(I−Π)U(k) = P  
+
+> λi̸=1
+
+Tk(λi)qic⊤ 
+
+> i
+
+, and hence ∥(I−Π)U(k)∥2 
+
+> F
+
+= P  
+
+> λi̸=1
+
+Tk(λi)2∥ci∥22. Averaging over k and applying Lemma C.4.1 to each λi ∈ (−1, 1) yields 
+
+lim 
+
+> L→∞
+
+1
+
+L
+
+> L−1
+
+X
+
+> k=0
+
+∥(I − Π)U(k)∥2 
+
+> F
+
+= X 
+
+> λi̸=1
+
+lim 
+
+> L→∞
+
+1
+
+L
+
+> L−1
+
+X
+
+> k=0
+
+Tk(λi)2
+
+!
+
+∥ci∥22
+
+= 12
+
+X 
+
+> λi̸=1
+
+∥ci∥22
+
+= 12 ∥H⊥∥2 
+
+> F
+
+.
+
+This proves the result. 
+
+23 HOPPER: Learnable Hop Extraction for Linearized Graph Sequence Models 
+
+# D Technical Lemmas 
+
+Lemma D.0.1 (Chebyshev trigonometric identity) . Let {Tk}k≥0 denote the Chebyshev polynomials of the first kind, defined by T0(x) = 1 , T1(x) = x, and Tk(x) = 2 xT k−1(x) − Tk−2(x) for k ≥ 2.Then, for every θ ∈ R and k ≥ 0, Tk(cos θ) = cos( kθ ). Consequently, sup x∈[−1,1] |Tk(x)| ≤ 1 for every k ≥ 0.Proof of Lemma D.0.1. The identity is standard for Chebyshev polynomials of the first kind. We include the argument for completeness. The result is immediate for k = 0 and k = 1 . Suppose it holds for k − 1 and k − 2. Then, using the Chebyshev recurrence and the identity 2 cos( θ) cos(( k − 1) θ) = cos( kθ ) + cos(( k − 2) θ), we obtain 
+
+Tk(cos θ) = 2 cos θ T k−1(cos θ) − Tk−2(cos θ)= 2 cos θ cos(( k − 1) θ) − cos(( k − 2) θ)= cos( kθ ).
+
+The claim follows by induction. Finally, every x ∈ [−1, 1] can be written as x = cos θ for some 
+
+θ ∈ [0 , π ], and hence |Tk(x)| = | cos( kθ )| ≤ 1.

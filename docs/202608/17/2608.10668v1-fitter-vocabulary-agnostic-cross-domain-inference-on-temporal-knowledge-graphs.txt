@@ -1,0 +1,1230 @@
+Title: FITTER: Vocabulary-Agnostic Cross-Domain Inference on Temporal Knowledge Graphs
+
+URL Source: https://arxiv.org/pdf/2608.10668v1
+
+Published Time: Wed, 12 Aug 2026 00:49:32 GMT
+
+Number of Pages: 33
+
+Markdown Content:
+# FITTER: Vocabulary-Agnostic Cross-Domain Inference on Temporal Knowledge Graphs 
+
+Jiaxin Pan 1, Mojtaba Nayyeri 2, Osama Mohammed 1, Daniel Hernández 1,Rongchuan Zhang 1, Cheng Cheng 1, and Steffen Staab 1,3 
+
+> 1
+
+University of Stuttgart, Stuttgart, Germany 
+
+{jiaxin.pan, osama.mohammed, steffen.staab}@ki.uni-stuttgart.de daniel@degu.cl , {st191486, st180913}@stud.uni-stuttgart.de  
+
+> 2
+
+SAP SE, Germany 
+
+mojtaba.nayyeri@ki.uni-stuttgart.de  
+
+> 3
+
+University of Southampton, Southampton, United Kingdom 
+
+Abstract. Temporal knowledge graphs are central to many uses of the Semantic Web, but existing completion methods assume the entities, re-lation names, and timestamps to be reasoned about are already known at training time, restricting each model to a single graph and vocabulary. We propose FITTER, the first fully-inductive structural model for tempo-ral knowledge graph link prediction that supports cross-domain transfer: the inference graph may contain entirely unseen entities, relation names, and timestamps drawn from a different domain. FITTER represents each predicate by its interaction patterns with others and time through en-codings of relative rather than absolute ordering; message-passing fuses local and global temporal context to produce vocabulary-agnostic em-beddings. We prove the temporal encoding is time-shift invariant and evaluate FITTER on cross-domain, cross-graph transfer over six tempo-ral knowledge graph benchmarks of diverse domains, granularities, and time spans. FITTER consistently outperforms inductive baselines with-out retraining, indicating that vocabulary-agnostic structural learning is a viable foundation for inference over the heterogeneous knowledge graphs of the Semantic Web. 
+
+Keywords: Temporal Knowledge Graphs · Inductive Link Prediction · Knowledge Graph Embedding · Graph Neural Networks · Cross-Domain Transfer 
+
+## 1 Introduction 
+
+Temporal Knowledge Graphs (TKGs) are a central object of study in the Se-mantic Web: large openly published graphs such as Wikidata [31], DBpedia [18], and YAGO [10] carry millions of facts that hold during specific intervals or at specific points in time, modelled through reified statements carrying temporal qualifiers (Wikidata’s start time , end time , point in time ), through named graphs annotated with valid times, or through RDF-star triples. Abstracting over these representations, a TKG fact is commonly treated as a time-stamped quadruple arXiv:2608.10668v1 [cs.AI] 11 Aug 2026 2 J. Pan et al. 
+
+(s, p, o, τ ), where s, p, o, and τ denote the subject entity, predicate, object en-tity, and timestamp. Reasoning over such quadruples supports a wide range of downstream tasks including question answering [11], event forecasting [1], and temporal recommendation; among these, temporal link prediction, i.e., predict-ing missing entities in queries of the form (s, p, ?, τ ) or (? , p, o, τ ), is one of the central problems in temporal knowledge graph research. Existing Temporal Knowledge Graph Embedding (TKGE) models [15, 6, 13] are primarily developed for temporal interpolation or extrapolation settings, where the entity and relation vocabularies are shared between training and in-ference. In practice, however, temporal knowledge graphs often differ substan-tially across domains. For example, diplomatic event graphs such as ICEWS contain dense daily interactions, while encyclopedic graphs such as YAGO de-scribe sparse long-term facts spanning decades or centuries. These datasets also differ in temporal granularity, time span, and relational structure. This heterogeneity raises a natural transfer challenge: can a model trained on one TKG generalize to a different TKG without retraining? Such a capabil-ity is particularly useful in cold-start scenarios, where a target TKG is newly constructed or contains only limited training data. It is also desirable in prac-tical deployments where training separate models for every temporal graph is computationally expensive. More broadly, despite differences in vocabulary and temporal scale, many TKGs share common structural and temporal patterns. For example, interaction sequences such as negotiation following conflict or re-curring temporal transitions between related events may appear across multiple domains. A transferable model should therefore capture structural and temporal regularities independently of dataset-specific entities, relations, or timestamps. Most existing TKGE models rely on dataset-specific entity, relation, and timestamp embeddings. Consequently, their learned representations cannot be directly applied to graphs containing unseen entities, relations, or timestamps. Recent work on static knowledge graphs has explored fully-inductive reason-ing through structure-based relational learning [5, 17, 34, 4], demonstrating that transferable representations can be learned without relying on fixed vocabular-ies. However, extending this paradigm to temporal knowledge graphs remains challenging due to the additional complexity introduced by temporal dynamics, heterogeneous temporal granularities, and varying time spans. In this work, we study cross-domain transfer for temporal knowledge graphs under a fully-inductive setting, where the training and inference graphs con-tain disjoint entity, relation, and timestamp sets. We propose FITTER (Fully Inductive Time-aware Transferable Representation), a structure-driven TKGE framework designed for cross-domain transfer across heterogeneous temporal knowledge graphs. FITTER addresses two key challenges in transferable temporal reasoning. First, temporal knowledge graphs may operate at different granularities and over different time spans, making dataset-specific timestamp embeddings dif-ficult to transfer across domains. To address this, FITTER represents tempo-ral information using sinusoidal positional encodings over snapshot indices, en-FITTER: Vocabulary-Agnostic Cross-Domain Inference on TKGs 3
+
+abling the model to capture relative temporal ordering independently of absolute timestamps. Second, to transfer structural knowledge across unseen vocabularies, FITTER constructs universal relation interaction graphs based on vocabulary-agnostic interaction types and learns adaptive entity and relation representations through temporal-aware message passing. In addition, FITTER combines local and global temporal contexts to capture both short-term event dependencies and long-range temporal patterns. We evaluate FITTER on 15 cross-dataset transfer settings spanning six tem-poral knowledge graphs with diverse domains, temporal granularities, and time spans. Experimental results show that FITTER consistently outperforms exist-ing inductive baselines in cross-domain transfer settings while remaining com-petitive with transductive approaches on in-domain evaluation. Our contributions are summarized as follows: 
+
+– We formulate cross-domain transfer for temporal knowledge graphs as a fully-inductive link prediction problem. 
+
+– We propose FITTER, a transferable TKGE framework that avoids dataset-specific entity, relation, and timestamp embeddings. 
+
+– We introduce transferable temporal representations based on relative tempo-ral ordering together with vocabulary-agnostic relational structure learning. 
+
+– We conduct extensive experiments across heterogeneous temporal knowledge graphs and demonstrate strong cross-domain transfer performance across domains and temporal granularities. 
+
+## 2 Task Formulation 
+
+A temporal knowledge graph is a tuple G = ( V, R, T, Q ), where V is a set of entities, R a set of relations, T an ordered set of timestamps, and Q ⊆ V × R ×
+
+V × T a set of temporal facts. The temporal link prediction task asks: given a query (s, p, ?, τ ) or (? , p, o, τ ), predict the missing entity. 
+
+2.1 Inference Settings 
+
+We characterize TKG inference settings along two orthogonal axes: a vocabulary axis and a temporal axis . The vocabulary axis describes whether the entity and relation vocabularies are shared between the training and inference graphs. The temporal axis describes whether inference timestamps are evaluated within an observed temporal range ( interpolation ) or on future timestamps beyond the observed range ( extrapolation ). Combining the two axes yields a 2 × 2 taxonomy of inference settings, illustrated in Figure 1. Let Gtrain = ( Vtrain , R train , T train , Q train ) denote the source training graph 
+
+used for model training, and let Ginf = ( Vinf , R inf , T inf , Q inf ) denote the inference graph used during evaluation. We partition the inference graph facts as 
+
+Qinf = Qmsg ∪ Qvalid ∪ Qtest ,4 J. Pan et al. 
+
+Fig. 1: Taxonomy of TKG inference settings along the vocabulary axis (trans-ductive vs. fully-inductive) and temporal axis (interpolation vs. extrapolation). This work studies fully-inductive cross-domain transfer under both regimes. where Qmsg , Qvalid , and Qtest denote the message graph , validation set , and test set , respectively. Their corresponding timestamp sets are Tmsg , Tvalid , and Ttest .
+
+Vocabulary axis. In transductive settings, the training and inference graphs share the same entity and relation vocabularies: 
+
+Vtrain = Vinf , Rtrain = Rinf .
+
+This is the standard setting adopted by existing TKG embedding methods, where models learn dataset-specific entity, relation, and timestamp embeddings. In fully-inductive settings, the training and inference graphs contain disjoint entity, relation, and timestamp sets: 
+
+Vtrain ∩ Vinf = ∅, Rtrain ∩ Rinf = ∅, Ttrain ∩ Tinf = ∅.
+
+As a result, representations tied to a specific vocabulary are not directly appli-cable at inference time. A practically important special case is cross-domain transfer , where the training and inference graphs originate from differ-ent source TKGs .
+
+Temporal axis. In interpolation settings, message, validation, and test facts share the same timestamp range: 
+
+Tmsg = Tvalid = Ttest .FITTER: Vocabulary-Agnostic Cross-Domain Inference on TKGs 5
+
+Fig. 2: Overview of FITTER. ULTRA constructs vocabulary-agnostic relation representations on a relation interaction graph. FITTER adds three temporal components (blue): sinusoidal temporal encodings, temporal-aware entity propa-gation, and local/global context fusion. An MLP scores the fused representations. In extrapolation settings, the inference graph is split chronologically such that: 
+
+max( Tmsg ) < min( Tvalid ) < min( Ttest ).
+
+For transductive settings, the message graph corresponds to the training graph of the same TKG. For fully-inductive settings, the message graph belongs to the target inference TKG and is used only for inference-time message passing. 
+
+Our setting. Existing TKG benchmarks primarily evaluate models in trans-ductive settings under either interpolation (e.g., ICEWS14, ICEWS05-15) or extrapolation (e.g., ICEWS18, WIKI). This paper studies fully-inductive infer-ence under cross-domain transfer, where a model trained on one source TKG is evaluated directly on a different target TKG without retraining, under both interpolation and extrapolation conditions. 
+
+## 3 Related Work 
+
+3.1 Temporal Knowledge Graph Embedding Transductive temporal interpolation models. Early TKGE models primar-ily address temporal interpolation, where training and inference share the same entity and relation vocabularies and test queries are evaluated within the ob-served temporal range. TTransE [15] and TA-DistMult [6] incorporate temporal information into scoring functions by treating time as an additional component 6 J. Pan et al. 
+
+of temporal facts. TComplEx and TNTComplEx [13] formulate temporal knowl-edge graph completion as a fourth-order tensor completion problem, while TLT-KGE [33] extends temporal representations into quaternion space. HGE [26] further embeds temporal knowledge graphs into heterogeneous geometric sub-spaces and uses attention to capture structural and geometric similarities. Al-though effective in standard interpolation benchmarks, these methods rely on dataset-specific entity, relation, and timestamp embeddings, which prevents di-rect application to graphs with unseen vocabularies. 
+
+Transductive temporal extrapolation models. Another line of work fo-cuses on temporal extrapolation, where models predict future facts beyond the observed time range. Many of these approaches use recurrent or graph neural architectures to encode historical graph evolution and forecast future events [20, 19, 28, 21]. For improved explainability, TLogic [24] extracts temporal logical rules via temporal random walks, while xERTE [9] performs prediction using explainable temporal subgraphs. 
+
+Limitations of existing TKGE models. Collectively, existing TKGE meth-ods operate in settings (a) and (b) of Figure 1: they assume vocabulary overlap between training and inference, making them unsuitable for the fully-inductive cross-domain settings (c) and (d) studied in this work. FITTER addresses this gap with vocabulary-agnostic structural representations and transferable tempo-ral encodings. 
+
+3.2 Inductive and Cross-Domain Learning on KGs Structure-based fully-inductive learning. Early inductive methods for static KGs, such as NBFNet [36], Grail [29], INDIGO [23], and Morse [2], learn rela-tional structures that generalize to unseen entities but still assume fixed re-lation vocabularies. More recent works, including INGRAM [17], ULTRA [5], TRIX [34], and GraphOracle [4], further enable transfer across entirely unseen entity and relation sets by constructing vocabulary-agnostic relation interaction graphs or relation dependency structures. However, all of these approaches are designed for static knowledge graphs and therefore do not model temporal dy-namics, temporal ordering, or heterogeneous temporal granularities required for temporal knowledge graphs. 
+
+Text-based and LLM-based transfer for TKGs. Recent approaches ex-plore inductive inference on TKGs using textual descriptions and large language models (LLMs). Methods such as ICL [16], zRLLM [3], GenTKG [22], and Chain-of-History [25] leverage semantic information from entity descriptions, relation names, or in-context temporal reasoning to support transfer across unseen tem-poral facts. However, their transferability primarily arises from textual semantics rather than structural temporal representations. As a result, they depend heavily on annotation quality, textual availability, prompting strategies, and large-scale pretrained models, while often underutilizing the structural and relational depen-dencies inherent in temporal knowledge graphs. In contrast, FITTER is purely 
+
+structure-driven : it learns transferable temporal and relational patterns directly FITTER: Vocabulary-Agnostic Cross-Domain Inference on TKGs 7
+
+from graph structure without requiring textual annotations or external language models. 
+
+## 4 NBFNet-Style Fully-Inductive KG Reasoning 
+
+We build on ULTRA [5], a fully-inductive KG reasoning framework derived from NBFNet-style message passing [36]. ULTRA is particularly suitable for cross-domain transfer because it avoids dataset-specific entity and relation embeddings, enabling inference on entirely unseen graphs. 
+
+Query-conditioned message passing. Given a query (s, r, ?) , these models perform query-conditioned reasoning by propagating information over the graph. The source entity s is initialized using the query relation r, and message passing iteratively aggregates relational information from neighboring entities. At each layer ℓ, messages are computed over graph edges and aggregated to update node representations: 
+
+m(ℓ) 
+
+> uv
+
+= ϕ
+
+
+
+h(ℓ−1)  
+
+> u
+
+, r uv 
+
+
+
+, h(ℓ) 
+
+> v
+
+= AGG 
+
+n 
+
+m(ℓ) 
+
+> uv
+
+: u ∈ N (v)
+
+o 
+
+. (1) 
+
+Vocabulary-agnostic relation representations. Unlike conventional KG em-bedding methods that learn fixed embeddings for each relation, ULTRA con-structs relation representations from a vocabulary-agnostic relation interaction graph . In this graph, relations are treated as nodes and connected through struc-tural interaction types: head-to-head, head-to-tail, tail-to-head, and tail-to-tail interactions. Message passing on the relation graph produces query-conditioned relation representations that generalize to unseen relations and unseen graphs. 
+
+## 5 FITTER 
+
+FITTER introduces three temporal components on top of the relational back-bone: (1) transferable temporal encodings that capture relative ordering indepen-dently of absolute timestamps; (2) temporal-aware message passing that incor-porates time into fact propagation; and (3) local/global context fusion that inte-grates short-term and long-range temporal dependencies. Together, these com-ponents enable FITTER to learn structural and temporal patterns that transfer across domains without any dataset-specific identifiers. The overall architecture is illustrated in Figure 2. 
+
+5.1 Transferable Temporal Encoding 
+
+FITTER represents temporal information via relative snapshot ordering rather than absolute timestamps, enabling transfer across TKGs with different granu-larities and time spans. Given a temporal knowledge graph G, we represent it as an ordered sequence of temporal snapshots {G1, G 2, . . . , G |T |}, where each snapshot Gi contains all temporal facts associated with the i-th timestamp in chronological order. We write τi for the timestamp at snapshot Gi.8 J. Pan et al. 
+
+We encode the temporal position of snapshot Gi using sinusoidal positional encodings: 
+
+[TE( i)] 2n = sin( ωn i), [TE( i)] 2n+1 = cos( ωn i),ωn = β−2n/d ,
+
+where d denotes the temporal embedding dimension and β controls the frequency scale. The index n ∈ { 0, 1, . . . , d/ 2 − 1} enumerates the d/ 2 dimension pairs of the encoding: each pair  [TE( i)] 2n, [TE( i)] 2n+1 
+
+ oscillates at its own frequency 
+
+ωn = β−2n/d , which decreases geometrically with n, so that small n captures fast, short-term variation and large n captures slow, long-range variation. We also write TE τi = TE( i).Unlike learned timestamp embeddings, this representation is independent of dataset-specific timestamp identities and depends only on relative temporal or-dering. As a result, it naturally supports transfer across temporal knowledge graphs with different timestamp vocabularies, temporal granularities, and time spans. Furthermore, the multi-frequency sinusoidal representation enables the model to capture both short-term and long-range temporal dependencies, as sup-ported by prior analysis of sinusoidal encodings in Transformer architectures [27]. 
+
+5.2 Temporal-Aware Quadruple Propagation 
+
+Temporal relations exhibit substantially different dynamics: some evolve slowly over long time spans (e.g., diplomatic alliances), while others are highly localized and depend primarily on recent events (e.g., daily conflict responses). FITTER therefore injects temporal information via two complementary graphs: a global entity graph over the full TKG for slow-changing relations, and a local entity graph restricted to a window around the query timestamp for fast-changing ones. Given query-conditioned relation representations rp from the relational back-bone, FITTER runs message passing on both graphs simultaneously. 
+
+Global quadruple representation. The global entity graph performs message passing over the entire temporal knowledge graph, capturing long-range temporal dependencies. For a temporal query (s, p, ?, τ i), the initial entity representation is: 
+
+e0 
+
+> v|s
+
+= 1v=s · rp, v ∈ G, (2) where rp is the query-conditioned relation representation from the relational backbone. At each message-passing layer, FITTER injects temporal information into propagation: 
+
+el+1  
+
+> v|s
+
+= AGG 
+
+
+
+T-MSG  elw, rq , P gl+1 (TE τj )
+
+(ew, q, v, τ j ) ∈ G, w ∈ Nq (v), q ∈ R
+
+
+
+, (3) where TE τj is the temporal encoding of timestamp τj and gl+1 (·) is a learn-able linear transformation per layer. Here T-MSG( ·) denotes the temporal mes-sage function : it computes the message propagated along an edge by applying FITTER: Vocabulary-Agnostic Cross-Domain Inference on TKGs 9
+
+a temporal scoring function, such as T(NT)ComplEx [13], to the neighbor rep-resentation elw, the query-relation representation rq , and the injected temporal encoding. This is how time enters propagation: the temporal encoding modulates each message rather than being appended as a separate feature. 
+
+Local quadruple representation. The local entity graph restricts propagation to a temporal window centered around the query timestamp: 
+
+Glocal = {Gi−k, . . . , G i, . . . , G i+k}, (4) where k controls the window size. The local representation follows the same temporal-aware propagation as Eq. 3 but restricted to Glocal :
+
+e0 
+
+> v|s,τ i,local
+
+= 1v=s · rp, v ∈ Glocal , (5) 
+
+el+1  
+
+> v|s,τ i,local
+
+= AGG 
+
+
+
+T-MSG  elw, local , rq , g l+1 (TE τj )
+
+(ew, q, v, τ j ) ∈ Glocal , w ∈ Nq (v), q ∈ R
+
+
+
+. (6) 
+
+Context fusion and scoring. The final entity representation combines local and global contexts: 
+
+Vs,p,o = α eo|s,τ i,local + (1 − α) eo|s, (7) where α balances short-term and long-range temporal information. The quadru-ple score is then computed as: 
+
+S(s, p, o, τ i) = fθ
+
+ Vs,p,o , TE τi
+
+, (8) where fθ is a multilayer perceptron. By integrating transferable temporal en-codings into both global and local message propagation, FITTER captures both immediate temporal interactions and long-range temporal dependencies, improv-ing cross-domain temporal transferability. 
+
+5.3 Loss Function 
+
+Given a temporal query (s, p, ?, τ ), FITTER predicts scores for candidate entities using the temporal-aware representations described above. We train the model using a binary cross-entropy objective with negative sampling. For each positive quadruple (s, p, o, τ ), negative samples are generated by corrupting the head or tail entity. The training objective is: 
+
+L = − X 
+
+> (s,p,o,τ )∈Q
+
+h
+
+y log σ S(s, p, o, τ ) + (1 − y) log  1 − σ S(s, p, o, τ ) i
+
+, (9) where y ∈ { 0, 1} denotes the label of the quadruple and σ(·) is the sigmoid function. This objective encourages FITTER to distinguish valid temporal facts from corrupted quadruples while learning transferable temporal and structural representations. 
+
+Theoretical analysis. We present a formal analysis of FITTER’s ability to model temporal transferability, diverse temporal periodicities, and various tem-poral frequencies in Appendix I. 10 J. Pan et al. 
+
+## 6 Experimental Setup 
+
+Datasets To evaluate cross-domain transfer, we conduct link prediction experi-ments across six widely-used TKG benchmark datasets 4 that differ substantially in domain, temporal granularity, and time span: ICEWS14 [6], ICEWS05-15 [6], GDELT [30], ICEWS18 [12], YAGO [12], and WIKI[15]. These datasets cover a diverse range of domains and temporal characteristics: 1. Inference Type: ICEWS14, ICEWS05-15, and GDELT were designed for transductive (temporal interpolation) inference, while ICEWS18, YAGO and WIKI were developed for semi-inductive (temporal extrapolation) tasks. 2. Domain Coverage: ICEWS14, ICEWS05-15, and ICEWS18 are subsets of the Integrated Crisis Early Warning System (ICEWS) [14], consisting of news event data. GDELT is a large-scale graph focused on capturing human behavior events. YAGO and WIKI are derived from the knowledge bases for commonsense facts. 3. Temporal Granularity: ICEWS14, ICEWS05-15, and ICEWS18 use daily timestamps. GDELT provides fine-grained 15-minute intervals, while YAGO and WIKI use yearly granularity. 4. Time Span: ICEWS14 and GDELT, ICEWS18 cover only 1 year, while ICEWS05-15 spans 11 years. Besides, YAGO and WIKI span a long range around 200 years. We perform fully-inductive cross-domain evaluation : the model is trained on one TKG and evaluated directly on a different TKG without retraining, ensur-ing no overlap in entities, relations, or timestamps between training and inference graphs. Table 6 in the Appendix shows the dataset splits. 
+
+Experimental protocol For each cross-domain scenario, the model is trained on 
+
+Gtrain (the source TKG training split), with the best checkpoint selected on the source TKG validation split. The trained model is then applied in a fully-inductive manner to the target TKG Ginf , whose facts are partitioned as Qinf =
+
+Qmsg ∪ Qvalid ∪ Qtest following Section 2.1. Concretely, Qmsg corresponds to the target TKG training split and is used solely for inference-time message passing to build entity representations; no gradient updates are performed on it. Qvalid 
+
+(target TKG validation split) is used to tune inference-time hyperparameters such as the local window size k and fusion weight α. Qtest (target TKG test split) yields the final reported results. This ensures strict separation between training supervision on the source graph and fully-inductive inference on the target graph, with no overlap in entities, relations, or timestamps across Gtrain 
+
+and Ginf .  
+
+> 4Code, pre-trained checkpoints, and datasets are available at https://github.com/ shouhulantian/FITTER. FITTER: Vocabulary-Agnostic Cross-Domain Inference on TKGs 11
+
+Baselines We evaluate FITTER under two regimes: 
+
+(i) Fully-inductive cross-domain transfer. For cross-domain transfer, we compare against INGRAM [17] and ULTRA [5], two strong fully-inductive rea-soning models originally developed for static knowledge graphs. Both methods learn vocabulary-agnostic relational representations that generalize to unseen en-tities and relations, making them natural baselines for cross-domain evaluation. We retrain both models on temporal knowledge graphs under the same experi-mental protocol used for FITTER. Transductive temporal extrapolation models such as RE-NET [12], CyGNet [35], and TiRGN [19] are architecturally incom-patible with this setting, as they depend on entity-indexed parameters undefined for unseen entities; we discuss this in detail in Appendix C. 
+
+(ii) Transductive in-domain evaluation. For standard transductive evalu-ation, we compare FITTER against representative TKGE models, including TComplEx and TNTComplEx [13], as well as recent fully-inductive KG reason-ing methods adapted to the temporal setting, including TRIX [34], ULTRA [5], and GraphOracle [4]. GraphOracle is included only in the transductive setting: we identified evaluation-time leakage in the original results and, after correction, the model became computationally impractical for cross-domain evaluation (see Appendix B). 
+
+Evaluation Metrics We adopt link prediction task to evaluate our proposed model. During the test step, we follow the procedure of [32] to generate can-didate quadruples. From a test quadruple (s, p, o, τ ), we replace s with all ¯s ∈ V
+
+and o with all ¯o ∈ V to get candidate answer quadruples (s, p, ¯o, τ ) and (¯ s, p, o, τ )
+
+to queries (s, p, ?, τ ) and (? , p, o, τ ). For each query, all candidate answer quadru-ples will be ranked by their scores using a time-aware filtering strategy [8]. We evaluate our models with three metrics: Mean Reciprocal Rank (MRR), the mean of the reciprocals of predicted ranks of correct quadruples, and Hits@(1/10), the percentage of ranks not higher than 1/10. For all experiments, the higher the better. We provide the hyperparameters and training details in Section F in the Appendix. 
+
+## 7 Experimental Result 
+
+Our central claim is that FITTER enables fully-inductive cross-domain transfer across temporal knowledge graphs. To evaluate this, we investigate the follow-ing questions: RQ1: Does FITTER achieve strong cross-domain transfer across TKGs with different domains, temporal granularities, and time spans? RQ2: 
+
+Does the proposed temporal embedding effectively capture transferable temporal structural patterns? RQ3: Which components are essential for enabling effective cross-domain transfer? 
+
+7.1 Cross-Domain Transfer Performance 
+
+To answer RQ1 , we evaluate FITTER in fully-inductive cross-domain transfer: the model is trained on one TKG and applied directly to a structurally and tem-12 J. Pan et al. 
+
+Table 1: Fully-inductive link prediction results. Each block shows training on one dataset and testing on the remaining without fine-tuning . Best results are in 
+
+bold .                                                                                                                                                                                                                
+
+> Trained on ICEWS14
+> Model To ICEWS05-15 To GDELT To ICEWS18 To YAGO To WIKI Total Avg
+> MRR H@1 H@10 MRR H@1 H@10 MRR H@1 H@10 MRR H@1 H@10 MRR H@1 H@10 MRR H@1 H@10 INGRAM 6.3 1.3 16.3 7.7 3.0 15.9 10.3 7.0 13.4 17.5 13.2 25.6 1.7 0.4 4.2 8.7 5.0 15.1 ULTRA 30.1 21.4 52.3 17.0 10.0 30.0 18.8 9.5 43.4 63.7 50.0 86.5 42.4 29.2 67.6 34.4 24.0 56.0 TRIX 32.7 22.4 53.3 17.2 10.4 33.0 18.0 9.2 36.9 72.6 64.7 87.2 41.4 29.1 65.5 36.4 27.2 55.2
+> FITTER 42.9 35.3 55.3 26.1 17.2 43.8 22.8 12.8 44.4 79.2 73.6 88.6 51.5 39.4 72.0 44.5 35.7 60.8 Trained on ICEWS05-15
+> Model To ICEWS14 To GDELT To ICEWS18 To YAGO To WIKI Total Avg
+> MRR H@1 H@10 MRR H@1 H@10 MRR H@1 H@10 MRR H@1 H@10 MRR H@1 H@10 MRR H@1 H@10 INGRAM 11.1 3.8 27.8 3.8 1.0 7.1 6.2 2.0 15.3 12.4 7.6 21.2 6.3 4.1 10.5 8.4 3.6 17.9 ULTRA 46.5 34.3 70.4 17.9 10.2 32.4 14.5 8.3 32.1 61.2 46.6 90.9 40.2 27.4 64.8 36.5 25.6 58.1 TRIX 45.5 33.3 71.0 17.9 10.2 32.3 14.6 8.4 32.1 61.2 46.7 87.5 43.3 29.4 65.8 36.5 25.6 57.7
+> FITTER 51.5 41.5 70.6 18.9 10.2 36.7 15.8 8.7 29.7 72.2 65.0 86.5 50.0 37.8 71.0 41.7 32.6 58.9 Trained on GDELT
+> Model To ICEWS14 To ICEWS05-15 To ICEWS18 To YAGO To WIKI Total Avg
+> MRR H@1 H@10 MRR H@1 H@10 MRR H@1 H@10 MRR H@1 H@10 MRR H@1 H@10 MRR H@1 H@10 INGRAM 8.6 2.9 20.7 5.8 1.2 14.4 5.0 2.3 9.3 7.4 3.3 15.0 5.3 3.9 7.3 6.7 2.4 14.9 ULTRA 33.6 24.5 50.7 38.3 26.8 60.5 14.4 8.6 31.8 48.5 40.1 63.2 36.5 27.2 61.2 34.3 25.4 53.5 TRIX 34.2 25.2 51.7 39.3 27.8 61.0 15.5 9.3 32.9 51.3 42.3 65.5 37.8 29.2 63.0 35.6 26.8 54.8
+> FITTER 43.7 32.4 65.7 45.5 33.1 70.0 20.2 10.2 40.4 63.3 50.2 76.8 50.7 38.8 70.7 44.7 33.0 64.7
+
+porally different TKG without retraining (Table 1). FITTER consistently and substantially outperforms all inductive baselines across all 15 transfer scenar-ios, confirming that our vocabulary-agnostic representations successfully transfer across domain boundaries. From the results, we highlight the following observa-tions: 
+
+Takeaway 1. FITTER generalizes well to datasets with varying temporal granularities and spans .The time span of the experimental datasets ranges from just 1 month (GDELT) to 189 years (YAGO), while their temporal granularities vary from 15 minutes (GDELT) to 1 year (YAGO). Despite being trained on one dataset and evalu-ated on another with significantly different temporal characteristics, FITTER consistently achieves strong performance across all scenarios. This demonstrates the robustness and generalization ability of our sequential temporal embedding in handling diverse and unseen temporal information regardless of granularity and span changes. Furthermore, the performance gap between FITTER and ULTRA is more pronounced when trained on ICEWS14 compared to ICEWS05-15, suggesting that the proposed sequential temporal embedding is particularly beneficial for smaller datasets. 
+
+Takeaway 2. FITTER generalizes well across datasets from different do-mains and densities .FITTER: Vocabulary-Agnostic Cross-Domain Inference on TKGs 13 
+
+The experimental datasets cover a wide range of domains, from encyclope-dic knowledge in YAGO to diplomatic event data in ICEWS. FITTER achieves impressive results even when trained on one domain and evaluated on another (see “Trained on ICEWS14 to YAGO”), demonstrating the model’s ability to transfer across domains. This highlights that the learned quadruple representa-tions from the relation encoder and quadruple encoder are capable of capturing domain-specific structural knowledge. Moreover, the datasets also vary in den-sity: GDELT has more frequent events per timestamp, while ICEWS14 is rel-atively sparse. FITTER consistently performs well in cross-dataset evaluation, demonstrating its robustness in event densities. 
+
+Takeaway 3. FITTER generalizes well to both temporal knowledge graph interpolation and extrapolation tasks. FITTER achieves strong results when trained on the interpolation task set-ting and tested on the extrapolation settings (see “Trained on ICEWS14 to ICEWS18”). We further observe that ULTRA retains an advantage over FIT-TER on Hits@10 for YAGO when trained on ICEWS05-15 (90.9 vs. 86.5), even though FITTER leads on MRR. Notably, over 90% of test queries in YAGO follow a Strict Recurrency pattern, where the same query appears in the imme-diately preceding snapshot [7]. When historical recurrence is dominant, the local entity graph already places a large fraction of correct answers in the top-10, lim-iting the additional benefit of temporal embeddings for recall-oriented metrics such as Hits@10. However, when trained on GDELT and tested on YAGO, the performance gap becomes much more evident. Only 2.2% of test queries in GDELT follow 
+
+Strict Recurrency pattern, compared to around 10% in ICEWS14. This low Strict Recurrency pattern distribution limits the learning on the local entity graph and transferability from GDELT to YAGO. Therefore, temporal embeddings in FITTER become essential to transfer the Strict Recurrency pattern from GDELT to YAGO. This highlights the importance of temporal embeddings for Temporal Transferability across TKGs by modeling relative temporal ordering. A similar performance trend is observed when testing on WIKI. However, the performance gap between ULTRA and FITTER is larger, as WIKI contains a lower proportion of Strict Recurrency queries 5.We further compare FITTER against LLM-based temporal reasoning meth-ods on extrapolation datasets in Table 2. ICL [16] and GenTKG [22] are designed solely for temporal extrapolation; because scoring all candidate entities is com-putationally prohibitive for LLMs, they do not report MRR. Despite being a purely structure-driven model with no access to textual descriptions or language       
+
+> 5We evaluate transfer to temporal extrapolation datasets but do not pre-train on them. Extrapolation training is unidirectional (past-only) and overemphasises the
+> Strict Recurrency pattern, which limits the learning of the bidirectional temporal structure needed for interpolation; empirically, extrapolation pre-training reduces transfer MRR to interpolation targets by roughly 20% . Interpolation datasets do not heavily depend on this pattern, so interpolation pre-training yields temporal representations that transfer well to both settings. 14 J. Pan et al.
+
+Table 2: Comparison with LLM-based temporal reasoning models on extrapola-tion datasets, trained on ICEWS14. ICL and GenTKG are evaluated only on ICEWS18 and YAGO, as they are designed solely for temporal extrapolation. LLM-based models cannot compute MRR because scoring all candidate enti-ties is computationally prohibitive; their results are therefore fixed regardless of training source. Best results in bold .                    
+
+> Model ICEWS18 YAGO
+> MRR H@1 H@10 MRR H@1 H@10 ICL [16] –18.2 41.4 –72.6 84.6 GenTKG [22] –24.3 42.1 –79.2 84.3 FITTER 22.8 12.8 44.4 79.2 73.6 88.6
+
+model priors, FITTER achieves higher MRR and Hits@10 on both ICEWS18 and YAGO. GenTKG attains higher Hits@1 on ICEWS18, partly because it pre-filters candidates using entity-relation co-occurrence statistics, which narrows the prediction space. FITTER does not rely on such filtering and generalises to both interpolation and extrapolation settings in a single unified framework. 
+
+7.2 Transductive Competitiveness 
+
+Table 3 compares FITTER with TComplEx [13], TNTComplEx [13], TRIX [34], and ULTRA [5] in the standard supervised transductive setting. FITTER outper-forms both TRIX and ULTRA across all datasets on MRR, demonstrating that the temporal encoding in FITTER provides a clear benefit even in the transduc-tive setting. At the same time, FITTER does not match the fully-trained trans-ductive models TComplEx and TNTComplEx, which fit per-dataset embedding tables that scale with entity, relation, and timestamp vocabulary sizes. Despite this, FITTER recovers 89–96% of MRR and 97–99% of Hits@10 on ICEWS14 and ICEWS05-15 using a single fixed vocabulary-agnostic model ( ≈248–275K parameters). The gap is larger on GDELT (MRR recovery ≈71%), where fine-grained 15-minute timestamps and dense event structure give dataset-specific em-beddings more room to specialize. These results show that the cost of vocabulary-agnostic cross-domain generalization is modest on standard benchmarks, while unlocking the fully-inductive cross-domain transfer capability demonstrated in Table 1. 
+
+7.3 Temporal Analysis and Ablation Study Temporal structural patterns (RQ2). To evaluate the ability of TE to cap-ture temporal structural patterns, we compare FITTER with ULTRA on two representative patterns using the subset from [26]: symmetric quadruples, where 
+
+(s, p, o, τ 1) implies (o, p, s, τ 2), and evolving quadruples, where (s, p, o, τ 1) transi-tions to (s, p ′, o, τ 2). As shown in Table 4a, FITTER consistently outperforms ULTRA on both patterns, demonstrating that incorporating relative temporal FITTER: Vocabulary-Agnostic Cross-Domain Inference on TKGs 15 
+
+Table 3: Transductive (in-domain) results. TComplEx and TNTComplEx use per-dataset embedding tables; GraphOracle, TRIX, ULTRA, and FITTER use fixed vocabulary-agnostic models. Best results in bold ; best among vocabulary-agnostic baselines underlined. † GraphOracle results are post-correction after fixing two eval-time data leakage bugs; see Appendix B.                                                                               
+
+> Model ICEWS14 ICEWS05-15 GDELT
+> MRR H@10 #Param MRR H@10 #Param MRR H@10 #Param TComplEx 61.9 76.7 2,035,968 66.5 81.1 3,841,792 34.6 51.5 333,104 TNTComplEx 60.7 77.2 2,624,856 66.6 81.7 3,101,800 34.1 51.5 354,300 GraphOracle †37.6 62.8 73,329 38.6 63.1 73,329 –––TRIX 48.6 71.9 342,210 45.6 72.2 342,210 21.0 47.2 342,210 ULTRA 49.5 73.1 169,750 45.1 72.0 169,750 20.0 45.5 169,750 FITTER 58.3 76.0 247,937 59.0 78.7 274,937 24.5 42.7 247,937
+> Gain vs. ULTRA +8.8 +2.9 –+13.9 +6.7 –+4.5 −2.8 –
+> Recovery vs. transductive baselines 94.2% 98.4% –88.6% 96.3% –70.8% 82.9% –
+
+signals enhances the model’s ability to learn and generalize temporal structural patterns. 
+
+Ablation study (RQ3). Table 4b ablates the key components of FITTER. GQR alone notably decreases Hits@1 but improves Hits@10, reflecting its role in capturing long-range context, while LQR alone reduces Hits@10 but improves Hits@1, reflecting its focus on local interactions; combining both is essential. Adding TE to LQR+GQR yields substantial gains: +8.1 MRR and +10.8 H@1 on transductive, and +4.0 MRR and +8.9 H@1 on cross-domain evaluation, confirming that transferable temporal encoding contributes significantly beyond structural propagation alone. Different TE integration strategies (TE-cat vs. TE-add) and T-MSG scoring variants show only minor differences, indicating the integration format is secondary. 
+
+## 8 Conclusion 
+
+We present FITTER, the first temporal KG embedding model for cross-domain transfer , requiring no dataset-specific entity, relation, or timestamp embeddings. FITTER uses sinusoidal positional encodings for granularity-agnostic temporal representation and relation interaction graphs for vocabulary-agnostic structural transfer. Across 15 cross-dataset transfer scenarios spanning six TKGs, FITTER consistently outperforms inductive baselines while remaining competitive with transductive models. Future directions include multi-source pre-training and scal-ing to more diverse TKG collections. 
+
+## Acknowledgements 
+
+We gratefully acknowledge computing time on the HoreKa supercomputer at the National High-Performance Computing Center at KIT (NHR@KIT), jointly 16 J. Pan et al. 
+
+Table 4: Left: performance on temporal structural pattern subsets (trained on ICEWS14, tested on ICEWS05-15 subsets). Right: ablation study for key components (trained on ICEWS14, evaluated on ICEWS14 (transductive) and ICEWS05-15 (cross-domain)). T-MSG variants refer to different temporal mes-sage scoring functions. 
+
+(a) Temporal structural patterns.           
+
+> Model Symmetric Evolve
+> MRR H@1 H@10 MRR H@1 H@10 ULTRA 52.5 39.8 85.8 46.2 32.5 73.9 FITTER+TE 67.0 53.7 90.7 59.8 46.7 84.3
+
+(b) Ablation study.                                                
+
+> Strategy Transductive Fully-inductive
+> MRR H@1 H@10 MRR H@1 H@10 FITTER 58.3 48.9 76.0 42.9 35.3 55.3 GQR only 49.2 37.3 72.6 37.9 25.6 62.6
+> LQR only 46.5 39.0 60.0 40.0 32.5 52.6 LQR+GQR w/o TE 50.2 38.1 74.3 38.9 26.4 62.1 w/o TE-cat 56.3 47.0 74.8 41.5 33.4 53.0 with TE-add 57.3 47.0 75.8 42.7 34.0 55.0 T-MSG (TTransE) 56.3 45.6 75.8 40.9 33.3 54.3 T-MSG (TNTComplEx) 58.0 48.0 75.8 41.3 34.3 55.3
+
+funded by the German Federal Ministry of Education and Research (BMBF), the Ministry of Science, Research, and the Arts of Baden-Württemberg, and the German Research Foundation (DFG). Jiaxin Pan and Osama Mohammed acknowledge funding from the EU Chips Joint Undertaking (GA 101140087, SMARTY) and from the BMBF sub-project 16MEE0444. Daniel Hernández is funded by the German Research Foundation (DFG) – SFB 1574 – 471687386. 
+
+## Declaration of Use of Generative AI 
+
+Claude (Anthropic) was utilized to assist with editing and refining sections of this work, including text. The authors remain fully responsible for all scientific con-tent, experimental results, and conclusions presented in this paper. All writing, research design, implementation, and analysis were carried out by the authors; generative AI was used solely as an editing aid and did not contribute to the research itself. 
+
+## References 
+
+1. Cai, L., Mao, X., Zhou, Y., Long, Z., Wu, C., Lan, M.: A survey on temporal knowledge graph: Representation learning and applications (2024), https://arxiv. org/abs/2403.04782 2. Chen, M., Zhang, W., Zhu, Y., Zhou, H., Yuan, Z., Xu, C., Chen, H.: Meta-knowledge transfer for inductive knowledge graph embedding. In: Proceedings of the 45th international ACM SIGIR conference on research and development in information retrieval. pp. 927–937 (2022) 3. Ding, Z., Cai, H., Wu, J., Ma, Y., Liao, R., Xiong, B., Tresp, V.: zrllm: Zero-shot relational learning on temporal knowledge graphs with large language models. In: FITTER: Vocabulary-Agnostic Cross-Domain Inference on TKGs 17 Proceedings of the 2024 Conference of the North American Chapter of the Asso-ciation for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers). pp. 1877–1895 (2024) 4. Du, E., Liu, S., Zhang, Y.: Graphoracle: Efficient fully-inductive knowledge graph reasoning via relation-dependency graphs. In: Proceedings of the AAAI Conference on Artificial Intelligence. vol. 40, pp. 19055–19063 (2026) 5. Galkin, M., Yuan, X., Mostafa, H., Tang, J., Zhu, Z.: Towards foundation mod-els for knowledge graph reasoning. In: The Twelfth International Conference on Learning Representations (2024) 6. García-Durán, A., Dumančić, S., Niepert, M.: Learning sequence encoders for tem-poral knowledge graph completion. In: Proceedings of the 2018 conference on em-pirical methods in natural language processing. pp. 4816–4821 (2018) 7. Gastinger, J., Meilicke, C., Errica, F., Sztyler, T., Schülke, A., Stuckenschmidt, H.: History repeats itself: A baseline for temporal knowledge graph forecasting. In: IJCAI (2024) 8. Goel, R., Kazemi, S.M., Brubaker, M., Poupart, P.: Diachronic embedding for temporal knowledge graph completion. In: Proceedings of the AAAI Conference on Artificial Intelligence. vol. 34, pp. 3988–3995 (2020) 9. Han, Z., Chen, P., Ma, Y., Tresp, V.: Explainable subgraph reasoning for fore-casting on temporal knowledge graphs. In: International conference on learning representations (2020) 10. Hoffart, J., Suchanek, F.M., Berberich, K., Weikum, G.: Yago2: A spatially and temporally enhanced knowledge base from wikipedia. Artificial intelligence 194 ,28–61 (2013) 11. Jia, Z., Pramanik, S., Saha Roy, R., Weikum, G.: Complex temporal question answering on knowledge graphs. In: Proceedings of the 30th ACM international conference on information & knowledge management. pp. 792–802 (2021) 12. Jin, W., Qu, M., Jin, X., Ren, X.: Recurrent event network: Autoregressive struc-ture inferenceover temporal knowledge graphs. In: Proceedings of the 2020 Confer-ence on Empirical Methods in Natural Language Processing (EMNLP). pp. 6669– 6683 (2020) 13. Lacroix, T., Obozinski, G., Usunier, N.: Tensor decompositions for temporal knowl-edge base completion. In: International Conference on Learning Representations (2020), https://openreview.net/forum?id=rke2P1BFwS 14. Lautenschlager, J., Shellman, S., Ward, M.: Icews event aggregations. Harvard Dataverse 3(595), 28 (2015) 15. Leblay, J., Chekol, M.W.: Deriving validity time in knowledge graph. In: Compan-ion proceedings of the the web conference 2018. pp. 1771–1776 (2018) 16. Lee, D.H., Ahrabian, K., Jin, W., Morstatter, F., Pujara, J.: Temporal knowledge graph forecasting without knowledge using in-context learning. In: Proceedings of the 2023 conference on empirical methods in natural language processing. pp. 544–557 (2023) 17. Lee, J., Chung, C., Whang, J.J.: Ingram: Inductive knowledge graph embedding via relation graphs. In: International Conference on Machine Learning. pp. 18796– 18809. PMLR (2023) 18. Lehmann, J., Isele, R., Jakob, M., Jentzsch, A., Kontokostas, D., Mendes, P.N., Hellmann, S., Morsey, M., Van Kleef, P., Auer, S., et al.: Dbpedia–a large-scale, multilingual knowledge base extracted from wikipedia. Semantic web 6(2), 167–195 (2015) 18 J. Pan et al. 19. Li, Y., Sun, S., Zhao, J.: Tirgn: Time-guided recurrent graph network with local-global historical patterns for temporal knowledge graph reasoning. In: IJCAI. pp. 2152–2158 (2022) 20. Li, Z., Guan, S., Jin, X., Peng, W., Lyu, Y., Zhu, Y., Bai, L., Li, W., Guo, J., Cheng, X.: Complex evolutional pattern learning for temporal knowledge graph reasoning. In: Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 2: Short Papers). pp. 290–296 (2022) 21. Liang, K., Meng, L., Liu, M., Liu, Y., Tu, W., Wang, S., Zhou, S., Liu, X.: Learn from relational correlations and periodic events for temporal knowledge graph rea-soning. In: Proceedings of the 46th international ACM SIGIR conference on re-search and development in information retrieval. pp. 1559–1568 (2023) 22. Liao, R., Jia, X., Li, Y., Ma, Y., Tresp, V.: Gentkg: Generative forecasting on temporal knowledge graph with large language models. In: NAACL-HLT (Findings) (2024) 23. Liu, S., Grau, B., Horrocks, I., Kostylev, E.: Indigo: Gnn-based inductive knowl-edge graph completion using pair-wise encoding. Advances in Neural Information Processing Systems 34 , 2034–2045 (2021) 24. Liu, Y., Ma, Y., Hildebrandt, M., Joblin, M., Tresp, V.: Tlogic: Temporal logical rules for explainable link forecasting on temporal knowledge graphs. In: Proceed-ings of the AAAI conference on artificial intelligence. vol. 36, pp. 4120–4127 (2022) 25. Luo, R., Gu, T., Li, H., Li, J., Lin, Z., Li, J., Yang, Y.: Chain of history: Learning and forecasting with llms for temporal knowledge graph completion. arXiv preprint arXiv:2401.06072 (2024) 26. Pan, J., Nayyeri, M., Li, Y., Staab, S.: Hge: embedding temporal knowledge graphs in a product space of heterogeneous geometric subspaces. In: Proceedings of the AAAI Conference on Artificial Intelligence. vol. 38, pp. 8913–8920 (2024) 27. Su, J., Ahmed, M., Lu, Y., Pan, S., Bo, W., Liu, Y.: Roformer: Enhanced trans-former with rotary position embedding. Neurocomputing 568 , 127063 (2024) 28. Sun, H., Zhong, J., Ma, Y., Han, Z., He, K.: Timetraveler: Reinforcement learning for temporal knowledge graph forecasting. In: Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing. pp. 8306–8319 (2021) 29. Teru, K., Denis, E., Hamilton, W.: Inductive relation prediction by subgraph rea-soning. In: International conference on machine learning. pp. 9448–9457. PMLR (2020) 30. Trivedi, R., Dai, H., Wang, Y., Song, L.: Know-evolve: Deep temporal reasoning for dynamic knowledge graphs. In: international conference on machine learning. pp. 3462–3471. PMLR (2017) 31. Vrandečić, D., Krötzsch, M.: Wikidata: A free collaborative knowledgebase. Com-munications of the ACM 57 (10), 78–85 (2014) 32. Xu, C., Nayyeri, M., Alkhoury, F., Yazdi, H.S., Lehmann, J.: Tero: A time-aware knowledge graph embedding via temporal rotation. In: Proceedings of the 28th International Conference on Computational Linguistics. pp. 1583–1593 (2020) 33. Zhang, F., Zhang, Z., Ao, X., Zhuang, F., Xu, Y., He, Q.: Along the time: Timeline-traced embedding for temporal knowledge graph completion. In: Proceedings of the 31st ACM International Conference on Information & Knowledge Management. pp. 2529–2538 (2022) 34. Zhang, Y., Bevilacqua, B., Galkin, M., Ribeiro, B.: Trix: A more expressive model for zero-shot domain transfer in knowledge graphs. In: The Third Learning on Graphs Conference (2025) FITTER: Vocabulary-Agnostic Cross-Domain Inference on TKGs 19 35. Zhu, C., Chen, M., Fan, C., Cheng, G., Zhang, Y.: Learning from history: Model-ing temporal knowledge graphs with sequential copy-generation networks. In: Pro-ceedings of the AAAI Conference on Artificial Intelligence. vol. 35, pp. 4732–4740 (2021) 36. Zhu, Z., Zhang, Z., Xhonneux, L.P., Tang, J.: Neural bellman-ford networks: A general graph neural network framework for link prediction. Advances in neural information processing systems 34 , 29476–29490 (2021) 20 J. Pan et al. 
+
+## A Parameter Count and Complexity 
+
+From Table 5, we observe that the number of parameters in FITTER is agnostic to the dataset size. Since FITTER does not initialize embeddings based on |V |,
+
+|R|, or |T |, but instead relies on a fixed number of relation interactions |H|, its parameter count is only related to the embedding dimension d. This property makes FITTER especially suitable for transfer learning scenarios. The time complexity of FITTER is primarily determined by the quadruple encoder, as the number of relations |R| is significantly smaller than the number of entities |V |, allowing us to omit the complexity contribution of the relation en-coder. Furthermore, since the local entity graph is much smaller than the global entity graph, the computational upper bound is dominated by the global quadru-ple representation. Utilizing NBFNet [36] as the encoder, the time complexity for a single layer is O(|Q|d + |V |d2). For A layers, the total time complexity becomes O(A(|Q|d + |V |d2)) .The memory complexity of FITTER is also linear in the number of edges, expressed as O(A|Q|d), as the quadruple encoder maintains and updates repre-sentations for each edge in the temporal knowledge graph. 
+
+Inference-time cost. We report wall-clock inference cost on the largest bench-mark. Evaluating the full GDELT test split ( 341 ,961 quadruples) takes approxi-mately 21 hours on a single NVIDIA A100. The bottleneck is the NBFNet-style conditional message passing: it materialises and updates a representation for ev-ery edge and loads the entire inference graph into GPU memory, so the cost grows with graph size and density. GDELT is the worst case among our benchmarks be-cause its 15 -minute granularity produces a very dense event graph. Importantly, this cost is a property of inference on large target graphs and not a training requirement: FITTER never needs to be trained on a large graph in order to transfer to one. A model trained on the small ICEWS14 graph ( 1.8 h/epoch) already achieves 26 .1 MRR on GDELT without any retraining, so multi-source pre-training can rely entirely on multiple small and diverse TKGs. Reducing infer-ence cost on dense target graphs is a natural direction for future work; promising strategies include query-conditioned subgraph extraction and attention-based edge selection that prune the message-passing graph before propagation. Table 5: Parameter number and average training time for FITTER.                  
+
+> Model Datasets dParameter number Batch Size Average epoch time(h) FITTER ICEWS14 64 247,937 16 1.8 ICEWS05-15 64 247,937 221.5 GDELT 64 247,937 1123.3 FITTER: Vocabulary-Agnostic Cross-Domain Inference on TKGs 21
+
+Table 6: Detailed statistics of datasets.                                              
+
+> Dataset ICEWS14 ICEWS05-15 GDELT ICEWS18 YAGO WIKI Entities 7,128 10,488 500 23,033 10,623 12,554 Relations 230 251 20 256 10 24 Times 365 4017 366 303 189 232 Train 72,826 386,962 2,735,685 373,018 161,540 539,286 Validation 8,941 46,275 341,961 45,995 19,523 67,538 Test 8,963 46,092 341,961 49,995 20,026 63,110 Granularity Daily Daily 15 minutes Daily Yearly Yearly
+
+## B GraphOracle: Leakage Bugs and Exclusion Rationale 
+
+We attempted to include GraphOracle [4] as a baseline but discovered two in-dependent eval-time data leakage bugs in its data loader ( load_data.py ) that render all published results unreliable. We report the corrected numbers in Ta-ble 3 and exclude GraphOracle from cross-domain experiments for the additional reason of computational infeasibility. 
+
+Bug 1 — Relation-dependency graph leak. The relation edges fed to the RelationGraphEncoder 
+
+at evaluation time were constructed from the validation/test split rather than the training split, allowing relation co-occurrence patterns from the evaluation data to influence per-relation embeddings. 
+
+Bug 2 — Knowledge graph substrate leak. The query-conditioned subgraph used for BFS-style message passing was similarly built from the evaluation split. Be-cause the data loader adds both (h, r, t ) and its inverse (t, r inv , h ) for every quadruple, the literal answer edge (h, r, answer ) of every evaluation query is guaranteed to appear in the message-passing graph. A per-query walk-through confirmed that 100% of validation queries on ICEWS14 (17,649/17,649) have the exact answer edge present in the leaky graph. 
+
+Empirical impact. Two controlled runs on ICEWS14 (hidden_dim=80, n_layer=3) quantify the inflation: Run Test MRR Test H@10 Leaky (original) 0.671 0.915 Fully fixed 0.376 0.628 The combined inflation is +0 .295 absolute MRR (78% relative) on ICEWS14. 
+
+Computational infeasibility. After fixing the leakage bugs, GraphOracle’s sub-graph extraction step becomes a practical bottleneck: it expands the neighbour-hood of all query entities layer by layer, and the number of edges grows rapidly 22 J. Pan et al. 
+
+with graph density. On GDELT, which has far more events per timestamp than ICEWS14, validation alone was projected to exceed 29 hours on 4 ×A100 GPUs, making both training and cross-domain transfer infeasible. We therefore exclude GraphOracle from cross-domain experiments and report only its corrected trans-ductive results in Table 3. 
+
+## C Incompatibility of Transductive Temporal Extrapolation Models 
+
+A natural question is why we do not compare FITTER against well-known tem-poral knowledge graph reasoning models such as RE-NET [12], CyGNet [35], and TiRGN [19]. These are transductive temporal extrapolation models: they are trained and evaluated on a single graph with a fixed entity and relation vocabulary, and they forecast future facts within that same vocabulary. They are therefore architecturally incompatible with our fully-inductive cross-domain setting, in which the target inference graph introduces entirely unseen entities, relations, and timestamps. The root cause is that each of these models relies on entity-indexed parame-ters that are undefined for entities not seen during training. We verified this by inspecting their reference implementations: 
+
+– RE-NET [12] maintains per-entity recurrent states ( ent_embeds ) that are updated autoregressively over historical snapshots. Each state is indexed by a fixed entity id. 
+
+– CyGNet [35] builds a per-entity historical co-occurrence matrix that drives its copy-generation mechanism. The matrix is defined over the training entity vocabulary and cannot score entities absent from it. 
+
+– TiRGN [19] evolves per-entity dynamic embeddings through a GCN–GRU module ( dynamic_emb ), again keyed by fixed entity ids. Because the target graph presents a new entity vocabulary, none of these entity-indexed parameters can be instantiated at inference time. Adapting the models to accept unseen entities—for example, by replacing their entity-indexed states with a structural, vocabulary-agnostic encoder—would remove the mecha-nisms that define them and yield fundamentally different architectures. We there-fore restrict our cross-domain baselines to fully-inductive, vocabulary-agnostic models (INGRAM [17] and ULTRA [5]), which are the only prior methods di-rectly applicable to this setting. 
+
+## D Limitations 
+
+Although FITTER demonstrates strong fully-inductive inference performance in cross-dataset scenarios, several limitations remain. First, training on larger graphs does not always lead to improved performance. We hypothesize that variations in temporal patterns across datasets of different sizes may influence FITTER: Vocabulary-Agnostic Cross-Domain Inference on TKGs 23 
+
+results. Second, FITTER can be computationally intensive for dense temporal knowledge graphs, as its space complexity scales with the number of events. Third, FITTER is unable to perform relation prediction and time prediction. We aim to explore more efficient architectures and adaptive training strategies to address these challenges in future work. 
+
+## E Relative Representation Transfer 
+
+Subgraph (a) in Figure 3 shows the transfer of relative entity representations. In the left bottom KG, (South Korea meet 
+
+−−−−→ North Korea negotiate 
+
+−−−−−−−→ US ) ∧
+
+(South Korea dialogue with 
+
+−−−−−−−−−→ China negotiate 
+
+−−−−−−−→ US ) implies that South Korea negotiate 
+
+−−−−−−−→
+
+US. Given entity v1, v2, v3, v4, we can learn a structure that (v1
+
+meet 
+
+−−−−→ v2
+
+negotiate 
+
+−−−−−−−→
+
+v3) ∧ (v1
+
+dialogue with 
+
+−−−−−−−−−→ v4
+
+negotiate 
+
+−−−−−−−→ v3) implies that v1
+
+negotiate 
+
+−−−−−−−→ v3 during training. In the right part, we substitute v1, v2, v3, v4 with Germany, India, UK and EU respectively, then we can infer that Germany negotiate 
+
+−−−−−−−→ UK. Subgraph (b) depicts the transfer of relative relation representations. In the left part, the upper relation graph depicts the interaction of relations in the bottom KG: (dialogue with h2h 
+
+−−−→ meet t2h 
+
+−−−→ negotiate ) ∧ (dialogue with t2h 
+
+−−−→
+
+negotiate ). Given relation r1, r2, r3, we learn a relational structure: (r1
+
+h2h 
+
+−−−→
+
+r2
+
+t2h 
+
+−−−→ r3)∧(r1
+
+t2h 
+
+−−−→ r3) during training. In the right part, we substitute r1, r2,
+
+r3 with marries , father of and lives in respectively, then we can the relational structure for the KG in the right part. Subgraph (c) depicts the transfer of relative temporal ordering. In the left part, the upper relation graph depicts the relative temporal ordering of quadru-ples in the bottom TKG: (dialogue with ∆=6 
+
+−−−→ meet ∆=4 
+
+−−−→ negotiate )∧(dialogue with ∆=5 
+
+−−−→
+
+negotiate ). Given relation r1, r2, r3, we learn a relational structure: (r1
+
+∆=6 
+
+−−−→
+
+r2
+
+∆=4 
+
+−−−→ r3) ∧ (r1
+
+∆=5 
+
+−−−→ r3) during training. In the right part, we substitute r1,
+
+r2, r3 with marries , father of and lives in respectively, then we can the temporal transition information for the TKG in the right part. =⇒ 
+
+> dialogue with negotiate negotiate meet negotiate South Korea China US North Korea
+> =⇒
+> dialogue with negotiate negotiate meet negotiate Germany EU UK India
+
+(a) t2h t2h h2h dialogue with negotiate meet   
+
+> =⇒
+> t2h t2h h2h lives in marries father of dialogue with negotiate negotiate meet negotiate South Korea China US North Korea
+> =⇒
+> marries lives in father of lives in lives in A. Einstein M. Mari´ cBern H. Einstein
+
+(b) ∆t = 5 t2h ∆t = 4 t2h ∆t = 6 h2h dialogue negotiate meet 
+
+=⇒ 
+
+> ∆t = 5 t2h ∆t = 4 t2h ∆t= 6 h2h lives in marries father of dialogue 18-06-01 negotiate 18-06-06 negotiate 18-06-11 meet 18-06-07 negotiate 18-06-09 South Korea China US North Korea
+
+=⇒ 
+
+> marries 1900 lives in 1905 father of 1906 lives in 1910 lives in 1908 A. Einstein M. Mari´ cBern H. Einstein
+
+(c) 
+
+Fig. 3: Relative Representation Transfer 24 J. Pan et al. 
+
+## F Hyperparameter and Training Details 
+
+Our experiments were conducted on 4 NVIDIA A100 GPUs with 48GB of RAM. We set the maximal training epoch as 10 and negative samples as 512. We use a batch size of 16, 2, and 1 for training ICEWS14, ICEWS05-15 and GDELT respectively. We set the dimension size d as 64. We employed the AdamW opti-mizer and set the learning rate as 0.0005. More details can be seen in Table 7. For the baseline methods, we utilized the settings in their original papers. Table 7: Detailed hyperparameters. GN N r denotes the relation representation encoder, GN N q is quadruple representation encoder.                
+
+> Module Hyperparameter Pre-training
+> GN N r
+> # layers 6hidden dim 64 MSG Dual AGG sum
+> GN N e
+> # layers 6hidden dim 64 T-MSG TComplEx AGG sum
+> kICEWS14:0; ICEWS0515, GDELT:1
+> β10,000 Prediction fθ2-layer MLP
+> αICEWS14:0.5; ICEWS0515, GDELT:0.8
+
+## G Hyperparameter Analysis 
+
+We conduct a sensitivity analysis of three key hyperparameters, k, α, and β on model performance by pre-training on the ICEWS14 dataset. Figure 4 presents the MRR and H@10 results under different values of each hyperparameter while keeping all others fixed at their optimal settings. 
+
+Effect of k. As shown in Figure 4(a), increasing k, which controls the length of the local entity graph, leads to a gradual decline in both MRR and H@10. As ICEWS14 is a news dataset and contains mainly short-term temporal rela-tions, deeper propagation may cause oversmoothing and decrease the model’s performance. 
+
+Effect of α. Figure 4(b) shows that performance is highly sensitive to the choice of α, which balances the contribution of local and global temporal con-texts. Both MRR and H@10 significantly improve as α increases from 0 to 0.5, indicating the benefit of incorporating both types of temporal information. How-ever, performance degrades when α approaches 1, implying that overemphasis FITTER: Vocabulary-Agnostic Cross-Domain Inference on TKGs 25 
+
+on either context harms generalization. The results highlight the importance of maintaining a moderate balance between local and global temporal patterns. 
+
+Effect of β. As illustrated in Figure 4(c), the model is highly robust to the choice of β, which controls the sinusoidal frequency of temporal embeddings. Across a wide range of values—from 10 2 to 10 6—MRR and H@10 remain largely stable, with negligible performance fluctuations. The hyperparameter analysis reveals that α is the most critical parameter and requires careful tuning to balance local and global temporal information. The choice of k should be dataset-dependent; for datasets characterized by short-term temporal patterns, smaller values of k are preferable. In contrast, the model is relative insensitive to β, so we set it as 10,000 across all datasets. 0 1 2 3 40.45 0.50 0.55 0.60 0.65 0.70 0.75 0.80 k
+
+> MRR H@10
+
+(a) k’s performance 0 0.3 0.5 0.8 10.45 0.50 0.55 0.60 0.65 0.70 0.75 0.80  
+
+> MRR H@10
+
+(b) α’s performance 100 1000 10000 100000 1000000 0.45 0.50 0.55 0.60 0.65 0.70 0.75 0.80  
+
+> MRR H@10
+
+(c) β’s performance 
+
+Fig. 4: MRR and H@10 performance with different k, α and β. We report ICEWS14’s pre-training performance and keep all other hyper-parameters as the fixed best setting. 
+
+## H Case Study 
+
+To intuitively demonstrate FITTER’s capability in generating compact and dis-tinguishable embeddings, we employ PCA to visualize the distribution of em-beddings for five representative quadruples: Q1: (China, Host a Visit, Macky Sall, 2014-02-19), Q2:(China, Host a Visit, Teo Chee Hean, 2014-10-28), Q3: (China, Host a Visit, Chuck Hagel, 2014-04-08), Q4: (China, Host a Visit, Sar Kheng, 2014-06-03), and Q5: (China, Host a Visit, Barack Obama, 2014-12-25), as illustrated in Figure 5. The visualization reveals that the Global Quadruple Representation tends to capture general relational patterns, producing embed-dings that are closely clustered for the same query structure (China, Host a Visit, ?, ?). In contrast, the Local Quadruple Representation is more sensitive to imme-diate temporal context, resulting in more distinctive embeddings across different time points. This dual representation mechanism highlights FITTER’s strength in capturing both global structural semantics and local temporal dynamics. For example, for Q5, Barack Obama is frequently the tail entity for similar queries, leading the global encoder to assign him a high probability and correctly predict the answer. Meanwhile, in Q1, a supporting local event (Macky Sall, Make a 26 J. Pan et al. 1 0 1 2 3 4 5 62.0  
+
+> 1.5
+> 1.0
+> 0.5
+> 0.0 0.5 1.0 Q 1 Q 2 Q 3 Q 4 Q 5
+
+(a) Global Quadruple Representation 0.2 0.0 0.2 0.4 0.6 0.8 1.0 1.2 0.5   
+
+> 0.4
+> 0.3
+> 0.2
+> 0.1
+> 0.0 0.1 0.2 Q 1 Q 2 Q 3 Q 4 Q 5
+
+(b) Local Quadruple Representation 
+
+Fig. 5: PCA visualizations of five quadruples with (China, Host a visit, ?, ?) Visit, China, 2014-02-18) appears in the surrounding context, enabling the local quadruple encoder to identify Macky Sall correctly. However, the absence of any relevant local events involving Teo Chee Hean in the Q2 causes the model to mispredict Barack Obama. 
+
+H.1 Strict Recurrency Transfer 
+
+To provide concrete evidence for the claim that temporal encoding is what trans-fers the Strict Recurrency pattern across domains (Section 7), we isolate the Strict Recurrent subset of the YAGO test set and compare FITTER against ULTRA when both are trained on GDELT. Although only 2.2% of GDELT training queries are Strict Recurrent, this subset accounts for 92 .7% of YAGO test queries ( 37 ,138 queries). As shown in Table 8, FITTER substantially out-performs ULTRA on this subset, with a +25 .2 gain in Hits@10. Because ULTRA lacks temporal encoding, it cannot recover the recurrency signal when the source graph provides few recurrent examples, whereas FITTER’s relative temporal or-dering transfers the pattern directly. Table 8: Performance on the YAGO Strict Recurrent subset ( 92 .7% of YAGO test queries), with both models trained on GDELT. Best results in bold .
+
+Model Subset n MRR H@10 ULTRA Strict Recurrent 37 ,138 52 .3 68 .1
+
+FITTER Strict Recurrent 37 ,138 68.1 93.3 FITTER: Vocabulary-Agnostic Cross-Domain Inference on TKGs 27 
+
+H.2 Qualitative Error Analysis 
+
+To understand where FITTER’s gains come from, we perform a per-query anal-ysis of a model trained on ICEWS05-15 and tested on ICEWS14, comparing against ULTRA. First, grouping queries by relation (Table 9) shows that the improvement is concentrated on relations whose events cluster in short time windows: Host a visit and Consult gain +40 .1 and +32 .5 MRR respectively, whereas a temporally uniform relation such as Make statement sees only a marginal +4 .4 gain. This matches the intuition that temporal encoding helps most when the timing of events is informative. Table 9: Per-relation MRR (trained on ICEWS05-15, tested on ICEWS14). 
+
+∆MRR is FITTER minus ULTRA.                
+
+> Relation nULTRA FITTER ∆MRR Host a visit 432 37 .177 .2+40 .1
+> Consult 977 49 .682 .0+32 .5
+> Make statement 1500 46 .350 .7+4 .4
+
+Second, grouping queries by novelty (Table 10) shows that ULTRA already reaches 93 .9 Hits@10 on recurrent triples, leaving little headroom there. FIT-TER’s gains therefore concentrate on novel triples, whose (h, r ) pair has recent activity but whose exact (h, r, t ) combination has not been seen: here FITTER improves MRR by +14 .8, versus +10 .5 on recurrent triples. Temporal encoding lets the model exploit recent context to resolve genuinely new facts rather than merely repeating history. Table 10: MRR by query novelty (trained on ICEWS05-15, tested on ICEWS14). 
+
+∆MRR is FITTER minus ULTRA.             
+
+> Query type nULTRA FITTER ∆MRR Novel (h, r, t )5097 35 .550 .3+14 .8
+> Recurrent (h, r, t ) 3866 71 .481 .9+10 .5
+
+## I Theoretical Analysis 
+
+In this section, we provide a theoretical analysis demonstrating the model’s abil-ity to transfer across time and effectively capture a variety of periodic patterns. 28 J. Pan et al. 
+
+Temporal Transferability As illustrated in Figure 3, the temporal difference is the transferable information in TKGs. Therefore, we expect that such transfer-ability must be followed in the time embedding space. Here, we aim to show that if four time points’ indices— τ1, τ 2 in the training graph and τ ′
+
+> 1
+
+, τ ′ 
+
+> 2
+
+in the test graph—hold ∆T = τ2 − τ1 = ∆T ′ = τ ′ 
+
+> 2
+
+− τ ′
+
+> 1
+
+, then we expect that such transferability is preserved via sinusoidal positional encoding in the form of Eu-clidean distance ∥TE( τ2) − TE( τ1)∥ = ∥TE( τ ′
+
+> 2
+
+) − TE( τ ′
+
+> 1
+
+)∥ that is governed solely by their time difference ∆T , rather than the absolute times. The following theorem states and proves this: 
+
+Theorem 1 (Time-Shift Invariance in Sinusoidal Positional Embeddings). 
+
+Let d ∈ N be even and fix positive frequencies ω0, ω 1, . . . , ω d  
+
+> 2−1
+
+> 0. Define the 
+
+sinusoidal temporal embedding TE : N → Rd component-wise by 
+
+TE( t) 
+
+> 2n
+
+= sin  ωn t, TE( t) 
+
+> 2n+1
+
+= cos  ωn t, 0 ≤ n < d 
+
+> 2
+
+.
+
+For any four time-points indices τ1, τ 2, τ ′
+
+> 1
+
+, τ ′ 
+
+> 2
+
+∈ N set 
+
+∆τ := τ2 − τ1, ∆′ 
+
+> τ
+
+:= τ ′ 
+
+> 2
+
+− τ ′
+
+> 1
+
+.
+
+If ∆τ = ∆′ 
+
+> τ
+
+then 
+
+TE( τ2) − TE( τ1) = TE( τ ′
+
+> 2
+
+) − TE( τ ′
+
+> 1
+
+) .
+
+That is, the Euclidean distance between two sinusoidal embeddings depends only 
+
+on the time difference, not on the absolute timestamps. Proof (Step-by-step proof ). 
+
+Fix an index n ∈ { 0, . . . , d 
+
+> 2
+
+− 1} and two times t1, t 2 ∈ N. Denote 
+
+∆ = t2 − t1, Σ = t1 + t2.
+
+Using the standard sum-and-difference identities, 
+
+sin( ωnt2) − sin( ωnt1) = 2 sin 
+
+ ωn∆
+
+> 2
+
+
+
+cos 
+
+ ωnΣ
+
+> 2
+
+
+
+,
+
+cos( ωnt2) − cos( ωnt1) = − 2 sin 
+
+ ωn∆
+
+> 2
+
+
+
+sin 
+
+ ωnΣ
+
+> 2
+
+
+
+.
+
+Thus, the squared contribution of this frequency to the Euclidean distance is 
+
+sin( ωnt2) − sin( ωnt1)2 + cos( ωnt2) − cos( ωnt1)2 = 4 sin 2 ωn∆
+
+> 2
+
+
+
+,
+
+because cos 2 + sin 2 = 1 removes any dependence on Σ.Summing over all n gives 
+
+TE( t2) − TE( t1) 2 = 
+
+> d
+> 2−1
+
+X
+
+> n=0
+
+4 sin 2 ωn∆
+
+> 2
+
+
+
+= 4  
+
+> d
+> 2−1
+
+X
+
+> n=0
+
+sin 2 ωn∆
+
+> 2
+
+
+
+,FITTER: Vocabulary-Agnostic Cross-Domain Inference on TKGs 29 
+
+which is a function of ∆ = t2 − t1 alone. Consequently, if τ2 − τ1 = τ ′ 
+
+> 2
+
+− τ ′ 
+
+> 1
+
+then 
+
+∆τ = ∆′ 
+
+> τ
+
+and 
+
+TE( τ2) − TE( τ1) 2 = 4 X
+
+> n
+
+sin 2  ωn∆τ
+
+> 2
+
+
+
+= 4 X
+
+> n
+
+sin 2 ωn∆′
+
+> τ
+> 2
+
+
+
+= TE( τ ′
+
+> 2
+
+) − TE( τ ′
+
+> 1
+
+) 2. (5) Taking square roots results in the claimed equality of norms. 
+
+Capturing Diverse Periodicities and Frequencies Temporal facts expressed as 
+
+(s, p, o, τ ), where τ ∈ T represents the time annotation, can capture periodic phenomena, such as the Olympic Games occurring every four years or annual events like the Nobel Prize ceremonies. Modeling diverse periodic behaviors is crucial in the fully-inductive transfer learning, as it enables systems to accurately represent and analyze the dynamic evolution of diverse relationships and events. In this section, we prove that FITTER is capable of capturing periodic (with different frequencies) temporal facts. In the following theorem, we prove that the scorer in Equation 8 can capture and express various frequencies even if we assume there fθ is simply a linear function (with m linear nodes for representing 
+
+m different frequencies). For simplicity, we loosely use τ as the timestamp index 
+
+i in τi in the following. 
+
+Theorem 2 (Multi-Frequency Affine Scorer ). Let 
+
+– T > 1 be an integer time horizon ; 
+
+– dPE ≥ T be an even positional–encoding dimension; 
+
+– P1, . . . , P m, such that Pi | T for every i = 1 , . . . , m, is a family of positive integers. 
+
+– [TE( τ )] 2n = sin( ωnτ ), [TE( τ )] 2n+1 = cos( ωnτ ), 0 ≤ n < dPE  
+
+> 2
+
+,
+
+with arbitrary real frequencies ω0, . . . , ω dPE /2−1, be (standard) sinusoidal po-sitional encoding defined for any τ .
+
+– G = {V1, . . . , V m} ⊂ RdV be m fixed context vectors and, 
+
+– gi : {0, 1, . . . , T − 1} −→ R be a non-constant sequence for each i = 1 , . . . , m ,that we extend to all Z by Pi-periodicity: 
+
+gi(τ ) := gi
+
+ τ mod Pi
+
+, τ ∈ Z.30 J. Pan et al. 
+
+M =
+
+
+
+TE(0) ⊤
+
+TE(1) ⊤
+
+...
+
+TE( T −1) ⊤
+
+ ∈ RT ×dPE ,B(i) =
+
+
+
+TE( Pi)⊤ − TE(0) ⊤
+
+TE( Pi +1) ⊤ − TE(1) ⊤
+
+...
+
+TE( T −1+ Pi)⊤ − TE( T −1) ⊤
+
+ ∈ RT ×dPE .
+
+be encoding matrices, we stack B(i) block-diagonally: 
+
+eB := diag  B(1) , . . . , B (m) ∈ RmT ×m d PE .
+
+Define 
+
+g := 
+
+
+
+g1
+
+...
+
+gm
+
+ ∈ RmT , wPE := 
+
+
+
+w(1) PE 
+
+...
+
+w(m)PE 
+
+ ∈ Rm d PE .
+
+(A) Compatibility (C). There exists wPE ∈ Rm d PE solving the linear system 
+
+Im ⊗M
+
+eB
+
+!
+
+wPE = g
+
+0
+
+!
+
+(C)
+
+where Im ⊗ M is the block-diagonal Kronecker product whose i-th diagonal block equals M .
+
+(B) Existence of a scorer (S). There exist parameters 
+
+θ =  WPE , w V , b  ∈ RdPE ×m × RdV × R
+
+such that the affine map 
+
+fθ
+
+ V, TE( τ ) := w⊤ 
+
+> V
+
+V + W ⊤ 
+
+> PE
+
+TE( τ ) + b ∈ Rm
+
+obeys, for each i = 1 , . . . , m ,
+
+(i) Pi-periodicity in τ ∈ Z;
+
+(ii) non-constancy as a function of τ ;
+
+(iii) interpolation on the basic window: 
+
+fθ
+
+ Vi, TE( τ )  
+
+> i
+
+= w⊤ 
+
+> V
+
+Vi + gi(τ ), 0 ≤ τ < T. FITTER: Vocabulary-Agnostic Cross-Domain Inference on TKGs 31 
+
+Given C and S, the following holds 
+
+C ⇐⇒ S .When these equivalent conditions hold one may choose any solution wPE of (C),set 
+
+WPE := w(1) PE · · · w(m)PE 
+
+, b = 0 ,
+
+and pick an arbitrary wV ; the resulting θ satisfies S.Proof (Step-by-step proof of C ⇐⇒ S ). We write wPE = ( w(1) PE , . . . , w (m)PE ) with each block w(i)PE ∈ RdPE .
+
+Part I: C =⇒ S . Assume a vector wPE satisfies system (C). Here, we show that if the compatibility condition holds, then a scorer exists. We divide the proof into four parts as follows: 
+
+Step 1: The top block (Im ⊗ M )wPE = g is equivalent to 
+
+M w (i)PE = gi 0≤τ <T 
+
+, i = 1 , . . . , m. (1) 
+
+Step 2: The block eB w PE = 0 gives for every iB(i) w(i)PE = 0 = ⇒ w(i)⊤
+
+> PE
+
+ TE( τ + Pi) − TE( τ ) = 0 , 0 ≤ τ < T. 
+
+Thus 
+
+w(i)⊤ 
+
+> PE
+
+TE( τ + Pi) = w(i)⊤ 
+
+> PE
+
+TE( τ ), 0 ≤ τ < T. (2) Replacing τ by τ + Pi and iterating k times shows 
+
+w(i)⊤ 
+
+> PE
+
+TE( τ + kP i) = w(i)⊤ 
+
+> PE
+
+TE( τ ), ∀τ ∈ { 0, . . . , T − 1}, k ∈ Z,
+
+i.e., Pi-periodicity on all integers. 
+
+Step 3: Combine (1) with periodicity: for every τ ∈ Z
+
+w(i)⊤ 
+
+> PE
+
+TE( τ ) = gi
+
+ τ mod Pi
+
+. (3) 
+
+Step 4: Define 
+
+WPE := w(1) PE · · · w(m)PE 
+
+, b := 0 , choose any wV ∈ RdV .
+
+Then 
+
+fθ
+
+ V, TE( τ ) = w⊤ 
+
+> V
+
+V +
+
+
+
+w(1) ⊤ 
+
+> PE
+
+TE( τ )
+
+...
+
+w(m)⊤ 
+
+> PE
+
+TE( τ )
+
+ ,
+
+whose i-th component equals the right-hand side of (3). Therefore: a) it is Pi-periodic by construction; b) it is non-constant because each gi
+
+is non-constant; c) on 0 ≤ τ < T , (3) reduces to w⊤ 
+
+> V
+
+Vi + gi(τ ). Hence 
+
+S holds. 32 J. Pan et al. 
+
+Part II: S =⇒ C .
+
+Conversely, suppose parameters θ = ( WPE , w V , b ) satisfy S. Write the columns as WPE = [ w(1) PE | · · · | w(m)PE ].
+
+Step 1: Evaluating property (iii) at 0 ≤ τ < T gives 
+
+M w (i)PE = gi 0≤τ <T 
+
+, i = 1 , . . . , m. (4) 
+
+Step 2: Pi-periodicity implies the B(i) equations. Property (i) yields, for every integer τ , w(i)⊤ 
+
+> PE
+
+TE( τ +Pi) = w(i)⊤ 
+
+> PE
+
+TE( τ ). Specialising to τ = 0 , . . . , T −
+
+1 one obtains B(i) w(i)PE = 0 .
+
+Step 3: Collecting (4) for all i and the B(i) equations in a single vector wPE 
+
+yields exactly system (C). Thus C holds. Both directions are proven; therefore C ⇐⇒ S . The final comment about choos-ing (WPE , w V , b ) is precisely the construction in Part I, Step 4. Following Theorem 2, we are interested in knowing under which conditions the compatibility condition holds itself, i.e., when the system has a solution. 
+
+Theorem 3 (Universal Compatibility under harmonically–aligned fre-quencies). Fix 
+
+T > 1, dPE ≥ T, P1, . . . , P m ∈ N, Pi | T. 
+
+Let L := lcm( P1, . . . , P m)6 and choose any collection of integers k0, k 1, . . . , k dPE /2−1.Define the frequencies 
+
+ωn := 2πk n
+
+L , 0 ≤ n < dPE  
+
+> 2
+
+,
+
+and build the sinusoidal positional encoding 
+
+[TE( τ )] 2n = sin( ωnτ ), [TE( τ )] 2n+1 = cos( ωnτ ), τ ∈ N.
+
+Form the matrices as follows 
+
+M =
+
+
+
+TE(0) ⊤
+
+...
+
+TE( T −1) ⊤
+
+ ∈ RT ×dPE , (9) 
+
+B(i) =
+
+
+
+TE( Pi)⊤ − TE(0) ⊤
+
+...
+
+TE( T −1+ Pi)⊤ − TE( T −1) ⊤
+
+ ∈ RT ×dPE . (10)  
+
+> 6
+
+least common multiple FITTER: Vocabulary-Agnostic Cross-Domain Inference on TKGs 33 
+
+For these frequencies, every B(i) vanishes identically; hence, the stacked com-patibility system 
+
+Im ⊗ M
+
+diag( B(1) , . . . , B (m))
+
+!
+
+wPE = g
+
+0
+
+!
+
+(C)
+
+is always solvable, regardless of the choice of any target sequences gi : {0, . . . , T −
+
+1} → R.Proof (We present the Step-by-step proof as follows.). 
+
+Step 1. Encoding is L-periodic. Because ωnL = 2 πk n,
+
+sin( ωn(τ + L)) = sin( ωnτ ), cos( ωn(τ + L)) = cos( ωnτ ),
+
+∀τ ∈ Z, so TE( τ + L) = TE( τ ).
+
+Step 2. Encoding is also Pi-periodic. Each Pi divides L, hence TE( τ +
+
+Pi) = TE( τ ). Therefore 
+
+B(i) = 0 ∈ RT ×dPE , i = 1 , . . . , m. 
+
+Step 3. Compatibility degenerates to a single block. With every B(i)
+
+equal to zero, system (C) becomes 
+
+(Im ⊗ M ) wPE = g. (C′)
+
+Step 4. Solve the reduced system. Write wPE = ( w(1) PE , . . . , w (m)PE ) and 
+
+g = ( g1, . . . , g m) with blocks in RT . The Kronecker structure of Im ⊗ M splits 
+
+(C′) into m independent systems 
+
+M w (i)PE = gi, i = 1 , . . . , m. (Ci)Because dPE ≥ T , the rows of M are linearly dependent at worst; pick any right inverse M + (for instance the Moore–Penrose pseudoinverse). Then 
+
+w(i)PE := M +gi (i = 1 , . . . , m )
+
+solves each (Ci), and hence wPE solves the full system (C).
+
+Step 5. Conclusion. Compatibility holds for every choice of data {gi} once the frequencies obey ωn = 2πk n 
+
+> L
+
+.

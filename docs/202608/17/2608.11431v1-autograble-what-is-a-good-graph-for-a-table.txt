@@ -1,0 +1,1325 @@
+Title: AutoGrable: What Is a Good Graph for a Table?
+
+URL Source: https://arxiv.org/pdf/2608.11431v1
+
+Published Time: Thu, 13 Aug 2026 00:12:08 GMT
+
+Number of Pages: 28
+
+Markdown Content:
+# AutoGrable: What Is a Good Graph for a Table? 
+
+Tamara Cucumides 
+
+University of Antwerp 
+
+tamara.cucumidesfaundez@uantwerp.be 
+
+Floris Geerts 
+
+University of Antwerp 
+
+floris.geerts@uantwerp.be 
+
+## Abstract 
+
+Graph learning presupposes a graph, and tables and relational databases do not come with one. Applying a GNN to them requires deciding which entities become nodes, which of them to connect, and through which relations—a decision made by hand, by schema heuristics, or by training a model on every candidate graph and keeping the best. We give a criterion that requires no trained graph model. In the minimal table-to-graph abstraction each row is a node, so a message-passing GNN, bounded by 1-WL, sees a construction only as a partition of the rows into colour-refinement classes: a construction is good for a task when that partition separates rows with different labels and does not split rows that share one. AUTO GRABLE turns this criterion into a construction procedure. For incidence constructions the partition is fixed by the selected columns, so building a graph reduces to choosing them, and we score a candidate subset by a label-alignment risk: the held-out risk of the best predictor constant on its blocks, penalised by an occupancy term measuring how thinly the blocks are populated. The score materialises no graph and trains no GNN, so A UTO GRABLE can search the space of subsets greedily and cheaply, and returns the resulting grable for single tables and for foreign-key schemas alike. Our experiments show that over a space of candidate graphs the score discards a large fraction while retaining the best; that A UTO GRABLE recovers the columns that generate the label on controlled tasks and outperforms fixed, random, and task-aware constructors on real tasks under a fixed predictor; and that it is the only method compared that can decline to build a graph when none helps. 
+
+## 1 Introduction 
+
+Graph learning presupposes the existence of a single or multiple graphs. The graph is where the inductive bias lives: Message-passing can only relate two entities if an edge, or a path of edges, connects them. Recent work has applied graph learning techniques to the data formats that dominate applied machine learning– single tables and relational databases linked by foreign keys– but these do not come with a graph representation. In order to bring a graph model to such data we must first decide what the nodes are, which entities to connect, and through which relations. This decision is usually made by hand, schema heuristics, or not at all, and it is made before any learning happens. The question this paper takes up is the one that precedes architecture and optimization entirely: when the graph is not given, what is a good graph to learn on, and how do we build it? 
+
+Two responses to this question exist, yet neither answers it fully. One learns a graph: taking the data points as nodes, it infers a soft adjacency from their features jointly with the model [1–3]. The other 
+
+constructs one from a table or schema, fixing the foreign-key skeleton, searching schema edits, or scoring attributes, and judges it by the accuracy of a model trained on it [4–6]. The first assumes structure means geometric proximity over given nodes, which a table does not provide: its relation is shared categorical values, and its node set is itself a construction choice. The second defines a good graph only operationally, good if a trained model likes it, which is circular, costs a training run per candidate, and says nothing about which distinctions a graph exposes to the learner . We seek a notion of a good graph that can be stated before training and that explains why a construction helps. 
+
+Preprint. Preliminary work. arXiv:2608.11431v1 [cs.LG] 11 Aug 2026 AutoGrable: What Is a Good Graph for a Table? 
+
+In this work, we judge the quality of a graph representation by the distinctions the model running on it can make. Message-passing GNNs are bounded by the one-dimensional Weisfeiler–Leman (1-WL) test, or colour refinement [7, 8]: a GNN cannot tell two nodes apart when 1-WL assigns them the same colour, that is, when their neighborhoods are indistinguishable under iterated aggregation, however near or far apart the two nodes sit. For such a model, then, a graph constructed from a table does just one thing: it sorts the table rows (row nodes in the graph) into 1-WL colour classes, and only distinctions between colour classes are visible to the learner. A graph is good for a task when this sorting lines up with the labels, rows of different labels fall in different classes, and rows of the same label are not split further than necessary. Too coarse a sorting hides the labels; too fine a one lets the model memorize individual rows instead of generalizing. This gives a criterion for constructing a graph that can be stated, and checked, before any model is trained. We turn this target into an algorithm. Scoring a candidate graph is cheap: because the target only concerns which rows are grouped together, it can be measured directly from that grouping, with no model training. Yet, searching for the best graph is not cheap, the closely related separation problem is NP-hard, so we build the graph greedily rather than by enumeration. The result is A UTO GRABLE ,which selects a construction by this training-free target and then trains a graph model on it. The algorithm naturally extends from a single table to several tables linked by foreign keys. 
+
+Contributions. We propose a criterion for what makes a graph good for a task, and apply it to tabular learning, where the graph is not given but has to be constructed. Our contributions are (1) alignment 
+
+as a criterion of graph goodness: a construction reaches a 1-WL-bounded learner only as a grouping of the rows, and is good for a task when that grouping matches the labels; (2) a score for this criterion, computed from the grouping alone with no model trained, weighing the error of the best predictor the grouping admits against how thinly it spreads the rows; and (3) A UTO GRABLE , a table-to-graph constructor that builds the graph the score selects, applies to single- and multi-table datasets, and outperforms alternative constructions on transactional and relational benchmarks. 
+
+## 2 Attribute selection as label alignment 
+
+Our approach rests on one observation: selecting a subset of attributes and expanding its values into shared nodes of an incidence graph induces, on the rows of the table, exactly the colour-refinement (1-WL) partition of that graph – and colour refinement is precisely what limits the power of message-passing GNNs (Section 4). Choosing attributes therefore fixes the expressive ceiling of every GNN run on the constructed graph, and the choice can be made entirely in table space, even though what the choice produces, cross-row communication, is not available in table space at all. We thus focus first on how to select the attribute subset. The guiding notion is that its induced partition should be aligned with the labels: fine enough that cells are label-homogeneous, yet coarse enough that each cell retains the support needed to estimate anything on it. This section makes alignment precise. We attach to every candidate attribute set a partition of the training rows and a training-free predictor, and score the pair by an objective that trades held-out predictive gain against fragmentation, with a generalisation bound as justification. 
+
+Tables and candidate attributes. Let C be a universe of attribute names and val a value domain. A schema is a finite set C ⊆ C , a C-row is a map r : C → val , and a C-table is a finite indexed collection of rows. We write r[c] for the value of c in r, and r|S for the restriction of r to S ⊆ C.One attribute Y ∈ C is the label, A := C \ { Y } are the input attributes, and F ⊆ A, fixed before the validation sample is inspected, contains the attributes eligible for structural selection. The labelled rows are split into disjoint training and validation samples Ttr and Tval of sizes ntr and nval . Every candidate set S ⊆ F partitions the training rows by projection: 
+
+r ∼S r′ ⇐⇒ r|S = r′|S , πS := Ttr /∼S .
+
+Equivalently, πS consists of the nonempty cells BS,u := {r ∈ Ttr : r|S = u} for u ∈ val S , with 
+
+NS,u := |BS,u |. We write π′ ⪯ π when π′ refines π; in particular S ⊆ S′ implies πS′ ⪯ πS .
+
+A training-free block predictor. Each candidate set is scored with the simplest predictor compatible with its partition. Writing bpS (y | u) := N −1
+
+> S,u
+
+P 
+
+> r∈Ttr
+
+1{r|S = u, r [Y ] = y} and bp0(y) := 
+
+n−1tr 
+
+P 
+
+> r∈Ttr
+
+1{r[Y ] = y}, we set bhS (r) := bpS ( · | r|S ) if NS,r |S > 0 and bhS (r) := bp0 otherwise: the empirical label distribution on occupied cells, the training marginal on unseen projections. This predictor serves only to select a structure; the final predictor is a graph-learning model (Section 4). 
+
+> 2
+
+AutoGrable: What Is a Good Graph for a Table? Training table T_tr                                        
+
+> region tier user y
+> EU pro u01 1
+> EU pro u02 1
+> EU pro u03 1
+> EU pro u04 1
+> EU pro u05 1
+> EU free u06 0
+> EU free u07 0
+> EU free u08 0
+> US pro u09 0
+> US pro u10 0
+> US free u11 0
+> US free u12 0
+
+Column-induced partitions  row with y = 1  row with y = 0               
+
+> S1 = ∅ S3 = {region, tier} S4 = {region, tier, user}
+> all rows mixed US + free pure 12 cells pure,
+> US + pro pure
+> S2 = {region}
+> EU + free pure US US US pure pure pure ... but every row lands in a different block of the partition EU mixed EU + pro pure
+
+Incidence Grable (S3)  
+
+> EU free
+> pro US
+
+Figure 1: A candidate set S partitions the training rows by their projection r|S . Under-refinement leaves differently labelled rows in the same cell; over-refinement produces sparsely supported cells. After selecting S⋆, the chosen values become shared value nodes. 
+
+The alignment score J . Alignment must balance two failure modes. An under-refined partition mixes differently labelled rows in one cell, which no cell-constant predictor can resolve; an over-refined one captures more label variation but produces small, poorly supported cells. For a subset 
+
+S ⊂ F of attributes, we measure fragmentation by 
+
+Ω( Ttr , π S ) := 1
+
+ntr 
+
+X
+
+> u:NS,u >0
+
+pNS,u ,
+
+which is monotone under refinement and ranges from n−1/2tr (a single cell) to 1 (all singletons). Let 
+
+dRisk val (bhS ) be the average validation loss of bhS for some bounded loss function ℓ. We score S by 
+
+J (πS ) := dRisk val (bhS ) + λ Ω( Ttr , π S ), λ ≥ 0. (1) The first term rewards distinctions that track the labels on held-out rows; the second charges for distinctions supported by too few training rows. Minimising J therefore selects the partition best aligned with the labels: an attribute enters only when its held-out gain outweighs the fragmentation it introduces. The penalty is principled rather than heuristic. For binary classification, let bgS be the empirical majority classifier on the cells of πS , Risk ⋆ the unrestricted optimal population risk, and 
+
+Risk ⋆S the best population risk among classifiers constant on those cells. For S fixed independently of Ttr , with probability at least 1 − δ,
+
+Risk( bgS ) − Risk ⋆ ≤  Risk ⋆S − Risk ⋆ + Ω( Ttr , π S ) + 4 
+
+s
+
+ln(4 /δ )2ntr 
+
+.
+
+Thus Ω bounds the estimation term in a generalisation bound: refinement can lower approximation error, but raises the observable quantity controlling estimation. Moreover, conditioning on Ttr , concen-tration on the validation sample is uniform over all 2|F | candidates: with εL := L
+
+q |F | ln 2+ln(2 /δ )2nval ,an exact minimiser S⋆ of (1) satisfies, with probability at least 1 − δ,
+
+Risk( bhS⋆ ) + λΩ( Ttr , π S⋆ ) ≤ min 
+
+> S⊆F
+
+Risk( bhS ) + λΩ( Ttr , π S ) + 2 εL.
+
+Because the concentration event is uniform over all 2|F | candidates, it also covers candidates inspected adaptively during search; if the search returns an η-suboptimal empirical minimiser, the oracle inequality holds with an additional additive term η. Full statements and proofs are in Section C. 
+
+## 3 Finding an aligned attribute set 
+
+The score J specifies which attribute sets are desirable; this section addresses how to find one. Exact minimisation over all 2|F | subsets is provably out of reach: even a requirement much weaker than alignment is already NP-complete. 
+
+Alignment rather than maximal separation. An attribute set S separates the labels when r[Y ]̸ =
+
+r′[Y ] implies r|S̸ = r′|S for all r, r ′ ∈ Ttr . Separation is necessary for a cell-constant predictor to fit 
+
+3AutoGrable: What Is a Good Graph for a Table? 
+
+Algorithm 1 SCS: structural column selection 
+
+Input: T = Ttr ∪ Tval , label Y , candidates F ⊆ A , direction ∈ { fwd , bwd }, signature σ ∈{val , freq }, λ ≥ 0, tolerance τ ≥ 0
+
+Output: selected columns S⋆ 
+
+> 1:
+
+if σ = freq then  
+
+> 2:
+
+T ← FREQ ENCODE (T, F ) // via (2)  
+
+> 3:
+
+end if  
+
+> 4:
+
+if direction = fwd then  
+
+> 5:
+
+S ← ∅ ; moves( S) := { S ∪ { c} : c ∈ F \ S } 
+
+> 6:
+
+else  
+
+> 7:
+
+S ← F ; moves( S) := { S \ { c} : c ∈ S } 
+
+> 8:
+
+end if  
+
+> 9:
+
+repeat  
+
+> 10:
+
+S′ ← arg min S′′ ∈moves( S) J (πS′′ ) // via (1)  
+
+> 11:
+
+if J (πS ) − J (πS′ ) > τ then  
+
+> 12:
+
+S ← S′ 
+
+> 13:
+
+else break  
+
+> 14:
+
+end if  
+
+> 15:
+
+until moves( S) = ∅ 
+
+> 16:
+
+return S⋆ ← S
+
+the training labels, but it is not the objective, and it is attained by two degenerate choices: taking all attributes separates whenever any subset does, at the price of the finest and least supported partition, while a key-like attribute separates all rows, permitting memorisation while exposing no repeated structure to generalise from. The desired partition is aligned with the task—fine enough to distinguish label-relevant row types, coarse enough to preserve support among rows that should share information. Even so, under a budget |S| ≤ k, the separation floor is computationally hard. 
+
+Theorem 1 (Separation is NP-complete) . Given Ttr , F , and k, deciding whether some S ⊆ F with 
+
+|S| ≤ k separates the labels is NP-complete. 
+
+Unless P = NP , no polynomial-time exact method solves even this restricted selection problem, let alone the alignment objective. We therefore use greedy local search. 
+
+Greedy search. Algorithm 1 (Structural column selection, SCS) performs local search on the refinement lattice of column subsets: at each step it evaluates every one-column neighbour of the current set—one addition or removal, controlled by chosen direction—and moves to the neighbour with the lowest J . Forward search starts from the coarsest partition ( S = ∅) and is cheap, terminating as soon as no single addition clears the tolerance; it is the right choice when few columns are expected to matter, but it can reject a column that becomes informative only jointly with another. Backward search starts from the finest available partition ( S = F ) and is more robust to such interactions, since an informative pair is present from the start rather than added one column at a time, at the cost of evaluating more candidates and relying on λ to prune the extra columns it keeps. The tolerance τ sets the minimum improvement in J the search will act on, so it does not chase differences attributable to validation noise; τ = 0 recovers standard greedy descent. The signature σ controls the initial table encoding (values or frequency), which is explained below. Because J requires no model fit—each evaluation is one group-by over Ttr and one pass over Tval —a full run costs O |F |2(ntr + nval ) in the worst case. The uniform validation event covers the adaptively returned subset, and the empirical optimisation gap η of greedy search enters the oracle inequality only additively. 
+
+What the search scores. SCS may be run on the table T directly ( σ=val) or on the frequency-recoded copy F REQ ENCODE (T, F ) (σ=freq), which has the same rows and columns as T and entries FREQ ENCODE (T, F )[ r, c ] := { r′ ∈ T : r′[c] = r[c] } , c ∈ F. (2) leaving the label and the attributes outside F unchanged, so each cell in a candidate column is replaced by the number of times its value occurs in that column. This changes what a column is scored on: under value encoding, a column scores well when particular values track the label; under frequency encoding, when the multiplicity pattern it induces does—whether a value is rare or shared, 
+
+> 4AutoGrable: What Is a Good Graph for a Table?
+
+not which value it is. The second is the weaker signal, and deliberately so: it selects columns for the structure they expose rather than for the labels their values happen to carry. This affects the score alone, since the constructor expands the selected columns by their original values in either case. 
+
+Extension to relational databases. In the multi-table setting the subset search is unchanged; only the table changes. We materialise eT := T ▷◁ d D by left joins along all foreign-key paths of length 
+
+< d and evaluate candidates on eT . Each expanded row retains the identifier of its originating primary row. To deal with join multiplicity, duplicate appearances of a primary row are collapsed within each cell, and if row i then occurs in ki(S) distinct cells, each appearance receives weight 1/k i(S), so every primary row contributes one total unit. The selected attributes are then added to the graph: each becomes value nodes attached to the rows of the table it belongs to, and the foreign-key path from T
+
+to that table is materialised. The skeleton is carried in by selection rather than fixed in advance, so selecting nothing returns the trivial grable ( γtriv ). 
+
+## 4 AUTO GRABLE 
+
+AUTO GRABLE is our table-to-graph constructor. Given a labelled table T and candidate attributes 
+
+F , it runs SCS (Section 3) to obtain S⋆, then expands the selected columns into a graph, the 
+
+incidence grable GS⋆ (T ) (see Figure 1), on which any row-level graph-learning method can be trained. This section supplies the graph-side vocabulary, grables and colour refinement, and proves the correspondence announced in Section 2: the partition πS⋆ that SCS optimises through group-bys is exactly the structural row partition of GS⋆ (T ), the partition that bounds message-passing GNNs. 
+
+Grables. A constructor γ maps a table to a typed, attributed graph GγC,T with one distinguished row node vr per row r; the result is a grable [9]. 1 A row-level GNN predicts at the row nodes, so it can exploit information from other rows only through the edges the constructor supplies. In this way a grable turns a row-local predictor, one whose output for a row is unchanged when all other rows are removed, into an extension-sensitive one [9]. 
+
+Colour refinement. What a message-passing GNN can distinguish is governed by colour refinement (or 1-WL). For a typed, attributed graph G, let χ(0)  
+
+> G
+
+(v) encode the initial node type and attributes exposed to the GNN, and iterate χ(t+1)  
+
+> G
+
+(v) =HASH 
+
+
+
+χ(t) 
+
+> G
+
+(v), {{(type( v, w ), χ (t) 
+
+> G
+
+(w)) : w ∈ NG(v)}}
+
+
+
+with HASH injective. On a finite graph the induced partition stabilises; πCR (G) denotes its restriction to the row nodes. Two row nodes with the same stable colour cannot receive different outputs from any message-passing GNN, and sufficiently expressive injective architectures attain this bound [7, 8]. The partition πCR (G) is thus the expressive ceiling of graph learning on G.
+
+The incidence grable. For S ⊆ A, the incidence grable GS (T ) := GγS 
+
+> inc
+> C,T
+
+contains 1. one row node vr per r ∈ T , carrying the unexpanded attributes r|A\S ; and 2. one value node uc,a per occurring typed value (c, a ) with c ∈ S, whose initial feature identifies 
+
+(c, a ).An edge of type c joins vr and uc,a exactly when r[c] = a; the label Y is never exposed. Rows that agree on a selected value are thus wired to a common value node, while the remaining attributes stay local to their row. The typed-value encoding matters: were literal values hidden, distinct values with identical structural profiles could remain colour-equivalent. To isolate the structure contributed by 
+
+S from the features that happen to sit on the rows, let G◦ 
+
+> S
+
+(T ) be the row-feature-erased reduct of 
+
+GS (T ): all row nodes receive the same initial colour, while value-node features and edge types are retained. The reduct is an analysis device only. 
+
+Lemma 1. For all r, r ′ ∈ Ttr , πCR 
+
+ G◦ 
+
+> S
+
+(Ttr ) = πS .
+
+The lemma closes the loop. SCS computes πS by a group-by, yet πS is precisely the stable row partition that the selected incidence structure induces once row features are suppressed. In minimising 
+
+J over column subsets, SCS is therefore searching over the expressive ceilings of the corresponding   
+
+> 1The trivial grable γtriv is the simplest grable, only consisting of row nodes and no edges. 5AutoGrable: What Is a Good Graph for a Table?
+
+grables—without ever building a graph. Note that the cells are structural row types, not connected components: rows in different cells may share value nodes and exchange messages through them. Selecting S is a table-space operation, but the object it selects is not. By Lemma 1 the graph adds no distinguishing power over πS ; what it adds is access, within a cell, to evidence held by other rows—how many share a value, and what those rows carry. Such statistics can be materialised as columns one at a time, but which grouping to count over, and which row-local attribute it should interact with, are task-dependent. Expanding S⋆ into structure leaves that choice to the downstream learner rather than fixing it in advance. 
+
+What the downstream GNN receives. The downstream learner receives the full graph GS⋆ (T ),not the reduct. Its row nodes retain r|A\S⋆ , which may separate rows within a structural cell, so πCR 
+
+ GS⋆ (T ) ⪯ πS⋆ . The selected columns fix the cross-row communication channels; the unexpanded attributes supply row-local evidence. The GNN combines both, and is in no way restricted to the block predictor SCS used for scoring. 
+
+## 5 Experiments 
+
+We ask three questions: (RQ1) Does A UTO GRABLE recover the columns that generate a task and reject the rest? (RQ2) Is J an indicator of downstream performance for 1-WL-bounded learners? 
+
+(RQ3) Under a fixed predictor, does A UTO GRABLE build graphs that outperform other table-to-graph constructors? RQ1 requires known ground-truth structure and is answered on controlled tasks; RQ2 and RQ3 are answered on real tabular, transactional, and relational tasks. 
+
+5.1 Controlled tasks: does alignment select relevant structure? Setup. RQ1 is about selection, not prediction, so no model is trained in this section: we run AUTO GRABLE to its selected subset S⋆ and compare that subset against the columns the task was built from. This requires ground truth, which is why the tasks are constructed. 
+
+Data and tasks. The base table is Census/Adult [10], whose categorical columns form the column universe C. A task is a choice of S⋆ ⊆ C together with a label generated from S⋆ alone. We include row-local tasks: single-value , conjunction , and interaction (XOR) and extension-sensitive ones: 
+
+count , and duplicate . Full generating processes are in Appendix D.2. 
+
+Configurations. We sweep the axes of A UTO GRABLE : signature ( value , frequency ), search direction (forward , backward ), and λ. Table 1 reports the noise-free tasks at λ ∈ { 0, 1}; the full sweep and the behaviour under label noise are in Appendix D.5. Task instances are drawn once per (family, seed). Each cell is N = 10 seeds, resampling the rows and the planted columns. 
+
+Metrics. Let S⋆ be the selected columns and S◦ the set the task was built from. Recovery Rec = 
+
+|S⋆ ∩ S◦|/|S◦| measures how much of the generating set is kept; Exact = 1[S⋆ = S◦] additionally requires that nothing else is selected. We separate failure of the objective from failure of the search: an objective-metric mismatch is a run in which J (πS◦ ) ≥ J (πS⋆ )—the search stopped somewhere the score prefers to the generating set, so the score, not the search, is what ranked S◦ below—and a 
+
+procedure failure is a stopping point that is not optimal for J . Only the second is a shortcoming of the algorithm rather than of the objective. 
+
+Results. RQ1 asks whether A UTO GRABLE recovers the columns that generate a task and rejects the rest. Table 1 answers yes on both counts, but the two halves are controlled by different axes: recovery is decided by the signature, rejection by λ and the search direction. 
+
+Recovery. With the value signature A UTO GRABLE recovers all tasks. Recovering Count is consistent with it being extension-sensitive: selection only has to find the column, and on a fixed table the partition by that column’s values already fixes each row’s multiplicity: the graph is needed to compute the target, not to identify the column. Duplicate with forward direction fails for the opposite reason: its column is near-unique, so its value partition is almost all singletons. The frequency signature is more suited to recover it. Symmetrically, frequency encoding returns the empty set on the row-local families (except at backward with λ = 0 ), and the † marks confirm J (∅) ≤ J (S◦) there: frequencies discard value identity, which is what a row-local label depends on, so the score reports that no structure is worth building. Recovery is therefore complete when the signature matches the family, and the failures are informative rather than silent. 
+
+> 6AutoGrable: What Is a Good Graph for a Table?
+
+Table 1: Column recovery on synthetic tasks, N = 10 seeds. Rows show λ ∈ { 0, 1} (more values in App. D.5). Cell format: %exact (%recovery); ∅ marks a cell where the selected column set was empty. A † marks an objective-metric mismatch against ground truth ( J (true ) ≥ J (reached )).                                                                                           
+
+> Row-local Extension-sensitive Encoding Direction λSingle-val. Conj. XOR Count Dup. Value Backward 00(100 )30 (100 )90 (100 )0(100 )0(100 )1100 (100 )100 (100 )100 (100 )100 (100 )0(100 )Forward 0100 (100 )50 (100 )100 (100 )100 (100 )0(0)1100 (100 )50 (80 )100 (100 )100 (100 )0(0)Freq. Backward 00(100 )†0(100 )†0(100 )†0(100 )0(100 )1∅(0) †∅(0) †∅(0) †0(0) 100 (100 )Forward 0∅(0) †∅(0) †∅(0) †100 (100) 100 (100) 1∅(0) †∅(0)†∅(0)†100 (100 )100 (100 )
+
+Exact recovery. A gap between Rec and Exact means the selected set contains the true columns and more, and this is where λ acts. It acts mainly on backward search, which keeps more columns than forward. At λ = 0 backward search reaches Rec = 100 with Exact between 0 and 90 : the true columns are kept, but so are others. At λ = 1 the gap closes, with Exact = 100 on four of five families. This is Ω doing its job. The effect is not uniform: forward search also leaves a gap on Conjunction at λ = 0 and there raising λ stops the search earlier rather than dropping the extra column, so Rec falls to 80 and Exact does not move; under frequency encoding with backward search, raising λ collapses the row-local families from Rec = 100 to the empty set. So λ closes the Rec–Exact gap where the search starts too large, and costs Rec where it does not. 
+
+5.2 Real tasks: does alignment relate to downstream performance? Setup. RQ2 and RQ3 need different apparatus. RQ2 compares J against downstream performance across many graphs for a single task; we take these from RDB2G-Bench [11], which enumerates schema-level constructions for RelBench [12, 13] tasks and reports trained-model performance for each. RQ3 compares construction methods, one graph per method, on the same task and split. 
+
+Fixed predictor. We use GraphSAGE throughout, with fixed architecture, budget and hyperparameters within regime (see Appendix D.6.1) for every construction and every dataset, and no per-constructor tuning. Under γtriv there are no edges, so GraphSAGE reduces to an MLP on the row features. Differences in performance across constructors are attributable to the construction alone. 
+
+Constructors. γtriv is the no-structure floor. The fixed constructions are the full incidence grable γinc 
+
+[9], which exposes every eligible column and so performs no selection, and, for foreign-key schemas, the relational entity graph (REG) [4], which takes the schema itself as the graph (defined only in the relational case). The random constructor draws a column subset uniformly at random in both size and membership, redrawn independently for each seed, and separates the contribution of which columns are selected from that of selecting any columns at all. The task-aware comparison is auGraph [6], which scores attributes individually and has multiple metrics. The one reported corresponds to the one with the best performance in the validation set ( gnn-gain on all tasks studied). 
+
+Datasets. Three regimes. Transactional: FDB [14] single tables that are not i.i.d. at the table level— rows share device, merchant and account values. Relational: RelBench [12, 13]. Negative control: the i.i.d. single-table benchmark TabArena [15], where each label should depend only on its own row. 
+
+Protocol. Learning is transductive: one graph per dataset carrying train, validation and test row masks, so a node may aggregate from rows in other splits while labels are read only within its own. On the timestamped datasets splits are contiguous blocks in time. The neighbour sampler restricts each row to aggregate from rows at or before its own timestamp. For the RDB2G graph constructions, we compute J from the partition induced by colour refinement. 
+
+Results. J acts as a one-sided screen rather than a ranking: low J is necessary for strong downstream AUC on these candidates, not sufficient. On driver-top3 , retaining the two lowest J levels discards 
+
+80% of the candidate graphs and all ten of the best-performing graphs survive. The correlations in 
+
+> 7
+
+AutoGrable: What Is a Good Graph for a Table? 
+
+Table 2: Correlation (Spearman’s rho and Kendall’s-tau τb) between J (·) and downstream performance (AUC on validation and test splits). Graph constructions and performance obtained from RDB2G-Bench, using GraphSAGE as model and all seeds available (5 per graph for study-outcome and 15 for driver-top3 ). 
+
+relbench-f1 relbench-trial driver-top3 study-outcome 
+
+Split λ ρ τb ρ τb
+
+Val 0 −0.229 −0.183 −0.458 −0.291 
+
+1 −0.235 −0.192 −0.508 −0.372 
+
+Test 0 −0.118 −0.082 −0.287 −0.219 
+
+1 −0.158 −0.091 −0.251 −0.203 1.78 1.87 2.02 2.15 4.28  
+
+> J score of label versus color with = 1
+> 0.74 0.75 0.76 0.77 0.78
+> Validation set performance (AUC)
+
+Figure 2: J (color , task ) vs. AUC on val set, task driver-top3 , 74 graphs, 
+
+15 seeds per graph .
+
+Table 3: Downstream test AUROC ( ↑) under a fixed predictor. Mean ± std over N =15 seeds. Best in bold , second underlined. A UTO GRABLE reported results are for fixed setup (forward direction, 
+
+λ = 1 , σ = frequencies). An ∗ marks equivalent constructions. More results in Tables 7 and 9 Transactional (FDB) Relational (RelBench) Constructor vehicleloan twitterbot driver-top3 driver-dnf study-outcome 
+
+Trivial ( γtriv ) 0.647 ± 0.015 0.864 ± 0.012 0.674 ± 0.011 0.596 ± 0.026 0.677 ± 0.009 *REG – – 0.777 ± 0.012 0.733 ± 0.013 0.635 ± 0.006 
+
+Full incidence ( γinc ) 0.619 ± 0.021 0.831 ± 0.027 0.746 ± 0.013 0.687 ± 0.022 0.621 ± 0.013 
+
+Random 0.620 ± 0.019 0.857 ± 0.021 0.759 ± 0.025 0.733 ± 0.012 0.602 ± 0.022 
+
+auGraph 0.631 ± 0.012 0.887 ± 0.032 0.791 ± 0.009 0.742 ± 0.021 0.630 ± 0.017 
+
+AUTO GRABLE 0.662 ± 0.010 0.908 ± 0.007 0.803 ± 0.011 0.761 ± 0.021 0.677 ± 0.009 *Table 2 are consistent with this: they are negative throughout, but attenuated by ties, since J takes limited distinct values over the constructions (Figure 2) and the AUC values are themselves tightly clustered. This is a property of the candidate set—RDB2G-Bench enumerates schema-level edits over a fixed key–foreign-key skeleton, so the induced row partitions differ in few ways. The association is weaker on test than on validation, as expected since J is also computed on the validation split. AUTO GRABLE uses J as a filter: it searches for a column subset J does not discard, and RQ3 asks whether the resulting graph beats the graphs the alternatives return, under the same predictor. Table 3 shows that it does, in both the single-table and the multi-table setting. More results for other datasets and tasks can be found in Appendix D.6. The baselines fail in three ways. Fixed constructions do not select: exposing every eligible column (γinc ) loses to building no graph on three of five tasks, and the schema skeleton (REG) loses to 
+
+γtriv on study-outcome . Structure is not free, and a column that fragments the rows costs more than the signal it carries. Random selection separates how many columns from which ones: it beats full incidence on some tasks, so part of the gain comes from selecting fewer columns, but it stays behind task-aware selection. A UTO GRABLE improves on auGraph everywhere, and at a lower cost: auGraph’s best-performing metric, gnn-gain , uses a GNN to score an attribute by materialising the augmented graph and running it over the validation nodes, which is done for every promotion. The task study-outcome is special: the row-local predictor is the strongest baseline and every constructor that builds structure loses to it. A UTO GRABLE returns ∅ and so γtriv itself: no subset lowers validation risk enough to pay for the fragmentation it introduces. It is the only method compared here that can decline to build a graph. The same behaviour appears on the i.i.d. benchmark TabArena [15], where each label depends on its own row and structure should not help (App. D.6.3). 
+
+8AutoGrable: What Is a Good Graph for a Table? 
+
+Our code is available at: https://github.com/TamaraCucumides/autoGrable 
+
+## 6 Related work 
+
+Expressive power as a design target. Message-passing networks separate two nodes only when colour refinement does [7, 8]; for relational data the canonical route to a graph is the incidence encoding, whose power under 1-WL is characterised by Grohe [16]. This literature is read almost always in one direction: given a graph, how much can a model distinguish, and how can an architecture distinguish more. Read the other way, the same bound is a statement about capacity. Morris et al. [17] bound MPNNs’ VC dimension by the number of colours 1-WL produces, and what rules generalisation is whether the induced classes align with the labels rather than how many there are [18, 19]. We apply this reading to the construction rather than the architecture. With the model class fixed at the 1-WL bound, a construction reaches the learner only as a partition of the rows, so construction is partition design and finer is not necessarily better. 
+
+Learning or modifying a graph. When no graph is given, one can learn one by fixing the data points as nodes and inferring connectivity jointly with the predictor [1, 2, 20]; see Zhou et al. [3] for a survey. Two assumptions divide this setting from ours. The node set is given—a table offers no such points, and what the row set becomes as a graph, including its value nodes and their typing, is itself the construction we study. And edge quality is read from the downstream objective, knowable only by training the predictor; our criterion is a property of the induced row partition, evaluated before any model is trained. A parallel line modifies a graph that already exists, adding or deleting edges to improve information flow via curvature [21], spectral gap [22], or effective resistance [23]. Those objectives are label-independent flow proxies over a given topology; ours is a label-dependent property of a graph that does not yet exist. 
+
+Graphs from tables and databases. Table-to-graph constructions include k-nearest-neighbour graphs over rows, row–value bipartite graphs, and hypergraph variants [24]; RDL instead fixes the entity graph induced by the key–foreign-key skeleton [4] and develops architectures over it [25, 26]. An empirical finding is that this skeleton is not the right graph and that not all of it helps: the extraction strategy materially changes performance [27], the best schema-level graph model beats the standard heuristic by up to 10% while being hard to identify without training [11], and validation performance is an unreliable selector across relational architectures [28]. Our position is stronger than select carefully : the graph adds no distinguishing power, so its value lies in enabling cross-row interactions only when it pays off , which is why declining to build one is an admissible output. 
+
+Automatic construction from tables. The closest methods propose a construction and judge it by a trained model. auGraph [6] promotes attributes to nodes by relevance scores, one of which trains a GNN per candidate; AutoG [5] has an LLM propose schema transformations and selects among them with an oracle that trains a basket of GNNs. A UTO GRABLE returns an object of the same class over the same input regime, and its search calls no trained graph model—a candidate costs one group-by and one pass over the validation split. See Appendix A for an extended discussion on related work. 
+
+## 7 Conclusions 
+
+We asked what makes a graph good for a table, and answered it before any model is trained. For a learner bounded by 1-WL, a construction is visible only as a partition of the rows, so the design question is not how much a construction distinguishes but how it groups . On a fixed table the maximum distinguishing power is already available without any construction, and under the incidence construction the induced partition is the projection onto the selected columns (Lemma 1). Construction therefore reduces to column selection, and the criterion that matters is alignment with the label rather than refinement. We introduced a score that selects columns exposing label-relevant structure, and turned it into AUTO GRABLE , which optimises it greedily since the weaker selection problem is NP-complete. Empirically, A UTO GRABLE (i) recovers the relevant columns on controlled tasks, and (ii) produces graphs that match or improve on canonical and task-aware baselines under a fixed predictor, in both the single-table and the multi-table setting. It can also decline to build a graph when no construction pays for the fragmentation it introduces. 
+
+> 9AutoGrable: What Is a Good Graph for a Table?
+
+## References 
+
+[1] Luca Franceschi, Mathias Niepert, Massimiliano Pontil, and Xiao He. Learning discrete structures for graph neural networks. In Kamalika Chaudhuri and Ruslan Salakhutdinov, editors, Proceedings of the 36th International Conference on Machine Learning , volume 97 of 
+
+Proceedings of Machine Learning Research , pages 1972–1982. PMLR, 09–15 Jun 2019. URL 
+
+https://proceedings.mlr.press/v97/franceschi19a.html . 1, 9, 13 [2] Anees Kazi, Luca Cosmo, Seyed-Ahmad Ahmadi, Nassir Navab, and Michael M Bronstein. Differentiable graph module (dgm) for graph convolutional networks. IEEE Transactions on Pattern Analysis and Machine Intelligence , 45(2):1606–1617, 2022. 9, 13 [3] Zhiyao Zhou, Sheng Zhou, Bochao Mao, Xuanyi Zhou, Jiawei Chen, Qiaoyu Tan, Daochen Zha, Yan Feng, Chun Chen, and Can Wang. OpenGSL: A comprehensive benchmark for graph structure learning. In Thirty-seventh Conference on Neural Information Processing Systems Datasets and Benchmarks Track , 2023. URL https://openreview.net/forum? id=yXLyhKvK4D . 1, 9, 13 [4] Matthias Fey, Weihua Hu, Kexin Huang, Jan Eric Lenssen, Rishabh Ranjan, Joshua Robin-son, Rex Ying, Jiaxuan You, and Jure Leskovec. Position: Relational deep learning - graph representation learning on relational databases. In Ruslan Salakhutdinov, Zico Kolter, Kather-ine Heller, Adrian Weller, Nuria Oliver, Jonathan Scarlett, and Felix Berkenkamp, editors, 
+
+Proceedings of the 41st International Conference on Machine Learning , volume 235 of Pro-ceedings of Machine Learning Research , pages 13592–13607. PMLR, 21–27 Jul 2024. URL 
+
+https://proceedings.mlr.press/v235/fey24a.html . 1, 7, 9, 13, 14 [5] Zhikai Chen, Han Xie, Jian Zhang, Xiang song, Jiliang Tang, Huzefa Rangwala, and George Karypis. Autog: Towards automatic graph construction from tabular data. In The Thirteenth International Conference on Learning Representations , 2025. URL https://openreview. net/forum?id=hovDbX4Gh6 . 9, 14 [6] Tamara Cucumides and Floris Geerts. From features to structure: Task-aware graph construction for relational and tabular learning with gnns. arXiv preprint arXiv:2506.02243 , 2025. 1, 7, 9, 14 [7] Keyulu Xu, Weihua Hu, Jure Leskovec, and Stefanie Jegelka. How powerful are graph neural networks? In International Conference on Learning Representations , 2019. URL https: //openreview.net/forum?id=ryGs6iA5Km . 2, 5, 9, 13 [8] Christopher Morris, Martin Ritzert, Matthias Fey, William L. Hamilton, Jan Eric Lenssen, Gaurav Rattan, and Martin Grohe. Weisfeiler and leman go neural: Higher-order graph neural networks. Proceedings of the AAAI Conference on Artificial Intelligence , 33(01):4602–4609, Jul. 2019. doi: 10.1609/aaai.v33i01.33014602. URL https://ojs.aaai.org/index.php/ AAAI/article/view/4384 . 2, 5, 9, 13 [9] Tamara Cucumides and Floris Geerts. Grables: Tabular learning beyond independent rows. 
+
+arXiv preprint arXiv:2602.03945 , 2026. 5, 7, 13, 14 [10] Barry Becker and Ronny Kohavi. Adult. UCI Machine Learning Repository, 1996. DOI: https://doi.org/10.24432/C5XW20. 6, 23 [11] Dongwon Choi, Sunwoo Kim, Juyeon Kim, Kyungho Kim, Geon Lee, Shinhwan Kang, Myunghwan Kim, and Kijung Shin. RDB2g-bench: A comprehensive benchmark for au-tomatic graph modeling of relational databases. In The Thirty-ninth Annual Conference on Neural Information Processing Systems Datasets and Benchmarks Track , 2025. URL 
+
+https://openreview.net/forum?id=ZbcUIxACQE . 7, 9, 14 [12] Joshua Robinson, Rishabh Ranjan, Weihua Hu, Kexin Huang, Jiaqi Han, Alejandro Dobles, Matthias Fey, Jan E Lenssen, Yiwen Yuan, Zecheng Zhang, et al. Relbench: A benchmark for deep learning on relational databases. Advances in Neural Information Processing Systems , 37: 21330–21341, 2024. 7, 13 [13] Justin Gu, Rishabh Ranjan, Charilaos Kanatsoulis, Haiming Tang, Martin Jurkovic, Valter Hudovernik, Mark Znidar, Pranshu Chaturvedi, Parth Shroff, Fengyu Li, et al. Relbench v2: A large-scale benchmark and repository for relational data. arXiv preprint arXiv:2602.12606 ,2026. 7, 13 [14] Prince Grover, Julia Xu, Justin Tittelfitz, Anqi Cheng, Zheng Li, Jakub Zablocki, Jianbo Liu, and Hao Zhou. Fraud dataset benchmark and applications, 2023. URL https://arxiv.org/ abs/2208.14417 . 7 
+
+> 10 AutoGrable: What Is a Good Graph for a Table?
+
+[15] Nick Erickson, Lennart Purucker, Andrej Tschalzev, David Holzmüller, Prateek Mutalik Desai, David Salinas, and Frank Hutter. Tabarena: A living benchmark for machine learning on tabular data. In The Thirty-ninth Annual Conference on Neural Information Processing Systems Datasets and Benchmarks Track , 2025. URL https://openreview.net/forum?id=jZqCqpCLdU . 7, 8, 14, 26 [16] Martin Grohe. word2vec, node2vec, graph2vec, x2vec: Towards a theory of vector embeddings of structured data. In Proceedings of the 39th ACM SIGMOD-SIGACT-SIGAI Symposium on Principles of Database Systems , PODS’20, page 1–16. ACM, 2020. URL https://doi.org/ 10.1145/3375395.3387641 . 9, 13 [17] Christopher Morris, Floris Geerts, Jan Tönshoff, and Martin Grohe. WL meet VC. In Andreas Krause, Emma Brunskill, Kyunghyun Cho, Barbara Engelhardt, Sivan Sabato, and Jonathan Scarlett, editors, Proceedings of the 40th International Conference on Machine Learning ,volume 202 of Proceedings of Machine Learning Research , pages 25275–25302. PMLR, 23–29 Jul 2023. URL https://proceedings.mlr.press/v202/morris23a.html . 9, 13 [18] Shouheng Li, Floris Geerts, Dongwoo Kim, and Qing Wang. Towards bridging generalization and expressivity of graph neural networks. In The Thirteenth International Conference on Learning Representations , 2025. URL https://openreview.net/forum?id=BOQpRtI4F5 .9, 13 [19] Sohir Maskey, Raffaele Paolino, Fabian Jogl, Gitta Kutyniok, and Johannes F. Lutzeyer. Graph representational learning: When does more expressivity hurt generalization? In The Fourteenth International Conference on Learning Representations , 2026. URL https://openreview. net/forum?id=C6vpifaZvU . 9, 13 [20] Bahare Fatemi, Layla El Asri, and Seyed Mehran Kazemi. Slaps: Self-supervision improves structure learning for graph neural networks. In M. Ranzato, A. Beygelz-imer, Y. Dauphin, P.S. Liang, and J. Wortman Vaughan, editors, Advances in Neu-ral Information Processing Systems , volume 34, pages 22667–22681. Curran Associates, Inc., 2021. URL https://proceedings.neurips.cc/paper_files/paper/2021/file/ bf499a12e998d178afd964adf64a60cb-Paper.pdf . 9, 13 [21] Jake Topping, Francesco Di Giovanni, Benjamin Paul Chamberlain, Xiaowen Dong, and Michael M Bronstein. Understanding over-squashing and bottlenecks on graphs via curvature. 
+
+arXiv preprint arXiv:2111.14522 , 2021. 9, 13 [22] Kedar Karhadkar, Pradeep Kr Banerjee, and Guido Montúfar. Fosr: First-order spectral rewiring for addressing oversquashing in gnns. arXiv preprint arXiv:2210.11790 , 2022. 9, 13 [23] Mitchell Black, Zhengchao Wan, Amir Nayyeri, and Yusu Wang. Understanding oversquash-ing in GNNs through the lens of effective resistance. In Andreas Krause, Emma Brunskill, Kyunghyun Cho, Barbara Engelhardt, Sivan Sabato, and Jonathan Scarlett, editors, Pro-ceedings of the 40th International Conference on Machine Learning , volume 202 of Pro-ceedings of Machine Learning Research , pages 2528–2547. PMLR, 23–29 Jul 2023. URL 
+
+https://proceedings.mlr.press/v202/black23a.html . 9, 13 [24] Cheng-Te Li, Yu-Che Tsai, Chih-Yao Chen, and Jay Chiehen Liao. Graph neural networks for tabular data learning: A survey with taxonomy and directions. 58(1), September 2025. ISSN 0360-0300. doi: 10.1145/3744918. URL https://doi.org/10.1145/3744918 . 9, 13 [25] Tianlang Chen, Charilaos Kanatsoulis, and Jure Leskovec. RelGNN: Composite message passing for relational deep learning. In Forty-second International Conference on Machine Learning , 2025. URL https://openreview.net/forum?id=XXh3zmw2Uy . 9, 13 [26] Vijay Prakash Dwivedi, Sri Jaladi, Yangyi Shen, Federico Lopez, Charilaos I. Kanatsoulis, Rishi Puri, Matthias Fey, and Jure Leskovec. Relational graph transformer. In The Fourteenth International Conference on Learning Representations , 2026. URL https://openreview. net/forum?id=2d3j6bt21A . 9, 13 [27] Minjie Wang, Quan Gan, David Wipf, Zhenkun Cai, Ning Li, Jianheng Tang, Yan-lin Zhang, Zizhao Zhang, Zunyao Mao, Yakun Song, Yanbo Wang, Jiahang Li, Han Zhang, Guang Yang, Xiao Qin, Chuan Lei, Muhan Zhang, Weinan Zhang, Christos Faloutsos, and Zheng Zhang. 4dbinfer: A 4d benchmarking toolbox for graph-centric predictive modeling on rdbs. In A. Globerson, L. Mackey, D. Belgrave, A. Fan, 
+
+> 11 AutoGrable: What Is a Good Graph for a Table?
+
+U. Paquet, J. Tomczak, and C. Zhang, editors, Advances in Neural Information Pro-cessing Systems , volume 37, pages 27236–27273. Curran Associates, Inc., 2024. doi: 10.52202/079017-0856. URL https://proceedings.neurips.cc/paper_files/ paper/2024/file/2fd67447702c8eff5683dda507a1b0a2-Paper-Datasets_and_ Benchmarks_Track.pdf . 9, 14 [28] Zhikai Chen, Han Xie, Jian Zhang, Jiliang Tang, Xiang song, and Huzefa Rangwala. Relatron: Automating relational machine learning over relational databases. In The Fourteenth Inter-national Conference on Learning Representations , 2026. URL https://openreview.net/ forum?id=59avbH4HnU . 9, 14 [29] Pablo Barceló, Egor V. Kostylev, Mikael Monet, Jorge Pérez, Juan Reutter, and Juan Pablo Silva. The logical expressiveness of graph neural networks. In International Conference on Learning Representations , 2020. URL https://openreview.net/forum?id=r1lZ7AEKvB . 13 [30] Martin Carrasco, Caio F. Deberaldini Netto, Vahan A. Martirosyan, Ehimare Okoyomon, and Caterina Graziani. On the rademacher complexity of graph neural networks: Unifying expressivity and geometry, 2026. URL https://arxiv.org/abs/2510.10101 . 13 [31] Billy Joe Franks, Christopher Morris, Ameya Velingker, and Floris Geerts. Weisfeiler-leman at the margin: When more expressivity matters. In Forty-first International Conference on Machine Learning , 2024. URL https://openreview.net/forum?id=HTNgNt8CTJ . 13 [32] Yu Chen, Lingfei Wu, and Mohammed Zaki. Iterative deep graph learning for graph neural networks: Better and robust node embeddings. In H. Larochelle, M. Ran-zato, R. Hadsell, M.F. Balcan, and H. Lin, editors, Advances in Neural Informa-tion Processing Systems , volume 33, pages 19314–19326. Curran Associates, Inc., 2020. URL https://proceedings.neurips.cc/paper_files/paper/2020/file/ e05c7ba4e087beea9410929698dc41a6-Paper.pdf . 13 [33] Yanqiao Zhu, Weizhi Xu, Jinghao Zhang, Yuanqi Du, Jieyu Zhang, Qiang Liu, Carl Yang, and Shu Wu. A survey on graph structure learning: Progress and opportunities. arXiv preprint arXiv:2103.03036 , 2021. 13 [34] Uri Alon and Eran Yahav. On the bottleneck of graph neural networks and its practical implications. In International Conference on Learning Representations , 2021. URL https: //openreview.net/forum?id=i80OPhOCVH2 . 13 [35] Noah Hollmann, Samuel Müller, Lennart Purucker, Arjun Krishnakumar, Max Körfer, Shi Bin Hoo, Robin Tibor Schirrmeister, and Frank Hutter. Accurate predictions on small data with a tabular foundation model. Nature , 637(8045):319–326, 2025. URL https://doi.org/10. 1038/s41586-024-08328-6 . 13 [36] Jingang Qu, David Holzmüller, Gaël Varoquaux, and Marine Le Morvan. TabICL: A tabular foundation model for in-context learning on large data. In Forty-second International Conference on Machine Learning , 2025. URL https://openreview.net/forum?id=0VvD1PmNzM . 13 [37] Gleb Bazhenov, Oleg Platonov, and Liudmila Prokhorenkova. Graphland: Evaluating graph machine learning models on diverse industrial data. In The Thirty-ninth Annual Conference on Neural Information Processing Systems Datasets and Benchmarks Track , 2025. URL 
+
+https://openreview.net/forum?id=Gyq8lMgdk5 . 14 [38] Agapi Rissaki, Ilias Fountalis, Wolfgang Gatterbauer, and Benny Kimelfeld. Database views as explanations for relational deep learning. arXiv preprint arXiv:2509.09482 , 2025. 14 [39] Scott Davies and Stuart Russell. Np-completeness of searches for smallest possible feature sets. In AAAI Symposium on Intelligent Relevance , pages 37–39. AAAI Press Menlo Park, 1994. 15 [40] Michael R. Garey and David S. Johnson. Computers and Intractability: A Guide to the Theory of NP-Completeness . W. H. Freeman and Company, San Francisco, CA, 1979. ISBN 0-7167-1045-5. 15 
+
+> 12 AutoGrable: What Is a Good Graph for a Table?
+
+## GenAI Usage Statement 
+
+In this work, we used generative AI tools for language editing and basic coding assistance. Specifically, we used Claude (Anthropic) for grammar correction, copy-editing, and phrasing of the manuscript, and Claude Code (Anthropic) as a coding assistant during implementation and debugging of the AUTO GRABLE codebase and the experimental pipeline. We have reviewed all AI-assisted work and take responsibility for the final content of this work, including text, claims, or artifacts produced with the aid of generative AI. 
+
+## A Extended related work 
+
+This appendix expands Section 6 along three axes that the main text compresses: the expressivity– capacity literature underlying Ω, the range of table-to-graph constructions, and a per-invariant comparison against automatic constructors. 
+
+A.1 Expressivity, capacity, and the partition 
+
+Beyond the 1-WL bound [7, 8], Barceló et al. [29] give the logical characterisation of what MPNNs express, and Grohe [16] the analysis of incidence encodings of relational structures that our γS
+
+> inc
+
+instantiates. This literature is read in one direction: given a graph, how much can a model distinguish, and how can an architecture distinguish more. The capacity side of the same bound appears less in construction work. Morris et al. [17] bound the VC dimension of MPNNs by the number of colours 1-WL produces, and Carrasco et al. [30] link the empirical Rademacher complexity of a class constant on the colour classes by the number of those classes and how the sample distributes across them. The colouring a construction induces is simultaneously what the learner can separate and what it can overfit. It follows that expressive power alone does not determine generalisation [19, 31]: what rules it is whether the induced classes align with the labels, a trade-off between intra-class concentration and inter-class separation [18]. This is precisely the spirit of J : the first term is what refinement buys, the second is what it costs, and the sum is minimised to balance the trade-off. Lemma 5 supplies the corresponding statement in our setting, with Ω as the occupancy-resolved form of the complexity term. Two differences are worth stating. The results from previous literature diagnose a fixed architecture on a given input, while we use it as the objective for choosing the input. They are also stated at the graph level, over a sample of graphs; our partition is on the row nodes of a single graph. 
+
+A.2 Learning a graph, and modifying one 
+
+Latent graph inference learns a soft adjacency over given nodes, either by a bi-level program over a distribution on edges [1], by similarity in a learned embedding [2], by alternating between structure and representation [32], or with an auxiliary denoising objective [20]; Zhu et al. [33] and Zhou et al. [3] survey the area and its benchmarks. The presupposition throughout is geometric: an edge means proximity in some feature space. A table’s native relation is exact agreement on a categorical value, which is combinatorial, and its node set is not given. Rewiring addresses a different failure mode— information flow over an existing topology [34], corrected by curvature-guided edge surgery [21], spectral-gap maximisation [22], or effective-resistance criteria [23]. These criteria are computed from topology alone and are label-independent, and could be applied downstream of any constructor, including ours. 
+
+A.3 Table-to-graph constructions 
+
+Li et al. [24] organise single-table constructions by which tabular elements become nodes (instances, features, values, cells) and by how edges are created (intrinsic, rule-based, learned, retrieval-based); our incidence grable is the row–value intrinsic case. In the multi-table setting the relational entity graph [4] fixes rows as nodes and foreign keys as edges, and the RelBench line [12, 13] standardises tasks over it, with architectures exploiting its specific structure [25, 26]. Structure can also be induced implicitly through cross-row attention in tabular foundation models [35, 36]; there the induced structure depends on tokenisation and architectural detail and is not available as an object one can inspect, compare, or hold fixed, which is what the grable abstraction [9] isolates. In the reverse 
+
+> 13 AutoGrable: What Is a Good Graph for a Table?
+
+direction, benchmarks with tabular features on given graphs [37] probe whether structure is used at all; our negative control on TabArena [15] plays the analogous role from the tabular side. 
+
+A.4 Which structure is worth having 
+
+Three recent results converge on the same finding from different directions. Wang et al. [27] make the relational-to-graph extraction strategy an explicit benchmark axis (Row2Node, Row2N/E, dummy tables) and report that the choice materially changes performance. Choi et al. [11] enumerate schema-level graph models over 5 databases and 12 tasks, producing roughly 50 k graph–performance pairs, and find the best model improves on the common heuristic by up to 10% while remaining hard to identify without repeated GNN training; Chen et al. [28] find that relational deep learning does not consistently beat deep feature synthesis, that no single architecture dominates, and that validation performance is an unreliable selector, and respond with training-free task signals for routing. Their object of selection is the architecture given a graph; ours is the graph given an architecture (or a family of them). 
+
+A.5 Automatic table to graph constructors 
+
+Table 4 compares the methods that produce a graph automatically. We separate them by what they return, what they require as input, and what a single candidate evaluation costs. 
+
+Table 4: Automatic table-to-graph constructors by invariant. Candidate cost is the work required to score one candidate construction during search.                    
+
+> Method Output class Input regime Candidate cost REG [4] FK entity graph FK schema —
+> γinc [9] incidence grable table / schema —auGraph [6] augmented base graph table / schema GNN prediction AutoG [5] graph from schema edits schema + col. names GNN basket (oracle) AUTO GRABLE incidence grable table / schema group-by + val.
+
+AutoG’s oracle uses early-stage validation performance averaged over a basket of GNNs, which is cheaper than full training per candidate but is still a trained graph model in the loop. 
+
+A.6 Relation to feature selection and to explanation 
+
+Selecting columns whose induced partition refines the label partition, viewed as a covering problem over pairs with different labels, is Test Cover, which is Theorem 1. However, two things separate our objective from standard filter feature selection. 1. In our setting, the selected columns are not features but structure: they become value nodes, and what they contribute is cross-row communication rather than row-local signal. 2. The partition scored by J is not a convenient proxy: it is exactly the structural row partition the selected construction induces, and hence the component of the downstream learner’s expressive ceiling that the construction controls. The downstream GNN also receives the unexpanded row features, so it can separate rows within a cell; J scores what the construction contributes, not the full model. Selection cannot substitute construction—on extension-sensitive targets no row-local predictor over the selected columns can compute the label at any capacity [9]. Rissaki et al. [38] are formally the closest work we are aware of: they select database views minimising deviation-from-determinacy plus λ · cost , and observe that even the projection-only fragment reduces to hitting set. The objective has the same shape as J —fidelity plus a regularised complexity term—and the same combinatorial core. The difference is directional: their views explain a model that has already been trained, ours chooses a construction before one exists. 
+
+> 14 AutoGrable: What Is a Good Graph for a Table?
+
+## B Connection to Test Cover and Min Features Problem 
+
+Selecting columns so that the induced row partition separates the labels is the M IN -F EATURES (or 
+
+k-F EATURE -S ET ) problem, shown NP-complete by Davies and Russell [39]. We record here an alternative derivation as an instance of the classical T EST COVER problem. We restate the result on the incidence constructions graph side. 
+
+B.1 Setup 
+
+A table T has a finite set of rows, a label column Y , and feature columns A. Entries are real numbers; categorical columns are assumed one-hot encoded, so this is without loss of generality. For S ⊆ A
+
+and a row r, write r|S for the restriction of r to S, and let πS be the partition of rows defined by 
+
+r ∼ r′ ⇐⇒ r|S = r′|S . Let πY be the partition induced by the label column. A column c separates 
+
+a pair {r, r ′} if r[c]̸ = r′[c], and a set S separates the pair if some c ∈ S does, i.e. r|S̸ = r′|S .
+
+Definition 1 (Label-separating set) . S ⊆ A is label-separating if πS refines πY : equivalently, every pair of rows with distinct labels is separated by some c ∈ S.
+
+Definition 2 (WL-S EPARATE ). Given a table T with label column Y , feature columns A, and 
+
+k ∈ N; decide whether there exists a label-separating S ⊆ A with |S| ≤ k. The optimization version, 
+
+MIN -S EPARATE , asks for a label-separating S of minimum size. 
+
+B.2 The test cover problem Definition 3 (Test cover) . Given a set of items I and a collection of tests T ⊆ 2I , where a test t
+
+separates {i, i ′} iff |t ∩ { i, i ′}| = 1 ; find a smallest T ′ ⊆ T such that every pair of items is separated by some t ∈ T ′.
+
+Test cover is set cover over the universe of item pairs  I
+
+> 2
+
+: a test covers exactly the pairs it separates. It is NP-complete [40]. 
+
+B.3 Reduction and hardness Lemma 2 (T EST COVER ≤p WL-S EPARATE ). Given an instance (I, T ) with I = {1, . . . , m } and 
+
+T = {t1, . . . , t p}, construct a table T with 
+
+• one row ri per item i ∈ I;
+
+• one feature column cj per test tj , with ri[cj ] = 1 if i ∈ tj and ri[cj ] = 0 otherwise; 
+
+• a label column with a distinct label per row, ri[Y ] = i.Then for every S ⊆ { c1, . . . , c p}, S is label-separating iff {tj : cj ∈ S} is a test cover of (I, T ).Proof. Since labels are distinct, every pair of rows must be separated, so label-separation means every pair {ri, r i′ } is separated by some cj ∈ S. By construction cj separates {ri, r i′ } iff ri[cj ]̸ = ri′ [cj ]
+
+iff exactly one of i, i ′ lies in tj iff tj separates {i, i ′}. Hence S separates all pairs iff {tj : cj ∈ S}
+
+covers all pairs. 
+
+Theorem 2. WL-S EPARATE is NP-complete. Proof. Membership: given S, checking that every pair of differently-labelled rows is separated takes polynomial time. Hardness follows from Lemma 2, which is size-preserving and therefore transfers both the decision hardness and the optimal value of test cover. 
+
+## C Details of the training-free alignment score 
+
+Roadmap. The purpose of the alignment score is to select a subset of columns that exposes label-relevant structure without fragmenting the data into cells that are too small to support reliable estimation or useful message passing. The construction has four steps. Given a column subset S, we 1. partition the training rows according to their values on S;
+
+> 15 AutoGrable: What Is a Good Graph for a Table?
+
+2. attach to each resulting cell the simplest possible predictor, namely its empirical label distribu-tion; 3. measure how strongly the partition fragments the training sample through an occupancy penalty; and 4. combine this penalty with the predictor’s loss on a held-out validation set. Thus, adding columns creates a more expressive predictor, but also produces finer and potentially less well-supported cells. The score makes this trade-off explicit. We first define the cells, predictor, and occupancy penalty. We then establish the statistical meaning of the penalty and the validation guarantee for the resulting score. Finally, we describe the greedy search used to optimise it in practice. 
+
+C.1 From column subsets to cells 
+
+Let X = val A be the ambient row space over the non-label attributes A = C \ { Y }, and let Y be the finite label alphabet. We treat the data as an indexed sample 
+
+T =  (Xi, Y i)ni=1 .
+
+Fix a split of the indices into disjoint training and validation sets Itr and Ival , with 
+
+ntr = |Itr | ≥ 1, nval = |Ival | ≥ 1.
+
+The corresponding subsamples are denoted by Ttr and Tval .Let F ⊆ A be the fixed set of columns eligible for selection. Throughout this section, S ⊆ F denotes a candidate subset. The information exposed by S about a row x ∈ X is its projection x|S . Rows that agree on this projection belong to the same cell . More precisely, for every value tuple u ∈ val S , define 
+
+BS,u = i ∈ Itr : Xi|S = u , NS,u = |BS,u |.
+
+We index cells by value tuples rather than only by observed training rows. Consequently, the count 
+
+NS,u is defined even when no training row has projection u. This will allow the predictor introduced below to be defined on all of X , including previously unseen rows. The nonempty sets BS,u form a partition πS ∈ Π( Itr ) of the training indices: 
+
+i ∼πS j ⇐⇒ Xi|S = Xj |S .
+
+We write π′ ⪯ π when π′ refines π, meaning that every block of π′ is contained in a block of π.
+
+C.2 The block predictor 
+
+A column subset S induces a predictor without fitting a parametric model. On each occupied cell, the predictor simply returns the empirical label distribution of the training rows in that cell. For 
+
+NS,u > 0, define 
+
+ˆpS (y | u) = 1
+
+NS,u 
+
+X
+
+> i∈Itr
+
+1{Xi|S = u, Y i = y}.
+
+For a cell that does not occur in the training data, these conditional frequencies are not identifiable. We therefore use the training-set marginal 
+
+ˆp0(y) = 1
+
+ntr 
+
+X
+
+> i∈Itr
+
+1{Yi = y}
+
+as a fixed fallback. The resulting block predictor is the function 
+
+ˆhS (x) = 
+
+(ˆpS ( · | x|S ), NS,x |S > 0,
+
+ˆp0, NS,x |S = 0 .
+
+The predictor is therefore defined on the entire row space X , not only on the rows observed during training. Moreover, conditional on Ttr , it is a fixed function: all its cell counts, label frequencies, and fallback probabilities are determined by the training sample. 
+
+> 16 AutoGrable: What Is a Good Graph for a Table?
+
+On occupied cells, ˆpS (· | u) is the categorical maximum-likelihood estimate. When a hard prediction is required, we use 
+
+ˆgS (x) = arg max 
+
+> y∈Y
+
+ˆhS (x)( y),
+
+with a fixed tie-breaking rule. Thus, ˆhS estimates a label distribution, whereas ˆgS is the 0–1 empirical risk minimiser among classifiers that are constant on the cells induced by S.
+
+C.3 The occupancy penalty 
+
+The block predictor becomes more expressive as cells are refined. In particular, a sufficiently fine partition can place every training row in its own cell, at which point the predictor merely memorises the training labels. What matters, however, is not the number of cells that could exist, but how the observed training rows are distributed over the cells that actually occur. We quantify this through the occupancy functional 
+
+Ω( Ttr , π ) = 1
+
+ntr 
+
+X
+
+> B∈π
+
+p|B|.
+
+For the partition induced by S, this becomes 
+
+Ω( Ttr , π S ) = 1
+
+ntr 
+
+X
+
+> u:NS,u >0
+
+pNS,u = 1
+
+ntr 
+
+X
+
+> i∈Itr
+
+1
+
+pNS,X i|S
+
+. (3) The final expression gives a useful row-wise interpretation: each training row is charged the inverse square root of the number of rows supporting its prediction. Accordingly, Ω is best read as an occupancy penalty . It is small when many rows share a few well-populated cells, and large when the data is spread over many sparsely populated cells. Since the block sizes always sum to ntr , we have 
+
+1
+
+√ntr 
+
+≤ Ω( Ttr , π S ) ≤ 1.
+
+The two extremes illustrate the scale: • If all rows belong to one cell, then Ω = 1 /√ntr . Every prediction is supported by the entire training sample. • If every cell is a singleton, then Ω = 1 . This is the pure memorisation regime. 
+
+C.3.1 Adding columns increases fragmentation 
+
+The first important property of Ω is structural: exposing more columns can only refine the partition and therefore can only increase the penalty. 
+
+Lemma 3. If S ⊆ S′ ⊆ F , then 
+
+πS′ ⪯ πS .
+
+Proof. If Xi|S′ = Xj |S′ , then Xi|S = Xj |S because S ⊆ S′. Hence every block of πS′ is contained in a block of πS .
+
+Lemma 4. If π′ ⪯ π, then 
+
+Ω( Ttr , π ) ≤ Ω( Ttr , π ′).
+
+Proof. Every block B ∈ π is the disjoint union of the blocks B′ ∈ π′ that it contains. Therefore, 
+
+|B| = X
+
+> B′∈π′
+> B′⊆B
+
+|B′|.
+
+By subadditivity of the square root, p|B| ≤ X
+
+> B′∈π′
+> B′⊆B
+
+p|B′|.
+
+Summing over B ∈ π and dividing by ntr proves the claim. 
+
+> 17
+
+AutoGrable: What Is a Good Graph for a Table? 
+
+Corollary 1. If S ⊆ S′ ⊆ F , then 
+
+Ω( Ttr , π S ) ≤ Ω( Ttr , π S′ ).
+
+Thus, an additional column may improve predictive fidelity, but it can never reduce the occupancy penalty. This is precisely the tension that the alignment score will balance. 
+
+C.3.2 Why occupancy is statistically meaningful 
+
+The occupancy penalty is not merely a heuristic measure of fragmentation. It also controls the estimation error of the corresponding class of cell-constant classifiers. Let 
+
+GS = {g : X → Y | x|S = x′|S ⇒ g(x) = g(x′)}
+
+be the class of classifiers that are constant on the cells induced by S. Let ˆgS be an empirical risk minimiser over GS on Ttr under 0–1 loss. On every occupied cell, this is the majority-label classifier. The convention above fixes its value on unoccupied cells. Write 
+
+Risk( g) = Pr  
+
+> D
+
+[g(X)̸ = Y ], Risk ∗ = inf  
+
+> g
+
+Risk( g),
+
+and 
+
+Risk ∗ 
+
+> S
+
+= inf 
+
+> g∈G S
+
+Risk( g).
+
+Lemma 5. Fix S ⊆ F independently of Ttr . Suppose that Y = {0, 1} and that Ttr consists of ntr 
+
+independent draws from D. For every δ ∈ (0 , 1) , with probability at least 1 − δ over Ttr ,
+
+Risk(ˆ gS ) − Risk ∗ ≤  Risk ∗ 
+
+> S
+
+− Risk ∗| {z }
+
+> approximation error
+
++ Ω( Ttr , π S )
+
+| {z }
+
+> estimation error
+
++4 
+
+s
+
+ln(4 /δ )2ntr 
+
+. (∗)
+
+Proof. Write n = ntr . Encode classifiers and labels by signs: 
+
+˜g = 2 g − 1 ∈ {− 1, +1 }, ˜Yi = 2 Yi − 1.
+
+Then 
+
+1{g(Xi)̸ = Yi} = 12
+
+ 1 − ˜Yi ˜g(Xi). (4) Let σ1, . . . , σ n be independent Rademacher signs and let 
+
+eGS = {˜g : g ∈ G S }.
+
+Every function in eGS is constant on each block of πS . Its values on the training sample are therefore determined by one freely chosen sign per block. Hence 
+
+bR( eGS ) = 1
+
+n Eσ
+
+"
+
+sup  
+
+> ˜g∈eGS
+> n
+
+X
+
+> i=1
+
+σi ˜g(Xi)
+
+#
+
+= 1
+
+n
+
+X
+
+> B∈πS
+
+Eσ
+
+X
+
+> i∈B
+
+σi .
+
+By Cauchy–Schwarz applied to the random variables |P 
+
+> i∈B
+
+σi| and 1, together with 
+
+Eσ
+
+X
+
+> i∈B
+
+σi
+
+!2
+
+= |B|,
+
+we obtain 
+
+Eσ
+
+X
+
+> i∈B
+
+σi ≤ p|B|.
+
+18 AutoGrable: What Is a Good Graph for a Table? 
+
+Consequently, 
+
+bR( eGS ) ≤ 1
+
+n
+
+X
+
+> B∈πS
+
+p|B| = Ω( Ttr , π S ).
+
+Let 
+
+LS = {(x, y ) 7 → 1{g(x)̸ = y} : g ∈ G S } .
+
+By (4), the additive constant contributes 12n Eσ
+
+P 
+
+> i
+
+σi = 0 , while the multiplicative factor 1/2 remains. Moreover, the products σi ˜Yi are again independent Rademacher signs conditional on the sample. Therefore, 
+
+bR(LS ) = 12 bR( eGS ) ≤ 12 Ω( Ttr , π S ).
+
+Apply the standard one-sided empirical Rademacher bound for [0 , 1] -valued loss classes with failure probability δ/ 2. With probability at least 1 − δ/ 2, simultaneously for every g ∈ G S ,
+
+Risk( g) ≤ dRisk tr (g) + 2 bR(LS ) + 3 
+
+r ln(4 /δ )2n
+
+≤ dRisk tr (g) + Ω( Ttr , π S ) + 3 
+
+r ln(4 /δ )2n .
+
+For ε > 0, choose a fixed ε-minimiser g∗ 
+
+> S,ε
+
+∈ G S satisfying 
+
+Risk( g∗
+
+> S,ε
+
+) ≤ Risk ∗ 
+
+> S
+
++ ε. 
+
+Since this comparator is fixed independently of Ttr , the one-sided Hoeffding inequality, also with failure probability δ/ 2, gives 
+
+dRisk tr (g∗
+
+> S,ε
+
+) ≤ Risk( g∗
+
+> S,ε
+
+) + 
+
+r ln(2 /δ )2n .
+
+By a union bound, both displayed inequalities hold with probability at least 1 − δ. Put 
+
+c = 3 
+
+r ln(4 /δ )2n , b =
+
+r ln(2 /δ )2n , Ω = Ω( Ttr , π S ).
+
+On the event above, 
+
+Risk(ˆ gS ) ≤ dRisk tr (ˆ gS ) + Ω + c
+
+≤ dRisk tr (g∗
+
+> S,ε
+
+) + Ω + c
+
+≤ Risk ∗ 
+
+> S
+
++ ε + Ω + c + b
+
+≤ Risk ∗ 
+
+> S
+
++ ε + Ω + 4 
+
+r ln(4 /δ )2n .
+
+The second inequality uses the empirical optimality of ˆgS . Subtracting Risk ∗ and letting ε ↓ 0 gives (∗). The bound separates two effects. The approximation term measures what is lost by forcing rows in the same cell to receive the same label. The occupancy term measures the estimation cost of learning one prediction per occupied cell. Thus, finer partitions can reduce approximation error, but they necessarily increase the quantity controlling estimation error. Because Ω can be as large as 1, the bound may be vacuous in the singleton-cell memorisation regime. This is precisely the regime that the occupancy penalty is designed to detect. The randomness in Lemma 5 is over Ttr : the lemma explains why the occupancy of the training sample is worth penalising. The validation result below instead conditions on Ttr and randomises over Tval : it certifies the selection made using that penalty. 
+
+> 19 AutoGrable: What Is a Good Graph for a Table?
+
+C.4 The alignment score 
+
+The occupancy penalty alone would always favour the coarsest possible partition. We therefore balance it against predictive fidelity on the validation split. Let ℓ be a loss taking values in [0 , L ]. Define 
+
+dRisk val (ˆhS ) = 1
+
+nval 
+
+X
+
+> i∈Ival
+
+ℓ ˆhS (Xi), Y i
+
+.
+
+The training-free alignment score is 
+
+J (πS ) = dRisk val (ˆhS ) + λ Ω( Ttr , π S ), λ ≥ 0. (5) The two terms have deliberately different roles: • Ttr determines the cells, the block predictor, and the occupancy penalty; • Tval measures how well the resulting predictor generalises beyond those training cells. The parameter λ states how much validation loss we are willing to trade for a coarser and better-supported structure. 
+
+C.5 Validation guarantee 
+
+Because every predictor ˆhS is fixed after conditioning on Ttr , standard concentration on the indepen-dent validation set gives a uniform guarantee over all candidate subsets. 
+
+Proposition 1 (Uniform validation guarantee) . Fix δ ∈ (0 , 1) and condition on Ttr . Assume that 
+
+(A1) the validation rows are independent draws from a distribution Dval , independent of Ttr , and 
+
+Risk( h) = EDval [ℓ(h(X), Y )]; 
+
+(A2) the loss ℓ takes values in [0 , L ]; and 
+
+(A3) the candidate set F ⊆ A is fixed independently of Tval .Define 
+
+εL = L
+
+s
+
+|F | ln 2 + ln(2 /δ )2nval 
+
+.
+
+Then, with probability at least 1 − δ over Tval , every minimiser 
+
+S⋆ ∈ arg min  
+
+> S⊆F
+
+J (πS )
+
+satisfies 
+
+Risk( ˆhS⋆ ) + λΩ( Ttr , π S⋆ ) ≤ min 
+
+> S⊆F
+
+n
+
+Risk( ˆhS ) + λΩ( Ttr , π S )
+
+o
+
++ 2 εL. (6) 
+
+In particular, 
+
+Risk( ˆhS⋆ ) ≤ min 
+
+> S⊆F
+
+n
+
+Risk( ˆhS ) + λΩ( Ttr , π S )
+
+o
+
++ 2 εL.
+
+Proof. Condition on Ttr . For every S ⊆ F , the function ˆhS is then fixed on all of X : its counts, empirical label distributions, and fallback distribution are determined entirely by the training sample. Because Tval is independent of Ttr , the random variables 
+
+ℓ(ˆhS (Xi), Y i), i ∈ Ival ,
+
+are independent, take values in [0 , L ], and have mean Risk( ˆhS ). Hoeffding’s inequality therefore gives 
+
+Pr 
+
+h dRisk val (ˆhS ) − Risk( ˆhS ) > t 
+
+i
+
+≤ 2 exp 
+
+
+
+− 2nval t2
+
+L2
+
+
+
+.
+
+> 20 AutoGrable: What Is a Good Graph for a Table?
+
+By assumption (A3), the family 
+
+{ˆhS : S ⊆ F }
+
+is fixed before the validation set is observed and contains at most 2|F | predictors. A union bound with total failure probability δ therefore yields t = εL. Hence, with probability at least 1 − δ,simultaneously for all S ⊆ F ,
+
+dRisk val (ˆhS ) − Risk( ˆhS ) ≤ εL. (7) On this event, for every S ⊆ F , the optimality of S⋆ for J and two applications of (7) give 
+
+Risk( ˆhS⋆ ) + λΩ( Ttr , π S⋆ ) ≤ dRisk val (ˆhS⋆ ) + λΩ( Ttr , π S⋆ ) + εL
+
+≤ dRisk val (ˆhS ) + λΩ( Ttr , π S ) + εL
+
+≤ Risk( ˆhS ) + λΩ( Ttr , π S ) + 2 εL.
+
+Minimising the right-hand side over S ⊆ F proves (6). Dropping the nonnegative penalty on the left gives the final statement. Assumption (A1) holds for a uniformly random train–validation split. For a time-based or grouped split, the guarantee should instead be read relative to the validation distribution that is actually sampled. If rows within a validation group are dependent, Hoeffding’s inequality must be replaced by an appropriate block-wise concentration inequality. 
+
+C.6 How to read the guarantee The comparator is penalised risk. For λ > 0, Proposition 1 does not claim that S⋆ is near-optimal for prediction risk alone. It says that S⋆ is near-optimal for the trade-off declared by J . A subset with slightly larger prediction risk may therefore be preferred when it induces substantially better-supported cells. When λ = 0 , the penalty disappears and the result reduces to the classical held-out model-selection bound. 
+
+Why use a positive penalty? There are two reasons to choose λ > 0.First, the validation guarantee conditions on one realised training sample. A partition consisting largely of singleton cells can behave well for that particular draw while changing sharply when the training sample changes. Lemma 5 shows that occupancy is precisely the quantity controlling this sensitivity. Second, S⋆ is not selected only to make predictions. It is used to construct γS⋆
+
+> inc
+
+, in which the cells determine shared neighbourhoods. When Ω is close to 1, most row nodes have essentially unique neighbourhoods, leaving message passing with little shared structure to aggregate. The score is therefore a structural selector , not merely a risk estimator. 
+
+Why is occupancy measured on the training set? The block predictor is fitted from Ttr , so its estimation error is governed by the occupancy of the cells in Ttr . Measuring Ω on Tval would charge the score for rows that were never used to estimate ˆpS (· | u), while failing to penalise training-time memorisation directly. Using Ttr also makes both the predictor and the penalty fixed after conditioning on the training sample. This conditional viewpoint is what the proof of Proposition 1 requires. It does not require the predictor and penalty to be unconditionally independent; indeed, both are functions of Ttr .
+
+What does the guarantee say about greedy search? The union bound in Proposition 1 ranges over the complete lattice {S : S ⊆ F }. Consequently, the uniform deviation event also covers a subset chosen adaptively by inspecting validation scores. In particular, if ˜S is the subset returned by Algorithm 1, then 
+
+dRisk val (ˆh ˜S ) − Risk( ˆh ˜S ) ≤ εL.
+
+> 21 AutoGrable: What Is a Good Graph for a Table?
+
+The deviation for one returned candidate is εL; the factor 2εL in Proposition 1 arises only when two candidates are compared. More generally, suppose that ˜S is η-suboptimal for the empirical score: 
+
+J (π ˜S ) ≤ min  
+
+> S⊆F
+
+J (πS ) + η. 
+
+Then the conclusion of Proposition 1 holds with η + 2 εL in place of 2εL. The validation guarantee therefore survives approximate optimisation. What it does not provide is a bound on η: although the occupancy term is monotone, the validation-risk term is not, and greedy search may stop at a local minimum. 
+
+C.7 Greedy optimisation 
+
+We provide a bit more background on Algorithm 1. As mentioned, exact minimisation of (1) is generally infeasible. The search space contains 2|F | column subsets, and the underlying separation problem is NP-complete. We therefore use the greedy local search in 
+
+Search strategy. The algorithm maintains a current subset S and considers all subsets that differ from S by one column. Forward selection starts from S = ∅ and considers additions S ∪ { c}. Backward elimination starts from S = F and considers deletions S \ { c}. At every iteration, the algorithm evaluates J on all one-column neighbours and selects the best one. The move is accepted only when it improves the current score by more than a tolerance τ . Otherwise, the search terminates. The algorithm returns the surviving subset S⋆, together with the block model already computed for it. This block model is then passed to the constructor as γS⋆
+
+> inc
+
+.
+
+Choosing the search direction. The two directions traverse the refinement lattice in opposite ways. Forward selection starts from the coarsest partition: it has the smallest possible occupancy penalty but is also the least expressive. Backward elimination starts from the finest available partition: it is the most expressive but pays the largest occupancy penalty. The validation-risk term is not monotone, so the two directions may reach different local minima. Forward selection is typically cheaper. It often terminates after only a few accepted additions and never needs to construct the finest partition. It is therefore preferable when only a small number of columns are expected to matter. Backward elimination is more robust to interactions between attributes. A column that is uninfor-mative in isolation but useful together with another column is present at the start and is not rejected before that interaction can be evaluated. Backward search also tends to remove high-cardinality columns early, since such columns strongly increase Ω and often fragment the cells on which the block predictor relies. 
+
+Choosing the tolerance. The tolerance τ prevents the search from accepting improvements that are indistinguishable from validation noise. Proposition 1 supplies the natural scale: 
+
+εL = O
+
+L
+
+s
+
+|F | + log(1 /δ )
+
+nval 
+
+ .
+
+A single candidate’s validation risk is accurate to εL, while the uncertainty in a pairwise comparison can be as large as 2εL. Choosing τ on this order prevents the search from pursuing sampling fluctuations. Setting τ = 0 recovers ordinary greedy descent. 
+
+Computational cost. For the J score, evaluation one candidate requires no model fitting. It consists of two passes through the data: 1. one hash group-by over Ttr to construct πS , accumulate per-cell label counts, and compute ˆpS ,
+
+ˆp0, and Ω;2. one pass over Tval to accumulate the validation loss. 
+
+> 22 AutoGrable: What Is a Good Graph for a Table?
+
+Each score evaluation therefore requires 
+
+O(ntr + nval )
+
+hash operations. At a subset of size k, backward elimination evaluates k neighbours, whereas forward selection evaluates |F | − k. A complete run uses at most O(|F |2) score evaluations and hence 
+
+O |F |2(ntr + nval )
+
+work in the worst case. In practice, the cost is usually lower because the search terminates as soon as no one-column move improves the score by more than τ .
+
+Summary. The complete procedure implements a transparent structural trade-off. Adding columns may improve validation fidelity by distinguishing more row types, but it also creates smaller and less-supported cells. The validation loss measures the first effect, the occupancy penalty measures the second, and J selects the balance between them. The two guarantees justify these roles separately: Lemma 5 explains why occupancy controls estimation, while Proposition 1 shows that held-out selection is uniformly reliable over the candidate subsets. 
+
+## D Extended experimental results 
+
+D.1 Controlled tasks D.1.1 Column recovery under the alignment objective (RQ1) 
+
+RQ1 asks whether minimizing J selects the columns that generate the task and rejects irrelevant ones. We answer it at two levels: whether the global minimizer of J is the true relevant set, and whether the greedy procedure we run reaches that minimizer. The second matters only because it shows that, despite being greedy, the algorithm performs. 
+
+D.2 Data-generating process 
+
+As base data we use the Census/Adult dataset [10], whose 8 categorical columns form the core of the column universe C. A task is defined by a ground-truth relevant set S◦ ⊆ C, and a label y generated from S◦. We constrain the base rate to P (y=1) ∈ [0 .3, 0.7] at generation time to avoid degenerate targets. The five mechanism families vary in how y depends on S◦, from row-local to genuinely relational: • Single-value. y is set by one value of one column: yi = 1[Ti[ca]= v], with S◦ = {ca}.• Conjunction. y requires two column values jointly: yi = 1[Ti[ca]= va ∧ Ti[cb]= vb], S◦ =
+
+{ca, c b}, with each column individually informative but neither sufficient. • Interaction (XOR). y is the exclusive-or of two binarized columns, chosen so that neither column is informative about y on its own while the pair determines it. S◦ = {ca, c b}. We include this family to stress-test greedy selection. • Count. y depends on how often a row’s key value recurs: yi = ⊮[ multiplicity of Ti[k] ≥ τ ],
+
+S◦ = {k}. No row-local feature on k expresses y.• Duplicate. y marks rows whose value in a particular column appears more than once: yi =
+
+1[ value Ti[d] is not unique ], S◦ = {d}.
+
+Noise. We flip each label independently with probability η ∈ { 0.0, 0.1, 0.2} to test the robustness and performance of the model against noisy targets. 
+
+D.3 Metrics 
+
+Let ˆS be the selected subset. Recall Rec = | ˆS ∩ S◦|/|S◦| measure how much of the true set is kept; Exact = 1[ ˆS = S◦] is their all-or-nothing combination. We also separate objective failure from procedure failure: objective failure is when the minimum of J does not correspond to the partition induced by the ground-truth relevant columns, and procedure failure is when the point reached by the greedy procedure is non-optimal. 
+
+> 23
+
+AutoGrable: What Is a Good Graph for a Table? 0.0 0.2 0.4 0.6 0.8 1.0 performance              
+
+> encoding = values | direction = forward encoding = values | direction = backward
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> λ
+> 0.0 0.2 0.4 0.6 0.8 1.0 performance
+> encoding = frequencies | direction = forward
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> λ
+> encoding = frequencies | direction = backward
+> noise = 0 task category
+> row-local extension-sensitive
+
+Figure 3: Performance (Exact recovery) versus regularisation strength λ for each encoding × direction setting, on the clean tasks (noise = 0 ). Solid lines are per-category means over tasks; faint lines are individual tasks. Axes are shared across panels. Best viewed in color. 
+
+D.4 Protocol 
+
+For each (family, η) we draw N = 10 seeds, resampling the rows, planted columns, and label noise each time, and score the selected subset against the known S◦.
+
+D.5 Extended results 
+
+Beyond the results in Table 1, we report the full experimental results for the different A UTO GRABLE 
+
+mechanisms and for the inclusion of progressive noise in the tasks. We analyse each axis separately. 
+
+Effect of the regularisation strength λ. Figure 3 reports performance as a function of λ for every combination of the two A UTO GRABLE axes—encoding ( values , frequencies ) and direction ( forward ,
+
+backward )—on the clean tasks (noise = 0 ). Solid curves show the mean over the tasks in each category ( row-local , extension-sensitive ); faint curves show the individual tasks. The location of the optimal λ shifts across panels and differs between the two task categories, showing that the effect of 
+
+λ is not independent of the chosen mechanism. 
+
+Robustness to progressive noise. Figure 4 reports performance as the amount of added noise increases, shown separately for each task category (Figures 4a and 4b). Within each panel—again one per encoding × direction setting—each curve corresponds to a value of λ. This lets us read off both the overall degradation under noise and whether the best λ depends on the noise level: crossing curves indicate that the ranking of λ changes as noise grows. 
+
+24 AutoGrable: What Is a Good Graph for a Table? 
+
+Table 5: GraphSAGE ( HeteroSAGE ) hyperparameters, Transactional (fraud) vs. Tabular IID (TabArena) setups. Both use the same architecture ( NodeEncoder + HeteroSAGE + MLPHead ). Hyperparameter Transactional Tabular IID Hidden dimension 256 256 Layers 4 4Head layers 2 2Dropout 0.15 0.15 Message aggregation (within relation) sum sum Relation aggregation (across relations) cat cat Residual True True Normalization layer layer Learning rate 2e-4 2e-4 Weight decay 1e-5 1e-5 Epochs (max) 200 200 Patience 20 20 Gradient clip 1.0 1.0 Selection metric AP AUC Optimizer AdamW AdamW 
+
+Table 6: GraphSAGE hyperparameters, Relational (RelBench) setup. Uses RelBench’s 
+
+HeteroEncoder + HeteroTemporalEncoder + HeteroGraphSAGE + single-layer MLP head Hyperparameter Relational Hidden dimension / channels 128 Layers 4Head layers 1Message aggregation sum Normalization batch_norm Learning rate 5e-3 Epochs (max) 200 Patience / early stopping 10 Temporal encoder HeteroTemporalEncoder 
+
+Optimizer Adam 
+
+D.6 Real transactional, relational and i.i.d tasks D.6.1 Training details GraphSAGE architecture and hyperparameters. Throughout the transactional, relational and i.i.d. tabular tasks, the predictor is kept fixed: for each dataset, a single configuration is instantiated once and reused unchanged across every task family and every graph construction evaluated on that dataset. Table 5 reports the architecture and configuration used for the transactional (fraud) and tabular i.i.d. (TabArena) setups, which share the same HeteroSAGE implementation. For RelBench tasks we use RelBench’s own reference HeteroGraphSAGE implementation and hyperparameters, reported separately in Table 6, since its encoder and message-passing modules differ from ours and are not directly comparable field-by-field. Hyperparameters are not selected per construction: the validation set is used only for early stopping, checkpointing on the epoch with the best validation score, under a fixed architecture and fixed hyperparameters, not for a hyperparameter search re-run per construction. No construction receives more tuning than another. 
+
+D.6.2 Transactional fraud detection 
+
+From the FDB: Fraud Dataset Benchmark we use all available real datasets with at least 3 categorical attributes. This rules out 5 of the 9 available datasets, from which 4 have two or less categorical variables (and hence the graph-construction-via-selection effect is limited) or are simulated (partic-
+
+> 25
+
+AutoGrable: What Is a Good Graph for a Table? 
+
+ularly “Simulated Credit Card Transactions generated using Sparkov” ( sparknov )). Table 7 show the validation and test results of the fixed graph constructions and the different A UTO GRABLE 
+
+configurations. 
+
+Table 7: AUTO GRABLE performance (AUC) comparison across encoding/direction/ λ configurations on transactional (FDB) datasets. Results averaged over N =15 seeds. We note that fraudecom is a particularly challenging task, where no configuration (nor other methods reported in the official benchmark leader board) beats near-random performance. Encoding Direction λ fraudecom twitterbot vehicleloan fakejob 
+
+Val Test Val Test Val Test Val Test Trivial ( γtriv ) 0.509 0.499 0.866 0.864 0.646 0.647 0.925 0.911 Full incidence ( γinc ) 0.511 0.501 0.821 0.831 0.630 0.619 0.938 0.951 
+
+Values Backward 0 0.511 0.492 0.837 0.831 0.647 0.642 0.930 0.929 Values Backward 1 0.502 0.507 0.837 0.831 0.649 0.645 0.923 0.910 Values Forward 0 0.525 0.516 0.916 0.919 0.653 0.649 0.917 0.897 Values Forward 1 0.503 0.497 0.914 0.917 0.646 0.645 0.923 0.910 Frequency Backward 0 0.525 0.513 0.837 0.831 0.642 0.644 0.938 0.951 
+
+Frequency Backward 1 0.525 0.513 0.912 0.911 0.646 0.647 0.921 0.907 Frequency Forward 0 0.527 0.513 0.893 0.880 0.646 0.647 0.922 0.907 Frequency Forward 1 0.527 0.513 0.913 0.908 0.676 0.662 0.925 0.911 
+
+D.6.3 Tabular datasets results 
+
+Table 8 reports the performance of γtriv , γinc , and the different configurations of A UTO GRABLE on a selected subset of the i.i.d. tabular benchmark TabArena [15]. The datasets are selected for having more than 8 categorical features and a binary classification target. 
+
+Table 8: TabArena (i.i.d. single-table) results. AUC averaged over N =15 seeds. Baselines above the rule; A UTO GRABLE configurations below, with bold marking the best validation score among them. A ∗ marks a configuration that selects no columns and therefore returns γtriv ; a ◦ marks one that selects all of them and therefore returns γinc . Since each label depends on its own row, no constructor is expected to improve on γtriv .Encoding Direction λ credit-g good-customer mkt_campaign NATICUSdroid qsar-biodeg                                                                                                                              
+
+> Val Test Val Test Val Test Val Test Val Test Trivial ( γtriv )0.769 0.764 0.683 0.762 0.908 0.886 0.984 0.983 0.688 0.715 Full incidence ( γinc )0.800 0.720 0.694 0.740 0.839 0.776 0.985 0.982 0.693 0.724 Values Backward 00.807 0.739 0.692 0.756 0.917 0.886 0.984 0.983 0.689 0.724 Values Backward 10.807 0.739 0.692 0.756 0.918 0.888 0.984 0.983 0.696 0.714 Values Forward 00.767 0.774 0.683 ∗0.762 0.903 0.887 0.984 0.984 0.693 ◦0.724 Values Forward 10.769 0.764 0.683 ∗0.762 0.909 0.886 0.985 0.984 0.693 ◦0.724 Frequency Backward 00.807 0.739 0.694 ◦0.740 0.913 0.880 0.983 0.982 0.693 0.725 Frequency Backward 10.807 0.739 0.699 0.766 0.909 0.883 0.983 0.986 0.693 0.715 Frequency Forward 00.769 ∗0.764 0.694 0.737 0.908 ∗0.886 0.984 ∗0.985 0.688 ∗0.715 Frequency Forward 10.769 ∗0.764 0.683 ∗0.762 0.908 ∗0.886 0.984 ∗0.985 0.705 0.714
+
+Here the labels are allegedly i.i.d. at the row level, so the informative outcome should be that no structure is selected. In every task at least one A UTO GRABLE configuration returns the empty column set and so reduces to γtriv , and in four of five at least two do. All ten such cases are forward search, and eight of them are frequency-encoded forward search: starting from the empty set, no column offers a validation gain that covers the fragmentation it adds. Building structure anyway is not neutral. Full incidence gains on validation and loses on test relative to γtriv (0.800 → 0.720 
+
+on credit-g , 0.839 → 0.776 on mkt_campaign , against drops of 0.005 and 0.022 ), which is the fragmentation-driven overfitting that Ω is meant to detect. 
+
+D.6.4 Relational databases results 
+
+Table 9 shows results of A UTO GRABLE and the other baselines in both validation and test set of Relbench tasks. 
+
+26 AutoGrable: What Is a Good Graph for a Table? 
+
+Table 9: Validation and test AUROC ( ↑) under a fixed predictor; only the constructor varies. Mean ± std over N =15 seeds. Best in bold , second underlined. 
+
+driver-top3 (RelBench-F1) driver-dnf (RelBench-F1) study-outcome (RelBench-Trial) Constructor Val Test Val Test Val Test Trivial ( γtriv ) 0.640 ± 0.017 0.674 ± 0.011 0.610 ± 0.020 0.596 ± 0.026 0.648 ± 0.019 0.677 ± 0.009 
+
+REG 0.803 ± 0.009 0.777 ± 0.012 0.737 ± 0.007 0.733 ± 0.013 0.633 ± 0.011 0.635 ± 0.006 
+
+Full incidence ( γinc ) 0.762 ± 0.020 0.746 ± 0.013 0.698 ± 0.017 0.687 ± 0.022 0.628 ± 0.031 0.621 ± 0.013 
+
+Random 0.767 ± 0.030 0.759 ± 0.025 0.741 ± 0.015 0.733 ± 0.012 0.598 ± 0.021 0.602 ± 0.022 
+
+auGraph 0.810 ± 0.019 0.791 ± 0.009 0.750 ± 0.014 0.742 ± 0.021 0.617 ± 0.018 0.630 ± 0.017 
+
+AUTO GRABLE 0.845 ± 0.013 0.803 ± 0.011 0.770 ± 0.012 0.761 ± 0.021 0.648 ± 0.019 0.677 ± 0.009 
+
+27 AutoGrable: What Is a Good Graph for a Table? 0.0 0.2 0.4 0.6 0.8 1.0 performance 
+
+encoding = values | direction = forward encoding = values | direction = backward 
+
+0.00 0.05 0.10 0.15 0.20 noise 0.0 0.2 0.4 0.6 0.8 1.0 performance 
+
+encoding = frequencies | direction = forward 
+
+0.00 0.05 0.10 0.15 0.20 noise 
+
+encoding = frequencies | direction = backward  
+
+> category = row-local
+
+λ
+
+0 0.25 0.5 1
+
+(a) Row-local tasks. 0.0 0.2 0.4 0.6 0.8 1.0 performance 
+
+encoding = values | direction = forward encoding = values | direction = backward 
+
+0.00 0.05 0.10 0.15 0.20 noise 0.0 0.2 0.4 0.6 0.8 1.0 performance 
+
+encoding = frequencies | direction = forward 
+
+0.00 0.05 0.10 0.15 0.20 noise 
+
+encoding = frequencies | direction = backward  
+
+> category = extension-sensitive
+
+λ
+
+0 0.25 0.5 1
+
+(b) Extension-sensitive tasks. 
+
+Figure 4: Performance (Exact recovery) under progressively stronger added noise, per task category. Each panel corresponds to an encoding × direction setting; each curve corresponds to a value of λ
+
+(light to dark). Best viewed in color. 
+
+28

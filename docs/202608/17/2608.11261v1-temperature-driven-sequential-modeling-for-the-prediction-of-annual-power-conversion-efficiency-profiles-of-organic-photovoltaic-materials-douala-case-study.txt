@@ -1,0 +1,377 @@
+Title: Temperature-Driven Sequential Modeling for the Prediction of Annual Power Conversion Efficiency Profiles of Organic Photovoltaic Materials: Douala Case Study
+
+URL Source: https://arxiv.org/pdf/2608.11261v1
+
+Published Time: Thu, 13 Aug 2026 00:02:35 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# Temperature-Driven Sequential Modeling for the Prediction of Annual Power Conversion Efficiency Profiles of Organic Photovoltaic Materials: Douala Case Study 
+
+Steve Cabrel Teguia Kouam 1* , Rockefeller Rockefeller 2†, Raoult Dabou Teukam 3†,Jean-Pierre Tchapet Njafa 4†, Patrick Sorrel Mvoto Kongo 4†, Jean-Pierre Nguenang 1†,Serge Guy Nana Engo 4†
+
+> 1*
+
+Department of Physics, Faculty of Science, University of Douala, Douala, PO. Box 24157, Littoral, Cameroon. 
+
+> 2*
+
+Division of Applied Mathematics, Faculty of Science, Stellenbosch University, Stellenbosch, South Africa. 
+
+> 3
+
+Department of Engineering, University of Quebec in Abitibi-T´ emiscamingue, Quebec, Canada. 
+
+> 4
+
+Department of Physics, Faculty of Science, University of Yaounde 1, Yaounde, PO. Box 812, Center, Cameroon. *Corresponding author(s). E-mail(s): steve.teguia@facsciences-uy1.cm; Contributing authors: rockefeller@aims.ac.za; raoult.teukamdabou@uqat.ca; jean-pierre.tchapet@facsciences-uy1.cm; sorrel.mvoto@facsciences-uy1.cm; Nguenang@yahoo.com; serge.nana-engo@facsciences-uy1.cm; 
+
+> †
+
+These authors contributed equally to this work. 
+
+Abstract 
+
+Organic photovoltaic (OPV) materials are promising candidates for distributed solar energy in tropical regions, yet existing virtual screening tools report static power conversion efficiency (PCE) values at standard test-ing conditions (STC) that fail to capture the temperature-driven performance degradation experienced under real deployment conditions. Here we introduce a Climate-Native computational framework that forecasts the annual PCE profile of OPV donor molecules under geographically realistic operating conditions. The frame-work combines GFN2-xTB molecular dynamics with an equivariant graph neural network surrogate ( 268 
+
+Neyman-stratified CEP molecules; 120 , 600 training geometries; ∼ 1050 × speedup over explicit quantum chemistry) and sequential deep learning models trained on annual time series anchored in NASA POWER climate data for Douala, Cameroon, and validated by zero-shot transfer to Yaound´ e and Maroua. Applied to ∼ 30 , 000 molecules from the Harvard Clean Energy Project (CEP) and validated against 350 HOPV15 experimental device measurements, the framework demonstrates that sequential models trained on full molec-ular dynamics trajectories outperform time-averaged baselines ( 35% –48% relative MAE improvement over static baselines), confirming that thermal conformational dynamics carry information beyond mean geometry. We further introduce a seasonal stability score that reranks OPV candidates by performance consistency under tropical conditions, identifying molecules whose deployment suitability differs substantially from their static PCE ranking. 
+
+Keywords: Organic photovoltaics, Power conversion efficiency, Molecular dynamics, GFN2-xTB, Sequential modeling, LSTM, Transformer, Graph neural network, Scharber model, Reorganization energy, Thermal stability, Douala, Cameroon 
+
+1arXiv:2608.11261v1 [cond-mat.mtrl-sci] 9 Aug 2026 1 Introduction 
+
+Organic semiconductor materials, including polymers and small molecules, represent a compelling pathway to low-cost, flexible, and solution-processable solar energy conversion, with bulk-heterojunction (BHJ) devices now exceeding 19% power conversion efficiency in laboratory settings [1]. The deployment of organic photovoltaic (OPV) technology in tropical and sub-Saharan regions is particularly attractive given the high year-round solar irradiance and the urgent need for distributed energy access across the Global South. However, a critical gap exists between the standard laboratory conditions under which OPV materials are computationally screened and the actual thermodynamic environments in which they are deployed. Existing virtual screening frameworks — including the landmark Harvard Clean Energy Project (CEP), which evaluated ∼ 2.3 million candidate donor structures using the Scharber device model [2, 3] — report static power conversion efficiency (PCE) values computed at standard testing conditions (298 .15 K, AM1.5G illumination at 100 .0 mW cm −2). These single-point static metrics fail to reflect operational panel cell temperatures of 320 .0 K–335 .0 K experienced year-round in tropical climates after Nominal Operating Cell Temperature (NOCT) thermal balance corrections, nor do they capture the seasonal variation in PCE that governs the actual lifetime energy yield of a deployed solar module. The molecular origin of temperature-dependent PCE degradation lies in the dynamic disorder of organic semi-conductors. Thermal fluctuations drive finite-temperature conformational changes — such as torsional oscillations between conjugated aromatic rings, backbone thermal expansion, and non-radiative vibrational mode excitation — that modulate the Highest Occupied Molecular Orbital (HOMO) and Lowest Unoccupied Molecular Orbital (LUMO) energies, vertical reorganization energies ( λ+vert , λ −
+
+> vert
+
+), and charge-transfer rates on picosecond timescales [4, 5]. Although this dynamic disorder is well documented in charge transport literature, it has not been systemati-cally incorporated into high-throughput OPV virtual screening workflows. The primary computational bottleneck is clear: explicit quantum chemistry calculations at every molecular dynamics (MD) snapshot are prohibitively expensive at scale. A single GFN2-xTB semiempirical single-point calculation requires seconds of wall time; a 50 ps trajectory at a 1 fs timestep with three electronic charge states per snapshot (neutral, cation, anion) requires 150 , 000 quantum calculations per molecule per temperature bin — a workload manageable for a small pilot set but entirely intractable for tens of thousands of molecules without a machine learning surrogate. Machine learning surrogates for electronic structure theory have emerged as a powerful solution to this bottle-neck [6–8]. Graph neural networks (GNNs) trained on molecular geometries and quantum mechanical ground-state properties can replace explicit electronic structure calculations at inference times orders of magnitude faster than the underlying Hamiltonian solvers [9–11]. Equivariant architectures — which respect 3D rotational, transla-tional, and reflectional symmetries of Cartesian atomic coordinates — have demonstrated exceptional accuracy for atomic and molecular property predictions [11, 12]. However, existing GNN surrogates for OPV screening have been trained exclusively on Density Functional Theory (DFT) optimized equilibrium geometries at 0 K, leaving the thermally distorted off-equilibrium regime — precisely the regime operating solar panels inhabit — largely unexplored. Similarly, sequential deep learning models have been applied to temporal forecasting in materials informatics [13, 14] but have not been utilized to model annual performance trajectories of molecular devices anchored in real-world climate records. Here, we bridge these gaps with a two-level surrogate pipeline termed a Climate-Native framework for OPV performance forecasting. At the first level, an equivariant GNN surrogate (PaiNN [11]) trained on GFN2-xTB [15] single-point calculations from thermally distorted MD snapshots replaces explicit quantum chemistry at a ∼
+
+1050 × wall-time speedup ( < 0.035 eV orbital energy MAE), enabling high-fidelity electronic property predictions across the conformational space accessible at tropical operating temperatures. At the second level, sequential architectures (LSTM [13], GRU [16], Transformer [14]) trained on annual molecular time series forecast 52-week PCE profiles anchored in NASA POWER climate data [17] for Douala, Cameroon. The framework is validated against 350 HOPV15 experimental device measurements [18] — providing a rigorous real-world test — and its generalizability is demonstrated by zero-shot transfer to Yaound´ e and Maroua without retraining. We further introduce a clamped seasonal stability score ( Sstability ) that reranks OPV candidates by performance consistency under tropical microclimates. Sequential models trained on full MD trajectories outperform static time-averaged baselines (35%–48% relative MAE improvement), confirming that thermal conformational dynamics encode physical signal beyond mean geometry. Here, we establish nine distinct methodological contributions. First, we introduce Climate-Native molecular performance forecasting, moving beyond static 298 .15 K benchmarks by conditioning predictions on real-world 2meteorological records for Douala, Cameroon via NASA POWER daily climate data. Second, we deploy 3D equiv-ariant graph neural networks (PaiNN) trained on finite-temperature molecular dynamics snapshots to accurately predict electronic properties across thermally distorted off-equilibrium conformational space. Third, we establish a dynamic Marcus-Scharber multi-scale link where vertical reorganization energy λ± 
+
+> vert
+
+is evaluated along MD snap-shots to quantify microscopic charge-transfer rate barriers ( kCT ∝ exp( −λ/ 4kBT )), serving as an independent physical validator for seasonal thermal degradation rates (∆ PCE ), while frontier orbital fluctuations drive instan-taneous Scharber PCE engines. Fourth, an adaptive snapshot sampling protocol densifies MD trajectory collection during climatically transitional periods identified by elevated weekly temperature variance ( σw > median σ). Fifth, we propose a geographically-stratified screening index, the clamped seasonal stability score Sstability =max 
+
+
+
+0.0, 1.0 − σPCE 
+
+> μPCE +10 −6
+
+
+
+∈ [0 .0, 1.0], ranking donor candidates by operational resilience under tropical micro-climates rather than static STC efficiency. Sixth, we demonstrate cross-city zero-shot transferability to Yaound´ eand Maroua without model retraining, updating atmospheric climate forcing vectors while identifying Sahelian thermal stress regimes. Seventh, we quantify thermal energy gap broadening ( σEgap ) across finite-temperature trajectories as a direct, molecule-specific metric of dynamic conformational disorder. Eighth, we establish a strong positive Pearson correlation ( r = 0 .86 , p < 0.001) between mean vertical reorganization energy ⟨λ+vert ⟩ and sea-sonal PCE degradation rates. Ninth, we deliver a rigorous computational benchmark demonstrating a ∼ 1050 ×
+
+wall-time speedup for equivariant GNN surrogates over explicit semiempirical quantum chemistry calculations across diverse graph architectures. 
+
+# 2 Results and Discussion 
+
+2.1 GNN Surrogate Validation 
+
+To evaluate the capacity of deep learning surrogates to replace explicit semiempirical quantum chemistry cal-culations along finite-temperature molecular dynamics trajectories, six distinct graph neural network (GNN) architectures were benchmarked: PaiNN [11], MACE [12], DimeNet++ [19], MEGNet [9], SchNet [10], and SchNet-Pack 2.0 [20]. The surrogate models were trained on a stratified dataset of 214 training molecules (96 , 300 snapshots at 450 frames per molecule) and validated on 27 validation molecules (12 , 150 snapshots) and 27 held-out test molecules (12 , 150 snapshots), adhering strictly to a group-level molecular identity split ( GroupShuffleSplit by 
+
+molecule id ) to eliminate snapshot-level data leakage.                                                                                                                  
+
+> Table 1 Benchmark performance of six GNN surrogate architectures evaluated on the held-out test set (27 molecules, 12 ,150 MD snapshots) with 5-fold ensemble standard errors ( ±std) for frontier orbital energies, bandgap, vertical reorganization energies, absolute Scharber PCE, and inference speedup relative to explicit GFN2-xTB single-point calculations. Architecture MAE EHOMO MAE ELUMO MAE Egap MAE λ+vert MAE PCE Speedup vs xTB (eV) (eV) (eV) (eV) (%) (ratio)
+> PaiNN 0.031 ±0.003 0.033 ±0.004 0.042 ±0.005 0.028 ±0.003 0.22 ±0.03 1050 ×
+> MACE 0.028 ±0.003 0.029 ±0.003 0.038 ±0.004 0.025 ±0.003 0.19 ±0.02 900 ×
+> DimeNet++ 0.041 ±0.005 0.043 ±0.005 0.052 ±0.006 0.036 ±0.004 0.31 ±0.04 850 ×
+> MEGNet 0.048 ±0.006 0.049 ±0.006 0.058 ±0.007 0.041 ±0.005 0.34 ±0.05 950 ×
+> SchNet 0.052 ±0.007 0.054 ±0.007 0.066 ±0.008 0.045 ±0.006 0.39 ±0.05 1200 ×
+> SchNetPack 2.0 0.049 ±0.006 0.051 ±0.006 0.063 ±0.007 0.042 ±0.005 0.37 ±0.04 1150 ×
+
+As detailed in Table 1, directional equivariant architectures (PaiNN and MACE) significantly outperform isotropic distance-based models (SchNet and MEGNet) across all electronic target properties. PaiNN achieved a 5-fold cross-validated mean absolute error (MAE) of 0 .031 ± 0.003 eV for EHOMO , 0 .033 ± 0.004 eV for ELUMO ,0.042 ± 0.005 eV for the fundamental bandgap Egap , 0 .028 ± 0.003 eV for hole reorganization energy λ+vert , and an absolute PCE MAE of 0 .22 ±0.03%. Crucially, PaiNN delivers an inference speedup of ∼ 1050 × over explicit GFN2-xTB single-point calculations (requiring three charge state evaluations per snapshot: neutral, cation, anion). While MACE attained marginally lower orbital energy errors ( Egap MAE = 0 .038 ± 0.004 eV), its higher body-order tensor expansions incurred greater computational cost ( ∼ 900 × speedup). Consequently, PaiNN was selected as the optimal surrogate engine for full-scale trajectory evaluations due to its superior trade-off between equivariant directional message passing and computational throughput. 3The necessity of directional vector channels is physically grounded in the non-equilibrium nature of finite-temperature MD snapshots. Thermally distorted donor conjugated backbones experience torsional ring rotations and out-of-plane planar deformations. Isotropic radial convolution filters (SchNet) treat interatomic distances as scalar quantities, failing to capture subtle orbital overlap degradation resulting from dihedral angle distortions. In contrast, PaiNN tracks both scalar invariant features and equivariant vector direction channels during message passing updates, directly capturing the directional dependence of π-conjugation overlap under thermal stress. Furthermore, conditioning node representations on cell operating temperature Tcell via feature concatenation allowed the network to adapt internal embedding representations across the 320 .0 K–335 .0 K regime without incurring numerical drift. 
+
+2.2 Sanity-Check: Electronic Property and PCE Recovery 
+
+Prior to deploying the GNN surrogate across the complete screening library, three rigorous validation checks were conducted on the pilot set to ensure physical consistency and confirm the presence of temporal signal in molecular dynamics trajectories. Check 1 evaluated the recovery of time-averaged frontier orbital energies. Trajectory-averaged values ⟨EHOMO ⟩
+
+and ⟨ELUMO ⟩ predicted by the GNN surrogate across MD snapshots at 300 .0 K were compared directly against standard benchmark DFT reference data from the Harvard Clean Energy Project database (BP86/def2-SVP). We explicitly defend this reference baseline: although BP86 is a pure Generalized Gradient Approximation (GGA) functional with 0% exact Hartree-Fock exchange subject to self-interaction error and def2-SVP lacks diffuse functions for radical ionic states, BP86 preserves relative energy rank-ordering ( r > 0.90) across heterogeneous conjugated donor families, validating its use as a high-throughput computational baseline. After applying a formal linear offset calibration to align semiempirical tight-binding orbital eigenvalues with the CEP DFT scale: 
+
+EDFT = 1 .12 × ExTB − 0.45 eV (R2 = 0 .92 , MAE = 0 .048 eV) (1) the surrogate achieved a Pearson correlation coefficient of r = 0 .94 ( p < 0.001), successfully passing the acceptance threshold ( r > 0.90). This confirms that semiempirical tight-binding trajectories filtered through equivariant GNNs faithfully preserve relative electronic trends across diverse conjugated donor topologies. Check 2 assessed device-level PCE recovery under standard testing conditions (T = 298 .15 K , P in =100 .0 mW cm −2). Time-averaged Scharber PCE values computed from surrogate-predicted orbital energies yielded an absolute MAE of 0 .42% relative to static CEP reference PCE values, accompanied by a Pearson correlation coefficient of r = 0 .89 (exceeding the required threshold of r > 0.85). Restoring the incident solar irradiance normalization constant Pin = 100 .0 mW cm −2 (resolving the historical 10 × underestimation bug caused by using 1000 .0 W m −2 directly against current densities in mA cm −2) placed the predicted peak donor PCEs in the physically validated range of 5 .5%–11 .1% (mean peak PCE ≈ 6.56%). Check 3 comprised the temporal information test. A sequential LSTM model trained on the complete multi-modal time series vector x(t) = [ Tcell (t), G (t), RH2M( t), WS2M( t), E HOMO (t), E gap (t), PCE STC ]T was evaluated against a collapsed arithmetic mean baseline that collapsed all temporal snapshot features into time-averaged static vectors. The sequential model achieved a 38 .4% reduction in prediction MAE compared to the collapsed baseline (0 .18% vs 0 .29% absolute PCE MAE). This statistically significant performance gain ( p < 0.001) disproves the null hypothesis that time-averaged mean geometries contain sufficient information for operational screening, proving that finite-temperature conformational fluctuations encode essential physical signals governing thermal PCE degradation. 
+
+2.3 Annual PCE Profiles: CEP Molecules 
+
+The validated PaiNN GNN surrogate was deployed to construct full 52-week annual efficiency profiles for the 268 donor molecules in the Neyman-stratified CEP subset. Neyman optimum allocation across four static PCE quartiles (Q1: 72 mol, Q2: 32 mol, Q3: 52 mol, Q4: 112 mol) ensured statistical representation across the entire efficiency spectrum while maintaining high structural dissimilarity (mean pairwise Tanimoto distance > 0.80, average Tanimoto similarity ≈ 0.15). In total, 120 , 600 MD snapshots (450 frames per molecule across discrete temperature bins) were evaluated. Figure 1 illustrates the structural flow and predicted annual PCE dynamics. Thermal fluctuations induce con-tinuous shifts in frontier orbital levels along MD trajectories. To quantify this dynamic disorder, the thermal energy 4Stage 1: Neyman Optimum Allocation 
+
+> Stratified Representative Sampling
+> Population: 29,978 CEP Candidates
+> Neyman Stratification: n = 268 Molecules
+> Quartiles: Q1=72, Q2=32, Q3=52, Q4=112
+> 3.2× Efficiency Gain (SE = 0.05%)
+
+Stage 2: 3D Equivariant GNN Surrogates 
+
+> Quantum Property Acceleration
+> Architectures: PaiNN, DimeNet++, SchNet, MACE
+> Group-Level Split (80/10/10 by Mol ID)
+> Target MAE: <0.035 eV (HOMO/LUMO)
+> Inference Speedup: ~1050× vs GFN2-xTB
+
+Stage 3: Dynamic NOCT Thermal Engine 
+
+> Diurnal Cell Heat Balance
+> T_cell(t) = T_amb(t) + [(NOCT-20)/800]*G(t)
+> NOCT Baseline = 45.0 °C
+> Hourly Weather Data: NASA POWER API
+> Diurnal Temperature & Irradiance Coupling
+
+Stage 4: Sequential Forecasting 
+
+> Annual PCE & Microclimate Stability
+> Models: PyTorch LSTM, GRU, Transformer
+> Multi-Modal Vector: [T_cell, G, RH, WS, E_g, PCE_STC]
+> Microclimates: Yaoundé & Maroua (Cameroon)
+> 35 48% MAE Reduction over Static Baseline
+
+Figure 1: Climate-Native OPV Screening & Annual PCE Forecasting Workflow Fig. 1 Overview of the Climate-Native OPV screening framework. (a) Daily meteorological records (ambient temperature Tamb , solar irradiance G) for Douala, Cameroon are corrected via the NOCT heat balance model. (b) Finite-temperature GFN2-xTB molecular dynamics trajectories generate conformational ensembles across discrete thermal bins. (c) An equivariant PaiNN GNN surrogate predicts snapshot electronic properties ( EHOMO , E LUMO , λ vert ) at a 1050 × speedup. (d) Sequential deep learning models process the resulting 52-week multivariate time series to forecast annual PCE profiles and compute the seasonal stability score Sstability .
+
+gap broadening metric σEgap was calculated as the standard deviation of Egap (t) across all production snapshots for each candidate molecule. Highly flexible donor structures lacking rigid coplanar ring systems exhibited pro-nounced thermal broadening ( σEgap > 0.14 eV), causing severe bandgap fluctuations that periodically disrupted optimal optical absorption alignment with the AM1.5G solar spectrum. Conversely, rigid fused-ring donor archi-tectures (such as benzodithiophene and indacenodithiophene derivatives) displayed constrained dynamic disorder (σEgap < 0.05 eV), maintaining steady frontier orbital alignments and robust photocurrent generation despite operational panel heating up to 335 .0 K. Across the 268 screened donor molecules, the dynamic Scharber model revealed substantial seasonal efficiency variations under Douala operating conditions. Molecules featuring high static peak PCE under standard testing conditions (298 .15 K) experienced efficiency drops of 1 .2%–2 .8% absolute PCE during peak sun hours in the dry season, driven by thermal voltage losses ( Voc ∝ − Tcell ) and increased reorganization energy barriers ( λ+vert ). These findings demonstrate that static STC screening systematically overestimates real-world energy yield for thermally sensitive donor structures. 
+
+2.4 Experimental Validation: HOPV15 Molecules 
+
+To establish the real-world predictive validity of the framework on experimentally fabricated devices, the sequen-tial forecasting pipeline was evaluated out-of-sample on the 350 organic donor polymers comprising the HOPV15 database [18]. Unlike synthetic screening databases where ground-truth values rely exclusively on theoretical elec-tronic structure calculations, HOPV15 provides experimentally measured power conversion efficiencies collected from published BHJ solar cell devices. The Climate-Native annual PCE forecast ( μPCE under Douala operating conditions) demonstrated superior agreement with experimental device measurements compared to traditional static STC Scharber predictions. Static 298 .15 K Scharber calculations yielded a coefficient of determination of R2 = 0 .54 and a root-mean-square 51.0 1.2 1.4 1.6 1.8 2.0 2.2 2.4             
+
+> Donor Optical Bandgap Egap (eV)
+> 6.50
+> 6.25
+> 6.00
+> 5.75
+> 5.50
+> 5.25
+> 5.00
+> 4.75
+> 4.50
+> Donor  EHOMO  (eV)
+> A: Corrected Scharber PCE Contour Map ( Pin = 100 mW/cm 2)
+> Representative Donor (PCE = 6.56%)
+> Mol #1 (Q1) Mol #42 (Q2) Mol #108 (Q3) Peak Donor (Q4)
+> 0123456
+> Power Conversion Efficiency PCE (%)
+> 0.120% 0.280% 0.450% 0.656% 1.20% 2.80% 4.50% 6.56%
+> B: Impact of 10 × Irradiance Unit Conversion Fix
+> Uncorrected Bug Scale ( Pin = 1000 W/m 2)Corrected Scale ( Pin = 100 mW/cm 2)0510 15 20 25 30 35
+> Corrected PCE (%)
+
+Fig. 2 Scharber photovoltaic engine remediation and NFA offset parameterization. (a) Mathematical proof of the 10 × PCE under-estimation bug and resolution via Pin = 100 .0 mW cm −2 irradiance normalization. (b) Scharber efficiency contour maps for classic fullerene acceptors (PC 61 BM, ELUMO = −4.3 eV) versus modern non-fullerene acceptors (NFAs, ELUMO = −3.9 eV, near-zero off-set ∆ ELUMO ≤ 0.1 eV). Out-of-sample validation against 350 experimental HOPV15 devices demonstrates significant predictive improvement from static STC predictions ( R2 = 0 .54, MAE = 1 .42%) to Climate-Native annual forecast PCE ( μPCE , R2 = 0 .78, MAE = 0 .68 ± 0.05%). 
+
+error of RMSE = 1 .68% relative to experimental device PCEs. In contrast, the sequential Transformer model forecasting annual operational PCE achieved R2 = 0 .78 and RMSE = 0 .84% (MAE = 0 .68 ± 0.05%). An audit of the 350 experimental HOPV15 validation predictions revealed that large residual outliers (error >
+
+1.5%, accounting for 4 .2% of the dataset) concentrate in three distinct physical failure regimes: (i) Solid-State Morphological Ordering and Phase Separation: Polymer donors with strong intermolecular π-π stacking whose solid-state film morphology suppresses dynamic single-molecule conformational fluctuations; (ii) Sterically Hindered Torsional Barriers: Highly twisted biaryl donor motifs where GFN2-xTB underestimates dihedral rotation barriers relative to high-level DFT; and (iii) Non-Radiative Recombination Pathways: Low-bandgap donor-acceptor complexes prone to strong electron-vibrational coupling and non-radiative decay, which standard Scharber equations omit. 
+
+2.5 Architectural Comparison of Sequential Models 
+
+Four sequential deep learning architectures were evaluated for their ability to forecast weekly PCE trajectories from 52-week multi-modal input vectors: Long Short-Term Memory (LSTM) [13], Gated Recurrent Unit (GRU) [16], Transformer encoder-decoder with multi-head self-attention [14], and a vanilla Recurrent Neural Network (RNN) baseline. 
+
+Table 2 Predictive accuracy and performance metrics of four sequential deep learning models compared against robust non-sequential baselines evaluated on annual PCE forecasting, reporting 5-fold ensemble standard errors (±std) and 95% bootstrap confidence intervals. Model Architecture MAE PCE (%) RMSE PCE (%) R2 Score [95% CI] Relative MAE Imp. 
+
+Transformer 0.178 ± 0.012 0.231 ± 0.015 0.884 [0.842, 0.918] 45.5% 
+
+LSTM 0.185 ± 0.014 0.242 ± 0.016 0.871 [0.828, 0.906] 43.3% GRU 0.192 ± 0.015 0.251 ± 0.017 0.860 [0.814, 0.897] 41.2% Vanilla RNN 0.248 ± 0.021 0.315 ± 0.023 0.762 [0.705, 0.811] 24.1% LightGBM (Lag Features) 0.274 ± 0.024 0.352 ± 0.026 0.710 [0.648, 0.764] 16.2% Auto-ARIMA 0.298 ± 0.026 0.381 ± 0.029 0.655 [0.588, 0.714] 8.9% Collapsed Static Mean 0.327 ± 0.029 0.418 ± 0.031 0.582 [0.512, 0.646] Baseline (0 .0%) 
+
+As presented in Table 2, deep sequential architectures outperform non-sequential statistical baselines. Global parameter sensitivity analysis (Sobol indices) confirms that candidate stability rankings ( Sstability ) remain highly 60.00 0.02 0.04 0.06 0.08 0.10             
+
+> MAE (eV)
+> MACE PaiNN DimeNet++ MEGNet SchNetPack 2.0 SchNet
+> A: Orbital Energy & Bandgap MAE
+> Quality Gate (0.10 eV) HOMO/LUMO MAE (eV)
+> Egap MAE (eV)
+> 0.0 0.1 0.2 0.3 0.4 0.5
+> Absolute PCE MAE (%)
+> MACE PaiNN DimeNet++ MEGNet SchNetPack 2.0 SchNet
+> 0.19% 0.24% 0.31% 0.34% 0.37% 0.39%
+> B: Photovoltaic Efficiency MAE
+> Quality Gate (0.50%)
+> 0200 400 600 800 1000 1200
+> Speedup Ratio ( txTB /tGNN )
+> MACE PaiNN DimeNet++ MEGNet SchNetPack 2.0 SchNet
+> 900× 1050× 850× 950× 1100× 1200×
+> C: Quantum Acceleration Speedup
+
+Fig. 3 GNN surrogate performance benchmarks on thermally distorted molecular geometries. (a) Orbital energy MAE (EHOMO , E LUMO ) across six benchmarked architectures. (b) Parity plot comparing GNN-predicted bandgaps ( Egap ) against explicit GFN2-xTB calculations for PaiNN and MACE. (c) Inference speedup factor relative to explicit GFN2-xTB single-point calculations. 
+
+robust under ±10% perturbations of NOCT coefficients, fill factor (FF ∈ [0 .55 , 0.75]), and loss voltage (∆ Vloss ∈
+
+[0 .25 , 0.35] V), exhibiting strong rank correlation ( ρ = 0 .94 , p < 0.001). The Transformer architecture achieved the lowest forecasting error (MAE = 0 .178 ± 0.012%, R2 = 0 .884 [95% CI: 0 .842 , 0.918]), representing a 45 .5% relative MAE improvement over the collapsed static baseline. 
+
+2.6 Seasonal Degradation Patterns in Douala, Cameroon 
+
+Deploying the sequential forecasting pipeline across Cameroonian microclimates provided key insights into geo-graphic stability and thermal degradation pathways. The primary deployment site, Douala (4 .05 ◦N, 9.70 ◦E; tropical monsoon climate), exhibits high annual ambient temperatures (19 .2◦C to 33 .5◦C) and global horizontal irradiance ( G ≤ 1000 .0 W m −2). Under the physical NOCT thermal model ( Tcell = Tamb + NOCT −20 800 G), peak panel temperatures reach 321 .0 K–327 .0 K during daytime operation. To evaluate geographic generalizability without retraining, the framework was transferred zero-shot to two additional Cameroonian locations: Yaound´ e (3 .87 ◦N, 11 .52 ◦E; tropical highland, Tcell ∈ [320 .5 K , 326 .5 K]) and Maroua (10 .59 ◦N, 14 .32 ◦E; semi-arid Sahelian zone, Tamb ∈ [16 .5◦C, 43 .8◦C]). We distinguish between in-domain zero-shot climate transfer (Yaound´ e, where operational temperatures fall entirely within the 320 .0–335 .0 K MD training envelope) and out-of-distribution (OOD) thermal stress (Maroua). In Maroua, extreme dry-season heat waves push ambient temperatures up to 43 .8◦C, causing peak panel temperatures to reach 338 .0 K (64 .85 ◦Cunder mean daytime irradiance G = 650 .0 W m −2), slightly exceeding the upper MD training boundary (335 .0 K). Rather than unrigorously extrapolating GNN predictions into unobserved conformational space, the framework automatically activates an OOD fallback handler that flags timesteps with Tcell > 335 .0 K, expands epistemic prediction uncertainty bounds by factor κ = 1 .85, and triggers supplementary MD trajectory sampling at 340 .0 K. The physical driver of seasonal efficiency degradation was validated by evaluating the Marcus-Scharber link. A strong positive Pearson correlation ( r = 0 .86 , p < 0.001) was established between mean vertical hole reorganization energy ⟨λ+vert ⟩ and the seasonal PCE degradation rate ∆ PCE = (PCE max − PCE min )/μ PCE . In Marcus charge-transfer theory, charge hopping rates scale exponentially with reorganization energy ( kCT ∝ exp( −λ/ 4kBT )). Donor molecules possessing large vertical reorganization energies experience severe transport mobility degradation as cell temperatures rise, accelerating photocurrent loss and fill factor reduction under operational heat. Finally, candidate donor molecules were ranked using the clamped Seasonal Stability Score: 
+
+Sstability = max 
+
+
+
+0.0, 1.0 − σPCE 
+
+μPCE + 10 −6
+
+
+
+∈ [0 .0, 1.0] (2) Figure 5 illustrates the resulting reranking of candidate materials. Analysis of edge-case behavior reveals that 4 out of 268 CEP molecules (1 .5%) exhibited extreme thermal sensitivity ( σPCE ≥ μPCE ), clamping Sstability = 0 .0. For thermally robust candidates, molecules ranked in the top 5% under static STC screening (e.g., CEP ID 20529, static PCE = 10 .75%) suffered severe performance drops under tropical heat ( Sstability = 0 .62, μPCE = 7 .82%). Conversely, structurally resilient donors (e.g., CEP ID 25672, static PCE = 8 .21%) exhibited high thermal stability (Sstability = 0 .94, μPCE = 7 .95%), delivering superior annual energy yield. This demonstrates that Climate-Native 70 10 20 30 40 50 
+
+Week of Year (52 Weeks) 
+
+> 4.25 4.50 4.75 5.00 5.25 5.50 5.75 6.00 6.25
+> Dynamic PCE (%)
+
+A: Annual PCE Profiles across Cameroon Microclimates           
+
+> Yaoundé (Equatorial Plateau, Sstab = 0.91) Maroua (Sahelian Semi-Arid, Sstab = 0.74) Sahelian Peak Heat ( Tamb > 42 C)
+> 34567
+
+Annual Mean PCE PCE (%) 
+
+> 0.6 0.7 0.8 0.9 1.0
+> Clamped Seasonal Stability Score  Sstability
+> Optimal Target Zone (High PCE & High Stability)
+
+B: Candidate Selection Matrix (Efficiency vs Thermal Resilience) 
+
+> 0.60 0.65 0.70 0.75 0.80 0.85 0.90 0.95
+> Seasonal Stability Score ( Sstability )
+
+Fig. 4 Microclimate thermal dynamics and zero-shot transfer across Cameroon deployment zones. (a) Annual daily ambient (Tambient ) and NOCT cell ( Tcell ) temperature profiles for Douala, Yaound´ e, and Maroua. (b) Diurnal solar irradiance ( G) and temperature distributions. (c) Thermal out-of-distribution (OOD) boundary alerts triggered in Maroua during peak dry season (Tcell = 338 .0 K > 335 .0 K). Static Baseline Vanilla RNN GRU LSTM Transformer  
+
+> 0.00 0.05 0.10 0.15 0.20 0.25 0.30
+> Sequential PCE MAE (%)
+> 0.32% 0.24% 0.20% 0.18% 0.17%
+
+A: Absolute Model Prediction Error 
+
+> Static Baseline Vanilla RNN GRU LSTM Transformer
+> 010 20 30 40
+> MAE Reduction vs Static (%)
+> +25.0% +37.5% +43.8% +46.9%
+
+B: Improvement over Static Baseline        
+
+> 2.5 5.0 7.5 10.0 12.5 15.0 17.5 20.0
+> Time Step (Days)
+> 5.0 5.2 5.4 5.6 5.8 6.0
+> PCE (%)
+
+C: Dynamic Trajectory Tracking 
+
+> Ground Truth PCE Static Mean (MAE=0.32%) LSTM (MAE=0.18%) Transformer (MAE=0.17%)
+
+Fig. 5 Sequential forecasting performance and seasonal stability evaluation. (a) Comparative annual PCE trajectory forecasts for representative donor molecules in Douala generated by LSTM, GRU, Transformer, and collapsed static baselines. (b) Relative MAE reduction (35%–48%) achieved by sequential models over static baselines. (c) Ranking of top resilient donor molecules based on the clamped seasonal stability score Sstability .
+
+screening based on Sstability provides a far more reliable metric for real-world OPV deployment planning in tropical regions than static laboratory PCE benchmarks. 
+
+# 3 Methods 
+
+3.1 Datasets and Stratified Sampling 
+
+Two primary datasets were utilized in this study: the Harvard Clean Energy Project (CEP) database ( ∼ 30 , 000 extended π-conjugated donor molecules with DFT-computed Scharber PCEs [2, 3]) and the Harvard Organic Photovoltaic Dataset (HOPV15, 350 experimentally characterized donor polymers [18]). The QM9 dataset was excluded due to its small molecular sizes ( ≤ 9 heavy atoms) and lack of OPV relevance. To construct a representative training and validation pilot set from the 29 , 978 CEP population ( N ), Neyman optimum stratified allocation [21] was employed across four static PCE quartiles: 
+
+nh = n × WhSh
+
+PHi=1 WiSi
+
+(3) 8where Wh = Nh/N is the population weight of stratum h, Sh is the standard deviation of PCE in stratum 
+
+h, and n = 268 is the total sample size. Stratifying on static STC PCE serves as a conservative, spectrum-covering baseline ensuring unbiased representation across historical efficiency quartiles (0 .99% to 12 .87%). Under simple random sampling, high-variance regions (Q4, S4 = 1 .3739) would be severely undersampled, requiring 
+
+nSRS ≥ 858 molecules to achieve equivalent variance bound SE( μ) = 0 .05%, demonstrating a 3 .2× statistical sampling efficiency gain for Neyman allocation ( nNeyman = 268). Furthermore, Bemis-Murcko scaffold classifica-tion confirms that the 268 Neyman-selected molecules encompass 42 distinct conjugated donor topologies (mean pairwise Tanimoto similarity ≈ 0.15, dissimilarity > 0.80). To eliminate data leakage, dataset partitioning was executed strictly at the unique molecule id level (GroupShuffleSplit ). The 268 molecules (120 , 600 total snapshots at 450 frames/mol) were partitioned into 80% Training (214 molecules, 96 , 300 snapshots), 10% Validation (27 molecules, 12 , 150 snapshots), and 10% Held-Out Test (27 molecules, 12 , 150 snapshots), ensuring zero snapshot overlap between splits. 
+
+3.2 Climate Data and NOCT Thermal Model 
+
+Annual meteorological data (2-meter ambient temperature Tamb and global horizontal solar irradiance G) for Douala, Cameroon (4 .05 ◦N, 9.70 ◦E) were retrieved from the NASA POWER API [17]. Panel cell operating temperatures were calculated using the physical NOCT thermal balance model: 
+
+Tcell (t) = Tambient (t) + 
+
+ NOCT − 20 800 
+
+
+
+G(t) (4) with NOCT = 45 .0◦C (318 .15 K). This model eliminates unphysical nighttime heating ( G = 0 =⇒ Tcell =
+
+Tambient ) while accurately reflecting daytime thermal stress (∆ T = 31 .25 ◦C at G = 1000 .0 W m −2), yielding effective operational panel temperatures of 321 .0 K–327 .0 K for Douala. Daily panel temperatures were aggregated into 52 weekly means ( ¯Tw) and standard deviations ( σw), binned into discrete temperature bins for MD trajectory selection while preserving continuous Tcell (w) as a contextual feature in sequential models. 
+
+3.3 Molecular Dynamics Simulations and Multi-Phase Protocol 
+
+All MD simulations followed a rigorous 3-stage phase workflow: 1. Conformational MD Sampling in Vacuum: 
+
+Molecular dynamics simulations were performed in the gas phase (isolated molecule in a cubic periodic box with L ≥ dmax + 25 .0 ˚ A) using the GFN2-xTB semiempirical tight-binding Hamiltonian [15] implemented via 
+
+tblite [22] and DFTB+ [23]. This step captures intrinsic molecular conformational dynamics and torsional potential landscapes under thermal fluctuations without unphysical solvent friction. Cartesian coordinates were scaled using 1 Bohr = 0 .52917721092 ˚ A. Simulations used a 1 fs timestep, Berendsen thermostat ( τ = 0 .1 ps), 5–10 ps equilibration, and 50 ps production runs, saving snapshots every 1 ps. 2. Electronic Single Points with Implicit Solvation: For each MD snapshot geometry Qt, single-point calculations evaluated neutral (0), cation (+1), and anion ( −1) states using GFN2-xTB paired with the ALPB implicit toluene solvation model (ϵr = 2 .38). Toluene continuum solvation serves as a low-dielectric proxy for organic donor matrix screening (ϵr ≈ 3.0–4 .0). 3. Linear Calibration Shift to DFT Reference: Solvated GFN2-xTB orbital eigenvalues were mapped onto the established CEP gas-phase DFT scale via the linear fit EDFT = 1 .12 × ExTB − 0.45 eV (R2 = 0 .92 , MAE = 0 .048 eV), absorbing uniform solvation shifts while preserving relative rank-ordering across donor topologies. 
+
+3.4 Electronic Properties and Corrected Scharber Engine 
+
+Orbital energies ( EHOMO , E LUMO ) were converted from Hartrees to eV (1 Eh = 27 .211386 eV). Vertical hole and electron reorganization energies were computed as: 
+
+λ+vert (t) = E+(Qt) − E0(Qt), λ−
+
+> vert
+
+(t) = E−(Qt) − E0(Qt) (5) 9Instantaneous PCE was calculated via the Scharber device model [3] parameterized for both standard fullerene (PC 61 BM, Eacc LUMO = −4.3 eV) and non-fullerene acceptors (NFAs, Eacc LUMO = −3.9 eV, ∆ ELUMO ≤ 0.1 eV): 
+
+Voc (t) = 1
+
+e
+
+ |Edonor HOMO (t)| − | Eacc LUMO | − 0.3 V (6) 
+
+Jsc (t) = 0 .65 × e
+
+Z ∞
+
+> Egap (t)
+
+ΦAM1.5G (E) dE (7) PCE( t) = Jsc (t)[mA cm −2] × Voc (t)[V] × FF 
+
+Pin [mW cm −2] × 100% (8) with static parameters FF = 0 .65 and EQE = 0 .65 representing thermodynamic upper-bound limits (idealized step-function absorption). Standard incident solar irradiance Pin = 100 .0 mW cm −2 matches Jsc units of mA cm −2,restoring peak donor PCEs to the physical scale ( ∼ 6.56%). 
+
+3.5 GNN Surrogate and Sequential Forecasting Models 
+
+The GNN surrogate was implemented in PyTorch Geometric (PaiNN, DimeNet++, SchNet) and matgl (MEG-Net). PaiNN was trained with AdamW (10 −3 learning rate, cosine annealing) to predict EHOMO , E LUMO , λ +vert ,and λ− 
+
+> vert
+
+simultaneously. Sequential forecasting models (LSTM, GRU, Transformer, RNN) were implemented in PyTorch. Input feature vectors at timestep t comprised: internal coordinate BAT dense embeddings, GNN-predicted electronic properties (EHOMO , E LUMO , E gap , λ ±
+
+> vert
+
+), instantaneous Scharber PCE, and continuous panel temperature Tcell (t). Models were trained using AdamW (10 −4 learning rate, early stopping on validation loss) to predict weekly PCE forecasts over the 52-week annual sequence. 
+
+# 4 Conclusions 
+
+We have developed and validated a Climate-Native computational framework for forecasting the annual power conversion efficiency profiles of organic photovoltaic materials under geographically realistic operating conditions. By coupling GFN2-xTB molecular dynamics, an equivariant PaiNN GNN surrogate ( ∼ 1050 × speedup, orbital MAE < 0.035 eV), and sequential deep learning models anchored in NASA POWER climate data, the framework captures the dynamic disorder and thermal loss mechanisms that static room-temperature virtual screening tools systematically ignore. Validated out-of-sample against 350 experimental device measurements from the HOPV15 database, Climate-Native forecasts demonstrated superior predictive accuracy ( R2 = 0 .78) compared to traditional static Scharber models ( R2 = 0 .54). Furthermore, the introduced Seasonal Stability Score ( Sstability ) provides a robust metric for candidate material selection, identifying donor molecules that maintain high operational performance under tropical microclimates. This framework establishes a scalable methodology for climate-aware materials discovery, guiding the rational deployment of renewable energy technologies across tropical and sub-Saharan regions. 
+
+Supplementary information. Supplementary Information is available for this paper, containing detailed the-oretical derivations (Scharber irradiance correction, NOCT heat balance, clamped stability metrics), complete GNN hyperparameter tables, data leakage elimination protocols, and full data tables for all 268 screened OPV donor molecules. 
+
+Acknowledgements. The authors acknowledge computational resources provided by the Department of Physics at the University of Douala and the University of Yaounde 1. 
+
+# Declarations 
+
+Funding. No external funding was received for this work. 
+
+Conflict of Interest. The authors declare no competing interests. 
+
+Ethics Approval. Not applicable. 
+
+Consent for Publication. All authors approved the final manuscript. 10 Data Availability. All raw GFN2-xTB molecular dynamics trajectories, extracted snapshot datasets (120 , 600 total frames), and HOPV15 validation predictions are openly accessible on Zenodo under DOI https://doi.org/10. 5281/zenodo.10849201 and in the official GitHub repository at https://github.com/Teguiacs/Materials Property Prediction. 
+
+Code Availability. The complete Python code suite — including dataset preprocessing pipelines, 3D GNN surrogate model implementations (PaiNN, MACE), NOCT thermal engine, and sequential forecasting modules — is available under the MIT License at https://github.com/Teguiacs/Materials Property Prediction. Software environment definitions and reproduction scripts are provided in environment.yml .
+
+Author Contributions. S.C.T.K. conceived the study and drafted the manuscript. R.R., R.D.T., J.-P.T.N., P.S.M.K., J.-P.N., and S.G.N.E. contributed equally to data analysis, model validation, and manuscript review. 
+
+# References 
+
+[1] Nowsherwan, G.A., Ali, Q., Ali, U.F., Ahmad, M., Khan, M., Hussain, S.S.: Advances in Organic Materials for Next-Generation Optoelectronics: Potential and Challenges. Organics 5(4), 520–560 (2024) https://doi. org/10.3390/org5040028 . Accessed 2025-11-20 [2] Hachmann, J., Olivares-Amaya, R., Atahan-Evrenk, S., Amador-Bedolla, C., S´ anchez-Carrera, R.S., Gold-Parker, A., Vogt, L., Brockway, A.M., Aspuru-Guzik, A.: The Harvard Clean Energy Project: Large-Scale Computational Screening and Design of Organic Photovoltaics on the World Community Grid. J. Phys. Chem. Lett. 2(17), 2241–2251 (2011) https://doi.org/10.1021/jz200866s [3] Scharber, M.C., M¨ uhlbacher, D., Koppe, M., Denk, P., Waldauf, C., Heeger, A.J., Brabec, C.J.: Design Rules for Donors in Bulk-Heterojunction Solar Cells—Towards 10% Energy-Conversion Efficiency. Adv. Mater. 
+
+18 (6), 789–794 (2006) https://doi.org/10.1002/adma.200501717 [4] Zhugayevych, A., Tretiak, S.: Theoretical Description of Structural and Electronic Properties of Organic Photovoltaic Materials. Annu. Rev. Phys. Chem. 66 (1), 305–330 (2015) https://doi.org/10.1146/ annurev-physchem-040214-121440 . Accessed 2025-11-20 [5] Panwar, P., Yang, Q., Martini, A.: PyL3dMD: Python LAMMPS 3D molecular descriptors package. J Cheminform 15 (1), 69 (2023) https://doi.org/10.1186/s13321-023-00737-5 . Accessed 2025-11-25 [6] Schleder, G.R., Padilha, A.C.M., Acosta, C.M., Costa, M., Fazzio, A.: From DFT to machine learning: recent approaches to materials science–a review. J. Phys. Mater. 2(3), 032001 (2019) https://doi.org/10. 1088/2515-7639/ab084b . Accessed 2025-11-25 [7] Ramprasad, R., Batra, R., Pilania, G., Mannodi-Kanakkithodi, A., Kim, C.: Machine learning in materials informatics: recent applications and prospects. npj Comput Mater 3(1), 54 (2017) https://doi.org/10.1038/ s41524-017-0056-5 . Accessed 2025-11-26 [8] Choudhary, K., DeCost, B.: Atomistic Line Graph Neural Network for improved materials property predictions. npj Comput Mater 7(1), 185 (2021) https://doi.org/10.1038/s41524-021-00650-1 . Accessed 2025-11-25 [9] Chen, C., Ye, W., Zuo, Y., Zheng, C., Ong, S.P.: Graph Networks as a Universal Machine Learning Framework for Molecules and Crystals. Chem. Mater. 31 (9), 3564–3572 (2019) https://doi.org/10.1021/acs.chemmater. 9b01294 . Accessed 2025-11-25 [10] Sch¨ utt, K.T., Sauceda, H.E., Kindermans, P.-J., Tkatchenko, A., M¨ uller, K.-R.: SchNet – A deep learning architecture for molecules and materials. J. Chem. Phys. 148 (24), 241722 (2018) https://doi.org/10.1063/1. 5019779 11 [11] Sch¨ utt, K., Unke, O., Gastegger, M.: Equivariant message passing for the prediction of tensorial properties and molecular spectra. In: Proceedings of the 38th International Conference on Machine Learning (ICML 2021), pp. 9377–9388. PMLR, ??? (2021). https://proceedings.mlr.press/v139/schutt21a.html 
+
+[12] Batatia, I., Kovacs, D.P., Simm, G.N.C., Ortner, C., Cs´ anyi, G.: MACE: Higher Order Equivariant Message Passing Neural Networks for Fast and Accurate Force Fields. In: Advances in Neural Information Processing Systems 35 (NeurIPS 2022) (2022). arXiv:2206.07697. https://arxiv.org/abs/2206.07697 
+
+[13] Hochreiter, S., Schmidhuber, J.: Long Short-Term Memory. Neural Comput. 9(8), 1735–1780 (1997) https: //doi.org/10.1162/neco.1997.9.8.1735 [14] Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A.N., Kaiser, L., Polosukhin, I.: Attention Is All You Need. In: Advances in Neural Information Processing Systems 30 (NeurIPS 2017) (2017). arXiv:1706.03762. https://arxiv.org/abs/1706.03762 
+
+[15] Bannwarth, C., Ehlert, S., Grimme, S.: GFN2-xTB—An Accurate and Broadly Parametrized Self-Consistent Tight-Binding Quantum Chemical Method with Multipole Electrostatics and Density-Dependent Dispersion Contributions. J. Chem. Theory Comput. 15 (3), 1652–1671 (2019) https://doi.org/10.1021/acs.jctc.8b01176 . Accessed 2024-12-10 [16] Cho, K., Merrienboer, B., Gulcehre, C., Bahdanau, D., Bougares, F., Schwenk, H., Bengio, Y.: Learning Phrase Representations using RNN Encoder-Decoder for Statistical Machine Translation. In: Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing (EMNLP), pp. 1724–1734 (2014). arXiv:1406.1078. https://arxiv.org/abs/1406.1078 
+
+[17] Stackhouse, P.W., Zhang, T., Westberg, D., Barnett, A.J., Bristow, T., Macpherson, B., Hoell, J.M.: The NASA POWER Project: Transitioning Research to Operations. Bull. Am. Meteorol. Soc. 100 (12), 2379–2396 (2019) https://doi.org/10.1175/BAMS-D-18-0148.1 [18] Lopez, S.A., Pyzer-Knapp, E.O., Simm, G.N., Lutzow, T., Li, K., Seress, L.R., Hachmann, J., Aspuru-Guzik, A.: The Harvard organic photovoltaic dataset. Sci Data 3(1), 160086 (2016) https://doi.org/10.1038/sdata. 2016.86 . Accessed 2025-05-18 [19] Gasteiger, J., Giri, S., Margraf, J.T., G¨ unnemann, S.: Fast and Uncertainty-Aware Directional Message Passing for Non-Equilibrium Molecules. In: Machine Learning for Molecules Workshop, NeurIPS 2020 (2020). arXiv:2011.14115. https://arxiv.org/abs/2011.14115 
+
+[20] Sch¨ utt, K.T., Hessmann, S.S.P., Gebauer, N.W.A., Lederer, J., Gastegger, M.: SchNetPack 2.0: A neural network toolbox for atomistic machine learning. J. Chem. Phys. 158 (14), 144801 (2023) https://doi.org/10. 1063/5.0138367 [21] Singh, S.: Advanced Sampling Theory with Applications: How Sampling Works. Kluwer Academic Publishers, Dordrecht (1996). https://doi.org/10.1007/978-94-007-0789-4 [22] Ehlert, S., Stahn, M., Spicher, S., Grimme, S.: Robust and Efficient Implicit Solvation Model for Fast Semiempirical Methods. J. Chem. Theory Comput. 17 (7), 4250–4261 (2021) https://doi.org/10.1021/acs. jctc.1c00471 [23] Hourahine, B., Aradi, B., Blum, V., Bonaf´ e, F., Buccheri, A., Camacho, C., Cevallos, C., Deshaye, M.Y., Dumitric˘ a, T., Dominguez, A., Ehlert, S., Elstner, M., Heide, T., Hermann, J., Irle, S., Kranz, J.J., K¨ ohler, C., Kowalczyk, T., Kubaˇ r, T., Lee, I.S., Lutsker, V., Maurer, R.J., Min, S.K., Mitchell, I., Negre, C., Niehaus, T.A., Niklasson, A.M.N., Page, A.J., Pecchia, A., Penazzi, G., Persson, M.P., ˇRez´ aˇ c, J., S´ anchez, C.G., Sternberg, M., St¨ ohr, M., Stuckenberg, F., Tkatchenko, A., Yu, V.W.-Z., Frauenheim, T.: DFTB+, a software package for efficient approximate density functional theory based atomistic simulations. J. Chem. Phys. 
+
+152 (12), 124101 (2020) https://doi.org/10.1063/1.5143190 12
